@@ -10,14 +10,13 @@ is executed at the next logical barrier when load imbalance surpasses a given th
 
 * LAIK is composable with any communication library: LAIK works with arbitrary communication backends, expected to provide the required communication functionality. Some standard backends are provided, but can be customized to cooperate with the existing application code.
 
-* LAIK enables incremental porting: data structures (and their partitioning among parallel tasks) can be moved one by one into LAIK's responsibility. LAIK can be instructed to not allocated memory resources itself, but use custom hooks for application provided allocators/data layouts.
+* LAIK enables incremental porting: data structures (and their partitioning among parallel tasks) can be moved one by one into LAIK's responsibility. LAIK can be instructed to not allocate memory resources itself, but use custom hooks for application provided allocators/data layouts.
 
 # Example
 
 LAIK uses SPMD (single program multiple data) programming style similar to MPI.
-For the following simple example, a parallel vector sum, LAIK's communication funtionality
-as provided by the generic TCP backend is enough. Usually, you would use it together with 
-A simple parallel vector sum:
+For the following simple example, a parallel vector sum, LAIK's communication
+funtionality via repartitioning is enough.
 
     #include "laik.h"
    
