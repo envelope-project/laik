@@ -1,10 +1,6 @@
 # LAIK - A Library for Lightweight Automatic Integrated data containers for parallel worKers
 
-This library provides lightweight data containers for parallel applications with support
-for automatic load-balancing. Before working on structure elements, the parallel workers
-within an applications are expected to ask the library for owned partitions
-("owner-computes"). Eventual re-partitioning is driven by element-wise weighting, and
-is executed at the next logical barrier when load imbalance surpasses a given threshould.
+This library provides lightweight data containers for parallel applications with support for dynamic re-distribution with automatic data migration. The data distribution specifies which data locally is available for direct access by tasks, enabling the "owner-computes" rule. Load-balancing is enabled by explicit repartitioning using element-wise weights.
 
 # Features
 
@@ -54,7 +50,8 @@ funtionality via repartitioning is enough.
     }
    
 Compile:
-     cc vectorsum.c -o vectorsum -llaik
+
+    cc vectorsum.c -o vectorsum -llaik
 
 To run this example, the LAIK's TCP backend is supported by the LAIK launcher "laikrun":
 
