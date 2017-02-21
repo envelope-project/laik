@@ -1,4 +1,4 @@
-# LAIK - A Library for Lightweight Automatic Integrated data containers for parallel worKers
+# LAIK 👍 - A Library for Lightweight Automatic Integrated data containers for parallel worKers
 
 This library provides lightweight data containers for parallel applications with support for dynamic re-distribution with automatic data migration. The data distribution specifies which data locally is available for direct access by tasks, enabling the "owner-computes" rule. Load-balancing is enabled by explicit repartitioning using element-wise weights.
 
@@ -55,7 +55,7 @@ Compile:
 
 To run this example, the LAIK's TCP backend is supported by the LAIK launcher "laikrun":
 
-     laikrun -h host1,host2 ./vectorsum
+    laikrun -h host1,host2 ./vectorsum
 
 
 # API
