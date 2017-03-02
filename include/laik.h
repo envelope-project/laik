@@ -18,6 +18,7 @@
 #ifndef _LAIK_H_
 #define _LAIK_H_
 
+#include <stdint.h>
 
 /*********************************************************************/
 /* LAIK enum/struct definitions
@@ -38,8 +39,8 @@ typedef enum _Laik_DataType {
   LAIK_DT_None = 0,
   LAIK_DT_1D_Double,
   LAIK_DT_2D_Double,
-  LAIK_DT_Costum = 100
-};
+  LAIK_DT_Custom = 100
+} Laik_DataType;
 
 // a LAIK task: entity with access to container part
 typedef struct _Laik_Task Laik_Task;
@@ -92,9 +93,9 @@ struct _Laik_Phase {
 typedef struct _Laik_Data Laik_Data;
 struct _Laik_Data {
   int elemsize;
-  Laik_Space s;        // index space of this container
-  Laik_Group g;        // task group sharing this container
-  Laik_Partition p[1]; // variable number of partitions
+  Laik_Space s;    // index space of this container
+  Laik_Group g;    // task group sharing this container
+  Laik_Phase p[1]; // variable number of partitions
 };
 
 // a serialisation order of a LAIK container
@@ -107,7 +108,7 @@ struct _Laik_Layout {
 typedef struct _Laik_Pinning Laik_Pinning;
 struct _Laik_Pinning {
   Laik_Data* d;
-  int p; // partition number in container
+  int p; // phase number in container
   int s; // slice number in partition
   Laik_Layout l; // ordering layout used
 
@@ -130,7 +131,7 @@ typedef struct _Laik_Config Laik_Config;
 struct _Laik_Config {
   int tasks;
   int id;
-  Laik_Backend* b;
+  Laik_Backend* backend;
   Laik_Data* d;    // active containers
   Laik_Pinning* p; // active pinnings
 };
@@ -149,7 +150,11 @@ struct _Laik_Error {
 // globally used LAIK configuration
 extern Laik_Config laik_config;
 
+// single process backend (ie. dummy)
+extern Laik_Backend laik_backend_single;
 
+// all tasks
+extern Laik_Group laik_world;
 
 /*********************************************************************/
 /* LAIK API
@@ -163,18 +168,30 @@ extern Laik_Config laik_config;
 Laik_Error* laik_init(Laik_Backend* backend);
 
 /**
+ * Return number of LAIK tasks available
+ */
+int laik_size();
+
+/**
+ * Return rank if calling LAIK task
+ */
+int laik_myid();
+
+/**
  * Define a LAIK container shared by a LAIK task group.
  * This is a collective operation of all tasks in the group.
  * If no partitioning is set (via laik_setPartition) before
  * before use, default to equal-sized owner STRIPE partitioning.
  */
-Laik_Data* laik_alloc(Laik_DataType type, uint64_t count, Laik_Group g);
+Laik_Data* laik_alloc(Laik_Group g, Laik_DataType type, uint64_t count);
 
-Laik_Pinning* laik_mydata(Laik_Data d, Laik_Layout l);
+void laik_fill_double(Laik_Data*, double);
 
-void laik_free(Laik_Data);
+Laik_Pinning* laik_pin(Laik_Data* d, Laik_Layout* l, void** base, uint64_t* count);
 
-void laik_repartition(Laik_data d, Laik_Part p);
+void laik_free(Laik_Data*);
+
+void laik_repartition(Laik_Data* d, Laik_PartitionType p);
 
 void laik_finish();
 

@@ -11,21 +11,41 @@
 // global LAIK configuration
 Laik_Config laik_config;
 
-Laik_Error* laik_init(Laik_Backend* backend)
+Laik_Backend laik_backend_single = {"Single Process Backend", 0, 0, 0, 0};
+
+Laik_Group laik_world = {0, {0}};
+
+
+Laik_Error* laik_init(Laik_Backend* b)
 {
-    assert(backend != 0);
-    laik_config.backend = backend;
-    backend->init();
+    assert(b != 0);
+    laik_config.backend = b;
+
+    if (b->init)
+        b->init();
 }
 
-Laik_Data* laik_alloc(Laik_DataType type, uint64_t count, Laik_Group g)
+int laik_size()
+{
+    return 1;
+}
+
+int laik_myid()
+{
+    return 0;
+}
+
+Laik_Data* laik_alloc(Laik_Group g, Laik_DataType type, uint64_t count)
 {
     Laik_Data* d = (Laik_Data*) malloc(sizeof(Laik_Data));
 
     return d;
 }
 
-Laik_Pinning* laik_mydata(Laik_Data d, Laik_Layout l)
+void laik_fill_double(Laik_Data* d, double v)
+{}
+
+Laik_Pinning* laik_pin(Laik_Data* d, Laik_Layout* l, void** base, uint64_t* count)
 {
     Laik_Pinning* p = (Laik_Pinning*) malloc(sizeof(Laik_Pinning));
 
@@ -37,7 +57,7 @@ void laik_free(Laik_Data* d)
     free(d);
 }
 
-void laik_repartition(Laik_data d, Laik_Part p)
+void laik_repartition(Laik_Data* d, Laik_PartitionType p)
 {}
 
 void laik_finish()
