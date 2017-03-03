@@ -14,7 +14,7 @@ This library provides lightweight data containers for parallel applications with
 LAIK uses SPMD (single program multiple data) programming style similar to MPI.
 For the following simple example, a parallel vector sum, LAIK's communication
 funtionality via repartitioning is enough.
-
+```C
     #include "laik.h"
    
     main() {
@@ -47,15 +47,15 @@ funtionality via repartitioning is enough.
       }
       laik_finish();
     }
-   
+```
 Compile:
-
+```
     cc vectorsum.c -o vectorsum -llaik
-
+```
 To run this example, the LAIK's TCP backend is supported by the LAIK launcher "laikrun":
-
+```
     laikrun -h host1,host2 ./vectorsum
-
+```
 
 # Concepts
 
