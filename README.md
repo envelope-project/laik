@@ -1,19 +1,26 @@
 # LAIK 👍 - A Library for Lightweight Automatic Integrated data containers for parallel worKers
 
-This library provides lightweight data containers for parallel applications with support for dynamic re-distribution with automatic data migration. The data distribution specifies which data locally is available for direct access by tasks, enabling the "owner-computes" rule. Load-balancing is enabled by explicit repartitioning using element-wise weights.
+This library provides lightweight management for the distribution of global data containers for parallel applications. It calculates the communication requirements for changing a partitioning or switching between different partitionings. By associating partitions with work load using the "owner-computes" rule, LAIK can be used for automatic load balancing.
 
 # Features
 
-* LAIK is composable with any communication library: LAIK works with arbitrary communication backends, expected to provide the required communication functionality. Some standard backends are provided, but can be customized to cooperate with the existing application code.
+* LAIK is modularized. The core functionality is about distributed partitioning of index spaces, and declarative specification of (iterative) sequences of partitionings for these index spaces. Optional modules provide LAIK-managed data containers (coupled to index spaces), integration of communication backends, and automatic load balancing.
 
-* LAIK enables incremental porting: data structures (and their partitioning among parallel tasks) can be moved one by one into LAIK's responsibility. LAIK can be instructed to not allocate memory resources itself, but use custom hooks for application provided allocators/data layouts.
+* Different LAIK instances may be nested to support the hierarchical topology of large HPC systems. To this end, the size of global index spaces is allowed to change. This enables partition size changes of an outer LAIK instance (e.g. responsible for distribution over cluster nodes) to be mapped to an index space of an inner LAIK instance (for intra-node distribution among CPUs and GPUs).
+
+* LAIK optionally provides flexible data containers for binding to index spaces, using allocator interfaces for requesting memory resources. Furthermore, applications have to acquire access to a partition, and only then the layout is fixed to some ordering of the index space to 1d memory space.
+
+* LAIK is composable with any communication library: either the application makes direct use of provided transfer requirements in index spaces, or by coupling data containers, LAIK can be asked to call handlers from communication backends for automatic data migration. Shared memory and MPI backends are provided, but can be customized to cooperate with application code.
+
+* LAIK enables incremental porting: data structures (and their partitioning among parallel tasks) can be moved one by one into LAIK's responsibility.
 
   
 # Example
 
 LAIK uses SPMD (single program multiple data) programming style similar to MPI.
 For the following simple example, a parallel vector sum, LAIK's communication
-funtionality via repartitioning is enough.
+funtionality via repartitioning is enough. This example also shows the use of a simple LAIK data container which enables automatic data migration when switching partitioning.
+
 ```C
     #include "laik.h"
    
