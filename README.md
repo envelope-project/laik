@@ -1,6 +1,13 @@
 # LAIK 👍 - A Library for Lightweight Automatic Integrated data containers for parallel worKers
 
-This library provides lightweight management for the distribution of global data containers for parallel applications. It calculates the communication requirements for changing a partitioning or switching between different partitionings. By associating partitions with work load using the "owner-computes" rule, LAIK can be used for automatic load balancing.
+This library provides lightweight management for the distribution of global data containers for parallel applications using index spaces. It calculates the communication requirements for changing a partitioning or switching between different partitionings. By associating partitions with work load using the "owner-computes" rule, LAIK can be used for automatic load balancing.
+
+Partitionings specify task-local access rights to be ensured when hitting a consistency point. The access rights stay valid until a consistency point with different access rights is hit. To this end, a consistency point triggers data transfers depending on a previously enforced consistency point.
+
+Multiple partitionings with different access permissions may be declared for the same index space and the same consistency point. Hitting the point thus ensures that for each index, a value written by a previous writer gets broadcasted to all tasks which want to read the value. Reductions are supported via aggregation write permissions: multiple written values get aggregated and broadcasted to all readers when switching.
+
+Re-partitiong (and thus load balancing) is enabled by specifically marked consistency points which require global synchronisation. In such a point, a handler is called which may change partitionings before data transfers are triggered.
+LAIK-managed index spaces can be coupled to support data transfers of different data structures at the same time.
 
 # Features
 
@@ -8,7 +15,7 @@ This library provides lightweight management for the distribution of global data
 
 * Different LAIK instances may be nested to support the hierarchical topology of large HPC systems. To this end, the size of global index spaces is allowed to change. This enables partition size changes of an outer LAIK instance (e.g. responsible for distribution over cluster nodes) to be mapped to an index space of an inner LAIK instance (for intra-node distribution among CPUs and GPUs).
 
-* LAIK optionally provides flexible data containers for binding to index spaces, using allocator interfaces for requesting memory resources. Furthermore, applications have to acquire access to a partition, and only then the layout is fixed to some ordering of the index space to 1d memory space.
+* LAIK provides flexible data containers for binding to index spaces, using allocator interfaces for requesting memory resources. Furthermore, applications have to acquire access to a partition, and only then the layout is fixed to some ordering of the index space to 1d memory space.
 
 * LAIK is composable with any communication library: either the application makes direct use of provided transfer requirements in index spaces, or by coupling data containers, LAIK can be asked to call handlers from communication backends for automatic data migration. Shared memory and MPI backends are provided, but can be customized to cooperate with application code.
 
@@ -64,64 +71,8 @@ To run this example, the LAIK's TCP backend is supported by the LAIK launcher "l
     laikrun -h host1,host2 ./vectorsum
 ```
 
-# Concepts
 
-* LAIK manages the distribution of global data between a group of tasks
-  of a parallel program via LAIK **containers**. Each container holds
-  a fixed number of elements of the same type, specified at creation time.
-
-* For each container, multiple **partitionings** can be defined with at most
-  one partitioning active at any point in time. The active partitioning
-  specifies which local access is allowed/enabled for tasks in the group.
-  For each element, at most one task may have write permission, but multiple
-  tasks may have read permission. The task with write access is the element owner.
-
-* Every element in a container has a global index. For direct access to
-  container elements via memory addresses, a partition has to be **pinned**.
-  Only at this point, the memory ordering of locally accessable elements
-  via a local index has to be defined. If a given order (mapping from local
-  to global indexes) is needed, it can be specified at pinning time, but
-  may result in time-consuming layout conversion. Alternatively, LAIK may
-  decide about the best ordering, providing the used index order. Often,
-  the order mapping can be provided as simple function (e.g. simply adding
-  an offset, or reshuffling a multi-dimensional indexes) which helps
-  performance if data traversals use special code for simple mappings.
-
-* **Communication** is triggered by enforcing consistency for a container in
-  regard to the active partitioning, which ensures that element values are
-  copied from owner tasks to tasks with read access. Enforcing consistency
-  is independent from switching between partitionings, which just changes
-  ownership and does not need data transfers. However, consistency
-  may be enforced atomically together with a switch of the partitioning.
-  LAIK enables asynchronous communication by starting required data transfers
-  at partitioning switch time, but only requires the data to have arrived
-  at the destination task when the task wants to pin it to memory.
-  To reduce communication, LAIK allows to pin owned memory read-only by
-  default, with explicit notification if elements were written to. Furthermore,
-  any read-only pinning is not enforced (e.g. via MMU) but is expected to
-  not be written to. LAIK tries to reuse memory pinnings, and may not update
-  values if it expects them to still be correct.
-  
-* Changing/adding/deleting partitiongs for a container requires global
-  **synchronisation** among the tasks in the task group that has access
-  to the container. Partitioning changes are useful for balancing work
-  load that depends on the size of partitions in a partitioning.
-  Active partitionings cannot be changed. However, an active partitioning
-  may be cloned into a new version, with the clone being changed.
-  Switching to the new versions will remove the old version of the
-  partitioning. 
-  As long as partitiongs stay fixed, a switch from one to
-  another only results in local synchronisation among the tasks which
-  need to send data to each other.
-
-* A computational kernel usually wants to access data from multiple
-  containers. To this end, containers can be **coupled** by specifying
-  a coupling scheme for global indexes. Switching the partitioning
-  of a container automatically also switches the partitiong of coupled
-  containers.
-
-
-# Most important API functions
+# Important API functions
 
 ## Laik_Error* laik_init( Laik_Backend* backend )
 
