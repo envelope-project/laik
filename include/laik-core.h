@@ -15,15 +15,35 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_H_
-#define _LAIK_H_
+#ifndef _LAIK_CORE_H_
+#define _LAIK_CORE_H_
 
-// Convenience header, including headers of important LAIK modules
-// (without LAIK backends)
+// configuration for a LAIK instance (there may be multiple)
+typedef struct _Laik_Instance Laik_Instance;
 
-#include "laik-core.h"
-#include "laik-space.h"
-#include "laik-data.h"
-#include "laik-backend.h"
+// LAIK error struct
+typedef struct _Laik_Error Laik_Error;
 
-#endif // _LAIK_H_
+
+/*********************************************************************/
+/* Core LAIK API
+ *********************************************************************/
+
+
+/**
+ * Return number of LAIK tasks available (within this instance)
+ */
+int laik_size(Laik_Instance*);
+
+/**
+ * Return rank of calling LAIK task (within this instance)
+ */
+int laik_myid(Laik_Instance*);
+
+/**
+ * Shut down communication and free resources of this instance
+ */
+void laik_finalize(Laik_Instance*);
+
+
+#endif // _LAIK_CORE_H_

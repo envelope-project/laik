@@ -15,15 +15,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_H_
-#define _LAIK_H_
+#ifndef _LAIK_INTERNAL_H_
+#define _LAIK_INTERNAL_H_
 
-// Convenience header, including headers of important LAIK modules
-// (without LAIK backends)
+#include "laik.h"
 
-#include "laik-core.h"
-#include "laik-space.h"
-#include "laik-data.h"
-#include "laik-backend.h"
+#include "laik-core-internal.h"
+#include "laik-space-internal.h"
+#include "laik-data-internal.h"
 
-#endif // _LAIK_H_
+#endif // _LAIK_INTERNAL_H_

@@ -7,7 +7,7 @@
     "problemMatcher": {
         "owner": "cpp",
         "fileLocation": [
-            "relative", "${workspace}/examples"
+            "relative", "${workspaceRoot}"
         ],
         "pattern": {
             "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",

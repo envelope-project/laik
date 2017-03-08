@@ -15,15 +15,21 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_H_
-#define _LAIK_H_
+#ifndef _LAIK_BACKEND_H_
+#define _LAIK_BACKEND_H_
 
-// Convenience header, including headers of important LAIK modules
-// (without LAIK backends)
+#include "laik.h"
 
-#include "laik-core.h"
-#include "laik-space.h"
-#include "laik-data.h"
-#include "laik-backend.h"
+// LAIK communication back-end
+typedef struct _Laik_Backend Laik_Backend;
+struct _Laik_Backend {
+  char* name;
+  void (*finalize)(Laik_Instance*);
+  int (*put)(Laik_Task target, int tag, void*, int); // trigger sending
+  int (*reg_receiver)(Laik_Task from, int tag, void*, int); // receiver space
+  int (*test)(Laik_Task from, int tag); // check if data arrived
+};
 
-#endif // _LAIK_H_
+Laik_Instance* laik_new_instance(Laik_Backend* b);
+
+#endif // _LAIK_BACKEND_H_

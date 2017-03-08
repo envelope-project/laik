@@ -15,15 +15,30 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_H_
-#define _LAIK_H_
+#ifndef _LAIK_DATA_INTERNAL_H_
+#define _LAIK_DATA_INTERNAL_H_
 
-// Convenience header, including headers of important LAIK modules
-// (without LAIK backends)
-
-#include "laik-core.h"
-#include "laik-space.h"
 #include "laik-data.h"
-#include "laik-backend.h"
 
-#endif // _LAIK_H_
+struct _Laik_Data {
+  int elemsize;
+  Laik_Space* s;      // index space of this container
+  Laik_Group* g;      // task group sharing this container
+  Laik_PartGroup* pg; // variable number of partitions
+};
+
+struct _Laik_Layout {
+  int dims, order[3]; // at most 3 dimensions  
+};
+
+struct _Laik_Mapping {
+  Laik_Data* d;
+  int p; // phase number in container
+  int s; // slice number in partition
+  Laik_Layout l; // ordering layout used
+
+  void* base; // start address of pinning
+  int count; // number of elements pinned
+};
+
+#endif // _LAIK_DATA_INTERNAL_H_
