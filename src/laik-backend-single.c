@@ -17,22 +17,22 @@ Laik_Instance* laik_init_single()
     if (!single_instance) {
         single_instance = laik_new_instance(&laik_backend_single);
         single_instance->size = 1;
+
+        // group world
+        Laik_Group* g = laik_create_group(single_instance);
+        g->inst = single_instance;
+        g->gid = 0;
+        g->tasks = 1;
+        g->task[0] = 0;
     }
     return single_instance;
 }
 
 Laik_Group* laik_single_world()
 {
-    static Laik_Group* g = 0;
+    if (!single_instance)
+        laik_init_single();
 
-    if (!g) {
-        if (!single_instance)
-            laik_init_single();
-
-        g = (Laik_Group*) malloc(sizeof(Laik_Group));
-
-        g->inst = single_instance;
-        g->gid = 0;
-    }
-    return g;
+    assert(single_instance->group_count > 0);
+    return single_instance->group[0];
 }

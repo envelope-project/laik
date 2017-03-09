@@ -20,17 +20,27 @@
 
 #include "laik.h"
 
+#define MAX_GROUPS   10
 #define MAX_SPACES   10
 #define MAX_DATAS    10
 #define MAX_MAPPINGS 50
+
+struct _Laik_Group {
+    Laik_Instance* inst;
+    int gid;
+    int tasks;
+    int task[1];
+};
 
 struct _Laik_Instance {
   int size;
   int myid;
   Laik_Backend* backend;
 
-  int space_count, data_count, mapping_count;
-  Laik_Space* space[MAX_SPACES];
+  Laik_Space* firstspace;
+
+  int group_count, data_count, mapping_count;
+  Laik_Group* group[MAX_GROUPS];
   Laik_Data* data[MAX_DATAS];
   Laik_Mapping* mapping[MAX_MAPPINGS]; // active mappings
 };

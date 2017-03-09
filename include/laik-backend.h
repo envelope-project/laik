@@ -30,6 +30,5 @@ struct _Laik_Backend {
   int (*test)(Laik_Task from, int tag); // check if data arrived
 };
 
-Laik_Instance* laik_new_instance(Laik_Backend* b);
 
 #endif // _LAIK_BACKEND_H_

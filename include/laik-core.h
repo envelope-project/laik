@@ -24,26 +24,33 @@ typedef struct _Laik_Instance Laik_Instance;
 // LAIK error struct
 typedef struct _Laik_Error Laik_Error;
 
+// backend to use for a LAIK instance
+typedef struct _Laik_Backend Laik_Backend;
+
+// a task group over which a index space gets distributed
+typedef struct _Laik_Group Laik_Group;
+//struct _Laik_Group;
 
 /*********************************************************************/
 /* Core LAIK API
  *********************************************************************/
 
-
-/**
- * Return number of LAIK tasks available (within this instance)
- */
+// return number of LAIK tasks available (within this instance)
 int laik_size(Laik_Instance*);
 
-/**
- * Return rank of calling LAIK task (within this instance)
- */
+// return rank of calling LAIK task (within this instance)
 int laik_myid(Laik_Instance*);
 
-/**
- * Shut down communication and free resources of this instance
- */
+// shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance*);
 
+// allocate space for a new LAIK instance
+Laik_Instance* laik_new_instance(Laik_Backend* b);
+
+// create a group to be used in this LAIK instance
+Laik_Group* laik_create_group(Laik_Instance*);
+
+// get default group with all tasks within this LAIK instance
+Laik_Group* laik_world(Laik_Instance* i);
 
 #endif // _LAIK_CORE_H_

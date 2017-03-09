@@ -28,6 +28,6 @@
 Laik_Instance* laik_init_single();
 
 // get the default task group: just this single task
-Laik_Group* laik_single_world();
+Laik_Group* laik_world();
 
 #endif // _LAIK_BACKEND_SINGLE_H_

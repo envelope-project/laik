@@ -62,10 +62,6 @@ struct _Laik_Slice {
 // a participating task in the distribution of an index space
 typedef struct _Laik_Task Laik_Task;
 
-// a task group over which a index space gets distributed
-typedef struct _Laik_Group Laik_Group;
-struct _Laik_Group;
-
 // an index space (regular and continous, up to 3 dimensions)
 typedef struct _Laik_Space Laik_Space;
 
@@ -84,15 +80,63 @@ typedef struct _Laik_PartTransition Laik_PartTransition;
 /* LAIK API for distributed index spaces
  *********************************************************************/
 
-Laik_Space* laik_space_create(Laik_Instance*, int dims, ...);
+// create a new index space object (initially invalid)
+Laik_Space* laik_new_space(Laik_Instance* i);
 
-//
-// convenience functions
-//
+// create a new index space object with an initial size
+Laik_Space* laik_new_space_1d(Laik_Instance* i, int s1);
+Laik_Space* laik_new_space_2d(Laik_Instance* i, int s1, int s2);
+Laik_Space* laik_new_space_3d(Laik_Instance* i, int s1, int s2, int s3);
 
-// add a new partitioning and instantly switch to
-void laik_repartition(Laik_Space* s,
-                      Laik_PartitionType pt, Laik_AccessPermission ap);
+// change the size of an index space, eventually triggering a repartitiong
+void laik_change_space_1d(Laik_Space* s, int s1);
+void laik_change_space_2d(Laik_Space* s, int s1, int s2);
+void laik_change_space_3d(Laik_Space* s, int s1, int s2, int s3);
+
+// free a space with all resources depending on it (e.g. paritionings)
+void laik_free_space(Laik_Space* s);
+
+// create a new partitioning on a space
+Laik_Partitioning*
+laik_new_base_partitioning(Laik_Space* s,
+                           Laik_PartitionType pt,
+                           Laik_AccessPermission ap);
+
+// create a new partitioning based on another one on the same space
+Laik_Partitioning*
+laik_new_coupled_partitioning(Laik_Partitioning* p,
+                              Laik_PartitionType pt,
+                              Laik_AccessPermission ap);
+
+// create a new partitioning based on another one on a different space
+// this also needs to know which dimensions should be coupled
+Laik_Partitioning*
+laik_new_spacecoupled_partitioning(Laik_Partitioning* p,
+                                   Laik_Space* s, int from, int to,
+                                   Laik_PartitionType pt,
+                                   Laik_AccessPermission ap);
+
+// append a partitioning to a partioning group whose consistency should
+// be enforced at the same point in time
+void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p);
+
+// Calculate communication required for transitioning between partitionings
+Laik_PartTransition* laik_calc_transition(Laik_PartGroup* from,
+                                          Laik_PartGroup* to);
+
+// enforce consistency for the partitioning group, depending on previous
+void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g);
+
+// set a weight for each participating task in a partitioning, to be
+//  used when a repartitioning is requested
+void laik_set_partition_weights(Laik_Partitioning*p, int* w);
+
+// change an existing base partitioning
+void laik_repartition(Laik_Partitioning* p, Laik_PartitionType pt);
+
+// couple different LAIK instances via spaces:
+// one partition of calling task in outer space is mapped to inner space
+void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
 
 
 #endif // _LAIK_SPACE_H_

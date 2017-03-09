@@ -28,24 +28,25 @@ struct _Laik_Task {
     int rank;
 };
 
-struct _Laik_Group {
-    Laik_Instance* inst;
-    int gid;
-};
-
 // internal to allow extension for non-regular index spaces
 
 struct _Laik_Space {
     int dims, size[3]; // at most 3 dimensions
+    Laik_Instance* inst;
+    Laik_Space* next; // for list of spaces used in instance
+
+    // linked list of partitionings for this space
+    Laik_Partitioning* first;
 };
 
 // internal to allow for more irregular partitionings
 
 struct _Laik_Partitioning {
-    int count; // number of participating tasks
+    Laik_Group* group;
     Laik_PartitionType type;
     Laik_AccessPermission permission;
     Laik_Space* space; // space to partition
+    Laik_Partitioning* next; // for list of partitionings using space
 
     // coupling to another partitioning (potentially other space)
     Laik_Partitioning* base;
