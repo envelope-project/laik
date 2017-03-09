@@ -20,6 +20,8 @@
 
 #include "laik.h"
 
+#include <stdint.h>
+
 /*********************************************************************/
 /* LAIK Spaces - Distributed partitioning of index spaces
  *********************************************************************/
@@ -27,12 +29,17 @@
 
 // generic partition types, may need parameters
 typedef enum _Laik_PartitionType {
-  LAIK_PT_None = 0,
-  LAIK_PT_Master,   // only one task has access to all elements
-  LAIK_PT_All,      // all tasks have access to all elements
-  LAIK_PT_Stripe,   // continous distinct ranges, covering all elements
-  LAIK_PT_Halo,     // extend a partition at borders
-  LAIK_PT_Neighbor, // extend a partition with neighbor parts
+    LAIK_PT_None = 0,
+
+    // base
+    LAIK_PT_Master,   // only one task has access to all elements
+    LAIK_PT_All,      // all tasks have access to all elements
+    LAIK_PT_Stripe,   // continous distinct ranges, covering all elements
+
+    // coupled
+    LAIK_PT_Copy,     // copy borders from base partitioning
+    LAIK_PT_Halo,     // extend a partitioning at borders
+    LAIK_PT_Neighbor, // extend a partitioning with neighbor parts
 } Laik_PartitionType;
 
 // access permission to partitions
@@ -50,7 +57,7 @@ typedef enum _Laik_AccessPermission {
 // a point in an index space
 typedef struct _Laik_Index Laik_Index;
 struct _Laik_Index {
-    int i[3]; // at most 3 dimensions
+    uint64_t i[3]; // at most 3 dimensions
 };
 
 // a rectangle-shaped slice from an index space [from;to[
@@ -84,14 +91,18 @@ typedef struct _Laik_PartTransition Laik_PartTransition;
 Laik_Space* laik_new_space(Laik_Instance* i);
 
 // create a new index space object with an initial size
-Laik_Space* laik_new_space_1d(Laik_Instance* i, int s1);
-Laik_Space* laik_new_space_2d(Laik_Instance* i, int s1, int s2);
-Laik_Space* laik_new_space_3d(Laik_Instance* i, int s1, int s2, int s3);
+Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1);
+Laik_Space* laik_new_space_2d(Laik_Instance* i,
+                              uint64_t s1, uint64_t s2);
+Laik_Space* laik_new_space_3d(Laik_Instance* i,
+                              uint64_t s1, uint64_t s2, uint64_t s3);
 
 // change the size of an index space, eventually triggering a repartitiong
-void laik_change_space_1d(Laik_Space* s, int s1);
-void laik_change_space_2d(Laik_Space* s, int s1, int s2);
-void laik_change_space_3d(Laik_Space* s, int s1, int s2, int s3);
+void laik_change_space_1d(Laik_Space* s, uint64_t s1);
+void laik_change_space_2d(Laik_Space* s,
+                          uint64_t s1, uint64_t s2);
+void laik_change_space_3d(Laik_Space* s,
+                          uint64_t s1, uint64_t s2, uint64_t s3);
 
 // free a space with all resources depending on it (e.g. paritionings)
 void laik_free_space(Laik_Space* s);
@@ -101,6 +112,9 @@ Laik_Partitioning*
 laik_new_base_partitioning(Laik_Space* s,
                            Laik_PartitionType pt,
                            Laik_AccessPermission ap);
+
+// for multiple-dimensional spaces, set dimension to partition (default is 0)
+void laik_set_partitioning_dimension(Laik_Partitioning*p, int d);
 
 // create a new partitioning based on another one on the same space
 Laik_Partitioning*
@@ -115,6 +129,9 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* p,
                                    Laik_Space* s, int from, int to,
                                    Laik_PartitionType pt,
                                    Laik_AccessPermission ap);
+
+// make sure partitioning borders are up to date
+void laik_update_partitioning(Laik_Partitioning* p);
 
 // append a partitioning to a partioning group whose consistency should
 // be enforced at the same point in time

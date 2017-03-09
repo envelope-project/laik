@@ -26,14 +26,6 @@
 /* LAIK Data - Data containers for LAIK index spaces
  *********************************************************************/
 
-// container types, used in laik_alloc
-typedef enum _Laik_DataType {
-  LAIK_DT_None = 0,
-  LAIK_DT_1D_Double,
-  LAIK_DT_2D_Double,
-  LAIK_DT_Custom = 100
-} Laik_DataType;
-
 // a LAIK container
 typedef struct _Laik_Data Laik_Data;
 
@@ -52,15 +44,17 @@ typedef struct _Laik_Mapping Laik_Mapping;
  * Define a LAIK container shared by a LAIK task group.
  * This is a collective operation of all tasks in the group.
  * If no partitioning is set (via laik_setPartition) before
- * before use, default to equal-sized owner STRIPE partitioning.
+ * use, default to equal-sized owner STRIPE partitioning.
  */
-Laik_Data* laik_alloc(Laik_Group* g, Laik_DataType type, uint64_t count);
+Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s);
+Laik_Data* laik_alloc_1d(Laik_Group* g, int elemsize, uint64_t s1);
+Laik_Data* laik_alloc_2d(Laik_Group* g, int elemsize, uint64_t s1, uint64_t s2);
 
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data*,
                            Laik_PartitionType, Laik_AccessPermission);
 
-void laik_fill_double(Laik_Data*, double);
+void laik_fill_double(Laik_Data* data, double v);
 
 Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l, void** base, uint64_t* count);
 

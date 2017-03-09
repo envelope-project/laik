@@ -22,7 +22,7 @@ Laik_Instance* laik_init_single()
         Laik_Group* g = laik_create_group(single_instance);
         g->inst = single_instance;
         g->gid = 0;
-        g->tasks = 1;
+        g->count = 1;
         g->task[0] = 0;
     }
     return single_instance;

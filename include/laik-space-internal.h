@@ -31,12 +31,13 @@ struct _Laik_Task {
 // internal to allow extension for non-regular index spaces
 
 struct _Laik_Space {
-    int dims, size[3]; // at most 3 dimensions
+    int dims;
+    uint64_t size[3]; // at most 3 dimensions
     Laik_Instance* inst;
     Laik_Space* next; // for list of spaces used in instance
 
     // linked list of partitionings for this space
-    Laik_Partitioning* first;
+    Laik_Partitioning* first_partitioning;
 };
 
 // internal to allow for more irregular partitionings
@@ -46,15 +47,17 @@ struct _Laik_Partitioning {
     Laik_PartitionType type;
     Laik_AccessPermission permission;
     Laik_Space* space; // space to partition
-    Laik_Partitioning* next; // for list of partitionings using space
+    int pdim; // for 2d/3d: dimension to partition
 
     // coupling to another partitioning (potentially other space)
     Laik_Partitioning* base;
-    int coupledDimFrom, coupledDimTo, haloWidth;
+    int haloWidth;
 
     // partitions borders (calculated lazy)
     bool bordersValid;
-    Laik_Slice* b; // slice borders, one slice per participating task
+    Laik_Slice* borders; // slice borders, one slice per participating task
+
+    Laik_Partitioning* next; // for list of partitionings same space
 };
 
 

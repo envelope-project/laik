@@ -22,9 +22,19 @@
 
 struct _Laik_Data {
   int elemsize;
-  Laik_Space* s;      // index space of this container
-  Laik_Group* g;      // task group sharing this container
-  Laik_PartGroup* pg; // variable number of partitions
+  Laik_Space* space; // index space of this container
+  Laik_Group* group;
+
+  // default partitioning
+  Laik_PartitionType defaultPartitionType;
+  Laik_AccessPermission defaultPermission;
+
+  // active partitioning (TODO: multiple may be active)
+  Laik_Partitioning* activePartitioning;
+  Laik_Mapping* activeMapping;
+
+  // can be set by backend
+  void* backend_data;
 };
 
 struct _Laik_Layout {
@@ -32,10 +42,10 @@ struct _Laik_Layout {
 };
 
 struct _Laik_Mapping {
-  Laik_Data* d;
-  int p; // phase number in container
-  int s; // slice number in partition
-  Laik_Layout l; // ordering layout used
+  Laik_Data* data;
+  Laik_Partitioning* partitioning;
+  int task; // slice/task number in partition
+  Laik_Layout* layout; // ordering layout used
 
   void* base; // start address of pinning
   int count; // number of elements pinned

@@ -57,7 +57,7 @@ Laik_Group* laik_create_group(Laik_Instance* i)
 
     g->inst = i;
     g->gid = i->group_count;
-    g->tasks = 0; // yet invalid
+    g->count = 0; // yet invalid
 
     i->group_count++;
 
@@ -72,7 +72,7 @@ Laik_Group* laik_world(Laik_Instance* i)
     Laik_Group* g = i->group[0];
     assert(g->gid == 0);
     assert(g->inst == i);
-    assert(g->tasks == i->size);
+    assert(g->count == i->size);
 
     return g;
 }

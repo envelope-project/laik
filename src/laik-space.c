@@ -15,7 +15,7 @@ Laik_Space* laik_new_space(Laik_Instance* i)
 
     space->inst = i;
     space->dims = 0; // invalid
-    space->first = 0;
+    space->first_partitioning = 0;
 
     // append this space to list of spaces used by LAIK instance
     space->next = i->firstspace;
@@ -25,7 +25,7 @@ Laik_Space* laik_new_space(Laik_Instance* i)
 }
 
 // create a new index space object with an initial size
-Laik_Space* laik_new_space_1d(Laik_Instance* i, int s1)
+Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 1;
@@ -34,7 +34,8 @@ Laik_Space* laik_new_space_1d(Laik_Instance* i, int s1)
     return space;
 }
 
-Laik_Space* laik_new_space_2d(Laik_Instance* i, int s1, int s2)
+Laik_Space* laik_new_space_2d(Laik_Instance* i,
+                              uint64_t s1, uint64_t s2)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 2;
@@ -44,7 +45,8 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i, int s1, int s2)
     return space;
 }
 
-Laik_Space* laik_new_space_3d(Laik_Instance* i, int s1, int s2, int s3)
+Laik_Space* laik_new_space_3d(Laik_Instance* i,
+                              uint64_t s1, uint64_t s2, uint64_t s3)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 3;
@@ -57,7 +59,7 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i, int s1, int s2, int s3)
 
 
 // change the size of an index space, eventually triggering a repartitiong
-void laik_change_space_1d(Laik_Space* s, int s1)
+void laik_change_space_1d(Laik_Space* s, uint64_t s1)
 {
     assert(s->dims == 1);
     if (s->size[0] == s1) return;
@@ -67,12 +69,14 @@ void laik_change_space_1d(Laik_Space* s, int s1)
     // TODO: notify partitionings about space change
 }
 
-void laik_change_space_2d(Laik_Space* s, int s1, int s2)
+void laik_change_space_2d(Laik_Space* s,
+                          uint64_t s1, uint64_t s2)
 {
     assert(0); // TODO
 }
 
-void laik_change_space_3d(Laik_Space* s, int s1, int s2, int s3)
+void laik_change_space_3d(Laik_Space* s,
+                          uint64_t s1, uint64_t s2, uint64_t s3)
 {
     assert(0); // TODO
 }
@@ -90,24 +94,34 @@ laik_new_base_partitioning(Laik_Space* s,
                            Laik_PartitionType pt,
                            Laik_AccessPermission ap)
 {
-    Laik_Partitioning* partitioning;
-    partitioning = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
+    Laik_Partitioning* p;
+    p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
 
-    partitioning->space = s;
-    partitioning->permission = ap;
-    partitioning->type = pt;
-    partitioning->group = laik_world(s->inst);
+    p->space = s;
+    p->next = s->first_partitioning;
+    s->first_partitioning = p;
 
-    partitioning->base = 0;
-    partitioning->next = 0;
-    partitioning->coupledDimFrom = 0;
-    partitioning->coupledDimTo = 0;
-    partitioning->haloWidth = 0;
+    p->permission = ap;
+    p->type = pt;
+    p->group = laik_world(s->inst);
+    p->pdim = 0;
 
-    partitioning->bordersValid = false;
+    p->base = 0;
+    p->haloWidth = 0;
 
-    return partitioning;
+    p->bordersValid = false;
+    p->borders = 0;
+
+    return p;
 }
+
+// for multiple-dimensional spaces, set dimension to partition (default is 0)
+void laik_set_partitioning_dimension(Laik_Partitioning* p, int d)
+{
+    assert((d >= 0) && (d < p->space->dims));
+    p->pdim = d;
+}
+
 
 // create a new partitioning based on another one on the same space
 Laik_Partitioning*
@@ -138,6 +152,90 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* p,
 
     return partitioning;
 }
+
+// make sure partitioning borders are up to date
+void laik_update_partitioning(Laik_Partitioning* p)
+{
+    Laik_Slice* baseBorders = 0;
+    int pdim = p->pdim;
+    int basepdim;
+
+    if (p->base) {
+        laik_update_partitioning(p->base);
+        baseBorders = p->base->borders;
+        basepdim = p->base->pdim;
+        // sizes of coupled dimensions should be equal
+        assert(p->space->size[pdim] == p->base->space->size[basepdim]);
+    }
+
+    if (p->bordersValid) return;
+
+    int count = p->group->count;
+    if (!p->borders)
+        p->borders = (Laik_Slice*) malloc(count * sizeof(Laik_Slice));
+
+    // partition according to dimension 0
+    uint64_t size = p->space->size[pdim];
+    uint64_t idx = 0;
+    uint64_t inc = (size / count)+1;
+
+    for(int task = 0; task < count; task++) {
+        Laik_Slice* b = &(p->borders[task]);
+        switch(p->type) {
+        case LAIK_PT_All:
+            b->from.i[0] = 0;
+            b->from.i[1] = 0;
+            b->from.i[2] = 0;
+            b->to.i[0] = p->space->size[0];
+            b->to.i[1] = p->space->size[1];
+            b->to.i[2] = p->space->size[2];
+            break;
+
+        case LAIK_PT_Stripe:
+            b->from.i[0] = 0;
+            b->from.i[1] = 0;
+            b->from.i[2] = 0;
+            b->to.i[0] = p->space->size[0];
+            b->to.i[1] = p->space->size[1];
+            b->to.i[2] = p->space->size[2];
+
+            b->from.i[pdim] = idx;
+            idx += inc;
+            if (idx > size) idx = size;
+            b->to.i[pdim] = idx;
+            break;
+
+        case LAIK_PT_Master:
+            b->from.i[0] = 0;
+            b->from.i[1] = 0;
+            b->from.i[2] = 0;
+            b->to.i[0] = (task == 0) ? p->space->size[0] : 0;
+            b->to.i[1] = (task == 0) ? p->space->size[1] : 0;
+            b->to.i[2] = (task == 0) ? p->space->size[2] : 0;
+            break;
+
+        case LAIK_PT_Copy:
+            assert(baseBorders);
+            b->from.i[0] = 0;
+            b->from.i[1] = 0;
+            b->from.i[2] = 0;
+            b->to.i[0] = p->space->size[0];
+            b->to.i[1] = p->space->size[1];
+            b->to.i[2] = p->space->size[2];
+
+            b->from.i[pdim] = baseBorders[task].from.i[basepdim];
+            b->to.i[pdim] = baseBorders[task].to.i[basepdim];
+            break;
+
+        default:
+            assert(0); // TODO
+            break;
+        }
+    }
+    p->bordersValid = true;
+}
+
+
 
 // append a partitioning to a partioning group whose consistency should
 // be enforced at the same point in time
