@@ -105,8 +105,11 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
         m->layout = l; // TODO
         m->count = count;
         m->base = malloc(count * d->elemsize);
+
+        d->activeMapping = m;
     }
 
+    m = d->activeMapping;
     *base = m->base;
     *count = m->count;
 
