@@ -7,10 +7,10 @@
 
 #include <stdio.h>
 
-void main(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
     Laik_Instance* inst = laik_init_single();
-    Laik_Group* world = laik_single_world();
+    Laik_Group* world = laik_world(inst);
 
     // allocate global 1d double array: 1 mio entries, equal sized stripes
     Laik_Data* a = laik_alloc(world, LAIK_DT_1D_Double, 1000000);
@@ -39,4 +39,6 @@ void main(int argc, char* argv[])
         printf("Result: %f\n", base[0]);
     }
     laik_finalize(inst);
+
+    return 0;
 }
