@@ -25,6 +25,7 @@
 #define mpi_world laik_mpi_world()
 
 // create a LAIK instance for this backend
+// if application already called MPI_Init, pass 0 for args
 Laik_Instance* laik_init_mpi(int* argc, char*** argv);
 
 // get the default task group: just this single task
