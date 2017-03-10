@@ -29,11 +29,12 @@ For the following simple example, a parallel vector sum, LAIK's communication
 funtionality via repartitioning is enough. This example also shows the use of a simple LAIK data container which enables automatic data migration when switching partitioning.
 
 ```C
-    #include "laik-backend-tcp.h"
+    #include "laik-backend-mpi.h"
 
     int main(int argc, char* argv[])
     {
-        Laik_Instance* inst = laik_init_tcp(); // use provided TCP backend
+        // use provided MPI backend, let LAIK do MPI_Init
+        Laik_Instance* inst = laik_init_mpi(&argc, &argv);
         Laik_Group* world = laik_world(inst);
 
         // allocate global 1d double array: 1 mio entries, equal sized stripes
@@ -67,37 +68,12 @@ Compile:
 ```
     cc vectorsum.c -o vectorsum -llaik
 ```
-To run this example, the LAIK's TCP backend is supported by the LAIK launcher "laikrun":
+To run this example (could use vectorsum directly for OpenMP backend):
 ```
-    laikrun -h host1,host2 ./vectorsum
+    mpirun -np 4 ./vectorsum
 ```
 
 
-# Important API functions
+# License
 
-## Laik_Error* laik_init( Laik_Backend* backend )
-
-Initialize LAIK, using *backend* for communication.
-Backend parameters usually are passed via environment variables.
-On success, *laik_init* returns NULL, otherwise an error struct.
-
-## Laik_Data laik_alloc( Laik_Type t, uint64_t c, Laik_Part p)
-
-Creates a handle for global, LAIK-managed data of type *t*
-with *c* elements and *p* as initially active partitioning.
-(TODO: task group).
-
-## Laik_Pinning laik_mydata( Laik_Data d, Laik_Order o)
-
-Pins owned partition of active partitioning of *d* to local memory,
-taking order wish *o* into account, and returning the used
-pinning order. This includes the base address of the pinning and
-the number of pinned elements.
-
-## laik_repartition( Laik_data d, Laik_Part p)
-
-Defines a new partitioning, and makes it active.
-
-## laik_finish()
-
-Shutdown the communication backend.
+LGPLv3+, (c) LRR/TUM
