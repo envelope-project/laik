@@ -31,6 +31,9 @@ struct _Laik_Task {
 // internal to allow extension for non-regular index spaces
 
 struct _Laik_Space {
+    char* name; // for debugging
+    int id;     // for debugging
+
     int dims;
     uint64_t size[3]; // at most 3 dimensions
     Laik_Instance* inst;
@@ -43,6 +46,9 @@ struct _Laik_Space {
 // internal to allow for more irregular partitionings
 
 struct _Laik_Partitioning {
+    char* name; // for debugging
+    int id;     // for debugging
+
     Laik_Group* group;
     Laik_PartitionType type;
     Laik_AccessPermission permission;

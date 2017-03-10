@@ -49,6 +49,7 @@ typedef enum _Laik_AccessPermission {
     LAIK_AP_WriteOnly, // promises complete overwriting
     LAIK_AP_ReadWrite,
     LAIK_AP_Plus,      // + reduction, multiple writers
+    LAIK_AP_Times,     // * reduction, multiple writers
     LAIK_AP_Min,       // min reduction, multiple writers
     LAIK_AP_Max        // max reduction, multiple writers
 } Laik_AccessPermission;
@@ -97,6 +98,12 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i,
 Laik_Space* laik_new_space_3d(Laik_Instance* i,
                               uint64_t s1, uint64_t s2, uint64_t s3);
 
+// free a space with all resources depending on it (e.g. paritionings)
+void laik_free_space(Laik_Space* s);
+
+// set a space a name, for debug output
+void laik_set_space_name(Laik_Space* s, char* n);
+
 // change the size of an index space, eventually triggering a repartitiong
 void laik_change_space_1d(Laik_Space* s, uint64_t s1);
 void laik_change_space_2d(Laik_Space* s,
@@ -104,12 +111,10 @@ void laik_change_space_2d(Laik_Space* s,
 void laik_change_space_3d(Laik_Space* s,
                           uint64_t s1, uint64_t s2, uint64_t s3);
 
-// free a space with all resources depending on it (e.g. paritionings)
-void laik_free_space(Laik_Space* s);
 
 // create a new partitioning on a space
 Laik_Partitioning*
-laik_new_base_partitioning(Laik_Space* s,
+laik_new_base_partitioning(Laik_Space* space,
                            Laik_PartitionType pt,
                            Laik_AccessPermission ap);
 
@@ -129,6 +134,12 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* p,
                                    Laik_Space* s, int from, int to,
                                    Laik_PartitionType pt,
                                    Laik_AccessPermission ap);
+
+// free a partitioning with related resources
+void laik_free_partitioning(Laik_Partitioning* p);
+
+// give a partitioning a name, for debug output
+void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
 
 // make sure partitioning borders are up to date
 void laik_update_partitioning(Laik_Partitioning* p);

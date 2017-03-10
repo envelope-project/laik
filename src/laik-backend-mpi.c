@@ -42,15 +42,16 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-    mpi_instance = laik_new_instance(&laik_backend_mpi);
-    mpi_instance->size = world_size;
-    mpi_instance->myid = world_rank;
+    Laik_Instance* inst;
+    inst = laik_new_instance(&laik_backend_mpi);
+    inst->size = world_size;
+    inst->myid = world_rank;
 
     // group world
-    Laik_Group* g = laik_create_group(mpi_instance);
-    g->inst = mpi_instance;
+    Laik_Group* g = laik_create_group(inst);
+    g->inst = inst;
     g->gid = 0;
-    g->count = world_size;
+    g->count = inst->size;
     g->task[0] = 0;
 
 #ifdef LAIK_DEBUG
@@ -59,11 +60,12 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     int name_len;
     MPI_Get_processor_name(processor_name, &name_len);
 
-    printf("LAIK MPI: %d/%d (host %s)\n",
-           world_rank, world_size, processor_name);
+    printf("LAIK %d/%d - MPI backend initialized (host %s)\n",
+           inst->myid, inst->size, processor_name);
 #endif
 
-    return mpi_instance;
+    mpi_instance = inst;
+    return inst;
 }
 
 void laik_mpi_finalize()
