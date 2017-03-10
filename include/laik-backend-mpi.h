@@ -15,19 +15,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_BACKEND_SINGLE_H_
-#define _LAIK_BACKEND_SINGLE_H_
+#ifndef _LAIK_BACKEND_MPI_H_
+#define _LAIK_BACKEND_MPI_H_
 
 #include "laik-backend.h"
 
-// Dummy backend.
+// MPI backend.
 
-#define single_world laik_single_world()
+#define mpi_world laik_mpi_world()
 
 // create a LAIK instance for this backend
-Laik_Instance* laik_init_single();
+Laik_Instance* laik_init_mpi(int* argc, char*** argv);
 
 // get the default task group: just this single task
-Laik_Group* laik_single_world();
+Laik_Group* laik_mpi_world();
 
-#endif // _LAIK_BACKEND_SINGLE_H_
+#endif // _LAIK_BACKEND_MPI_H_

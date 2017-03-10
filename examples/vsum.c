@@ -3,13 +3,22 @@
  */
 
 #include "laik.h"
+
+#ifdef LAIK_USEMPI
+#include "laik-backend-mpi.h"
+#else
 #include "laik-backend-single.h"
+#endif
 
 #include <stdio.h>
 
 int main(int argc, char* argv[])
 {
+#ifdef LAIK_USEMPI
+    Laik_Instance* inst = laik_init_mpi(&argc, &argv);
+#else
     Laik_Instance* inst = laik_init_single();
+#endif
     Laik_Group* world = laik_world(inst);
 
     // allocate global 1d double array: 1 mio entries, equal sized stripes

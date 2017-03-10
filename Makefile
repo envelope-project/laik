@@ -1,3 +1,7 @@
+# MPI
+CC = mpicc
+DEFS = -DLAIK_USEMPI -DLAIK_DEBUG
+
 CFLAGS=-g -std=gnu99 -Iinclude
 LDFLAGS=-g
 
@@ -9,6 +13,8 @@ DEPS = $(SRCS:.c=.d)
 # instruct GCC to produce dependency files
 CFLAGS += -MMD -MP
 
+CFLAGS += $(DEFS)
+
 SUBDIRS=examples
 .PHONY: $(SUBDIRS)
 
@@ -18,7 +24,7 @@ liblaik.a: $(OBJS)
 	ar rcs liblaik.a $(OBJS)
 
 examples: liblaik.a
-	cd examples && $(MAKE)
+	cd examples && $(MAKE) CC=$(CC) DEFS='$(DEFS)'
 
 clean:
 	rm -f *~ *.o $(OBJS) $(DEPS) liblaik.a

@@ -1,5 +1,6 @@
 EXAMPLES = vsum
 CFLAGS = -g -std=gnu99 -I../include
+CFLAGS += $(DEFS)
 
 all: $(EXAMPLES)
 
