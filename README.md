@@ -1,4 +1,4 @@
-# LAIK 👍 - A Library for Lightweight Automatic Integrated data containers for parallel worKers
+# LAIK 👍 - A Library for Lightweight Application-Integrated data containers for parallel worKers
 
 This library provides lightweight management for the distribution of global data containers for parallel applications using index spaces. It calculates the communication requirements for changing a partitioning or switching between different partitionings. By associating partitions with work load using the "owner-computes" rule, LAIK can be used for automatic load balancing.
 
