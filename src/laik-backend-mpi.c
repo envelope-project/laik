@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 void laik_mpi_finalize();
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t);
@@ -32,27 +33,38 @@ void laik_mpi_finalize() {}
 
 #include <mpi.h>
 
+typedef struct _MPIData MPIData;
+struct _MPIData {
+    MPI_Comm comm;
+    bool didInit;
+};
+
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
     if (mpi_instance) return mpi_instance;
 
-    if (argc)
-        MPI_Init(argc, argv);
+    MPIData* d = (MPIData*) malloc(sizeof(MPIData));
+    d->didInit = false;
+    d->comm = MPI_COMM_WORLD;
 
-    int world_size, world_rank;
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    if (argc) {
+        MPI_Init(argc, argv);
+        d->didInit = true;
+    }
+
+
+    int size, rank;
+    MPI_Comm_size(d->comm, &size);
+    MPI_Comm_rank(d->comm, &rank);
 
     Laik_Instance* inst;
-    inst = laik_new_instance(&laik_backend_mpi);
-    inst->size = world_size;
-    inst->myid = world_rank;
+    inst = laik_new_instance(&laik_backend_mpi, size, rank, d);
 
     // group world
     Laik_Group* g = laik_create_group(inst);
     g->inst = inst;
     g->gid = 0;
-    g->count = inst->size;
+    g->size = inst->size;
     g->myid = inst->myid;
     g->task[0] = 0; // TODO
 
@@ -70,14 +82,21 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     return inst;
 }
 
+MPIData* mpiData(Laik_Instance* i)
+{
+    return (MPIData*) i->backend_data;
+}
+
 void laik_mpi_finalize()
 {
-    MPI_Finalize();
+    if (mpiData(mpi_instance)->didInit)
+        MPI_Finalize();
 }
 
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t)
 {
     Laik_Instance* inst = d->space->inst;
+    MPI_Comm comm = mpiData(inst)->comm;
 
     if (t->redCount > 0) {
         for(int i=0; i < t->redCount; i++) {
@@ -101,7 +120,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t)
             // TODO: use group
 
 #ifdef LAIK_DEBUG
-            printf("LAIK %d/%d - MPI Reduce: from %lu, to %lu, elemsize %d, base %p\n",
+            printf("LAIK %d/%d - MPI Reduce: "
+                   "from %lu, to %lu, elemsize %d, base %p\n",
                    d->space->inst->myid, d->space->inst->size,
                    from, to, d->elemsize, base);
 #endif
@@ -113,7 +133,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t)
                               base + from * d->elemsize,
                               to - from,
                               mpiDateType, mpiRedOp,
-                              MPI_COMM_WORLD);
+                              comm);
             }
             else {
                 void* fromPtr = base + from * d->elemsize;
@@ -122,7 +142,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t)
                            base + from * d->elemsize,
                            to - from,
                            mpiDateType, mpiRedOp,
-                           t->redRoot[i], MPI_COMM_WORLD);
+                           t->redRoot[i], comm);
             }
         }
     }

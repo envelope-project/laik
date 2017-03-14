@@ -9,14 +9,14 @@
 #include <stdlib.h>
 
 
-int laik_size(Laik_Instance* i)
+int laik_size(Laik_Group* g)
 {
-    return i->size;
+    return g->size;
 }
 
-int laik_myid(Laik_Instance* i)
+int laik_myid(Laik_Group* g)
 {
-    return i->myid;
+    return g->myid;
 }
 
 void laik_finalize(Laik_Instance* i)
@@ -28,13 +28,16 @@ void laik_finalize(Laik_Instance* i)
 
 
 // allocate space for a new LAIK instance
-Laik_Instance* laik_new_instance(Laik_Backend* b)
+Laik_Instance* laik_new_instance(Laik_Backend* b,
+                                 int size, int myid, void* data)
 {
-    Laik_Instance* instance = (Laik_Instance*) malloc(sizeof(Laik_Instance));
+    Laik_Instance* instance;
+    instance = (Laik_Instance*) malloc(sizeof(Laik_Instance));
 
     instance->backend = b;
-    instance->size = 0; // invalid
-    instance->myid = 0;
+    instance->backend_data = data;
+    instance->size = size;
+    instance->myid = myid;
 
     instance->firstspace = 0;
 
@@ -57,7 +60,7 @@ Laik_Group* laik_create_group(Laik_Instance* i)
 
     g->inst = i;
     g->gid = i->group_count;
-    g->count = 0; // yet invalid
+    g->size = 0; // yet invalid
 
     i->group_count++;
 
@@ -72,7 +75,7 @@ Laik_Group* laik_world(Laik_Instance* i)
     Laik_Group* g = i->group[0];
     assert(g->gid == 0);
     assert(g->inst == i);
-    assert(g->count == i->size);
+    assert(g->size == i->size);
 
     return g;
 }

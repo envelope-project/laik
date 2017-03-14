@@ -28,7 +28,7 @@
 struct _Laik_Group {
     Laik_Instance* inst;
     int gid;
-    int count;
+    int size;
     int myid;
     int task[1];
 };
@@ -36,7 +36,9 @@ struct _Laik_Group {
 struct _Laik_Instance {
   int size;
   int myid;
+
   Laik_Backend* backend;
+  void* backend_data;
 
   Laik_Space* firstspace;
 

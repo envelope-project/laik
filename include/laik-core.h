@@ -35,22 +35,22 @@ typedef struct _Laik_Group Laik_Group;
 /* Core LAIK API
  *********************************************************************/
 
-// return number of LAIK tasks available (within this instance)
-int laik_size(Laik_Instance*);
-
-// return rank of calling LAIK task (within this instance)
-int laik_myid(Laik_Instance*);
+// allocate space for a new LAIK instance
+Laik_Instance* laik_new_instance(Laik_Backend* b, int size, int myid, void* data);
 
 // shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance*);
-
-// allocate space for a new LAIK instance
-Laik_Instance* laik_new_instance(Laik_Backend* b);
 
 // create a group to be used in this LAIK instance
 Laik_Group* laik_create_group(Laik_Instance*);
 
 // get default group with all tasks within this LAIK instance
 Laik_Group* laik_world(Laik_Instance* i);
+
+// return number of LAIK tasks available (within this instance)
+int laik_size(Laik_Group*);
+
+// return rank of calling LAIK task (within this instance)
+int laik_myid(Laik_Group*);
 
 #endif // _LAIK_CORE_H_

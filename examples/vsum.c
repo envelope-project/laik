@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
     // master-only partitioning: add partial values to be read at master
     laik_set_partitioning(sum, LAIK_PT_Master, LAIK_AP_ReadOnly);
 
-    if (laik_myid(inst) == 0) {
+    if (laik_myid(world) == 0) {
         laik_map(sum, 0, (void**) &base, &count);
         printf("Result: %f\n", base[0]);
     }

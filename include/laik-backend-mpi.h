@@ -22,13 +22,9 @@
 
 // MPI backend.
 
-#define mpi_world laik_mpi_world()
-
-// create a LAIK instance for this backend
+// create a LAIK instance for this backend.
 // if application already called MPI_Init, pass 0 for args
+// returns the same object if called multiple times
 Laik_Instance* laik_init_mpi(int* argc, char*** argv);
-
-// get the default task group: just this single task
-Laik_Group* laik_mpi_world();
 
 #endif // _LAIK_BACKEND_MPI_H_

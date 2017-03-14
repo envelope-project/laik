@@ -444,7 +444,7 @@ void laik_update_partitioning(Laik_Partitioning* p)
 
     if (p->bordersValid) return;
 
-    int count = p->group->count;
+    int count = p->group->size;
     if (!p->borders)
         p->borders = (Laik_Slice*) malloc(count * sizeof(Laik_Slice));
 
@@ -548,7 +548,7 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     t->dims = dims;
 
     int myid = from->group->inst->myid;
-    int count = from->group->count;
+    int count = from->group->size;
 
     // something to send?
     switch(from->permission) {

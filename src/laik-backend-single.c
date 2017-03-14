@@ -15,14 +15,13 @@ static Laik_Instance* single_instance = 0;
 Laik_Instance* laik_init_single()
 {
     if (!single_instance) {
-        single_instance = laik_new_instance(&laik_backend_single);
-        single_instance->size = 1;
+        single_instance = laik_new_instance(&laik_backend_single, 1, 0, 0);
 
         // group world
         Laik_Group* g = laik_create_group(single_instance);
         g->inst = single_instance;
         g->gid = 0;
-        g->count = 1;
+        g->size = 1;
         g->myid = 0;
         g->task[0] = 0;
     }

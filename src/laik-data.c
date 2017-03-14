@@ -98,7 +98,7 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
     if (!d->activeMapping) {
         m = (Laik_Mapping*) malloc(sizeof(Laik_Mapping));
 
-        int t = laik_myid(d->group->inst);
+        int t = laik_myid(d->group);
         uint64_t count = 1;
         switch(p->space->dims) {
         case 3:
