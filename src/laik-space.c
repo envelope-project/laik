@@ -179,8 +179,9 @@ int getTransitionStr(char* s, Laik_Transition* t)
             if (i>0) off += sprintf(s+off, ", ");
             off += getAccessPermissionStr(s+off, t->redOp[i]);
             off += getSliceStr(s+off, t->dims, &(t->red[i]));
-            off += sprintf(s+off, " => %s",
-                           (t->redRoot[i] == -1) ? "all":"master");
+            off += sprintf(s+off, " => %s (%d)",
+                           (t->redRoot[i] == -1) ? "all":"master",
+                           t->redRoot[i]);
         }
         off += sprintf(s+off, "\n");
     }
@@ -597,35 +598,44 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         break;
     }
 
-    // something to receive?
-    switch(to->permission) {
-    case LAIK_AP_ReadWrite:
-    case LAIK_AP_ReadOnly:
-        switch(to->type) {
-        case LAIK_PT_Master:
-        case LAIK_PT_All:
-        case LAIK_PT_Stripe:
-            if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
-                for(int task = 0; task < count; task++) {
-                    Laik_Slice* s;
-                    s = laik_slice_intersect(dims,
-                                             &(to->borders[myid]),
-                                             &(from->borders[task]));
-                    if (s == 0) continue;
+    switch(from->permission) {
+    // aggregation do not receive...
+    case LAIK_AP_Max:
+    case LAIK_AP_Min:
+    case LAIK_AP_Plus:
+    case LAIK_AP_Times:
+        break;
+    default:
+        // something to receive?
+        switch(to->permission) {
+        case LAIK_AP_ReadWrite:
+        case LAIK_AP_ReadOnly:
+            switch(to->type) {
+            case LAIK_PT_Master:
+            case LAIK_PT_All:
+            case LAIK_PT_Stripe:
+                if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
+                    for(int task = 0; task < count; task++) {
+                        Laik_Slice* s;
+                        s = laik_slice_intersect(dims,
+                                                 &(to->borders[myid]),
+                                                 &(from->borders[task]));
+                        if (s == 0) continue;
 
-                    assert(t->recvCount < COMMSLICES_MAX);
-                    t->recv[t->recvCount] = *s;
-                    t->recvFrom[t->recvCount] = task;
-                    t->recvCount++;
+                        assert(t->recvCount < COMMSLICES_MAX);
+                        t->recv[t->recvCount] = *s;
+                        t->recvFrom[t->recvCount] = task;
+                        t->recvCount++;
+                    }
                 }
+                break;
+            default:
+                break;
             }
             break;
         default:
             break;
         }
-        break;
-    default:
-        break;
     }
 
 #ifdef LAIK_DEBUG

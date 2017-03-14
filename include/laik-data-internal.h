@@ -47,7 +47,7 @@ struct _Laik_Mapping {
   int task; // slice/task number in partition
   Laik_Layout* layout; // ordering layout used
 
-  void* base; // start address of pinning
+  char* base; // start address of pinning
   int count; // number of elements pinned
 };
 

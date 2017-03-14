@@ -59,7 +59,7 @@ void laik_set_partitioning(Laik_Data* d,
 
         // TODO: use async interface
         if (p->space->inst->backend->execTransition)
-            (p->space->inst->backend->execTransition)(t);
+            (p->space->inst->backend->execTransition)(d, t);
     }
 
     if (d->activePartitioning)

@@ -11,7 +11,7 @@
 #include <stdio.h>
 
 void laik_mpi_finalize();
-void laik_mpi_execTransition(Laik_Transition *t);
+void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t);
 
 static Laik_Backend laik_backend_mpi = {"MPI Backend",
                                         laik_mpi_finalize,
@@ -75,9 +75,59 @@ void laik_mpi_finalize()
     MPI_Finalize();
 }
 
-void laik_mpi_execTransition(Laik_Transition* t)
+void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t)
 {
-    // TODO
+    Laik_Instance* inst = d->space->inst;
+
+    if (t->redCount > 0) {
+        for(int i=0; i < t->redCount; i++) {
+            assert(d->space->dims == 1);
+            uint64_t from = t->red[i].from.i[0];
+            uint64_t to   = t->red[i].to.i[0];
+            char* base = d->activeMapping->base;
+            assert(base != 0);
+            MPI_Op mpiRedOp;
+            switch(t->redOp[i]) {
+            case LAIK_AP_Plus: mpiRedOp = MPI_SUM; break;
+            default: assert(0);
+            }
+
+            MPI_Datatype mpiDateType;
+            switch(d->elemsize) {
+            case 8: mpiDateType = MPI_DOUBLE; break;
+            default: assert(0);
+            }
+
+            // TODO: use group
+
+#ifdef LAIK_DEBUG
+            printf("LAIK %d/%d - MPI Reduce: from %lu, to %lu, elemsize %d, base %p\n",
+                   d->space->inst->myid, d->space->inst->size,
+                   from, to, d->elemsize, base);
+#endif
+
+            if (t->redRoot[i] == -1) {
+                void* fromPtr = base + from * d->elemsize;
+                if (inst->myid == 0) fromPtr = MPI_IN_PLACE;
+                MPI_Allreduce(fromPtr,
+                              base + from * d->elemsize,
+                              to - from,
+                              mpiDateType, mpiRedOp,
+                              MPI_COMM_WORLD);
+            }
+            else {
+                void* fromPtr = base + from * d->elemsize;
+                if (inst->myid == 0) fromPtr = MPI_IN_PLACE;
+                MPI_Reduce(fromPtr,
+                           base + from * d->elemsize,
+                           to - from,
+                           mpiDateType, mpiRedOp,
+                           t->redRoot[i], MPI_COMM_WORLD);
+            }
+        }
+    }
+
+    // TODO: send / recv
 }
 
 #endif // LAIK_USEMPI
