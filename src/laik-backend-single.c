@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <stdlib.h>
 
-static Laik_Backend laik_backend_single = {"Single Task Backend", 0, 0, 0, 0};
+static Laik_Backend laik_backend_single = {"Single Task Backend", 0, 0};
 static Laik_Instance* single_instance = 0;
 
 Laik_Instance* laik_init_single()
@@ -23,6 +23,7 @@ Laik_Instance* laik_init_single()
         g->inst = single_instance;
         g->gid = 0;
         g->count = 1;
+        g->myid = 0;
         g->task[0] = 0;
     }
     return single_instance;

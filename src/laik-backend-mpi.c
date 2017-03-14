@@ -11,10 +11,11 @@
 #include <stdio.h>
 
 void laik_mpi_finalize();
+void laik_mpi_execTransition(Laik_Transition *t);
 
 static Laik_Backend laik_backend_mpi = {"MPI Backend",
                                         laik_mpi_finalize,
-                                        0, 0, 0};
+                                        laik_mpi_execTransition };
 static Laik_Instance* mpi_instance = 0;
 
 #ifndef LAIK_USEMPI
@@ -52,7 +53,8 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     g->inst = inst;
     g->gid = 0;
     g->count = inst->size;
-    g->task[0] = 0;
+    g->myid = inst->myid;
+    g->task[0] = 0; // TODO
 
 #ifdef LAIK_DEBUG
     // Get the name of the processor
@@ -71,6 +73,11 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 void laik_mpi_finalize()
 {
     MPI_Finalize();
+}
+
+void laik_mpi_execTransition(Laik_Transition* t)
+{
+    // TODO
 }
 
 #endif // LAIK_USEMPI

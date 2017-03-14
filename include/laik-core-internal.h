@@ -29,6 +29,7 @@ struct _Laik_Group {
     Laik_Instance* inst;
     int gid;
     int count;
+    int myid;
     int task[1];
 };
 

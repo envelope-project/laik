@@ -21,6 +21,7 @@
 #include "laik.h"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /*********************************************************************/
 /* LAIK Spaces - Distributed partitioning of index spaces
@@ -80,7 +81,7 @@ typedef struct _Laik_Partitioning Laik_Partitioning;
 typedef struct _Laik_PartGroup Laik_PartGroup;
 
 // communication requirements when switching partitioning groups
-typedef struct _Laik_PartTransition Laik_PartTransition;
+typedef struct _Laik_Transition Laik_Transition;
 
 
 
@@ -111,6 +112,11 @@ void laik_change_space_2d(Laik_Space* s,
 void laik_change_space_3d(Laik_Space* s,
                           uint64_t s1, uint64_t s2, uint64_t s3);
 
+// is the given slice empty?
+bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
+
+// get the intersection of 2 slices; return 0 if intersection is empty
+Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
 // create a new partitioning on a space
 Laik_Partitioning*
@@ -149,8 +155,12 @@ void laik_update_partitioning(Laik_Partitioning* p);
 void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p);
 
 // Calculate communication required for transitioning between partitionings
-Laik_PartTransition* laik_calc_transition(Laik_PartGroup* from,
-                                          Laik_PartGroup* to);
+Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
+                                       Laik_Partitioning* to);
+
+// Calculate communication for transitioning between partitioning groups
+Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
+                                       Laik_PartGroup* to);
 
 // enforce consistency for the partitioning group, depending on previous
 void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g);

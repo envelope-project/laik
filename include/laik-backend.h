@@ -25,9 +25,9 @@ typedef struct _Laik_Backend Laik_Backend;
 struct _Laik_Backend {
   char* name;
   void (*finalize)(Laik_Instance*);
-  int (*put)(Laik_Task target, int tag, void*, int); // trigger sending
-  int (*reg_receiver)(Laik_Task from, int tag, void*, int); // receiver space
-  int (*test)(Laik_Task from, int tag); // check if data arrived
+  void (*execTransition)(Laik_Transition*);
+
+  // TODO: async interface: start sending / register receiving / probe
 };
 
 

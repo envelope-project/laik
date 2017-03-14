@@ -50,8 +50,20 @@ void laik_set_partitioning(Laik_Data* d,
     Laik_Partitioning* p;
     p = laik_new_base_partitioning(d->space, pt, ap);
 
-    // calculate borders (FIXME: send to master via backend)
+    // calculate borders (TODO: may need global communication)
     laik_update_partitioning(p);
+
+    if (d->activePartitioning) {
+        // calculate elements which need to be sent/received by this task
+        Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
+
+        // TODO: use async interface
+        if (p->space->inst->backend->execTransition)
+            (p->space->inst->backend->execTransition)(t);
+    }
+
+    if (d->activePartitioning)
+        laik_free_partitioning(d->activePartitioning);
 
     // set active
     d->activePartitioning = p;

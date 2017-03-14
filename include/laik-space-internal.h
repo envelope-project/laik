@@ -66,5 +66,18 @@ struct _Laik_Partitioning {
     Laik_Partitioning* next; // for list of partitionings same space
 };
 
+#define COMMSLICES_MAX 10
+
+struct _Laik_Transition {
+    int dims;
+    int sendCount, recvCount, redCount;
+    Laik_Slice send[COMMSLICES_MAX];
+    int sendTo[COMMSLICES_MAX];
+    Laik_Slice recv[COMMSLICES_MAX];
+    int recvFrom[COMMSLICES_MAX];
+    Laik_Slice red[COMMSLICES_MAX];
+    int redOp[COMMSLICES_MAX];
+    int redRoot[COMMSLICES_MAX]; // -1: all
+};
 
 #endif // _LAIK_SPACE_INTERNAL_H_
