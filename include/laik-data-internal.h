@@ -21,20 +21,23 @@
 #include "laik-data.h"
 
 struct _Laik_Data {
-  int elemsize;
-  Laik_Space* space; // index space of this container
-  Laik_Group* group;
+    char* name;
+    int id;
 
-  // default partitioning
-  Laik_PartitionType defaultPartitionType;
-  Laik_AccessPermission defaultPermission;
+    int elemsize;
+    Laik_Space* space; // index space of this container
+    Laik_Group* group;
 
-  // active partitioning (TODO: multiple may be active)
-  Laik_Partitioning* activePartitioning;
-  Laik_Mapping* activeMapping;
+    // default partitioning
+    Laik_PartitionType defaultPartitionType;
+    Laik_AccessPermission defaultPermission;
 
-  // can be set by backend
-  void* backend_data;
+    // active partitioning (TODO: multiple may be active)
+    Laik_Partitioning* activePartitioning;
+    Laik_Mapping* activeMapping;
+
+    // can be set by backend
+    void* backend_data;
 };
 
 struct _Laik_Layout {
@@ -46,9 +49,10 @@ struct _Laik_Mapping {
   Laik_Partitioning* partitioning;
   int task; // slice/task number in partition
   Laik_Layout* layout; // ordering layout used
+  Laik_Index baseIdx; // global index at base address
 
-  char* base; // start address of pinning
-  int count; // number of elements pinned
+  char* base; // start address of mapping
+  int count; // number of elements mapped
 };
 
 #endif // _LAIK_DATA_INTERNAL_H_

@@ -55,7 +55,6 @@ typedef enum _Laik_AccessPermission {
     LAIK_AP_Max        // max reduction, multiple writers
 } Laik_AccessPermission;
 
-
 // a point in an index space
 typedef struct _Laik_Index Laik_Index;
 struct _Laik_Index {
@@ -88,6 +87,13 @@ typedef struct _Laik_Transition Laik_Transition;
 /*********************************************************************/
 /* LAIK API for distributed index spaces
  *********************************************************************/
+
+// is this a reduction?
+bool laik_is_reduction(Laik_AccessPermission p);
+// includes this read access?
+bool laik_is_read(Laik_AccessPermission);
+// includes this write access?
+bool laik_is_write(Laik_AccessPermission);
 
 // create a new index space object (initially invalid)
 Laik_Space* laik_new_space(Laik_Instance* i);
@@ -124,8 +130,13 @@ laik_new_base_partitioning(Laik_Space* space,
                            Laik_PartitionType pt,
                            Laik_AccessPermission ap);
 
+// set index-wise and task-wise weight getter interface
+void laik_set_weight_IF(Laik_Partitioning*,
+                        int (*)(Laik_Partitioning*, Laik_Index*),
+                        int (*)(Laik_Partitioning*, int));
+
 // for multiple-dimensional spaces, set dimension to partition (default is 0)
-void laik_set_partitioning_dimension(Laik_Partitioning*p, int d);
+void laik_set_partitioning_dimension(Laik_Partitioning* p, int d);
 
 // create a new partitioning based on another one on the same space
 Laik_Partitioning*

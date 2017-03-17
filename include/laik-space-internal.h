@@ -80,4 +80,7 @@ struct _Laik_Transition {
     int redRoot[COMMSLICES_MAX]; // -1: all
 };
 
+// LAIK internal
+int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1);
+
 #endif // _LAIK_SPACE_INTERNAL_H_

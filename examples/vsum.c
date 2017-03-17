@@ -21,18 +21,27 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
-    // allocate global 1d double array: 1 mio entries, equal sized stripes
+    double *base;
+    uint64_t count;
+
+    // allocate global 1d double array: 1 mio entries
     Laik_Data* a = laik_alloc_1d(world, 8, 1000000);
-    // parallel initialization: write 1.0 to own partition
-    laik_fill_double(a, 1.0);
+
+    // initialize from master (others do nothing, empty partition)
+    laik_set_partitioning(a, LAIK_PT_Master, LAIK_AP_WriteOnly);
+    if (laik_myid(world) == 0) {
+        laik_map(a, 0, (void**) &base, &count);
+        for(uint64_t i = 0; i < count; i++) base[i] = (double) i;
+    }
+
+    // distribute data equally among all, only for reading
+    laik_set_partitioning(a, LAIK_PT_Stripe, LAIK_AP_ReadOnly);
 
     // partial vector sum over own partition via direct access
-    double mysum = 0.0, *base;
-    uint64_t count, i;
+    double mysum = 0.0;
     laik_map(a, 0, (void**) &base, &count);
-    for (i = 0; i < count; i++) {
-        mysum += base[i];
-    }
+    for(uint64_t i = 0; i < count; i++) mysum += base[i];
+    printf("Id %d: sum %f\n", laik_myid(world), mysum);
 
     // for collecting partial sums at master, use LAIK's automatic
     // aggregation functionality when switching to new partitioning
@@ -45,7 +54,7 @@ int main(int argc, char* argv[])
 
     if (laik_myid(world) == 0) {
         laik_map(sum, 0, (void**) &base, &count);
-        printf("Result: %f\n", base[0]);
+        printf("Total sum: %f\n", base[0]);
     }
     laik_finalize(inst);
 

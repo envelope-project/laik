@@ -35,8 +35,7 @@ int getSpaceStr(char* s, Laik_Space* spc)
 }
 
 
-static
-int getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1)
+int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1)
 {
     uint64_t i1 = idx->i[0];
     uint64_t i2 = idx->i[1];
@@ -111,6 +110,21 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2)
 }
 
 static
+void laik_slice_sub(int dims, Laik_Slice* s, Laik_Index* from)
+{
+    s->from.i[0] -= from->i[0];
+    s->to.i[0] -= from->i[0];
+    if (dims > 1) {
+        s->from.i[1] -= from->i[1];
+        s->to.i[1] -= from->i[1];
+        if (dims > 2) {
+            s->from.i[2] -= from->i[2];
+            s->to.i[2] -= from->i[2];
+        }
+    }
+}
+
+static
 Laik_Slice* sliceFromSpace(Laik_Space* s)
 {
     static Laik_Slice slc;
@@ -133,9 +147,9 @@ int getSliceStr(char* s, int dims, Laik_Slice* slc)
 
     int off;
     off  = sprintf(s, "[");
-    off += getIndexStr(s+off, dims, &(slc->from), false);
+    off += laik_getIndexStr(s+off, dims, &(slc->from), false);
     off += sprintf(s+off, "-");
-    off += getIndexStr(s+off, dims, &(slc->to), true);
+    off += laik_getIndexStr(s+off, dims, &(slc->to), true);
     off += sprintf(s+off, "]");
     return off;
 }
@@ -174,7 +188,7 @@ int getTransitionStr(char* s, Laik_Transition* t)
     int off = 0;
 
     if (t->redCount>0) {
-        off += sprintf(s+off, "  %d reds: ", t->redCount);
+        off += sprintf(s+off, "  redu: ");
         for(int i=0; i<t->redCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getAccessPermissionStr(s+off, t->redOp[i]);
@@ -187,28 +201,68 @@ int getTransitionStr(char* s, Laik_Transition* t)
     }
 
     if (t->sendCount>0) {
-        off += sprintf(s+off, "  %d sends: ", t->sendCount);
+        off += sprintf(s+off, "  send: ");
         for(int i=0; i<t->sendCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getSliceStr(s+off, t->dims, &(t->send[i]));
-            off += sprintf(s+off, " => %d", t->sendTo[i]);
+            off += sprintf(s+off, " => T%d", t->sendTo[i]);
         }
         off += sprintf(s+off, "\n");
     }
 
     if (t->recvCount>0) {
-        off += sprintf(s+off, "  %d recvs: ", t->recvCount);
+        off += sprintf(s+off, "  recv: ");
         for(int i=0; i<t->recvCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
-            off += sprintf(s+off, "%d => ", t->recvFrom[i]);
+            off += sprintf(s+off, "T%d => ", t->recvFrom[i]);
             off += getSliceStr(s+off, t->dims, &(t->recv[i]));
         }
         off += sprintf(s+off, "\n");
     }
+    if (off == 0) s[0] = 0;
     return off;
 }
 
+// is this a reduction?
+bool laik_is_reduction(Laik_AccessPermission p)
+{
+    switch(p) {
+    case LAIK_AP_Max:
+    case LAIK_AP_Min:
+    case LAIK_AP_Plus:
+    case LAIK_AP_Times:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
 
+// includes this read access?
+bool laik_is_read(Laik_AccessPermission p)
+{
+    switch(p) {
+    case LAIK_AP_ReadOnly:
+    case LAIK_AP_ReadWrite:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+// includes this write access?
+bool laik_is_write(Laik_AccessPermission p)
+{
+    switch(p) {
+    case LAIK_AP_WriteOnly:
+    case LAIK_AP_ReadWrite:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
 
 // create a new index space object (initially invalid)
 Laik_Space* laik_new_space(Laik_Instance* i)
@@ -550,12 +604,8 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     int myid = from->group->inst->myid;
     int count = from->group->size;
 
-    // something to send?
-    switch(from->permission) {
-    case LAIK_AP_Max:
-    case LAIK_AP_Min:
-    case LAIK_AP_Plus:
-    case LAIK_AP_Times:
+    // something to reduce?
+    if (laik_is_reduction(from->permission)) {
         // reductions always should involve everyone
         assert(from->type == LAIK_PT_All);
         if ((to->permission == LAIK_AP_ReadOnly) ||
@@ -568,15 +618,18 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                 t->redRoot[t->redCount] = (to->type == LAIK_PT_All) ? -1 : 0;
                 t->redCount++;
         }
-        break;
-    case LAIK_AP_ReadWrite:
-    case LAIK_AP_WriteOnly:
+    }
+
+    // something to send?
+    if (laik_is_write(from->permission)) {
         switch(from->type) {
         case LAIK_PT_Master:
         case LAIK_PT_All:
         case LAIK_PT_Stripe:
             if (!laik_slice_isEmpty(dims, &(from->borders[myid]))) {
                 for(int task = 0; task < count; task++) {
+                    if (task == myid) continue;
+
                     Laik_Slice* s;
                     s = laik_slice_intersect(dims,
                                              &(from->borders[myid]),
@@ -593,44 +646,29 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         default:
             break;
         }
-        break;
-    default:
-        break;
     }
 
-    switch(from->permission) {
-    // aggregation do not receive...
-    case LAIK_AP_Max:
-    case LAIK_AP_Min:
-    case LAIK_AP_Plus:
-    case LAIK_AP_Times:
-        break;
-    default:
-        // something to receive?
-        switch(to->permission) {
-        case LAIK_AP_ReadWrite:
-        case LAIK_AP_ReadOnly:
-            switch(to->type) {
-            case LAIK_PT_Master:
-            case LAIK_PT_All:
-            case LAIK_PT_Stripe:
-                if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
-                    for(int task = 0; task < count; task++) {
-                        Laik_Slice* s;
-                        s = laik_slice_intersect(dims,
-                                                 &(to->borders[myid]),
-                                                 &(from->borders[task]));
-                        if (s == 0) continue;
+    // something to receive?
+    if (!laik_is_reduction(from->permission) && laik_is_read(to->permission)) {
+        switch(to->type) {
+        case LAIK_PT_Master:
+        case LAIK_PT_All:
+        case LAIK_PT_Stripe:
+            if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
+                for(int task = 0; task < count; task++) {
+                    if (task == myid) continue;
 
-                        assert(t->recvCount < COMMSLICES_MAX);
-                        t->recv[t->recvCount] = *s;
-                        t->recvFrom[t->recvCount] = task;
-                        t->recvCount++;
-                    }
+                    Laik_Slice* s;
+                    s = laik_slice_intersect(dims,
+                                             &(to->borders[myid]),
+                                             &(from->borders[task]));
+                    if (s == 0) continue;
+
+                    assert(t->recvCount < COMMSLICES_MAX);
+                    t->recv[t->recvCount] = *s;
+                    t->recvFrom[t->recvCount] = task;
+                    t->recvCount++;
                 }
-                break;
-            default:
-                break;
             }
             break;
         default:
@@ -640,10 +678,15 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
 
 #ifdef LAIK_DEBUG
         char s[1000];
-        getTransitionStr(s, t);
-        printf("LAIK %d/%d - transition %s => %s:\n%s",
-               from->space->inst->myid, from->space->inst->size,
-               from->name, to->name, s);
+        int len = getTransitionStr(s, t);
+        if (len == 0)
+            printf("LAIK %d/%d - transition %s => %s: (nothing)\n",
+                   from->space->inst->myid, from->space->inst->size,
+                   from->name, to->name);
+        else
+            printf("LAIK %d/%d - transition %s => %s:\n%s",
+                   from->space->inst->myid, from->space->inst->size,
+                   from->name, to->name, s);
 #endif
 
 

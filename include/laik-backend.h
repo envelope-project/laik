@@ -25,7 +25,7 @@ typedef struct _Laik_Backend Laik_Backend;
 struct _Laik_Backend {
   char* name;
   void (*finalize)(Laik_Instance*);
-  void (*execTransition)(Laik_Data*, Laik_Transition*);
+  void (*execTransition)(Laik_Data*, Laik_Transition*, Laik_Mapping* to);
 
   // TODO: async interface: start sending / register receiving / probe
 };
