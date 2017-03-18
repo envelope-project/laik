@@ -201,10 +201,14 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     d->activeMapping = toMap;
 }
 
-void laik_set_new_partitioning(Laik_Data* d,
-                               Laik_PartitionType pt, Laik_AccessPermission ap)
+Laik_Partitioning* laik_set_new_partitioning(Laik_Data* d,
+                                             Laik_PartitionType pt,
+                                             Laik_AccessPermission ap)
 {
-    laik_set_partitioning(d, laik_new_base_partitioning(d->space, pt, ap));
+    Laik_Partitioning* p = laik_new_base_partitioning(d->space, pt, ap);
+    laik_set_partitioning(d, p);
+
+    return p;
 }
 
 

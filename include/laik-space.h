@@ -137,19 +137,27 @@ typedef double (*Laik_GetIdxWeight_t)(Laik_Index*, void* userData);
 void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f,
                            void* userData);
 
+// set task-wise weight getter, used when calculating STRIPE partitioning.
+// as getter is called in every LAIK task, weights have to be known globally
+// (useful if relative performance per task is known)
+typedef double (*Laik_GetTaskWeight_t)(int rank, void* userData);
+void laik_set_task_weight(Laik_Partitioning* p, Laik_GetTaskWeight_t f,
+                          void* userData);
+
+
 // for multiple-dimensional spaces, set dimension to partition (default is 0)
 void laik_set_partitioning_dimension(Laik_Partitioning* p, int d);
 
 // create a new partitioning based on another one on the same space
 Laik_Partitioning*
-laik_new_coupled_partitioning(Laik_Partitioning* p,
+laik_new_coupled_partitioning(Laik_Partitioning* base,
                               Laik_PartitionType pt,
                               Laik_AccessPermission ap);
 
 // create a new partitioning based on another one on a different space
 // this also needs to know which dimensions should be coupled
 Laik_Partitioning*
-laik_new_spacecoupled_partitioning(Laik_Partitioning* p,
+laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
                                    Laik_Space* s, int from, int to,
                                    Laik_PartitionType pt,
                                    Laik_AccessPermission ap);

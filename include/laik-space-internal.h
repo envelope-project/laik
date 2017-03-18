@@ -55,8 +55,11 @@ struct _Laik_Partitioning {
     Laik_Space* space; // space to partition
     int pdim; // for 2d/3d: dimension to partition
 
+    // weighted partitioning (Stripe) uses callbacks
     Laik_GetIdxWeight_t getIdxW;
-    void* userData;
+    void* idxUserData;
+    Laik_GetTaskWeight_t getTaskW;
+    void* taskUserData;
 
     // coupling to another partitioning (potentially other space)
     Laik_Partitioning* base;

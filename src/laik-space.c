@@ -394,10 +394,7 @@ void laik_change_space_3d(Laik_Space* s,
 
 
 // create a new partitioning on a space
-Laik_Partitioning*
-laik_new_partitioning(Laik_Space* s,
-                      Laik_PartitionType pt,
-                      Laik_AccessPermission ap)
+Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
 {
     Laik_Partitioning* p;
     p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
@@ -410,8 +407,8 @@ laik_new_partitioning(Laik_Space* s,
     p->next = s->first_partitioning;
     s->first_partitioning = p;
 
-    p->permission = ap;
-    p->type = pt;
+    p->permission = LAIK_AP_None;
+    p->type = LAIK_PT_None;
     p->group = laik_world(s->inst);
     p->pdim = 0;
 
@@ -432,7 +429,9 @@ laik_new_base_partitioning(Laik_Space* space,
                            Laik_AccessPermission ap)
 {
     Laik_Partitioning* p;
-    p = laik_new_partitioning(space, pt, ap);
+    p = laik_new_partitioning(space);
+    p->permission = ap;
+    p->type = pt;
 
 #ifdef LAIK_DEBUG
     char s[100];
@@ -451,13 +450,22 @@ void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f,
                            void* userData)
 {
     p->getIdxW = f;
-    p->userData = userData;
+    p->idxUserData = userData;
 
     // borders may change
     p->bordersValid = false;
 }
 
+// set task-wise weight getter interface: if performance per task is known
+void laik_set_task_weight(Laik_Partitioning* p, Laik_GetTaskWeight_t f,
+                          void* userData)
+{
+    p->getTaskW = f;
+    p->taskUserData = userData;
 
+    // borders may change
+    p->bordersValid = false;
+}
 
 // for multiple-dimensional spaces, set dimension to partition (default is 0)
 void laik_set_partitioning_dimension(Laik_Partitioning* p, int d)
@@ -469,32 +477,36 @@ void laik_set_partitioning_dimension(Laik_Partitioning* p, int d)
 
 // create a new partitioning based on another one on the same space
 Laik_Partitioning*
-laik_new_coupled_partitioning(Laik_Partitioning* p,
+laik_new_coupled_partitioning(Laik_Partitioning* base,
                               Laik_PartitionType pt,
                               Laik_AccessPermission ap)
 {
-    Laik_Partitioning* partitioning;
-    partitioning = laik_new_base_partitioning(p->space, pt, ap);
+    Laik_Partitioning* p;
+    p = laik_new_partitioning(p->space);
+    p->permission = ap;
+    p->type = pt;
+    p->base = base;
 
-    assert(0); // TODO
-
-    return partitioning;
+    return p;
 }
 
 // create a new partitioning based on another one on a different space
 // this also needs to know which dimensions should be coupled
 Laik_Partitioning*
-laik_new_spacecoupled_partitioning(Laik_Partitioning* p,
+laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
                                    Laik_Space* s, int from, int to,
                                    Laik_PartitionType pt,
                                    Laik_AccessPermission ap)
 {
-    Laik_Partitioning* partitioning;
-    partitioning = laik_new_base_partitioning(p->space, pt, ap);
+    Laik_Partitioning* p;
+    p = laik_new_partitioning(p->space);
+    p->permission = ap;
+    p->type = pt;
+    p->base = base;
 
     assert(0); // TODO
 
-    return partitioning;
+    return p;
 }
 
 // free a partitioning with related resources
@@ -523,12 +535,13 @@ void setStripeBorders(Laik_Partitioning* p)
     uint64_t size = p->space->size[pdim];
     if (p->getIdxW) {
         // element-wise weighting
+        // TODO: also task-wise weighting
         Laik_Index idx;
         setIndex(&idx, 0, 0, 0);
         double total = 0.0;
         for(uint64_t i = 0; i < size; i++) {
             idx.i[pdim] = i;
-            total += (p->getIdxW)(&idx, p->userData);
+            total += (p->getIdxW)(&idx, p->idxUserData);
         }
         double perPart = total / count;
         double w = 0.0;
@@ -536,7 +549,7 @@ void setStripeBorders(Laik_Partitioning* p)
         p->borders[task].from.i[pdim] = 0;
         for(uint64_t i = 0; i < size; i++) {
             idx.i[pdim] = i;
-            w += (p->getIdxW)(&idx, p->userData);
+            w += (p->getIdxW)(&idx, p->idxUserData);
             if (w >= perPart) {
                 w = w - perPart;
                 if (task+1 == count) break;
@@ -550,14 +563,30 @@ void setStripeBorders(Laik_Partitioning* p)
         return;
     }
 
-    // equal-sized stripes
-    uint64_t idx = 0;
-    uint64_t inc = size / count;
-    if (inc * count < size) inc++;
+    // use task-wise weighting?
+    bool useTW = false;
+    double totalTW;
+    if (p->getTaskW) {
+        for(int task = 0; task < count; task++)
+            totalTW += (p->getTaskW)(task, p->taskUserData);
+        if (totalTW > 0.0)
+            useTW = true;
+    }
+
+    uint64_t idx = 0, inc;
     for(int task = 0; task < count; task++) {
         Laik_Slice* b = &(p->borders[task]);
 
         b->from.i[pdim] = idx;
+        if (useTW) {
+            double f = (p->getTaskW)(task, p->taskUserData) / totalTW;
+            inc = (uint64_t)(f * size);
+        }
+        else {
+            // equal-sized stripes
+            inc = size / count;
+        }
+
         idx += inc;
         // last border always must be <size>
         if ((idx > size) || (task+1 == count))
