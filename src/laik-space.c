@@ -520,6 +520,15 @@ void laik_free_partitioning(Laik_Partitioning* p)
     // TODO
 }
 
+// get slice of this task
+Laik_Slice* laik_my_slice(Laik_Partitioning* p)
+{
+    static Laik_Slice s;
+
+    s = p->borders[p->group->myid];
+    return &s;
+}
+
 
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n)

@@ -230,8 +230,8 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
 
     if (!d->activePartitioning)
         laik_set_new_partitioning(d,
-                              d->defaultPartitionType,
-                              d->defaultPermission);
+                                  d->defaultPartitionType,
+                                  d->defaultPermission);
 
     p = d->activePartitioning;
 

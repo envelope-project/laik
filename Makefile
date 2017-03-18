@@ -1,6 +1,8 @@
 # MPI
 CC=mpicc
-DEFS=-DLAIK_USEMPI -DLAIK_DEBUG
+DEFS=-DLAIK_USEMPI
+
+DEFS += -DLAIK_DEBUG
 
 OPT = -g
 CFLAGS=$(OPT) -std=gnu99 -Iinclude

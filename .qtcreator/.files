@@ -20,7 +20,8 @@
 
 ../Makefile
 
-../examples/vsum.c
 ../examples/Makefile
+../examples/vsum.c
+../examples/spmv.c
 
 ../README.md
