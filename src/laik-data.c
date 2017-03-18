@@ -150,12 +150,9 @@ void copyMap(Laik_Mapping* to, Laik_Mapping* from)
 
 }
 
-void laik_set_partitioning(Laik_Data* d,
-                           Laik_PartitionType pt, Laik_AccessPermission ap)
+// set and enforce partitioning
+void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 {
-    Laik_Partitioning* p;
-    p = laik_new_base_partitioning(d->space, pt, ap);
-
     // calculate borders (TODO: may need global communication)
     laik_update_partitioning(p);
 
@@ -188,6 +185,12 @@ void laik_set_partitioning(Laik_Data* d,
     d->activeMapping = toMap;
 }
 
+void laik_set_new_partitioning(Laik_Data* d,
+                               Laik_PartitionType pt, Laik_AccessPermission ap)
+{
+    laik_set_partitioning(d, laik_new_base_partitioning(d->space, pt, ap));
+}
+
 
 void laik_fill_double(Laik_Data* d, double v)
 {
@@ -206,7 +209,7 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
     Laik_Mapping* m;
 
     if (!d->activePartitioning)
-        laik_set_partitioning(d,
+        laik_set_new_partitioning(d,
                               d->defaultPartitionType,
                               d->defaultPermission);
 

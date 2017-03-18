@@ -127,13 +127,14 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
 // create a new partitioning on a space
 Laik_Partitioning*
 laik_new_base_partitioning(Laik_Space* space,
-                           Laik_PartitionType pt,
-                           Laik_AccessPermission ap);
+                      Laik_PartitionType pt,
+                      Laik_AccessPermission ap);
 
-// set index-wise and task-wise weight getter interface
-void laik_set_weight_IF(Laik_Partitioning*,
-                        int (*)(Laik_Partitioning*, Laik_Index*),
-                        int (*)(Laik_Partitioning*, int));
+// set index-wise weight getter, used when calculating STRIPE partitioning.
+// as getter is called in every LAIK task, weights have to be known globally
+// (useful if workload per index is known)
+typedef double (*Laik_GetIdxWeight_t)(Laik_Index*);
+void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f);
 
 // for multiple-dimensional spaces, set dimension to partition (default is 0)
 void laik_set_partitioning_dimension(Laik_Partitioning* p, int d);

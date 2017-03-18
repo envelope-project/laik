@@ -398,6 +398,8 @@ laik_new_partitioning(Laik_Space* s,
     p->group = laik_world(s->inst);
     p->pdim = 0;
 
+    p->getIdxW = 0;
+
     p->base = 0;
     p->haloWidth = 0;
 
@@ -427,6 +429,14 @@ laik_new_base_partitioning(Laik_Space* space,
     return p;
 }
 
+// set index-wise weight getter interface: if workload per index is known
+void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f)
+{
+    p->getIdxW = f;
+}
+
+
+
 // for multiple-dimensional spaces, set dimension to partition (default is 0)
 void laik_set_partitioning_dimension(Laik_Partitioning* p, int d)
 {
@@ -442,7 +452,7 @@ laik_new_coupled_partitioning(Laik_Partitioning* p,
                               Laik_AccessPermission ap)
 {
     Laik_Partitioning* partitioning;
-    partitioning = laik_new_partitioning(p->space, pt, ap);
+    partitioning = laik_new_base_partitioning(p->space, pt, ap);
 
     assert(0); // TODO
 
@@ -458,7 +468,7 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* p,
                                    Laik_AccessPermission ap)
 {
     Laik_Partitioning* partitioning;
-    partitioning = laik_new_partitioning(p->space, pt, ap);
+    partitioning = laik_new_base_partitioning(p->space, pt, ap);
 
     assert(0); // TODO
 
@@ -528,6 +538,7 @@ void laik_update_partitioning(Laik_Partitioning* p)
             b->to.i[1] = p->space->size[1];
             b->to.i[2] = p->space->size[2];
 
+            // TODO: use weight
             b->from.i[pdim] = idx;
             idx += inc;
             if (idx > size) idx = size;

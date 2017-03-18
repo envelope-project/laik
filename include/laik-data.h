@@ -53,9 +53,13 @@ Laik_Data* laik_alloc_2d(Laik_Group* g, int elemsize, uint64_t s1, uint64_t s2);
 // set a data name, for debug output
 void laik_set_data_name(Laik_Data* d, char* n);
 
+// set and enforce a newly created partitioning
+void laik_set_new_partitioning(Laik_Data*,
+                               Laik_PartitionType, Laik_AccessPermission);
+
 // set and enforce partitioning
-void laik_set_partitioning(Laik_Data*,
-                           Laik_PartitionType, Laik_AccessPermission);
+void laik_set_partitioning(Laik_Data*, Laik_Partitioning*);
+
 
 void laik_fill_double(Laik_Data* data, double v);
 

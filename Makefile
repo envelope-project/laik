@@ -2,8 +2,9 @@
 CC=mpicc
 DEFS=-DLAIK_USEMPI -DLAIK_DEBUG
 
-CFLAGS=-g -std=gnu99 -Iinclude
-LDFLAGS=-g
+OPT = -g
+CFLAGS=$(OPT) -std=gnu99 -Iinclude
+LDFLAGS=$(OPT)
 
 SRCS = $(wildcard src/*.c)
 HEADERS = $(wildcard include/*.h)

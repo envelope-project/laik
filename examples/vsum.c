@@ -28,14 +28,14 @@ int main(int argc, char* argv[])
     Laik_Data* a = laik_alloc_1d(world, 8, 1000000);
 
     // initialize from master (others do nothing, empty partition)
-    laik_set_partitioning(a, LAIK_PT_Master, LAIK_AP_WriteOnly);
+    laik_set_new_partitioning(a, LAIK_PT_Master, LAIK_AP_WriteOnly);
     if (laik_myid(world) == 0) {
         laik_map(a, 0, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) base[i] = (double) i;
     }
 
     // distribute data equally among all, only for reading
-    laik_set_partitioning(a, LAIK_PT_Stripe, LAIK_AP_ReadOnly);
+    laik_set_new_partitioning(a, LAIK_PT_Stripe, LAIK_AP_ReadOnly);
 
     // partial vector sum over own partition via direct access
     double mysum = 0.0;
@@ -46,11 +46,11 @@ int main(int argc, char* argv[])
     // for collecting partial sums at master, use LAIK's automatic
     // aggregation functionality when switching to new partitioning
     Laik_Data* sum = laik_alloc_1d(world, 8, 1);
-    laik_set_partitioning(sum, LAIK_PT_All, LAIK_AP_Plus);
+    laik_set_new_partitioning(sum, LAIK_PT_All, LAIK_AP_Plus);
     // write partial sum
     laik_fill_double(sum, mysum);
     // master-only partitioning: add partial values to be read at master
-    laik_set_partitioning(sum, LAIK_PT_Master, LAIK_AP_ReadOnly);
+    laik_set_new_partitioning(sum, LAIK_PT_Master, LAIK_AP_ReadOnly);
 
     if (laik_myid(world) == 0) {
         laik_map(sum, 0, (void**) &base, &count);
