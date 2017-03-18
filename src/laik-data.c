@@ -184,8 +184,8 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
         Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
 
         // TODO: use async interface
-        if (p->space->inst->backend->execTransition)
-            (p->space->inst->backend->execTransition)(d, t, toMap);
+        assert(p->space->inst->backend->execTransition);
+        (p->space->inst->backend->execTransition)(d, t, toMap);
 
         if (t->localCount >0)
             copyMap(t, toMap, d->activeMapping);
