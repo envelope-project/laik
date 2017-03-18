@@ -132,8 +132,9 @@ void freeMap(Laik_Mapping* m)
 }
 
 static
-void copyMap(Laik_Mapping* toMap, Laik_Mapping* fromMap)
+void copyMap(Laik_Transition* t, Laik_Mapping* toMap, Laik_Mapping* fromMap)
 {
+    assert(t->localCount > 0);
     assert(toMap->data == fromMap->data);
     if (toMap->count == 0) {
         // no elements to copy to
@@ -147,49 +148,26 @@ void copyMap(Laik_Mapping* toMap, Laik_Mapping* fromMap)
 
     // calculate overlapping range between fromMap and toMap
     assert(fromMap->data->space->dims == 1); // only for 1d now
-    // transform from fromMap-local indexes to toMap-local indexes
-    uint64_t fromMapStart = 0;
-    uint64_t fromMapEnd   = fromMap->count;
-    uint64_t globalStart  = fromMapStart + fromMap->baseIdx.i[0];
-    uint64_t globalEnd    = fromMapEnd   + fromMap->baseIdx.i[0];
-    uint64_t toMapStart   = globalStart  - toMap->baseIdx.i[0];
-    uint64_t toMapEnd     = globalEnd    - toMap->baseIdx.i[0];
-
-    // skip at start or end if outside local ranges
-    int count = fromMap->count;
-    if (toMapStart < 0) {
-        uint64_t skipStart = -toMapStart;
-        fromMapStart += skipStart;
-        toMapStart   += skipStart;
-        count -= skipStart;
-        if (count<0) {
-            count = 0;
-            toMapEnd = toMapStart;
-        }
-    }
-    if (toMapEnd + count > toMap->count) {
-        uint64_t skipEnd = toMapEnd + count - toMap->count;
-        fromMapEnd -= skipEnd;
-        toMapEnd   -= skipEnd;
-        count -= skipEnd;
-        if (count < 0) {
-            count = 0;
-            toMapEnd = toMapStart;
-        }
-    }
-
     Laik_Data* d = toMap->data;
-    char* from = fromMap->base + fromMapStart * d->elemsize;
-    char* to   = toMap->base   + toMapStart * d->elemsize;
+    for(int i = 0; i < t->localCount; i++) {
+        Laik_Slice* s = &(t->local[i]);
+        int count = s->to.i[0] - s->from.i[0];
+        uint64_t fromStart = s->from.i[0] - fromMap->baseIdx.i[0];
+        uint64_t toStart   = s->from.i[0] - toMap->baseIdx.i[0];
+        char*    fromPtr   = fromMap->base + fromStart * d->elemsize;
+        char*    toPtr     = toMap->base   + toStart * d->elemsize;
 
 #ifdef LAIK_DEBUG
-    printf("LAIK %d/%d - copy map for '%s': count %d x %d, %p => %p\n",
-           d->space->inst->myid, d->space->inst->size,
-           d->name, count, d->elemsize, from, to);
+        printf("LAIK %d/%d - copy map for '%s': "
+               "%d x %d from [%lu global [%lu to [%lu, %p => %p\n",
+               d->space->inst->myid, d->space->inst->size, d->name,
+               count, d->elemsize, fromStart, s->from.i[0], toStart,
+               fromPtr, toPtr);
 #endif
 
-    memcpy(to, from, count * d->elemsize);
-
+        if (count>0)
+            memcpy(toPtr, fromPtr, count * d->elemsize);
+    }
 }
 
 // set and enforce partitioning
@@ -205,16 +183,12 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
         // calculate elements which need to be sent/received by this task
         Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
 
-
         // TODO: use async interface
         if (p->space->inst->backend->execTransition)
             (p->space->inst->backend->execTransition)(d, t, toMap);
 
-        if (laik_is_reduction(d->activePartitioning->permission)) {
-            ; // reduction done by communication backend
-        }
-        else
-            copyMap(toMap, d->activeMapping);
+        if (t->localCount >0)
+            copyMap(t, toMap, d->activeMapping);
 
         freeMap(d->activeMapping);
     }

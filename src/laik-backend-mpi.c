@@ -165,9 +165,9 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
 #ifdef LAIK_DEBUG
             printf("LAIK %d/%d - MPI Send: "
-                   "from %lu, to %lu, elemsize %d, from base %p\n",
+                   "local [%lu-%lu], elemsize %d, from base %p\n",
                    d->space->inst->myid, d->space->inst->size,
-                   from, to, d->elemsize, fromBase);
+                   from, to-1, d->elemsize, fromBase);
 #endif
 
             // FIXME: may deadlock (use 2 phases)
@@ -195,9 +195,9 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
 #ifdef LAIK_DEBUG
             printf("LAIK %d/%d - MPI Recv: "
-                   "from %lu, to %lu, elemsize %d, to base %p\n",
+                   "local [%lu-%lu], elemsize %d, to base %p\n",
                    d->space->inst->myid, d->space->inst->size,
-                   from, to, d->elemsize, toBase);
+                   from, to-1, d->elemsize, toBase);
 #endif
 
             MPI_Status s;

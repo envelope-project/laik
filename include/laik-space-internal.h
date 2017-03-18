@@ -72,11 +72,23 @@ struct _Laik_Partitioning {
 
 struct _Laik_Transition {
     int dims;
-    int sendCount, recvCount, redCount;
+
+    // local slices (may need copy with different from/to mappings)
+    int localCount;
+    Laik_Slice local[COMMSLICES_MAX];
+
+    // slices to send to other task
+    int sendCount;
     Laik_Slice send[COMMSLICES_MAX];
     int sendTo[COMMSLICES_MAX];
+
+    // slices to receive from other task
+    int recvCount;
     Laik_Slice recv[COMMSLICES_MAX];
     int recvFrom[COMMSLICES_MAX];
+
+    // slices to reduce
+    int redCount;
     Laik_Slice red[COMMSLICES_MAX];
     int redOp[COMMSLICES_MAX];
     int redRoot[COMMSLICES_MAX]; // -1: all
