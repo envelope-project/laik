@@ -103,6 +103,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
     char* fromBase = fromMap->base;
     char* toBase = toMap->base;
 
+    // TODO: do group != world
+
     if (t->redCount > 0) {
         for(int i=0; i < t->redCount; i++) {
             assert(d->space->dims == 1);
@@ -125,8 +127,6 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             default: assert(0);
             }
 
-            // TODO: use group
-
 #ifdef LAIK_DEBUG
             printf("LAIK %d/%d - MPI Reduce: "
                    "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
@@ -146,39 +146,25 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
         }
     }
 
-    
-    if (t->sendCount > 0) {
-        for(int i=0; i < t->sendCount; i++) {
-            assert(d->space->dims == 1);
-            // from global to sender-local indexes
-            uint64_t from = t->send[i].from.i[0] - fromMap->baseIdx.i[0];
-            uint64_t to   = t->send[i].to.i[0] - fromMap->baseIdx.i[0];
-            assert(fromBase != 0);
+    // use phases to avoid deadlock:
+    // - phase 0.a: receive from lower ranks
+    // - phase 0.b: send to higher ranks
+    // - phase 1.a: receive from higher ranks
+    // - phase 1.b: send to lower ranks
+    int myid = d->space->inst->myid;
+    for(int phase = 0; phase < 2; phase++) {
 
-            MPI_Datatype mpiDateType;
-            switch(d->elemsize) {
-            case 8: mpiDateType = MPI_DOUBLE; break;
-            default: assert(0);
+        // receive
+        for(int i=0; i < t->recvCount; i++) {
+
+            assert(myid != t->recvFrom[i]);
+            if (phase == 0) {
+                if (myid < t->recvFrom[i]) continue;
+            }
+            else {
+                if (myid > t->recvFrom[i]) continue;
             }
 
-            // TODO: use group
-
-#ifdef LAIK_DEBUG
-            printf("LAIK %d/%d - MPI Send: "
-                   "local [%lu-%lu], elemsize %d, from base %p\n",
-                   d->space->inst->myid, d->space->inst->size,
-                   from, to-1, d->elemsize, fromBase);
-#endif
-
-            // FIXME: may deadlock (use 2 phases)
-            // TODO: tag 1 may conflict with application
-            MPI_Send(fromBase + from * d->elemsize, to - from,
-                     mpiDateType, t->sendTo[i], 1, comm);
-        }
-    }
-    
-    if (t->recvCount > 0) {
-        for(int i=0; i < t->recvCount; i++) {
             assert(d->space->dims == 1);
             // from global to receiver-local indexes
             uint64_t from = t->recv[i].from.i[0] - toMap->baseIdx.i[0];
@@ -191,23 +177,57 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             default: assert(0);
             }
 
-            // TODO: use group
-
 #ifdef LAIK_DEBUG
-            printf("LAIK %d/%d - MPI Recv: "
+            printf("LAIK %d/%d - MPI Recv from T%d: "
                    "local [%lu-%lu], elemsize %d, to base %p\n",
-                   d->space->inst->myid, d->space->inst->size,
+                   d->space->inst->myid, d->space->inst->size, t->recvFrom[i],
                    from, to-1, d->elemsize, toBase);
 #endif
 
             MPI_Status s;
-            // FIXME: may deadlock (use 2 phases)
             // TODO:
             // - tag 1 may conflict with application
             // - check status
             MPI_Recv(toBase + from * d->elemsize, to - from,
                      mpiDateType, t->recvFrom[i], 1, comm, &s);
         }
+
+        // send
+        for(int i=0; i < t->sendCount; i++) {
+
+            assert(myid != t->sendTo[i]);
+            if (phase == 0) {
+                if (myid > t->sendTo[i]) continue;
+            }
+            else {
+                if (myid < t->sendTo[i]) continue;
+            }
+
+            assert(d->space->dims == 1);
+            // from global to sender-local indexes
+            uint64_t from = t->send[i].from.i[0] - fromMap->baseIdx.i[0];
+            uint64_t to   = t->send[i].to.i[0] - fromMap->baseIdx.i[0];
+            assert(fromBase != 0);
+
+            MPI_Datatype mpiDateType;
+            switch(d->elemsize) {
+            case 8: mpiDateType = MPI_DOUBLE; break;
+            default: assert(0);
+            }
+
+#ifdef LAIK_DEBUG
+            printf("LAIK %d/%d - MPI Send to T%d: "
+                   "local [%lu-%lu], elemsize %d, from base %p\n",
+                   d->space->inst->myid, d->space->inst->size, t->sendTo[i],
+                   from, to-1, d->elemsize, fromBase);
+#endif
+
+            // FIXME: may deadlock (use 2 phases)
+            // TODO: tag 1 may conflict with application
+            MPI_Send(fromBase + from * d->elemsize, to - from,
+                     mpiDateType, t->sendTo[i], 1, comm);
+        }
+    
     }
 }
 
