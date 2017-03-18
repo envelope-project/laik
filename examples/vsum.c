@@ -14,7 +14,7 @@
 #include <assert.h>
 
 // for element-wise weighted partitioning: same as index
-double getW(Laik_Index* i) { return (double) i->i[0]; }
+double getEW(Laik_Index* i, void* d) { return (double) i->i[0]; }
 
 int main(int argc, char* argv[])
 {
@@ -50,17 +50,17 @@ int main(int argc, char* argv[])
     laik_map(a, 0, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];
 
-    // change distribution to use element-wise weights equal to index
+    // distribution using element-wise weights equal to index
     Laik_Partitioning* p;
     p = laik_new_base_partitioning(laik_get_space(a),
                                    LAIK_PT_Stripe, LAIK_AP_ReadWrite);
-    laik_set_index_weight(p, getW);
+    laik_set_index_weight(p, getEW, 0);
     laik_set_partitioning(a, p);
     // partial sum using stripes sized by element weights
     laik_map(a, 0, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[2] += base[i];
 
-    printf("Id %d: partitial sums %f, %f, %f\n",
+    printf("Id %d: partitial sums %.0f, %.0f, %.0f\n",
            laik_myid(world), mysum[0], mysum[1], mysum[2]);
 
     // for collecting partial sums at master, use LAIK's automatic
@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
 
     if (laik_myid(world) == 0) {
         laik_map(sum, 0, (void**) &base, &count);
-        printf("Total sums: %f, %f, %f\n", base[0], base[1], base[2]);
+        printf("Total sums: %.0f, %.0f, %.0f\n", base[0], base[1], base[2]);
     }
 
     laik_finalize(inst);

@@ -56,6 +56,7 @@ struct _Laik_Partitioning {
     int pdim; // for 2d/3d: dimension to partition
 
     Laik_GetIdxWeight_t getIdxW;
+    void* userData;
 
     // coupling to another partitioning (potentially other space)
     Laik_Partitioning* base;

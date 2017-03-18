@@ -447,9 +447,11 @@ laik_new_base_partitioning(Laik_Space* space,
 }
 
 // set index-wise weight getter interface: if workload per index is known
-void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f)
+void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f,
+                           void* userData)
 {
     p->getIdxW = f;
+    p->userData = userData;
 
     // borders may change
     p->bordersValid = false;
@@ -525,15 +527,16 @@ void setStripeBorders(Laik_Partitioning* p)
         setIndex(&idx, 0, 0, 0);
         double total = 0.0;
         for(uint64_t i = 0; i < size; i++) {
-            total += (p->getIdxW)(&idx);
             idx.i[pdim] = i;
+            total += (p->getIdxW)(&idx, p->userData);
         }
-        double perPart = total / size;
+        double perPart = total / count;
         double w = 0.0;
         int task = 0;
         p->borders[task].from.i[pdim] = 0;
         for(uint64_t i = 0; i < size; i++) {
-            w += (p->getIdxW)(&idx);
+            idx.i[pdim] = i;
+            w += (p->getIdxW)(&idx, p->userData);
             if (w >= perPart) {
                 w = w - perPart;
                 if (task+1 == count) break;
@@ -541,7 +544,6 @@ void setStripeBorders(Laik_Partitioning* p)
                 task++;
                 p->borders[task].from.i[pdim] = i;
             }
-            idx.i[p->pdim] = i;
         }
         assert(task+1 == count);
         p->borders[task].to.i[pdim] = size;
