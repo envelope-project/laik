@@ -71,6 +71,13 @@ void laik_set_data_name(Laik_Data* d, char* n)
     d->name = n;
 }
 
+// get space used for data
+Laik_Space* laik_get_space(Laik_Data* d)
+{
+    return d->space;
+}
+
+
 static
 Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
 {
@@ -125,28 +132,63 @@ void freeMap(Laik_Mapping* m)
 }
 
 static
-void copyMap(Laik_Mapping* to, Laik_Mapping* from)
+void copyMap(Laik_Mapping* toMap, Laik_Mapping* fromMap)
 {
-    assert(to->data == from->data);
-    if (to->count == 0) {
+    assert(toMap->data == fromMap->data);
+    if (toMap->count == 0) {
         // no elements to copy to
         return;
     }
-    if (from->base == 0) {
+    if (fromMap->base == 0) {
         // nothing to copy from
-        assert(from->count == 0);
+        assert(fromMap->count == 0);
         return;
     }
 
+    // calculate overlapping range between fromMap and toMap
+    assert(fromMap->data->space->dims == 1); // only for 1d now
+    // transform from fromMap-local indexes to toMap-local indexes
+    uint64_t fromMapStart = 0;
+    uint64_t fromMapEnd   = fromMap->count;
+    uint64_t globalStart  = fromMapStart + fromMap->baseIdx.i[0];
+    uint64_t globalEnd    = fromMapEnd   + fromMap->baseIdx.i[0];
+    uint64_t toMapStart   = globalStart  - toMap->baseIdx.i[0];
+    uint64_t toMapEnd     = globalEnd    - toMap->baseIdx.i[0];
+
+    // skip at start or end if outside local ranges
+    int count = fromMap->count;
+    if (toMapStart < 0) {
+        uint64_t skipStart = -toMapStart;
+        fromMapStart += skipStart;
+        toMapStart   += skipStart;
+        count -= skipStart;
+        if (count<0) {
+            count = 0;
+            toMapEnd = toMapStart;
+        }
+    }
+    if (toMapEnd + count > toMap->count) {
+        uint64_t skipEnd = toMapEnd + count - toMap->count;
+        fromMapEnd -= skipEnd;
+        toMapEnd   -= skipEnd;
+        count -= skipEnd;
+        if (count < 0) {
+            count = 0;
+            toMapEnd = toMapStart;
+        }
+    }
+
+    Laik_Data* d = toMap->data;
+    char* from = fromMap->base + fromMapStart * d->elemsize;
+    char* to   = toMap->base   + toMapStart * d->elemsize;
+
 #ifdef LAIK_DEBUG
-    Laik_Data* d = to->data;
     printf("LAIK %d/%d - copy map for '%s': count %d x %d, %p => %p\n",
            d->space->inst->myid, d->space->inst->size,
-           d->name, to->count, d->elemsize, from->base, to->base);
+           d->name, count, d->elemsize, from, to);
 #endif
 
-    assert(to->count <= from->count);
-    memcpy(to->base, from->base, to->count * to->data->elemsize);
+    memcpy(to, from, count * d->elemsize);
 
 }
 

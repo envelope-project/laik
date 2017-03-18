@@ -18,6 +18,13 @@ static int part_id = 0;
 
 // helpers
 
+void setIndex(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3)
+{
+    i->i[0] = i1;
+    i->i[1] = i2;
+    i->i[2] = i3;
+}
+
 static
 int getSpaceStr(char* s, Laik_Space* spc)
 {
@@ -433,6 +440,9 @@ laik_new_base_partitioning(Laik_Space* space,
 void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f)
 {
     p->getIdxW = f;
+
+    // borders may change
+    p->bordersValid = false;
 }
 
 
@@ -490,88 +500,126 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
     p->name = strdup(n);
 }
 
+static
+void setStripeBorders(Laik_Partitioning* p)
+{
+    assert(p->borders != 0);
+    assert(p->type == LAIK_PT_Stripe);
+
+    int count = p->group->size;
+    int pdim = p->pdim;
+    uint64_t size = p->space->size[pdim];
+    if (p->getIdxW) {
+        // element-wise weighting
+        Laik_Index idx;
+        setIndex(&idx, 0, 0, 0);
+        double total = 0.0;
+        for(uint64_t i = 0; i < size; i++) {
+            total += (p->getIdxW)(&idx);
+            idx.i[pdim] = i;
+        }
+        double perPart = total / size;
+        double w = 0.0;
+        int task = 0;
+        p->borders[task].from.i[pdim] = 0;
+        for(uint64_t i = 0; i < size; i++) {
+            w += (p->getIdxW)(&idx);
+            if (w >= perPart) {
+                w = w - perPart;
+                if (task+1 == count) break;
+                p->borders[task].to.i[pdim] = i;
+                task++;
+                p->borders[task].from.i[pdim] = i;
+            }
+            idx.i[p->pdim] = i;
+        }
+        assert(task+1 == count);
+        p->borders[task].to.i[pdim] = size;
+        return;
+    }
+
+    // equal-sized stripes
+    uint64_t idx = 0;
+    uint64_t inc = size / count;
+    if (inc * count < size) inc++;
+    for(int task = 0; task < count; task++) {
+        Laik_Slice* b = &(p->borders[task]);
+
+        b->from.i[pdim] = idx;
+        idx += inc;
+        // last border always must be <size>
+        if ((idx > size) || (task+1 == count))
+            idx = size;
+        b->to.i[pdim] = idx;
+    }
+}
+
 
 // make sure partitioning borders are up to date
-void laik_update_partitioning(Laik_Partitioning* p)
+// returns true on changes (if borders had to be updated)
+bool laik_update_partitioning(Laik_Partitioning* p)
 {
     Laik_Slice* baseBorders = 0;
+    Laik_Space* s = p->space;
     int pdim = p->pdim;
     int basepdim;
 
     if (p->base) {
-        laik_update_partitioning(p->base);
+        if (laik_update_partitioning(p->base))
+            p->bordersValid = false;
+
         baseBorders = p->base->borders;
         basepdim = p->base->pdim;
         // sizes of coupled dimensions should be equal
-        assert(p->space->size[pdim] == p->base->space->size[basepdim]);
+        assert(s->size[pdim] == p->base->space->size[basepdim]);
     }
 
-    if (p->bordersValid) return;
+    if (p->bordersValid)
+        return false;
 
     int count = p->group->size;
     if (!p->borders)
         p->borders = (Laik_Slice*) malloc(count * sizeof(Laik_Slice));
 
-    // partition according to dimension 0
-    uint64_t size = p->space->size[pdim];
-    uint64_t idx = 0;
-    uint64_t inc = size / count;
-    if (inc * count < size) inc++;
-
+    // init to all space indexes first
     for(int task = 0; task < count; task++) {
         Laik_Slice* b = &(p->borders[task]);
-        switch(p->type) {
-        case LAIK_PT_All:
-            b->from.i[0] = 0;
-            b->from.i[1] = 0;
-            b->from.i[2] = 0;
-            b->to.i[0] = p->space->size[0];
-            b->to.i[1] = p->space->size[1];
-            b->to.i[2] = p->space->size[2];
-            break;
+        setIndex(&(b->from), 0, 0, 0);
+        setIndex(&(b->to), s->size[0], s->size[1], s->size[2]);
+    }
 
-        case LAIK_PT_Stripe:
-            b->from.i[0] = 0;
-            b->from.i[1] = 0;
-            b->from.i[2] = 0;
-            b->to.i[0] = p->space->size[0];
-            b->to.i[1] = p->space->size[1];
-            b->to.i[2] = p->space->size[2];
+    switch(p->type) {
+    case LAIK_PT_All:
+        // init was fine, nothing to do
+        break;
 
-            // TODO: use weight
-            b->from.i[pdim] = idx;
-            idx += inc;
-            if (idx > size) idx = size;
-            b->to.i[pdim] = idx;
-            break;
+    case LAIK_PT_Master:
+        // set partitions for non-masters to empty
+        for(int task = 1; task < count; task++) {
+            Laik_Slice* b = &(p->borders[task]);
+            setIndex(&(b->to), 0, 0, 0);
+        }
+        break;
 
-        case LAIK_PT_Master:
-            b->from.i[0] = 0;
-            b->from.i[1] = 0;
-            b->from.i[2] = 0;
-            b->to.i[0] = (task == 0) ? p->space->size[0] : 0;
-            b->to.i[1] = (task == 0) ? p->space->size[1] : 0;
-            b->to.i[2] = (task == 0) ? p->space->size[2] : 0;
-            break;
+    case LAIK_PT_Stripe:
+        setStripeBorders(p);
+        break;
 
-        case LAIK_PT_Copy:
-            assert(baseBorders);
-            b->from.i[0] = 0;
-            b->from.i[1] = 0;
-            b->from.i[2] = 0;
-            b->to.i[0] = p->space->size[0];
-            b->to.i[1] = p->space->size[1];
-            b->to.i[2] = p->space->size[2];
+    case LAIK_PT_Copy:
+        assert(baseBorders);
+        for(int task = 0; task < count; task++) {
+            Laik_Slice* b = &(p->borders[task]);
 
             b->from.i[pdim] = baseBorders[task].from.i[basepdim];
             b->to.i[pdim] = baseBorders[task].to.i[basepdim];
-            break;
-
-        default:
-            assert(0); // TODO
-            break;
         }
+        break;
+
+    default:
+        assert(0); // TODO
+        break;
     }
+
     p->bordersValid = true;
 
 #ifdef LAIK_DEBUG
@@ -588,6 +636,8 @@ void laik_update_partitioning(Laik_Partitioning* p)
     printf("LAIK %d/%d - %s\n",
            p->group->inst->myid, p->group->inst->size, str);
 #endif
+
+    return true;
 }
 
 

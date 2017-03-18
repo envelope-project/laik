@@ -159,8 +159,8 @@ void laik_free_partitioning(Laik_Partitioning* p);
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
 
-// make sure partitioning borders are up to date
-void laik_update_partitioning(Laik_Partitioning* p);
+// make sure partitioning borders are up to date (return true on changes)
+bool laik_update_partitioning(Laik_Partitioning* p);
 
 // append a partitioning to a partioning group whose consistency should
 // be enforced at the same point in time
