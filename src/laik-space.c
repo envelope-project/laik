@@ -413,6 +413,9 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     p->pdim = 0;
 
     p->getIdxW = 0;
+    p->idxUserData = 0;
+    p->getTaskW = 0;
+    p->taskUserData = 0;
 
     p->base = 0;
     p->haloWidth = 0;
@@ -565,7 +568,7 @@ void setStripeBorders(Laik_Partitioning* p)
 
     // use task-wise weighting?
     bool useTW = false;
-    double totalTW;
+    double totalTW = 0.0;
     if (p->getTaskW) {
         for(int task = 0; task < count; task++)
             totalTW += (p->getTaskW)(task, p->taskUserData);

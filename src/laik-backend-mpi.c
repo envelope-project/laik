@@ -146,25 +146,32 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
         }
     }
 
-    // use phases to avoid deadlock:
-    // - phase 0.a: receive from lower ranks
-    // - phase 0.b: send to higher ranks
-    // - phase 1.a: receive from higher ranks
-    // - phase 1.b: send to lower ranks
-    int myid = d->space->inst->myid;
-    for(int phase = 0; phase < 2; phase++) {
+    // use 2x <task count> phases to avoid deadlocks
+    // - count phases X: 0..<count-1>
+    //     - receive from <task X> if <task X> lower rank
+    //     - send to <task X> if <task X> is higher rank
+    // - count phases Y: 0..<count-1>
+    //     - receive from <task count-Y> if it is higher rank
+    //     - send to <task count-1-Y> if it is lower rank
+    //
+    // TODO: sort transitions actions!
+
+    int myid  = d->space->inst->myid;
+    int count = d->space->inst->size;
+    for(int phase = 0; phase < 2*count; phase++) {
+        int task = (phase < count) ? phase : (2*count-phase-1);
+        bool sendToHigher   = (phase < count);
+        bool recvFromLower  = (phase < count);
+        bool sendToLower    = (phase >= count);
+        bool recvFromHigher = (phase >= count);
 
         // receive
         for(int i=0; i < t->recvCount; i++) {
+            if (task != t->recvFrom[i]) continue;
+            if (recvFromLower  && (myid < task)) continue;
+            if (recvFromHigher && (myid > task)) continue;
 
             assert(myid != t->recvFrom[i]);
-            if (phase == 0) {
-                if (myid < t->recvFrom[i]) continue;
-            }
-            else {
-                if (myid > t->recvFrom[i]) continue;
-            }
-
             assert(d->space->dims == 1);
             // from global to receiver-local indexes
             uint64_t from = t->recv[i].from.i[0] - toMap->baseIdx.i[0];
@@ -194,15 +201,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
         // send
         for(int i=0; i < t->sendCount; i++) {
+            if (task != t->sendTo[i]) continue;
+            if (sendToLower  && (myid < task)) continue;
+            if (sendToHigher && (myid > task)) continue;
 
             assert(myid != t->sendTo[i]);
-            if (phase == 0) {
-                if (myid > t->sendTo[i]) continue;
-            }
-            else {
-                if (myid < t->sendTo[i]) continue;
-            }
-
             assert(d->space->dims == 1);
             // from global to sender-local indexes
             uint64_t from = t->send[i].from.i[0] - fromMap->baseIdx.i[0];
