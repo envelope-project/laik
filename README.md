@@ -21,6 +21,12 @@ LAIK-managed index spaces can be coupled to support data transfers of different 
 
 * LAIK enables incremental porting: data structures (and their partitioning among parallel tasks) can be moved one by one into LAIK's responsibility.
 
+# Concepts
+
+* LAIK's core is about partitioning of index spaces to distribute data or compute load tied to indexes among tasks. By seperating the concern of how to partition an index space from application code into LAIK, the partitioning can be controlled explicitely (e.g. by a load balancing module)
+
+* Partitioning of index spaces may become complex, and it may be convenient to map a complex partition of one index space to a simple linear index space of the size of the partition: allows nesting, local-to-global calculations, mapping to 1d memory
+
   
 # Example
 
