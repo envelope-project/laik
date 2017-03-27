@@ -72,30 +72,37 @@ struct _Laik_Partitioning {
     Laik_Partitioning* next; // for list of partitionings same space
 };
 
-#define COMMSLICES_MAX 10
+#define TRANSSLICES_MAX 10
 
 struct _Laik_Transition {
     int dims;
 
-    // local slices (may need copy with different from/to mappings)
+    // local slices staying local;
+    // may need copy when different from/to mappings are used
     int localCount;
-    Laik_Slice local[COMMSLICES_MAX];
+    Laik_Slice local[TRANSSLICES_MAX];
+
+    // local slices that should be initialized;
+    // the value depends on the reduction type (neutral element)
+    int initCount;
+    Laik_Slice init[TRANSSLICES_MAX];
+    int initRedOp[TRANSSLICES_MAX];
 
     // slices to send to other task
     int sendCount;
-    Laik_Slice send[COMMSLICES_MAX];
-    int sendTo[COMMSLICES_MAX];
+    Laik_Slice send[TRANSSLICES_MAX];
+    int sendTo[TRANSSLICES_MAX];
 
     // slices to receive from other task
     int recvCount;
-    Laik_Slice recv[COMMSLICES_MAX];
-    int recvFrom[COMMSLICES_MAX];
+    Laik_Slice recv[TRANSSLICES_MAX];
+    int recvFrom[TRANSSLICES_MAX];
 
     // slices to reduce
     int redCount;
-    Laik_Slice red[COMMSLICES_MAX];
-    int redOp[COMMSLICES_MAX];
-    int redRoot[COMMSLICES_MAX]; // -1: all
+    Laik_Slice red[TRANSSLICES_MAX];
+    int redOp[TRANSSLICES_MAX];
+    int redRoot[TRANSSLICES_MAX]; // -1: all
 };
 
 // LAIK internal

@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
     Laik_Data* a = laik_alloc_1d(world, 8, 1000000);
 
     // initialize at master (others do nothing, empty partition)
-    p1 = laik_set_new_partitioning(a, LAIK_PT_Master, LAIK_AP_WriteOnly);
+    p1 = laik_set_new_partitioning(a, LAIK_PT_Master, LAIK_AP_WriteAll);
     if (laik_myid(world) == 0) {
         laik_map(a, 0, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) base[i] = (double) i;
@@ -107,7 +107,7 @@ int main(int argc, char* argv[])
     // for collecting partial sums at master, use LAIK's automatic
     // aggregation functionality when switching to new partitioning
     Laik_Data* sum = laik_alloc_1d(world, 8, 4);
-    laik_set_new_partitioning(sum, LAIK_PT_All, LAIK_AP_Plus);
+    laik_set_new_partitioning(sum, LAIK_PT_All, LAIK_AP_WASum);
     laik_map(sum, 0, (void**) &base, &count);
     assert(count == 4);
     for(int i = 0; i < 4; i++) base[i] = mysum[i];

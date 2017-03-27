@@ -95,16 +95,18 @@ int main(int argc, char* argv[])
 
     double* res;
     uint64_t count;
+    Laik_Slice* slc;
+    int fromRow, toRow;
 
-    for(int iter = 0; iter < 20; iter++) {
+    for(int iter = 0; iter < 10; iter++) {
         // init result vector (only my partition)
         laik_map(resD, 0, (void**) &res, &count);
         for(uint64_t i = 0; i < count; i++)
             res[i] = 0.0;
 
-        Laik_Slice* slc = laik_my_slice(p);
-        int fromRow = slc->from.i[0];
-        int toRow = slc->to.i[0];
+        slc = laik_my_slice(p);
+        fromRow = slc->from.i[0];
+        toRow = slc->to.i[0];
         for(int r = fromRow; r < toRow; r++) {
             for(int o = m->row[r]; o < m->row[r+1]; o++)
                 res[r - fromRow] += m->val[o] * v[m->col[o]];
@@ -117,7 +119,26 @@ int main(int argc, char* argv[])
         laik_map(resD, 0, (void**) &res, &count);
         double sum = 0.0;
         for(uint64_t i = 0; i < count; i++) sum += res[i];
-        printf("Res sum: %f\n", sum);
+        printf("Res sum (regular): %f\n", sum);
+    }
+
+    // other way to push results to master: use sum reduction
+    laik_set_new_partitioning(resD, LAIK_PT_All, LAIK_AP_Sum);
+    laik_map(resD, 0, (void**) &res, &count);
+    slc = laik_my_slice(p);
+    fromRow = slc->from.i[0];
+    toRow = slc->to.i[0];
+    for(int r = fromRow; r < toRow; r++) {
+        for(int o = m->row[r]; o < m->row[r+1]; o++)
+            res[r] += m->val[o] * v[m->col[o]];
+    }
+
+    laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_AP_ReadOnly);
+    if (laik_myid(world) == 0) {
+        laik_map(resD, 0, (void**) &res, &count);
+        double sum = 0.0;
+        for(uint64_t i = 0; i < count; i++) sum += res[i];
+        printf("Res sum (reduce): %f\n", sum);
     }
 
     laik_finalize(inst);

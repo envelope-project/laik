@@ -170,6 +170,45 @@ void copyMap(Laik_Transition* t, Laik_Mapping* toMap, Laik_Mapping* fromMap)
     }
 }
 
+static
+void initMap(Laik_Transition* t, Laik_Mapping* toMap)
+{
+    assert(t->initCount > 0);
+    if (toMap->count == 0) {
+        // no elements to initialize
+        return;
+    }
+
+    assert(toMap->data->space->dims == 1); // only for 1d now
+    Laik_Data* d = toMap->data;
+    for(int i = 0; i < t->initCount; i++) {
+        Laik_Slice* s = &(t->init[i]);
+        int count = s->to.i[0] - s->from.i[0];
+        double v;
+        double* dbase = (double*) toMap->base;
+
+        assert(d->elemsize == 8); // FIXME: we assume "double"
+        switch(t->initRedOp[i]) {
+        case LAIK_AP_Sum: v = 0.0; break;
+        case LAIK_AP_Prod: v = 1.0; break;
+        case LAIK_AP_Min: v = 9e99; break; // should be largest double val
+        case LAIK_AP_Max: v = -9e99; break; // should be smallest double val
+        default:
+            assert(0);
+        }
+
+#ifdef LAIK_DEBUG
+        printf("LAIK %d/%d - init map for '%s': double %f => %d x at [%lu, %p\n",
+               d->space->inst->myid, d->space->inst->size, d->name,
+               v, count, s->from.i[0], dbase);
+#endif
+
+        for(int j = s->from.i[0]; j < s->to.i[0]; j++)
+            dbase[j] = v;
+    }
+}
+
+
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 {
@@ -187,14 +226,18 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
         assert(p->space->inst->backend->execTransition);
         (p->space->inst->backend->execTransition)(d, t, toMap);
 
-        if (t->localCount >0)
+        if (t->localCount > 0)
             copyMap(t, toMap, d->activeMapping);
+
+        if (t->initCount > 0)
+            initMap(t, toMap);
 
         freeMap(d->activeMapping);
     }
 
-    if (d->activePartitioning)
+    if (d->activePartitioning) {
         laik_free_partitioning(d->activePartitioning);
+    }
 
     // set active
     d->activePartitioning = p;

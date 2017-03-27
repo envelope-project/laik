@@ -178,12 +178,17 @@ int getAccessPermissionStr(char* s, Laik_AccessPermission ap)
 {
     switch(ap) {
     case LAIK_AP_ReadOnly:  return sprintf(s, "readonly");
-    case LAIK_AP_WriteOnly: return sprintf(s, "writeonly");
+    case LAIK_AP_WriteAll:  return sprintf(s, "writeall");
     case LAIK_AP_ReadWrite: return sprintf(s, "readwrite");
-    case LAIK_AP_Plus:      return sprintf(s, "plus-red");
-    case LAIK_AP_Times:     return sprintf(s, "times-red");
-    case LAIK_AP_Min:       return sprintf(s, "min-red");
-    case LAIK_AP_Max:       return sprintf(s, "max-red");
+
+    case LAIK_AP_Sum:       return sprintf(s, "plus");
+    case LAIK_AP_Prod:      return sprintf(s, "prod");
+    case LAIK_AP_Min:       return sprintf(s, "min");
+    case LAIK_AP_Max:       return sprintf(s, "max");
+    case LAIK_AP_WASum:     return sprintf(s, "writeall plus");
+    case LAIK_AP_WAProd:    return sprintf(s, "writeall prod");
+    case LAIK_AP_WAMin:     return sprintf(s, "writeall min");
+    case LAIK_AP_WAMax:     return sprintf(s, "writeall max");
     }
     return 0;
 }
@@ -195,10 +200,20 @@ int getTransitionStr(char* s, Laik_Transition* t)
     int off = 0;
 
     if (t->localCount>0) {
-        off += sprintf(s+off, "  locl: ");
+        off += sprintf(s+off, "  local: ");
         for(int i=0; i<t->localCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getSliceStr(s+off, t->dims, &(t->local[i]));
+        }
+        off += sprintf(s+off, "\n");
+    }
+
+    if (t->initCount>0) {
+        off += sprintf(s+off, "  init: ");
+        for(int i=0; i<t->initCount; i++) {
+            if (i>0) off += sprintf(s+off, ", ");
+            off += getAccessPermissionStr(s+off, t->initRedOp[i]);
+            off += getSliceStr(s+off, t->dims, &(t->init[i]));
         }
         off += sprintf(s+off, "\n");
     }
@@ -224,7 +239,7 @@ int getTransitionStr(char* s, Laik_Transition* t)
     }
 
     if (t->redCount>0) {
-        off += sprintf(s+off, "  redu: ");
+        off += sprintf(s+off, "  reduction: ");
         for(int i=0; i<t->redCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getAccessPermissionStr(s+off, t->redOp[i]);
@@ -244,10 +259,14 @@ int getTransitionStr(char* s, Laik_Transition* t)
 bool laik_is_reduction(Laik_AccessPermission p)
 {
     switch(p) {
-    case LAIK_AP_Max:
+    case LAIK_AP_Sum:
+    case LAIK_AP_WASum:
+    case LAIK_AP_Prod:
+    case LAIK_AP_WAProd:
     case LAIK_AP_Min:
-    case LAIK_AP_Plus:
-    case LAIK_AP_Times:
+    case LAIK_AP_WAMin:
+    case LAIK_AP_Max:
+    case LAIK_AP_WAMax:
         return true;
     default:
         break;
@@ -255,7 +274,49 @@ bool laik_is_reduction(Laik_AccessPermission p)
     return false;
 }
 
-// includes this read access?
+// return the reduction operation from access behavior
+// (we reuse the same type)
+Laik_AccessPermission laik_get_reduction(Laik_AccessPermission p)
+{
+    switch(p) {
+    case LAIK_AP_Sum:
+    case LAIK_AP_WASum:
+        return LAIK_AP_Sum;
+    case LAIK_AP_Prod:
+    case LAIK_AP_WAProd:
+        return LAIK_AP_Prod;
+    case LAIK_AP_Min:
+    case LAIK_AP_WAMin:
+        return LAIK_AP_Min;
+    case LAIK_AP_Max:
+    case LAIK_AP_WAMax:
+        return LAIK_AP_Max;
+    default:
+        break;
+    }
+    return LAIK_AP_None;
+}
+
+// do writers overwrite all elements in their partition?
+// - for reductions, this means that no initialization is required
+// - for regular access, this means no value propagation from previous
+bool laik_is_writeall(Laik_AccessPermission p)
+{
+    switch(p) {
+    case LAIK_AP_WriteAll:
+    case LAIK_AP_WASum:
+    case LAIK_AP_WAProd:
+    case LAIK_AP_WAMin:
+    case LAIK_AP_WAMax:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+// Does the access behavior specify that we want to read the
+// values from previous partitioning? If so, we need to propagate them.
 bool laik_is_read(Laik_AccessPermission p)
 {
     switch(p) {
@@ -268,11 +329,12 @@ bool laik_is_read(Laik_AccessPermission p)
     return false;
 }
 
-// includes this write access?
+// Does the access behavior specify that we will modify/write values
+// to eventually be passed on to next partitioning?
 bool laik_is_write(Laik_AccessPermission p)
 {
     switch(p) {
-    case LAIK_AP_WriteOnly:
+    case LAIK_AP_WriteAll:
     case LAIK_AP_ReadWrite:
         return true;
     default:
@@ -515,8 +577,9 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p)
 {
-    free(p->name);
+    // FIXME: we need some kind of reference counting/GC here
 
+    //free(p->name);
     // TODO
 }
 
@@ -707,9 +770,11 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                                        Laik_Partitioning* to)
 {
     Laik_Slice* slc;
+    Laik_Transition* t;
 
-    Laik_Transition* t = (Laik_Transition*) malloc(sizeof(Laik_Transition));
+    t = (Laik_Transition*) malloc(sizeof(Laik_Transition));
     t->localCount = 0;
+    t->initCount = 0;
     t->sendCount = 0;
     t->recvCount = 0;
     t->redCount = 0;
@@ -724,14 +789,28 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     // determine local slice to keep?
     // (may need local copy if from/to mappings are different).
     // reductions always are taken care by backend
-    if (!laik_is_reduction(from->permission)) {
+    if (!laik_is_reduction(from->permission) &&
+        laik_is_write(from->permission) &&
+        laik_is_read(to->permission)) {
         slc = laik_slice_intersect(dims,
                                    &(from->borders[myid]),
                                    &(to->borders[myid]));
         if (slc != 0) {
-            assert(t->localCount < COMMSLICES_MAX);
+            assert(t->localCount < TRANSSLICES_MAX);
             t->local[t->sendCount] = *slc;
             t->localCount++;
+        }
+    }
+
+    // some reduction to be done where we need to initialize values?
+    if (laik_is_reduction(to->permission) &&
+        !laik_is_writeall(to->permission)) {
+
+        if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
+            assert(t->initCount < TRANSSLICES_MAX);
+            t->init[t->initCount] = to->borders[myid];
+            t->initRedOp[t->initCount] = laik_get_reduction(to->permission);
+            t->initCount++;
         }
     }
 
@@ -741,11 +820,11 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         assert(from->type == LAIK_PT_All);
         if ((to->permission == LAIK_AP_ReadOnly) ||
             (to->permission == LAIK_AP_ReadWrite)) {
-                assert(t->redCount < COMMSLICES_MAX);
+                assert(t->redCount < TRANSSLICES_MAX);
                 assert((to->type == LAIK_PT_Master) ||
                        (to->type == LAIK_PT_All));
                 t->red[t->redCount] = *sliceFromSpace(from->space);
-                t->redOp[t->redCount] = from->permission;
+                t->redOp[t->redCount] = laik_get_reduction(from->permission);
                 t->redRoot[t->redCount] = (to->type == LAIK_PT_All) ? -1 : 0;
                 t->redCount++;
         }
@@ -766,7 +845,7 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                                                &(to->borders[task]));
                     if (slc == 0) continue;
 
-                    assert(t->sendCount < COMMSLICES_MAX);
+                    assert(t->sendCount < TRANSSLICES_MAX);
                     t->send[t->sendCount] = *slc;
                     t->sendTo[t->sendCount] = task;
                     t->sendCount++;
@@ -793,7 +872,7 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                                                &(from->borders[task]));
                     if (slc == 0) continue;
 
-                    assert(t->recvCount < COMMSLICES_MAX);
+                    assert(t->recvCount < TRANSSLICES_MAX);
                     t->recv[t->recvCount] = *slc;
                     t->recvFrom[t->recvCount] = task;
                     t->recvCount++;

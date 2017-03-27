@@ -43,16 +43,25 @@ typedef enum _Laik_PartitionType {
     LAIK_PT_Neighbor, // extend a partitioning with neighbor parts
 } Laik_PartitionType;
 
-// access permission to partitions
+// Access behavior to partitions.
+// Laik uses this information to derive what needs to be propagated
+// to/from a partition at switch time; no enforcement is done.
+// E.g. you can write to a ReadOnly partition, but you need to aware
+// that Laik will not propagate these value modifications.
 typedef enum _Laik_AccessPermission {
     LAIK_AP_None = 0,
-    LAIK_AP_ReadOnly,
-    LAIK_AP_WriteOnly, // promises complete overwriting
-    LAIK_AP_ReadWrite,
-    LAIK_AP_Plus,      // + reduction, multiple writers
-    LAIK_AP_Times,     // * reduction, multiple writers
-    LAIK_AP_Min,       // min reduction, multiple writers
-    LAIK_AP_Max        // max reduction, multiple writers
+
+    // one writer, multiple readers
+    LAIK_AP_ReadOnly,  // for copies, no changes to propagate to next
+    LAIK_AP_WriteAll,  // no prop. from previous, complete overwrite
+    LAIK_AP_ReadWrite, // propagate from previous and to next
+
+    // reductions with multiple writers
+    // LAIK initializes partition unless WA (WriteAll) variant is used
+    LAIK_AP_Sum,  LAIK_AP_WASum,  // + reduction
+    LAIK_AP_Prod, LAIK_AP_WAProd, // * reduction
+    LAIK_AP_Min,  LAIK_AP_WAMin,  // min reduction
+    LAIK_AP_Max,  LAIK_AP_WAMax   // max reduction
 } Laik_AccessPermission;
 
 // a point in an index space
