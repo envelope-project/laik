@@ -12,6 +12,12 @@ Some TODOs
 * 1d/2d jacobi
 * blas kernels
 
+# Open Questions
+
+* good allocator interface / allocation policy (for whole partitioning sequence)
+* keep partitions mapped as good as possible (may be sitting on the GPU)
+* ... ?
+
 # Finish half implemented features
 
 Driven by example code we want to work (see above)
