@@ -15,8 +15,8 @@ Some TODOs
 # Open Questions
 
 * good allocator interface / allocation policy (for whole partitioning sequence)
-* keep partitions mapped as good as possible (may be sitting on the GPU)
-* ... ?
+* keep partitions mapped as much as possible (may be sitting on the GPU)
+* Data Pipelining (SLURM, 12GB Matrix)
 
 # Finish half implemented features
 
