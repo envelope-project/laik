@@ -209,5 +209,18 @@ void laik_repartition(Laik_Partitioning* p, Laik_PartitionType pt);
 // one partition of calling task in outer space is mapped to inner space
 void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
 
+//------------------------------------------
+// automatic repartitioning
+
+typedef enum _Laik_RepartitionHint {
+    LAIK_RH_None = 0,
+    LAIK_RH_Update      = 1,  // update by re-checking parameter
+    LAIK_RH_External    = 2,  // check external sources
+    LAIK_RH_Incremental = 4   // try to keep changes small
+} Laik_RepartitionHint;
+
+// allow LAIK to change a partitioning based on external means
+// returns true if partitioning was changed
+bool allowRepartitioning(Laik_Partitioning* p);
 
 #endif // _LAIK_SPACE_H_
