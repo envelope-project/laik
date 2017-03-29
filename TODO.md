@@ -29,6 +29,7 @@ Driven by example code we want to work (see above)
 
 # Features not yet implemented
 
+* Get Partition-Number/Name by HostName
 * stencil example (with derived Halo partitioning)
 * OpenMP/PThreads backend
 * LAIK nesting (using MPI / PThreads)
