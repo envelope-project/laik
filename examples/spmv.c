@@ -86,7 +86,7 @@ int main(int argc, char* argv[])
     // 1d space for matrix rows and vector <res>
     Laik_Space* s = laik_new_space_1d(inst, SIZE);
     // result vector
-    Laik_Data* resD = laik_alloc(world, s, 8);
+    Laik_Data* resD = laik_alloc(world, s, laik_Double);
 
     // block partitioning according to elems in matrix rows
     Laik_Partitioning* p;

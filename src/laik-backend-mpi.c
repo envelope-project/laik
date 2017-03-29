@@ -122,10 +122,9 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             }
 
             MPI_Datatype mpiDateType;
-            switch(d->elemsize) {
-            case 8: mpiDateType = MPI_DOUBLE; break;
-            default: assert(0);
-            }
+            if      (d->type == laik_Double) mpiDateType = MPI_DOUBLE;
+            else if (d->type == laik_Float) mpiDateType = MPI_FLOAT;
+            else assert(0);
 
 #ifdef LAIK_DEBUG
             printf("LAIK %d/%d - MPI Reduce: "

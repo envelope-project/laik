@@ -25,23 +25,31 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+
 /*********************************************************************/
 /* LAIK Data - Data containers for LAIK index spaces
  *********************************************************************/
 
-// a LAIK container
+
+//----------------------------------
+// Laik data types
+
+typedef struct _Laik_Type Laik_Type;
+// predefined
+extern Laik_Type *laik_Int32;
+extern Laik_Type *laik_Int64;
+extern Laik_Type *laik_Float;
+extern Laik_Type *laik_Double;
+
+// simple type, no support for reductions
+Laik_Type* laik_register_type(char* name, int size);
+
+
+
+//----------------------------------
+// LAIK data container
+
 typedef struct _Laik_Data Laik_Data;
-
-// a serialisation order of a LAIK container
-typedef struct _Laik_Layout Laik_Layout;
-
-// container part pinned to local memory space
-typedef struct _Laik_Mapping Laik_Mapping;
-
-
-/*********************************************************************/
-/* LAIK API for data containers
- *********************************************************************/
 
 /**
  * Define a LAIK container shared by a LAIK task group.
@@ -49,9 +57,9 @@ typedef struct _Laik_Mapping Laik_Mapping;
  * If no partitioning is set (via laik_setPartition) before
  * use, default to equal-sized owner BLOCK partitioning.
  */
-Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, int elemsize);
-Laik_Data* laik_alloc_1d(Laik_Group* g, int elemsize, uint64_t s1);
-Laik_Data* laik_alloc_2d(Laik_Group* g, int elemsize, uint64_t s1, uint64_t s2);
+Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t);
+Laik_Data* laik_alloc_1d(Laik_Group* g, Laik_Type* t, uint64_t s1);
+Laik_Data* laik_alloc_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2);
 
 // set a data name, for debug output
 void laik_set_data_name(Laik_Data* d, char* n);
@@ -59,20 +67,36 @@ void laik_set_data_name(Laik_Data* d, char* n);
 // get space used for data
 Laik_Space* laik_get_space(Laik_Data*);
 
+// free resources for a data container
+void laik_free(Laik_Data*);
+
+// set and enforce partitioning
+void laik_set_partitioning(Laik_Data*, Laik_Partitioning*);
+
+// convenience functions
+
 // set and enforce a newly created partitioning, and return it
 Laik_Partitioning* laik_set_new_partitioning(Laik_Data*,
                                              Laik_PartitionType,
                                              Laik_AccessBehavior);
 
-// set and enforce partitioning
-void laik_set_partitioning(Laik_Data*, Laik_Partitioning*);
-
-
 void laik_fill_double(Laik_Data* data, double v);
 
-Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l, void** base, uint64_t* count);
 
-void laik_free(Laik_Data*);
+
+//----------------------------------
+// LAIK data mapped to memory space
+
+// a serialisation order of a LAIK container
+typedef struct _Laik_Layout Laik_Layout;
+
+// container part pinned to local memory space
+typedef struct _Laik_Mapping Laik_Mapping;
+
+Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
+                       void** base, uint64_t* count);
+
+
 
 //----------------------------------
 // Allocator interface

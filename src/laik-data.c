@@ -10,9 +10,52 @@
 #include <string.h>
 #include <stdio.h>
 
+Laik_Type *laik_Char;
+Laik_Type *laik_Int32;
+Laik_Type *laik_Int64;
+Laik_Type *laik_Float;
+Laik_Type *laik_Double;
+
+static int type_id = 0;
+
+Laik_Type* laik_new_type(char* name, Laik_TypeKind kind, int size)
+{
+    Laik_Type* t = (Laik_Type*) malloc(sizeof(Laik_Type));
+
+    t->id = type_id++;
+    if (name)
+        t->name = name;
+    else {
+        t->name = strdup("type-0     ");
+        sprintf(t->name, "type-%d", t->id);
+    }
+
+    t->kind = kind;
+    t->size = size;
+    t->init = 0;    // reductions not supported
+    t->reduce = 0;
+    t->getLength = 0; // not needed for POD type
+    t->convert = 0;
+
+    return t;
+}
+
+void laik_init_types()
+{
+    if (type_id > 0) return;
+
+    laik_Char   = laik_new_type("char",  LAIK_TK_POD, 1);
+    laik_Int32  = laik_new_type("int32", LAIK_TK_POD, 4);
+    laik_Int64  = laik_new_type("int64", LAIK_TK_POD, 8);
+    laik_Float  = laik_new_type("float", LAIK_TK_POD, 4);
+    laik_Double = laik_new_type("double", LAIK_TK_POD, 8);
+}
+
+
+
 static int data_id = 0;
 
-Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, int elemsize)
+Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
 {
     assert(g->inst == s->inst);
 
@@ -24,7 +67,9 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, int elemsize)
 
     d->group = g;
     d->space = s;
-    d->elemsize = elemsize;
+    d->type = t;
+    assert(t && (t->size > 0));
+    d->elemsize = t->size; // TODO: other than POD types
 
     d->backend_data = 0;
     d->defaultPartitionType = LAIK_PT_Block;
@@ -36,10 +81,10 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, int elemsize)
     return d;
 }
 
-Laik_Data* laik_alloc_1d(Laik_Group* g, int elemsize, uint64_t s1)
+Laik_Data* laik_alloc_1d(Laik_Group* g, Laik_Type* t, uint64_t s1)
 {
     Laik_Space* space = laik_new_space_1d(g->inst, s1);
-    Laik_Data* d = laik_alloc(g, space, elemsize);
+    Laik_Data* d = laik_alloc(g, space, t);
 
 #ifdef LAIK_DEBUG
     printf("LAIK %d/%d - new 1d data '%s': elemsize %d, space '%s'\n",
@@ -50,10 +95,10 @@ Laik_Data* laik_alloc_1d(Laik_Group* g, int elemsize, uint64_t s1)
     return d;
 }
 
-Laik_Data* laik_alloc_2d(Laik_Group* g, int elemsize, uint64_t s1, uint64_t s2)
+Laik_Data* laik_alloc_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2)
 {
     Laik_Space* space = laik_new_space_2d(g->inst, s1, s2);
-    Laik_Data* d = laik_alloc(g, space, elemsize);
+    Laik_Data* d = laik_alloc(g, space, t);
 
 #ifdef LAIK_DEBUG
     printf("LAIK %d/%d - new 2d data '%s': elemsize %d, space '%s'\n",
@@ -197,27 +242,45 @@ void initMap(Laik_Transition* t, Laik_Mapping* toMap)
     for(int i = 0; i < t->initCount; i++) {
         Laik_Slice* s = &(t->init[i]);
         int count = s->to.i[0] - s->from.i[0];
-        double v;
-        double* dbase = (double*) toMap->base;
 
-        assert(d->elemsize == 8); // FIXME: we assume "double"
-        switch(t->initRedOp[i]) {
-        case LAIK_AB_Sum: v = 0.0; break;
-        case LAIK_AB_Prod: v = 1.0; break;
-        case LAIK_AB_Min: v = 9e99; break; // should be largest double val
-        case LAIK_AB_Max: v = -9e99; break; // should be smallest double val
-        default:
-            assert(0);
+        if (d->type == laik_Double) {
+            double v;
+            double* dbase = (double*) toMap->base;
+
+            switch(t->initRedOp[i]) {
+            case LAIK_AB_Sum: v = 0.0; break;
+            case LAIK_AB_Prod: v = 1.0; break;
+            case LAIK_AB_Min: v = 9e99; break; // should be largest double val
+            case LAIK_AB_Max: v = -9e99; break; // should be smallest double val
+            default:
+                assert(0);
+            }
+            for(int j = s->from.i[0]; j < s->to.i[0]; j++)
+                dbase[j] = v;
         }
+        else if (d->type == laik_Float) {
+            float v;
+            float* dbase = (float*) toMap->base;
+
+            switch(t->initRedOp[i]) {
+            case LAIK_AB_Sum: v = 0.0; break;
+            case LAIK_AB_Prod: v = 1.0; break;
+            case LAIK_AB_Min: v = 9e99; break; // should be largest double val
+            case LAIK_AB_Max: v = -9e99; break; // should be smallest double val
+            default:
+                assert(0);
+            }
+            for(int j = s->from.i[0]; j < s->to.i[0]; j++)
+                dbase[j] = v;
+        }
+        else assert(0);
 
 #ifdef LAIK_DEBUG
-        printf("LAIK %d/%d - init map for '%s': double %f => %d x at [%lu, %p\n",
+        printf("LAIK %d/%d - init map for '%s': %d x at [%lu\n",
                d->space->inst->myid, d->space->inst->size, d->name,
-               v, count, s->from.i[0], dbase);
+               count, s->from.i[0]);
 #endif
 
-        for(int j = s->from.i[0]; j < s->to.i[0]; j++)
-            dbase[j] = v;
     }
 }
 

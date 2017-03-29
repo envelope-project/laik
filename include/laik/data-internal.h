@@ -22,6 +22,37 @@
 #error "include laik-internal.h instead"
 #endif
 
+
+// kinds of data types supported by Laik
+typedef enum _Laik_TypeKind {
+    LAIK_TK_None = 0,
+    LAIK_TK_POD       // "Plain Old Data", just a sequence of bytes
+} Laik_TypeKind;
+
+// a data type
+struct _Laik_Type {
+    char* name;
+    int id;
+
+    Laik_TypeKind kind;
+    int size;      // in bytes (for POD)
+
+    // callbacks for reductions
+    // initialize values of this type with neutral element
+    void (*init)(void* base, int count, Laik_AccessBehavior a);
+    // do a reduction on input arrays
+    void (*reduce)(void* out, void* in1, void* in2,
+                   int count, Laik_AccessBehavior a);
+
+    // callbacks for packing/unpacking
+    int (*getLength)(Laik_Data*,Laik_Slice*);
+    bool (*convert)(Laik_Data*,Laik_Slice*, void*);
+};
+
+// called from laik_new_instance
+void laik_init_types();
+
+
 struct _Laik_Data {
     char* name;
     int id;
@@ -29,6 +60,7 @@ struct _Laik_Data {
     int elemsize;
     Laik_Space* space; // index space of this container
     Laik_Group* group;
+    Laik_Type* type;
 
     // default partitioning
     Laik_PartitionType defaultPartitionType;
