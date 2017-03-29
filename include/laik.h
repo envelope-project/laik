@@ -18,12 +18,10 @@
 #ifndef _LAIK_H_
 #define _LAIK_H_
 
-// Convenience header, including headers of important LAIK modules
-// (without LAIK backends)
-
-#include "laik-core.h"
-#include "laik-space.h"
-#include "laik-data.h"
-#include "laik-backend.h"
+// include headers of all Laik modules (without LAIK backends)
+#include "laik/core.h"
+#include "laik/space.h"
+#include "laik/data.h"
+#include "laik/backend.h"
 
 #endif // _LAIK_H_

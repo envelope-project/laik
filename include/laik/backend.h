@@ -15,42 +15,22 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_CORE_INTERNAL_H_
-#define _LAIK_CORE_INTERNAL_H_
+#ifndef _LAIK_BACKEND_H_
+#define _LAIK_BACKEND_H_
 
-#include "laik.h"
+#ifndef _LAIK_H_
+#error "include laik.h instead"
+#endif
 
-#define MAX_GROUPS   10
-#define MAX_SPACES   10
-#define MAX_DATAS    10
-#define MAX_MAPPINGS 50
+// LAIK communication back-end
+typedef struct _Laik_Backend Laik_Backend;
+struct _Laik_Backend {
+  char* name;
+  void (*finalize)(Laik_Instance*);
+  void (*execTransition)(Laik_Data*, Laik_Transition*, Laik_Mapping* to);
 
-struct _Laik_Group {
-    Laik_Instance* inst;
-    int gid;
-    int size;
-    int myid;
-    int task[1];
+  // TODO: async interface: start sending / register receiving / probe
 };
 
-struct _Laik_Instance {
-  int size;
-  int myid;
 
-  Laik_Backend* backend;
-  void* backend_data;
-
-  Laik_Space* firstspace;
-
-  int group_count, data_count, mapping_count;
-  Laik_Group* group[MAX_GROUPS];
-  Laik_Data* data[MAX_DATAS];
-  Laik_Mapping* mapping[MAX_MAPPINGS]; // active mappings
-};
-
-struct _Laik_Error {
-  int type;
-  char* desc;
-};
-
-#endif // _LAIK_CORE_INTERNAL_H_
+#endif // _LAIK_BACKEND_H_

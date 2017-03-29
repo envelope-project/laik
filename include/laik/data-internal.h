@@ -18,7 +18,9 @@
 #ifndef _LAIK_DATA_INTERNAL_H_
 #define _LAIK_DATA_INTERNAL_H_
 
-#include "laik-data.h"
+#ifndef _LAIK_INTERNAL_H_
+#error "include laik-internal.h instead"
+#endif
 
 struct _Laik_Data {
     char* name;

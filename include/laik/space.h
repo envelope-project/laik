@@ -18,7 +18,9 @@
 #ifndef _LAIK_SPACE_H_
 #define _LAIK_SPACE_H_
 
-#include "laik.h"
+#ifndef _LAIK_H_
+#error "include laik.h instead"
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>

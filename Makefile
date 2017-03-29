@@ -1,4 +1,7 @@
-# MPI
+# default installation path
+PREFIX=/usr/local
+
+# enable MPI backend
 CC=mpicc
 DEFS=-DLAIK_USEMPI
 
@@ -9,7 +12,7 @@ CFLAGS=$(OPT) -std=gnu99 -Iinclude
 LDFLAGS=$(OPT)
 
 SRCS = $(wildcard src/*.c)
-HEADERS = $(wildcard include/*.h)
+HEADERS = $(wildcard include/*.h include/laik/*.h)
 OBJS = $(SRCS:.c=.o)
 DEPS = $(SRCS:.c=.d)
 
@@ -32,6 +35,20 @@ examples: liblaik.a
 clean:
 	rm -f *~ *.o $(OBJS) $(DEPS) liblaik.a
 	cd examples && make clean
+
+install: liblaik.a $(HEADERS)
+	cp $(wildcard include/*.h) $(PREFIX)/include
+	mkdir -p $(PREFIX)/include/laik
+	cp $(wildcard include/laik/*.h) $(PREFIX)/include/laik
+	mkdir -p $(PREFIX)/lib
+	cp liblaik.a $(PREFIX)/lib
+
+uninstall:
+	rm -rf $(PREFIX)/include/laik
+	rm -f $(PREFIX)/include/laik.h
+	rm -f $(PREFIX)/include/laik-internal.h
+	rm -f $(PREFIX)/include/laik-backend-*.h
+	rm -f $(PREFIX)/lib/liblaik.a
 
 # include previously generated dependency rules if existing
 -include $(DEPS)

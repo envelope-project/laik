@@ -18,7 +18,7 @@
 #ifndef _LAIK_BACKEND_SINGLE_H_
 #define _LAIK_BACKEND_SINGLE_H_
 
-#include "laik-backend.h"
+#include "laik.h"
 
 // Dummy backend.
 
