@@ -31,6 +31,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s)
     d->defaultPermission = LAIK_AP_ReadWrite;
     d->activePartitioning = 0;
     d->activeMapping = 0;
+    d->allocator = 0; // default: malloc/free
 
     return d;
 }
@@ -103,7 +104,15 @@ Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
     m->layout = l; // TODO
     m->count = count;
     m->baseIdx = p->borders[t].from;
-    m->base = (count == 0) ? 0 : malloc(count * d->elemsize);
+    if (count == 0)
+        m->base = 0;
+    else {
+        // TODO: different policies
+        if ((!d->allocator) || (!d->allocator->malloc))
+            m->base = malloc(count * d->elemsize);
+        else
+            m->base = (d->allocator->malloc)(d, count * d->elemsize);
+    }
 
 #ifdef LAIK_DEBUG
     char s[100];
@@ -126,8 +135,14 @@ void freeMap(Laik_Mapping* m)
            d->name, m->count, m->base);
 #endif
 
-    if (m && m->base)
-        free(m->base);
+    if (m && m->base) {
+        // TODO: different policies
+        if ((!d->allocator) || (!d->allocator->free))
+            free(m->base);
+        else
+            (d->allocator->free)(d, m->base);
+    }
+
     free(m);
 }
 
@@ -294,5 +309,35 @@ void laik_free(Laik_Data* d)
     // TODO: free space, partitionings
 
     free(d);
+}
+
+
+
+// Allocator interface
+
+// returns an allocator with default policy LAIK_MP_NewAllocOnRepartition
+Laik_Allocator* laik_new_allocator()
+{
+    Laik_Allocator* a = (Laik_Allocator*) malloc(sizeof(Laik_Allocator));
+
+    a->policy = LAIK_MP_NewAllocOnRepartition;
+    a->malloc = 0;  // use malloc
+    a->free = 0;    // use free
+    a->realloc = 0; // use malloc/free for reallocation
+    a->unmap = 0;   // no notification
+
+    return a;
+}
+
+void laik_set_allocator(Laik_Data* d, Laik_Allocator* a)
+{
+    // TODO: decrement reference count for existing allocator
+
+    d->allocator = a;
+}
+
+Laik_Allocator* laik_get_allocator(Laik_Data* d)
+{
+    return d->allocator;
 }
 

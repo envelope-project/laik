@@ -21,6 +21,7 @@
 #include "laik.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 
 /*********************************************************************/
 /* LAIK Data - Data containers for LAIK index spaces
@@ -71,5 +72,43 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l, void** base, uint64_t* coun
 
 void laik_free(Laik_Data*);
 
+//----------------------------------
+// Allocator interface
+//
+// an allocator interface specifies the policy to use for memory resources
+// if no allocator is set for a data container, LAIK will use malloc/free
+//
+// TODO: Split delarations for allocator users vs. allocator implementers
+
+// memory policy to use for a Laik container
+typedef enum _Laik_MemoryPolicy {
+    LAIK_MP_None = 0,
+    LAIK_MP_NewAllocOnRepartition, // reallocate memory at each repartitioning
+    LAIK_MP_NotifyOnChange, // notify allocator about needed changes
+    LAIK_MP_UsePool,        // no allocate if possible via spare pool resource
+} Laik_MemoryPolicy;
+
+// allocator interface
+typedef struct _Laik_Allocator Laik_Allocator;
+struct _Laik_Allocator {
+    Laik_MemoryPolicy policy;
+
+    // called by Laik for allocating resources for a data container
+    // usually, Laik_Data parameter can be ignored, but may be used
+    // to implement an application-specific policy for a container
+    void* (*malloc)(Laik_Data* d, size_t size);
+    void (*free)(Laik_Data* d, void* ptr);
+    void* (*realloc)(Laik_Data* d, void* ptr, size_t size);
+
+    // notification to allocator that a part of the data is about to be
+    // transfered by the communication backend and should be made consistent
+    // (used with LAIK_MP_NotifyOnChange)
+    void (*unmap)(Laik_Data* d, void* ptr, size_t length);
+};
+
+// returns an allocator with default policy LAIK_MP_NewAllocOnRepartition
+Laik_Allocator* laik_new_allocator();
+void laik_set_allocator(Laik_Data* d, Laik_Allocator* alloc);
+Laik_Allocator* laik_get_allocator(Laik_Data* d);
 
 #endif // _LAIK_DATA_H_

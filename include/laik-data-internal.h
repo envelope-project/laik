@@ -35,6 +35,7 @@ struct _Laik_Data {
     // active partitioning (TODO: multiple may be active)
     Laik_Partitioning* activePartitioning;
     Laik_Mapping* activeMapping;
+    Laik_Allocator* allocator;
 
     // can be set by backend
     void* backend_data;
