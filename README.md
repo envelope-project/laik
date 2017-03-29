@@ -2,9 +2,9 @@
 
 # A Library for Lightweight Application-Integrated data containers for parallel worKers
 
-This library provides lightweight management for the distribution of global data containers for parallel applications using index spaces. It calculates the communication requirements for changing a partitioning or switching between different partitionings. By associating partitions with work load using the "owner-computes" rule, LAIK can be used for automatic load balancing.
+This library provides support for the distribution of global data containers for parallel applications using index spaces. It calculates the communication requirements for changing a partitioning or switching between different partitionings. By associating partitions with work load using the "owner-computes" rule, LAIK can be used for automatic load balancing.
 
-Partitionings specify task-local access rights to be ensured when hitting a consistency point. The access rights stay valid until a consistency point with different access rights is hit. To this end, a consistency point triggers data transfers depending on a previously enforced consistency point.
+Partitionings specify task-local accessability to be ensured. Access stay valid until a consistency point with different access rights is hit. To this end, a consistency point triggers data transfers depending on a previously enforced consistency point.
 
 Multiple partitionings with different access behavior may be declared for the same index space and the same consistency point. Hitting the point thus ensures that for each index, a value written by a previous writer gets broadcasted to all tasks which want to read the value. Reductions are supported via aggregation write behavior: multiple written values get aggregated and broadcasted to all readers when switching.
 
@@ -46,7 +46,7 @@ funtionality via repartitioning is enough. This example also shows the use of a 
         Laik_Group* world = laik_world(inst);
 
         // allocate global 1d double array: 1 mio entries, equal sized blocks
-        Laik_Data* a = laik_alloc_1d(world, 8, 1000000);
+        Laik_Data* a = laik_alloc_1d(world, laik_Double, 1000000);
         // parallel initialization: write 1.0 to own partition
         laik_fill_double(a, 1.0);
 
@@ -58,12 +58,12 @@ funtionality via repartitioning is enough. This example also shows the use of a 
 
         // for collecting partial sums at master, use LAIK's automatic
         // aggregation functionality when switching to new partitioning
-        Laik_Data* sum = laik_alloc_1d(world, 8, 1);
-        laik_set_partitioning(sum, LAIK_PT_All, LAIK_AP_Plus);
+        Laik_Data* sum = laik_alloc_1d(world, laik_Double, 1);
+        laik_set_partitioning(sum, LAIK_PT_All, LAIK_AB_Plus);
         // write partial sum
         laik_fill_double(sum, mysum);
         // master-only partitioning: add partial values to be read at master
-        laik_set_partitioning(sum, LAIK_PT_Master, LAIK_AP_ReadOnly);
+        laik_set_partitioning(sum, LAIK_PT_Master, LAIK_AB_ReadOnly);
 
         if (laik_myid(inst) == 0) {
             laik_map(sum, 0, (void**) &base, &count);
