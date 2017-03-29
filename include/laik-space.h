@@ -35,7 +35,7 @@ typedef enum _Laik_PartitionType {
     // base
     LAIK_PT_Master,   // only one task has access to all elements
     LAIK_PT_All,      // all tasks have access to all elements
-    LAIK_PT_Stripe,   // continous distinct ranges, covering all elements
+    LAIK_PT_Block,   // continous distinct ranges, covering all elements
 
     // coupled
     LAIK_PT_Copy,     // copy borders from base partitioning
@@ -139,14 +139,14 @@ laik_new_base_partitioning(Laik_Space* space,
                       Laik_PartitionType pt,
                       Laik_AccessPermission ap);
 
-// set index-wise weight getter, used when calculating STRIPE partitioning.
+// set index-wise weight getter, used when calculating BLOCK partitioning.
 // as getter is called in every LAIK task, weights have to be known globally
 // (useful if workload per index is known)
 typedef double (*Laik_GetIdxWeight_t)(Laik_Index*, void* userData);
 void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f,
                            void* userData);
 
-// set task-wise weight getter, used when calculating STRIPE partitioning.
+// set task-wise weight getter, used when calculating BLOCK partitioning.
 // as getter is called in every LAIK task, weights have to be known globally
 // (useful if relative performance per task is known)
 typedef double (*Laik_GetTaskWeight_t)(int rank, void* userData);

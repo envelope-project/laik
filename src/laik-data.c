@@ -27,7 +27,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, int elemsize)
     d->elemsize = elemsize;
 
     d->backend_data = 0;
-    d->defaultPartitionType = LAIK_PT_Stripe;
+    d->defaultPartitionType = LAIK_PT_Block;
     d->defaultPermission = LAIK_AP_ReadWrite;
     d->activePartitioning = 0;
     d->activeMapping = 0;

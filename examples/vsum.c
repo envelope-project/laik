@@ -74,27 +74,27 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < count; i++) mysum[0] += base[i];
 
     // distribute data equally among all
-    p2 = laik_set_new_partitioning(a, LAIK_PT_Stripe, LAIK_AP_ReadWrite);
-    // partial sum using equally-sized stripes
+    p2 = laik_set_new_partitioning(a, LAIK_PT_Block, LAIK_AP_ReadWrite);
+    // partial sum using equally-sized blocks
     laik_map(a, 0, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];
 
     // distribution using element-wise weights equal to index
     p3 = laik_new_base_partitioning(laik_get_space(a),
-                                   LAIK_PT_Stripe, LAIK_AP_ReadWrite);
+                                   LAIK_PT_Block, LAIK_AP_ReadWrite);
     laik_set_index_weight(p3, getEW, 0);
     laik_set_partitioning(a, p3);
-    // partial sum using stripes sized by element weights
+    // partial sum using blocks sized by element weights
     laik_map(a, 0, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[2] += base[i];
 
     if (laik_size(world) > 1) {
         // distribution using task-wise weights: without master
         p4 = laik_new_base_partitioning(laik_get_space(a),
-                                        LAIK_PT_Stripe, LAIK_AP_ReadWrite);
+                                        LAIK_PT_Block, LAIK_AP_ReadWrite);
         laik_set_task_weight(p4, getTW, 0); // without master
         laik_set_partitioning(a, p4);
-        // partial sum using stripes sized by task weights
+        // partial sum using blocks sized by task weights
         laik_map(a, 0, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
     }

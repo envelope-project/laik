@@ -45,7 +45,7 @@ typedef struct _Laik_Mapping Laik_Mapping;
  * Define a LAIK container shared by a LAIK task group.
  * This is a collective operation of all tasks in the group.
  * If no partitioning is set (via laik_setPartition) before
- * use, default to equal-sized owner STRIPE partitioning.
+ * use, default to equal-sized owner BLOCK partitioning.
  */
 Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, int elemsize);
 Laik_Data* laik_alloc_1d(Laik_Group* g, int elemsize, uint64_t s1);

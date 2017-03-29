@@ -88,9 +88,9 @@ int main(int argc, char* argv[])
     // 1d space into matrix rows and vector <res>
     Laik_Data* resD = laik_alloc(world, s, 8);
 
-    // stripe partitioning according to elems in matrix rows
+    // block partitioning according to elems in matrix rows
     Laik_Partitioning* p;
-    p = laik_new_base_partitioning(s, LAIK_PT_Stripe, LAIK_AP_ReadWrite);
+    p = laik_new_base_partitioning(s, LAIK_PT_Block, LAIK_AP_ReadWrite);
     laik_set_index_weight(p, getEW, m);
     laik_set_partitioning(resD, p);
 

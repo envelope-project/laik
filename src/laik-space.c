@@ -167,7 +167,7 @@ int getPartitioningTypeStr(char* s, Laik_PartitionType type)
 {
     switch(type) {
     case LAIK_PT_All:    return sprintf(s, "all");
-    case LAIK_PT_Stripe: return sprintf(s, "stripe");
+    case LAIK_PT_Block: return sprintf(s, "block");
     case LAIK_PT_Master: return sprintf(s, "master");
     }
     return 0;
@@ -600,10 +600,10 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
 }
 
 static
-void setStripeBorders(Laik_Partitioning* p)
+void setBlockBorders(Laik_Partitioning* p)
 {
     assert(p->borders != 0);
-    assert(p->type == LAIK_PT_Stripe);
+    assert(p->type == LAIK_PT_Block);
 
     int count = p->group->size;
     int pdim = p->pdim;
@@ -658,7 +658,7 @@ void setStripeBorders(Laik_Partitioning* p)
             inc = (uint64_t)(f * size);
         }
         else {
-            // equal-sized stripes
+            // equal-sized blocks
             inc = size / count;
         }
 
@@ -717,8 +717,8 @@ bool laik_update_partitioning(Laik_Partitioning* p)
         }
         break;
 
-    case LAIK_PT_Stripe:
-        setStripeBorders(p);
+    case LAIK_PT_Block:
+        setBlockBorders(p);
         break;
 
     case LAIK_PT_Copy:
@@ -835,7 +835,7 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         switch(from->type) {
         case LAIK_PT_Master:
         case LAIK_PT_All:
-        case LAIK_PT_Stripe:
+        case LAIK_PT_Block:
             if (!laik_slice_isEmpty(dims, &(from->borders[myid]))) {
                 for(int task = 0; task < count; task++) {
                     if (task == myid) continue;
@@ -862,7 +862,7 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         switch(to->type) {
         case LAIK_PT_Master:
         case LAIK_PT_All:
-        case LAIK_PT_Stripe:
+        case LAIK_PT_Block:
             if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
                 for(int task = 0; task < count; task++) {
                     if (task == myid) continue;

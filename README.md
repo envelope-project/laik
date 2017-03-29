@@ -45,7 +45,7 @@ funtionality via repartitioning is enough. This example also shows the use of a 
         Laik_Instance* inst = laik_init_mpi(&argc, &argv);
         Laik_Group* world = laik_world(inst);
 
-        // allocate global 1d double array: 1 mio entries, equal sized stripes
+        // allocate global 1d double array: 1 mio entries, equal sized blocks
         Laik_Data* a = laik_alloc_1d(world, 8, 1000000);
         // parallel initialization: write 1.0 to own partition
         laik_fill_double(a, 1.0);
