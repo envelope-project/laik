@@ -12,7 +12,7 @@
 
 static int data_id = 0;
 
-Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s)
+Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, int elemsize)
 {
     assert(g->inst == s->inst);
 
@@ -24,7 +24,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s)
 
     d->group = g;
     d->space = s;
-    d->elemsize = 0; // invalid
+    d->elemsize = elemsize;
 
     d->backend_data = 0;
     d->defaultPartitionType = LAIK_PT_Stripe;
@@ -39,8 +39,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s)
 Laik_Data* laik_alloc_1d(Laik_Group* g, int elemsize, uint64_t s1)
 {
     Laik_Space* space = laik_new_space_1d(g->inst, s1);
-    Laik_Data* d = laik_alloc(g, space);
-    d->elemsize = elemsize;
+    Laik_Data* d = laik_alloc(g, space, elemsize);
 
 #ifdef LAIK_DEBUG
     printf("LAIK %d/%d - new 1d data '%s': elemsize %d, space '%s'\n",
@@ -54,8 +53,7 @@ Laik_Data* laik_alloc_1d(Laik_Group* g, int elemsize, uint64_t s1)
 Laik_Data* laik_alloc_2d(Laik_Group* g, int elemsize, uint64_t s1, uint64_t s2)
 {
     Laik_Space* space = laik_new_space_2d(g->inst, s1, s2);
-    Laik_Data* d = laik_alloc(g, space);
-    d->elemsize = elemsize;
+    Laik_Data* d = laik_alloc(g, space, elemsize);
 
 #ifdef LAIK_DEBUG
     printf("LAIK %d/%d - new 2d data '%s': elemsize %d, space '%s'\n",

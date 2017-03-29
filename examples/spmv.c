@@ -83,13 +83,14 @@ int main(int argc, char* argv[])
     for(int i = 0; i < SIZE; i++)
         v[i] = (double) (i + 1);
 
+    // 1d space for matrix rows and vector <res>
+    Laik_Space* s = laik_new_space_1d(inst, SIZE);
     // 1d space into matrix rows and vector <res>
-    Laik_Data* resD = laik_alloc_1d(world, 8, SIZE);
+    Laik_Data* resD = laik_alloc(world, s, 8);
 
     // stripe partitioning according to elems in matrix rows
     Laik_Partitioning* p;
-    p = laik_new_base_partitioning(laik_get_space(resD),
-                                   LAIK_PT_Stripe, LAIK_AP_ReadWrite);
+    p = laik_new_base_partitioning(s, LAIK_PT_Stripe, LAIK_AP_ReadWrite);
     laik_set_index_weight(p, getEW, m);
     laik_set_partitioning(resD, p);
 
