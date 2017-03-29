@@ -6,7 +6,7 @@ This library provides lightweight management for the distribution of global data
 
 Partitionings specify task-local access rights to be ensured when hitting a consistency point. The access rights stay valid until a consistency point with different access rights is hit. To this end, a consistency point triggers data transfers depending on a previously enforced consistency point.
 
-Multiple partitionings with different access permissions may be declared for the same index space and the same consistency point. Hitting the point thus ensures that for each index, a value written by a previous writer gets broadcasted to all tasks which want to read the value. Reductions are supported via aggregation write permissions: multiple written values get aggregated and broadcasted to all readers when switching.
+Multiple partitionings with different access behavior may be declared for the same index space and the same consistency point. Hitting the point thus ensures that for each index, a value written by a previous writer gets broadcasted to all tasks which want to read the value. Reductions are supported via aggregation write behavior: multiple written values get aggregated and broadcasted to all readers when switching.
 
 Re-partitiong (and thus load balancing) is enabled by specifically marked consistency points which require global synchronisation. In such a point, a handler is called which may change partitionings before data transfers are triggered.
 LAIK-managed index spaces can be coupled to support data transfers of different data structures at the same time.

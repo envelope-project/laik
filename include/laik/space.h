@@ -45,26 +45,27 @@ typedef enum _Laik_PartitionType {
     LAIK_PT_Neighbor, // extend a partitioning with neighbor parts
 } Laik_PartitionType;
 
-// Access behavior to partitions.
+// Access behavior of applications to indexes in partitions.
+//
 // Laik uses this information to derive what needs to be propagated
 // to/from a partition at switch time; no enforcement is done.
 // E.g. you can write to a ReadOnly partition, but you need to aware
 // that Laik will not propagate these value modifications.
-typedef enum _Laik_AccessPermission {
-    LAIK_AP_None = 0,
+typedef enum _Laik_AccessBehavior {
+    LAIK_AB_None = 0,
 
     // one writer, multiple readers
-    LAIK_AP_ReadOnly,  // for copies, no changes to propagate to next
-    LAIK_AP_WriteAll,  // no prop. from previous, complete overwrite
-    LAIK_AP_ReadWrite, // propagate from previous and to next
+    LAIK_AB_ReadOnly,  // for copies, no changes to propagate to next
+    LAIK_AB_WriteAll,  // no prop. from previous, complete overwrite
+    LAIK_AB_ReadWrite, // propagate from previous and to next
 
     // reductions with multiple writers
     // LAIK initializes partition unless WA (WriteAll) variant is used
-    LAIK_AP_Sum,  LAIK_AP_WASum,  // + reduction
-    LAIK_AP_Prod, LAIK_AP_WAProd, // * reduction
-    LAIK_AP_Min,  LAIK_AP_WAMin,  // min reduction
-    LAIK_AP_Max,  LAIK_AP_WAMax   // max reduction
-} Laik_AccessPermission;
+    LAIK_AB_Sum,  LAIK_AB_WASum,  // + reduction
+    LAIK_AB_Prod, LAIK_AB_WAProd, // * reduction
+    LAIK_AB_Min,  LAIK_AB_WAMin,  // min reduction
+    LAIK_AB_Max,  LAIK_AB_WAMax   // max reduction
+} Laik_AccessBehavior;
 
 // a point in an index space
 typedef struct _Laik_Index Laik_Index;
@@ -84,7 +85,7 @@ typedef struct _Laik_Task Laik_Task;
 // an index space (regular and continous, up to 3 dimensions)
 typedef struct _Laik_Space Laik_Space;
 
-// a partitioning of an index space with same access permission
+// a partitioning of an index space with same access behavior
 typedef struct _Laik_Partitioning Laik_Partitioning;
 
 // set of partitionings to make consistent at the same time
@@ -100,11 +101,11 @@ typedef struct _Laik_Transition Laik_Transition;
  *********************************************************************/
 
 // is this a reduction?
-bool laik_is_reduction(Laik_AccessPermission p);
+bool laik_is_reduction(Laik_AccessBehavior p);
 // includes this read access?
-bool laik_is_read(Laik_AccessPermission);
+bool laik_is_read(Laik_AccessBehavior);
 // includes this write access?
-bool laik_is_write(Laik_AccessPermission);
+bool laik_is_write(Laik_AccessBehavior);
 
 // create a new index space object (initially invalid)
 Laik_Space* laik_new_space(Laik_Instance* i);
@@ -139,7 +140,7 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
 Laik_Partitioning*
 laik_new_base_partitioning(Laik_Space* space,
                       Laik_PartitionType pt,
-                      Laik_AccessPermission ap);
+                      Laik_AccessBehavior ap);
 
 // set index-wise weight getter, used when calculating BLOCK partitioning.
 // as getter is called in every LAIK task, weights have to be known globally
@@ -163,7 +164,7 @@ void laik_set_partitioning_dimension(Laik_Partitioning* p, int d);
 Laik_Partitioning*
 laik_new_coupled_partitioning(Laik_Partitioning* base,
                               Laik_PartitionType pt,
-                              Laik_AccessPermission ap);
+                              Laik_AccessBehavior ap);
 
 // create a new partitioning based on another one on a different space
 // this also needs to know which dimensions should be coupled
@@ -171,7 +172,7 @@ Laik_Partitioning*
 laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
                                    Laik_Space* s, int from, int to,
                                    Laik_PartitionType pt,
-                                   Laik_AccessPermission ap);
+                                   Laik_AccessBehavior ap);
 
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p);

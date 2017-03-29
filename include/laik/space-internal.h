@@ -53,7 +53,7 @@ struct _Laik_Partitioning {
 
     Laik_Group* group;
     Laik_PartitionType type;
-    Laik_AccessPermission permission;
+    Laik_AccessBehavior access;
     Laik_Space* space; // space to partition
     int pdim; // for 2d/3d: dimension to partition
 

@@ -32,7 +32,7 @@ struct _Laik_Data {
 
     // default partitioning
     Laik_PartitionType defaultPartitionType;
-    Laik_AccessPermission defaultPermission;
+    Laik_AccessBehavior defaultAccess;
 
     // active partitioning (TODO: multiple may be active)
     Laik_Partitioning* activePartitioning;

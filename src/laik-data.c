@@ -28,7 +28,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, int elemsize)
 
     d->backend_data = 0;
     d->defaultPartitionType = LAIK_PT_Block;
-    d->defaultPermission = LAIK_AP_ReadWrite;
+    d->defaultAccess = LAIK_AB_ReadWrite;
     d->activePartitioning = 0;
     d->activeMapping = 0;
     d->allocator = 0; // default: malloc/free
@@ -202,10 +202,10 @@ void initMap(Laik_Transition* t, Laik_Mapping* toMap)
 
         assert(d->elemsize == 8); // FIXME: we assume "double"
         switch(t->initRedOp[i]) {
-        case LAIK_AP_Sum: v = 0.0; break;
-        case LAIK_AP_Prod: v = 1.0; break;
-        case LAIK_AP_Min: v = 9e99; break; // should be largest double val
-        case LAIK_AP_Max: v = -9e99; break; // should be smallest double val
+        case LAIK_AB_Sum: v = 0.0; break;
+        case LAIK_AB_Prod: v = 1.0; break;
+        case LAIK_AB_Min: v = 9e99; break; // should be largest double val
+        case LAIK_AB_Max: v = -9e99; break; // should be smallest double val
         default:
             assert(0);
         }
@@ -259,7 +259,7 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 
 Laik_Partitioning* laik_set_new_partitioning(Laik_Data* d,
                                              Laik_PartitionType pt,
-                                             Laik_AccessPermission ap)
+                                             Laik_AccessBehavior ap)
 {
     Laik_Partitioning* p = laik_new_base_partitioning(d->space, pt, ap);
     laik_set_partitioning(d, p);
@@ -287,7 +287,7 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
     if (!d->activePartitioning)
         laik_set_new_partitioning(d,
                                   d->defaultPartitionType,
-                                  d->defaultPermission);
+                                  d->defaultAccess);
 
     p = d->activePartitioning;
 

@@ -62,7 +62,7 @@ Laik_Space* laik_get_space(Laik_Data*);
 // set and enforce a newly created partitioning, and return it
 Laik_Partitioning* laik_set_new_partitioning(Laik_Data*,
                                              Laik_PartitionType,
-                                             Laik_AccessPermission);
+                                             Laik_AccessBehavior);
 
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data*, Laik_Partitioning*);
