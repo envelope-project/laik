@@ -779,31 +779,35 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     t->recvCount = 0;
     t->redCount = 0;
 
-    assert(from->space == to->space);
-    int dims = from->space->dims;
+    // either one of <from> and <to> has to be valid; same space, same group
+    Laik_Space* space = 0;
+    Laik_Group* group = 0;
+    if (from) {
+        space = from->space;
+        group = from->group;
+    }
+    if (to) {
+        if (space)
+            assert(space == to->space);
+        else
+            space = to->space;
+
+        if (group)
+            assert(group == to->group);
+        else
+            group = to->group;
+    }
+    assert(space != 0);
+    assert(group != 0);
+
+    int dims = space->dims;
+    int myid = group->inst->myid;
+    int count = group->size;
     t->dims = dims;
 
-    int myid = from->group->inst->myid;
-    int count = from->group->size;
-
-    // determine local slice to keep?
-    // (may need local copy if from/to mappings are different).
-    // reductions always are taken care by backend
-    if (!laik_is_reduction(from->access) &&
-        laik_is_write(from->access) &&
-        laik_is_read(to->access)) {
-        slc = laik_slice_intersect(dims,
-                                   &(from->borders[myid]),
-                                   &(to->borders[myid]));
-        if (slc != 0) {
-            assert(t->localCount < TRANSSLICES_MAX);
-            t->local[t->sendCount] = *slc;
-            t->localCount++;
-        }
-    }
-
     // some reduction to be done where we need to initialize values?
-    if (laik_is_reduction(to->access) &&
+    if ((to != 0) &&
+        laik_is_reduction(to->access) &&
         !laik_is_writeall(to->access)) {
 
         if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
@@ -814,12 +818,30 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         }
     }
 
-    // something to reduce?
-    if (laik_is_reduction(from->access)) {
-        // reductions always should involve everyone
-        assert(from->type == LAIK_PT_All);
-        if ((to->access == LAIK_AB_ReadOnly) ||
-            (to->access == LAIK_AB_ReadWrite)) {
+    if ((from != 0) && (to != 0)) {
+
+        // determine local slice to keep?
+        // (may need local copy if from/to mappings are different).
+        // reductions always are taken care by backend
+        if (!laik_is_reduction(from->access) &&
+            laik_is_write(from->access) &&
+            laik_is_read(to->access)) {
+            slc = laik_slice_intersect(dims,
+                                       &(from->borders[myid]),
+                                       &(to->borders[myid]));
+            if (slc != 0) {
+                assert(t->localCount < TRANSSLICES_MAX);
+                t->local[t->sendCount] = *slc;
+                t->localCount++;
+            }
+        }
+
+        // something to reduce?
+        if (laik_is_reduction(from->access)) {
+            // reductions always should involve everyone
+            assert(from->type == LAIK_PT_All);
+            if ((to->access == LAIK_AB_ReadOnly) ||
+                (to->access == LAIK_AB_ReadWrite)) {
                 assert(t->redCount < TRANSSLICES_MAX);
                 assert((to->type == LAIK_PT_Master) ||
                        (to->type == LAIK_PT_All));
@@ -827,60 +849,61 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                 t->redOp[t->redCount] = laik_get_reduction(from->access);
                 t->redRoot[t->redCount] = (to->type == LAIK_PT_All) ? -1 : 0;
                 t->redCount++;
-        }
-    }
-
-    // something to send?
-    if (laik_is_write(from->access)) {
-        switch(from->type) {
-        case LAIK_PT_Master:
-        case LAIK_PT_All:
-        case LAIK_PT_Block:
-            if (!laik_slice_isEmpty(dims, &(from->borders[myid]))) {
-                for(int task = 0; task < count; task++) {
-                    if (task == myid) continue;
-
-                    slc = laik_slice_intersect(dims,
-                                               &(from->borders[myid]),
-                                               &(to->borders[task]));
-                    if (slc == 0) continue;
-
-                    assert(t->sendCount < TRANSSLICES_MAX);
-                    t->send[t->sendCount] = *slc;
-                    t->sendTo[t->sendCount] = task;
-                    t->sendCount++;
-                }
             }
-            break;
-        default:
-            break;
         }
-    }
 
-    // something to receive?
-    if (!laik_is_reduction(from->access) && laik_is_read(to->access)) {
-        switch(to->type) {
-        case LAIK_PT_Master:
-        case LAIK_PT_All:
-        case LAIK_PT_Block:
-            if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
-                for(int task = 0; task < count; task++) {
-                    if (task == myid) continue;
+        // something to send?
+        if (laik_is_write(from->access)) {
+            switch(from->type) {
+            case LAIK_PT_Master:
+            case LAIK_PT_All:
+            case LAIK_PT_Block:
+                if (!laik_slice_isEmpty(dims, &(from->borders[myid]))) {
+                    for(int task = 0; task < count; task++) {
+                        if (task == myid) continue;
 
-                    slc = laik_slice_intersect(dims,
-                                               &(to->borders[myid]),
-                                               &(from->borders[task]));
-                    if (slc == 0) continue;
+                        slc = laik_slice_intersect(dims,
+                                                   &(from->borders[myid]),
+                                                   &(to->borders[task]));
+                        if (slc == 0) continue;
 
-                    assert(t->recvCount < TRANSSLICES_MAX);
-                    t->recv[t->recvCount] = *slc;
-                    t->recvFrom[t->recvCount] = task;
-                    t->recvCount++;
+                        assert(t->sendCount < TRANSSLICES_MAX);
+                        t->send[t->sendCount] = *slc;
+                        t->sendTo[t->sendCount] = task;
+                        t->sendCount++;
+                    }
                 }
+                break;
+            default:
+                break;
             }
-            break;
-        default:
-            break;
+        }
+
+        // something to receive?
+        if (!laik_is_reduction(from->access) && laik_is_read(to->access)) {
+            switch(to->type) {
+            case LAIK_PT_Master:
+            case LAIK_PT_All:
+            case LAIK_PT_Block:
+                if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
+                    for(int task = 0; task < count; task++) {
+                        if (task == myid) continue;
+
+                        slc = laik_slice_intersect(dims,
+                                                   &(to->borders[myid]),
+                                                   &(from->borders[task]));
+                        if (slc == 0) continue;
+
+                        assert(t->recvCount < TRANSSLICES_MAX);
+                        t->recv[t->recvCount] = *slc;
+                        t->recvFrom[t->recvCount] = task;
+                        t->recvCount++;
+                    }
+                }
+                break;
+            default:
+                break;
+            }
         }
     }
 
@@ -889,12 +912,13 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         int len = getTransitionStr(s, t);
         if (len == 0)
             printf("LAIK %d/%d - transition %s => %s: (nothing)\n",
-                   from->space->inst->myid, from->space->inst->size,
-                   from->name, to->name);
+                   space->inst->myid, space->inst->size,
+                   from ? from->name : "(none)", to ? to->name : "(none)");
         else
             printf("LAIK %d/%d - transition %s => %s:\n%s",
-                   from->space->inst->myid, from->space->inst->size,
-                   from->name, to->name, s);
+                   space->inst->myid, space->inst->size,
+                   from ? from->name : "(none)", to ? to->name : "(none)",
+                   s);
 #endif
 
     return t;

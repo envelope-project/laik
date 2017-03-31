@@ -58,8 +58,8 @@ void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
 {
     Laik_Instance* inst = d->space->inst;
     Laik_Mapping* fromMap = d->activeMapping;
-    char* fromBase = fromMap->base;
-    char* toBase = toMap->base;
+    char* fromBase = fromMap ? fromMap->base : 0;
+    char* toBase = toMap ? toMap->base : 0;
 
     for(int i=0; i < t->redCount; i++) {
         assert(d->space->dims == 1);

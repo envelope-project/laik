@@ -294,28 +294,29 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     // TODO: convert to realloc (with taking over layout)
     Laik_Mapping* toMap = allocMap(d, p, 0);
 
-    if (d->activePartitioning) {
-        // calculate elements which need to be sent/received by this task
-        Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
+    // calculate actions to be done for switching
+    Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
 
-        // TODO: use async interface
-        assert(p->space->inst->backend->execTransition);
-        (p->space->inst->backend->execTransition)(d, t, toMap);
+    // let backend do send/recv/reduce actions
+    // TODO: use async interface
+    assert(p->space->inst->backend->execTransition);
+    (p->space->inst->backend->execTransition)(d, t, toMap);
 
-        if (t->localCount > 0)
-            copyMap(t, toMap, d->activeMapping);
+    // local copy action
+    if (t->localCount > 0)
+        copyMap(t, toMap, d->activeMapping);
 
-        if (t->initCount > 0)
-            initMap(t, toMap);
+    // local init action
+    if (t->initCount > 0)
+        initMap(t, toMap);
 
+    // free old mapping/partitioning
+    if (d->activeMapping)
         freeMap(d->activeMapping);
-    }
-
-    if (d->activePartitioning) {
+    if (d->activePartitioning)
         laik_free_partitioning(d->activePartitioning);
-    }
 
-    // set active
+    // set new mapping/partitioning active
     d->activePartitioning = p;
     d->activeMapping = toMap;
 }

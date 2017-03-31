@@ -100,8 +100,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
     Laik_Instance* inst = d->space->inst;
     MPI_Comm comm = mpiData(inst)->comm;
     Laik_Mapping* fromMap = d->activeMapping;
-    char* fromBase = fromMap->base;
-    char* toBase = toMap->base;
+    char* fromBase = fromMap ? fromMap->base : 0;
+    char* toBase = toMap ? toMap->base : 0;
 
     // TODO: do group != world
 
