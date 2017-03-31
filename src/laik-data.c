@@ -360,8 +360,12 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
         d->activeMapping = allocMap(d, p, l);
 
     m = d->activeMapping;
+
+    assert(base != 0);
     *base = m->base;
-    *count = m->count;
+
+    if (count)
+        *count = m->count;
 
     return m;
 }
