@@ -588,6 +588,8 @@ Laik_Slice* laik_my_slice(Laik_Partitioning* p)
 {
     static Laik_Slice s;
 
+    laik_update_partitioning(p);
+
     s = p->borders[p->group->myid];
     return &s;
 }

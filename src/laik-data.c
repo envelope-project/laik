@@ -171,8 +171,9 @@ Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
 static
 void freeMap(Laik_Mapping* m)
 {
-#ifdef LAIK_DEBUG
     Laik_Data* d = m->data;
+
+#ifdef LAIK_DEBUG
     printf("LAIK %d/%d - free map for '%s' (count %d, base %p)\n",
            d->space->inst->myid, d->space->inst->size,
            d->name, m->count, m->base);
