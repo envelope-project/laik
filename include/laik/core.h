@@ -33,17 +33,19 @@ typedef struct _Laik_Backend Laik_Backend;
 
 // a task group over which a index space gets distributed
 typedef struct _Laik_Group Laik_Group;
-//struct _Laik_Group;
 
 /*********************************************************************/
 /* Core LAIK API
  *********************************************************************/
 
 // allocate space for a new LAIK instance
-Laik_Instance* laik_new_instance(Laik_Backend* b, int size, int myid, void* data);
+Laik_Instance* laik_new_instance(Laik_Backend* b, int size, int myid, char* location, void* data);
 
 // shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance*);
+
+// return a backend-dependant string for the location of the calling task
+char* laik_mylocation(Laik_Instance*);
 
 // create a group to be used in this LAIK instance
 Laik_Group* laik_create_group(Laik_Instance*);
@@ -56,5 +58,6 @@ int laik_size(Laik_Group*);
 
 // return rank of calling LAIK task (within this instance)
 int laik_myid(Laik_Group*);
+
 
 #endif // _LAIK_CORE_H_

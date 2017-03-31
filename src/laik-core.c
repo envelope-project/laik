@@ -7,7 +7,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
-
+#include <string.h>
 
 int laik_size(Laik_Group* g)
 {
@@ -26,10 +26,16 @@ void laik_finalize(Laik_Instance* i)
         (*i->backend->finalize)(i);
 }
 
+// return a backend-dependant string for the location of the calling task
+char* laik_mylocation(Laik_Instance* inst)
+{
+    return inst->mylocation;
+}
 
 // allocate space for a new LAIK instance
 Laik_Instance* laik_new_instance(Laik_Backend* b,
-                                 int size, int myid, void* data)
+                                 int size, int myid,
+                                 char* location, void* data)
 {
     Laik_Instance* instance;
     instance = (Laik_Instance*) malloc(sizeof(Laik_Instance));
@@ -38,6 +44,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     instance->backend_data = data;
     instance->size = size;
     instance->myid = myid;
+    instance->mylocation = strdup(location);
 
     instance->firstspace = 0;
 

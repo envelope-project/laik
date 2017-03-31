@@ -38,6 +38,7 @@ struct _Laik_Group {
 struct _Laik_Instance {
   int size;
   int myid;
+  char* mylocation;
 
   Laik_Backend* backend;
   void* backend_data;
