@@ -49,9 +49,6 @@ struct _Laik_Type {
     bool (*convert)(Laik_Data*,Laik_Slice*, void*);
 };
 
-// called from laik_new_instance
-void laik_init_types();
-
 
 struct _Laik_Data {
     char* name;
@@ -76,18 +73,23 @@ struct _Laik_Data {
 };
 
 struct _Laik_Layout {
-  int dims, order[3]; // at most 3 dimensions  
+    Laik_LayoutType type;
+    bool isFixed; // still variable, or fixed to a given layout
+    int dims, order[3]; // at most 3 dimensions
 };
 
 struct _Laik_Mapping {
-  Laik_Data* data;
-  Laik_Partitioning* partitioning;
-  int task; // slice/task number in partition
-  Laik_Layout* layout; // ordering layout used
-  Laik_Index baseIdx; // global index at base address
+    Laik_Data* data;
+    Laik_Partitioning* partitioning;
+    int task; // slice/task number in partition
+    Laik_Layout* layout; // ordering layout used
+    Laik_Index baseIdx; // global index at base address
 
-  char* base; // start address of mapping
-  int count; // number of elements mapped
+    char* base; // start address of mapping
+    int count; // number of elements mapped
 };
+
+// initialize the LAIK data module, called from laik_new_instance
+void laik_data_init();
 
 #endif // _LAIK_DATA_INTERNAL_H_

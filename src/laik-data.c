@@ -40,7 +40,7 @@ Laik_Type* laik_new_type(char* name, Laik_TypeKind kind, int size)
     return t;
 }
 
-void laik_init_types()
+void laik_data_init()
 {
     if (type_id > 0) return;
 
@@ -144,9 +144,18 @@ Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
     m->data = d;
     m->partitioning = p;
     m->task = t;
-    m->layout = l; // TODO
     m->count = count;
     m->baseIdx = p->borders[t].from;
+
+    if (l) {
+        // TODO: actually use the requested order, eventually convert
+        m->layout = l;
+    }
+    else {
+        // TODO: we promise 1 slice, default mapping order (1,2,3)
+        m->layout = laik_new_layout(LAIK_LT_Default1Slice);
+    }
+
     if (count == 0)
         m->base = 0;
     else {
@@ -338,13 +347,47 @@ void laik_fill_double(Laik_Data* d, double v)
     double* base;
     uint64_t count, i;
 
-    laik_map(d, 0, (void**) &base, &count);
+    laik_map_def1(d, (void**) &base, &count);
     for (i = 0; i < count; i++)
         base[i] = v;
 }
 
-Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
-                       void** base, uint64_t* count)
+// allocate new layout object with a layout hint, to use in laik_map
+Laik_Layout* laik_new_layout(Laik_LayoutType t)
+{
+    Laik_Layout* l = (Laik_Layout*) malloc(sizeof(Laik_LayoutType));
+
+    l->type = t;
+    l->isFixed = false;
+    l->dims = 0; // invalid
+
+    return l;
+}
+
+// return the layout used by a mapping
+Laik_Layout* laik_map_layout(Laik_Mapping* m)
+{
+    assert(m);
+    return m->layout;
+}
+
+// return the layout type of a specific layout
+Laik_LayoutType laik_layout_type(Laik_Layout* l)
+{
+    assert(l);
+    return l->type;
+}
+
+// return the layout type used in a mapping
+Laik_LayoutType laik_map_layout_type(Laik_Mapping* m)
+{
+    assert(m && m->layout);
+    return m->layout->type;
+}
+
+
+// make own partition available for direct access in local memory
+Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* layout)
 {
     Laik_Partitioning* p;
     Laik_Mapping* m;
@@ -358,18 +401,24 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
 
     // lazy allocation
     if (!d->activeMapping)
-        d->activeMapping = allocMap(d, p, l);
+        d->activeMapping = allocMap(d, p, layout);
 
     m = d->activeMapping;
-
-    assert(base != 0);
-    *base = m->base;
-
-    if (count)
-        *count = m->count;
-
     return m;
 }
+
+// similar to laik_map, but force a default mapping with only 1 slice
+Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
+{
+    Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
+    Laik_Mapping* m = laik_map(d, l);
+    assert(m->layout->type == LAIK_LT_Default1Slice);
+
+    if (base) *base = m->base;
+    if (count) *count = m->count;
+    return m;
+}
+
 
 void laik_free(Laik_Data* d)
 {

@@ -52,7 +52,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     instance->data_count = 0;
     instance->mapping_count = 0;
 
-    laik_init_types();
+    laik_data_init();
 
     return instance;
 }

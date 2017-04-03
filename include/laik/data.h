@@ -87,14 +87,43 @@ void laik_fill_double(Laik_Data* data, double v);
 //----------------------------------
 // LAIK data mapped to memory space
 
+typedef enum _Laik_LayoutType {
+    LAIK_LT_Invalid = 0,
+    // not specified, can cope with arbitrary layout
+    LAIK_LT_None,
+    // possibly multiple slices, each ordered innermost dim 1, then 2, 3
+    LAIK_LT_Default,
+    // same as Default, but explictily only 1 slice
+    LAIK_LT_Default1Slice
+} Laik_LayoutType;
+
 // a serialisation order of a LAIK container
 typedef struct _Laik_Layout Laik_Layout;
 
 // container part pinned to local memory space
 typedef struct _Laik_Mapping Laik_Mapping;
 
-Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* l,
-                       void** base, uint64_t* count);
+// allocate new layout object with a layout hint, to use in laik_map
+Laik_Layout* laik_new_layout(Laik_LayoutType t);
+
+// return the layout used by a mapping
+Laik_Layout* laik_map_layout(Laik_Mapping* m);
+
+// return the layout type of a specific layout
+Laik_LayoutType laik_layout_type(Laik_Layout* l);
+
+// return the layout type used in a mapping
+Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
+
+// make own partition available for direct access in local memory.
+// if layout is 0, it will be choosen by LAIK, and can be requested with
+// laik_map_layout(). Otherwise a new layout with a hint can be provided,
+// and the layout object directly is written to the actually used layout.
+// TODO: API only works for single-slice layouts
+Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* layout);
+
+// similar to laik_map, but force a default mapping with only 1 slice
+Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count);
 
 
 
