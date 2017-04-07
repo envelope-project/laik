@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
 
     for(int iter = 0; iter < 10; iter++) {
         // init result vector (only my partition)
-        laik_map(resD, 0, (void**) &res, &count);
+        laik_map_def1(resD, (void**) &res, &count);
         for(uint64_t i = 0; i < count; i++)
             res[i] = 0.0;
 
@@ -117,7 +117,7 @@ int main(int argc, char* argv[])
     // push result to master
     laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_AB_ReadOnly);
     if (laik_myid(world) == 0) {
-        laik_map(resD, 0, (void**) &res, &count);
+        laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;
         for(uint64_t i = 0; i < count; i++) sum += res[i];
         printf("Res sum (regular): %f\n", sum);
@@ -125,7 +125,7 @@ int main(int argc, char* argv[])
 
     // other way to push results to master: use sum reduction
     laik_set_new_partitioning(resD, LAIK_PT_All, LAIK_AB_Sum);
-    laik_map(resD, 0, (void**) &res, &count);
+    laik_map_def1(resD, (void**) &res, &count);
     slc = laik_my_slice(p);
     fromRow = slc->from.i[0];
     toRow = slc->to.i[0];
@@ -136,7 +136,7 @@ int main(int argc, char* argv[])
 
     laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_AB_ReadOnly);
     if (laik_myid(world) == 0) {
-        laik_map(resD, 0, (void**) &res, &count);
+        laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;
         for(uint64_t i = 0; i < count; i++) sum += res[i];
         printf("Res sum (reduce): %f\n", sum);
