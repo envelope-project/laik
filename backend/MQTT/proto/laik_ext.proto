@@ -1,0 +1,6 @@
+message laik_ext_msg{
+//	required int32 num_failing_nodes = 1;
+	repeated string failing_nodes = 2;
+//	required int32 num_spare_nodes = 3;
+	repeated string spare_nodes = 4;
+}
