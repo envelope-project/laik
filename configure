@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 # Configure script for LAIK:
 # - tests for required/wanted packages
@@ -6,7 +6,6 @@
 
 import sys, getopt
 import os
-from pathlib import Path
 
 defs = "-DLAIK_DEBUG"
 cc = ""
@@ -14,8 +13,7 @@ subdirs = "examples"
 ipath = "/usr/include"
 
 # Mosquitto/MQTT
-file = Path(ipath + "/mosquitto.h")
-if not file.is_file():
+if not os.path.isfile(ipath + "/mosquitto.h"):
     print("Mosquitto include file not found. MQTT disabled.")
     print("On Ubuntu, install 'libmosquitto-dev'.")
 else:
@@ -24,8 +22,7 @@ else:
     subdirs += " external/MQTT"
 
 # LAIK-internal MPI support
-file = Path(ipath + "/mpi/mpi.h")
-if not file.is_file():
+if not os.path.isfile(ipath + "/mpi/mpi.h"):
     print("MPI not found, disabled LAIK MPI backend.")
     print("On Ubuntu, install 'libopenmpi-dev'.")
 else:
