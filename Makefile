@@ -21,7 +21,7 @@ CFLAGS += -MMD -MP
 
 CFLAGS += $(DEFS)
 
-SUBDIRS=examples
+SUBDIRS=examples backend/MQTT
 .PHONY: $(SUBDIRS)
 
 all: liblaik.a $(SUBDIRS)
@@ -32,9 +32,13 @@ liblaik.a: $(OBJS)
 examples: liblaik.a
 	cd examples && $(MAKE) CC=$(CC) DEFS='$(DEFS)'
 
+mqtt: liblaik.a
+	cd external/MQTT && $(MAKE) CC=$(CC) DEFS='$(DEFS)'
+
 clean:
 	rm -f *~ *.o $(OBJS) $(DEPS) liblaik.a
 	cd examples && make clean
+	cd external/MQTT && make clean
 
 install: liblaik.a $(HEADERS)
 	cp $(wildcard include/*.h) $(PREFIX)/include
