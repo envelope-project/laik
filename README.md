@@ -89,12 +89,13 @@ There is a 'configure' command that detects features of your system and enables 
 
 To compile, run
 
-```
-    ./configure && make
-```
+    ./configure
+    make
 
 There also are clean, install, and uninstall targets. The install defaults
-to /usr/local, but can be set via $PREFIX.
+to '/usr/local'. To set the installation path to your home directory, use
+
+    PREFIX=~ ./configure
 
 ## Ubuntu
 

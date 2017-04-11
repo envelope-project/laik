@@ -5,6 +5,7 @@
 # - generates a Makefile.config
 
 import sys, getopt
+import os
 from pathlib import Path
 
 defs = "-DLAIK_DEBUG"
@@ -39,6 +40,8 @@ cfile.write("DEFS=" + defs + "\n")
 cfile.write("SUBDIRS=" + subdirs + "\n")
 if cc:
     cfile.write("CC=" + cc + "\n")
+if "PREFIX" in os.environ:
+    cfile.write("PREFIX=" + os.path.abspath(os.environ['PREFIX']) + "\n")
 cfile.close()
 
 print("Generated 'Makefile.config'")
