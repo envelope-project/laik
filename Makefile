@@ -36,6 +36,10 @@ examples: liblaik.a
 external/MQTT: liblaik.a
 	cd external/MQTT && $(MAKE) CC=$(CC) CFLAGS='$(DEFS)'
 
+# tests
+test: examples
+	echo "Dummy test is working!"
+
 # clean targets
 SUBDIRS_CLEAN=$(addprefix clean_, $(SUBDIRS))
 .PHONY: $(SUBDIRS_CLEAN)
