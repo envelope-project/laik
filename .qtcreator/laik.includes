@@ -3,3 +3,4 @@
 ../src
 /usr/include/mpi
 ../examples
+../

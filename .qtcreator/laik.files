@@ -1,3 +1,4 @@
+../configure
 ../include/laik-ext.h
 ../src/laik-backend.c
 ../src/laik-backend-single.c
