@@ -20,7 +20,7 @@
 
 #include "laik.h"
 
-#ifdef LAIK_USEMPI
+#ifdef USE_MPI
 #include "laik-backend-mpi.h"
 #else
 #include "laik-backend-single.h"
@@ -52,7 +52,7 @@ double getEW(Laik_Index* i, void* d)
 
 int main(int argc, char* argv[])
 {
-#ifdef LAIK_USEMPI
+#ifdef USE_MPI
     Laik_Instance* inst = laik_init_mpi(&argc, &argv);
 #else
     Laik_Instance* inst = laik_init_single();

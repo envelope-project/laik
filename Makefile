@@ -2,9 +2,7 @@
 # run 'configure' to generate Makefile.config
 
 PREFIX=/usr/local
-# enable MPI backend
-CC=mpicc
-DEFS = -DLAIK_USEMPI -DLAIK_DEBUG
+DEFS = -DLAIK_DEBUG
 OPT = -g
 SUBDIRS=examples
 
@@ -21,8 +19,8 @@ OBJS = $(SRCS:.c=.o)
 DEPS = $(SRCS:.c=.d)
 
 # instruct GCC to produce dependency files
-CFLAGS += -MMD -MP
-CFLAGS += $(DEFS)
+CFLAGS+=-MMD -MP
+CFLAGS+=$(DEFS)
 
 # build targets
 .PHONY: $(SUBDIRS)

@@ -28,7 +28,7 @@
 
 #include "laik.h"
 
-#ifdef LAIK_USEMPI
+#ifdef USE_MPI
 #include "laik-backend-mpi.h"
 #else
 #include "laik-backend-single.h"
@@ -44,7 +44,7 @@ double getTW(int r, void* d) { return ((long int)d == r) ? 0.0 : 1.0; }
 
 int main(int argc, char* argv[])
 {
-#ifdef LAIK_USEMPI
+#ifdef USE_MPI
     Laik_Instance* inst = laik_init_mpi(&argc, &argv);
 #else
     Laik_Instance* inst = laik_init_single();

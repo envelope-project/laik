@@ -20,7 +20,7 @@ static Laik_Backend laik_backend_mpi = {"MPI Backend",
                                         laik_mpi_execTransition };
 static Laik_Instance* mpi_instance = 0;
 
-#ifndef LAIK_USEMPI
+#ifndef USE_MPI
 
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
@@ -30,7 +30,7 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
 void laik_mpi_finalize() {}
 
-#else // LAIK_USEMPI
+#else // USE_MPI
 
 #include <mpi.h>
 
@@ -235,4 +235,4 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
     }
 }
 
-#endif // LAIK_USEMPI
+#endif // USE_MPI
