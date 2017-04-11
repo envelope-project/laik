@@ -1,5 +1,7 @@
 ![drawing](doc/logo/laiklogo.png)
 
+[![Build Status](https://travis-ci.org/envelope-project/laik.svg?branch=master)](https://travis-ci.org/envelope-project/laik)
+
 # A Library for Lightweight Application-Integrated data containers for parallel worKers
 
 This library provides support for the distribution of global data containers for parallel applications using index spaces. It calculates the communication requirements for changing a partitioning or switching between different partitionings. By associating partitions with work load using the "owner-computes" rule, LAIK can be used for automatic load balancing.
