@@ -21,7 +21,7 @@ CFLAGS += -MMD -MP
 
 CFLAGS += $(DEFS)
 
-SUBDIRS=examples backend/MQTT
+SUBDIRS=examples mqtt
 .PHONY: $(SUBDIRS)
 
 all: liblaik.a $(SUBDIRS)
