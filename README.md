@@ -81,6 +81,28 @@ To run this example (could use vectorsum directly for OpenMP backend):
     mpirun -np 4 ./vectorsum
 ```
 
+# Build and Install
+
+There is a 'configure' command that detects features of your system and enables corresponding LAIK functionality if found:
+* for MPI backend support, MPI must be installed
+* for external control via MQTT, mosquitto and protobuf must be installed
+
+To compile, run
+
+```
+    ./configure && make
+```
+
+There also are clean, install, and uninstall targets. The install defaults
+to /usr/local, but can be set via $PREFIX.
+
+## Ubuntu
+
+On Ubuntu, install the following packages to enable MPI and MQTT:
+
+    libopenmpi-dev libmosquitto-dev libprotobuf-c-dev
+
+
 
 # License
 
