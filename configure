@@ -13,11 +13,22 @@ subdirs = "examples"
 ipath = "/usr/include"
 
 # Mosquitto/MQTT
-if not os.path.isfile(ipath + "/mosquitto.h"):
+mqtt_found = os.path.isfile(ipath + "/mosquitto.h")
+protobuf_found = os.path.isfile(ipath + "/protobuf-c/protobuf-c.h")
+if not protobuf_found:
+    # on precise/trusty header is in /usr/include/google
+    protobuf_found = os.path.isfile(ipath + "/google/protobuf-c/protobuf-c.h")
+    if protobuf_found:
+        defs += " -I/usr/include/google"
+
+if not mqtt_found:
     print("Mosquitto include file not found. MQTT disabled.")
-    print("On Ubuntu, install 'libmosquitto-dev'.")
-else:
-    print("Mosquitto header found in " + ipath + ", enabled MQTT support.")
+    print("On Ubuntu, install 'libmosquitto-dev' or 'libmosquitto0-dev' (trusty).")
+if not protobuf_found:
+    print("Protobuf C include file not found. MQTT disabled.")
+    print("On Ubuntu, install 'libprotobuf-c-dev' or 'libprotobuf-c0-dev' (trusty).")
+if mqtt_found and protobuf_found:
+    print("Mosquitto/Protobuf headers found, enabled MQTT support.")
     defs += " -DUSE_MQTT"
     subdirs += " external/MQTT"
 

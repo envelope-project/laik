@@ -1,3 +1,4 @@
+../.travis.yml
 ../configure
 ../include/laik-ext.h
 ../src/laik-backend.c
