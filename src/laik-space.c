@@ -547,7 +547,7 @@ laik_new_coupled_partitioning(Laik_Partitioning* base,
                               Laik_AccessBehavior ap)
 {
     Laik_Partitioning* p;
-    p = laik_new_partitioning(p->space);
+    p = laik_new_partitioning(base->space);
     p->access = ap;
     p->type = pt;
     p->base = base;

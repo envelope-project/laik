@@ -114,7 +114,7 @@ int main(int argc, char* argv[])
     // LAIK container for result vector
     Laik_Data* resD = laik_alloc(world, s, laik_Double);
     // LAIK container for input vector
-    Laik_Data* inpD = laik_alloc_1d(world, laik_Double, size);
+    Laik_Data* inpD = laik_alloc(world, s, laik_Double);
     // for global normalization, to broadcast a vector sum to all
     Laik_Data* sumD = laik_alloc_1d(world, laik_Double, 1);
 
@@ -123,6 +123,11 @@ int main(int argc, char* argv[])
     p = laik_new_base_partitioning(s, LAIK_PT_Block, LAIK_AB_ReadWrite);
     laik_set_index_weight(p, getEW, m);
     laik_set_partitioning(resD, p);
+
+    // same partitioning, used to broadcast partitial input to all
+    // TODO: This is a bad API - needs rethinking
+    Laik_Partitioning* p2;
+    p2 = laik_new_coupled_partitioning(p, LAIK_PT_Copy, LAIK_AB_WriteAll);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i;
@@ -172,8 +177,15 @@ int main(int argc, char* argv[])
             printf("Sum at iter %2d: %f\n", iter, sum);
         }
 
+#if 1
         // make input vector writable, broadcast via sum reduction
         laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_AB_Sum);
+#else
+        // variant 2: copy it directly without reduction
+        // FIXME: deadlock at the moment
+        laik_set_partitioning(inpD, p2);
+        fromRow = 0; // local indexing for writes into inp, as with res
+#endif
         laik_map_def1(inpD, (void**) &inp, 0);
         // normalize values from my partition of result vector into next input
         for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
