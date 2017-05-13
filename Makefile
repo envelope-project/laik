@@ -31,7 +31,7 @@ liblaik.a: $(OBJS)
 	ar rcs liblaik.a $(OBJS)
 
 examples: liblaik.a
-	cd examples && $(MAKE) CC=$(CC) DEFS='$(DEFS)'
+	cd examples && $(MAKE)
 
 external/MQTT: liblaik.a
 	cd external/MQTT && $(MAKE) CC=$(CC) CFLAGS='$(DEFS)'
