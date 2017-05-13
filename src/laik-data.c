@@ -86,11 +86,8 @@ Laik_Data* laik_alloc_1d(Laik_Group* g, Laik_Type* t, uint64_t s1)
     Laik_Space* space = laik_new_space_1d(g->inst, s1);
     Laik_Data* d = laik_alloc(g, space, t);
 
-#ifdef LAIK_DEBUG
-    printf("LAIK %d/%d - new 1d data '%s': elemsize %d, space '%s'\n",
-           space->inst->myid, space->inst->size,
-           d->name, d->elemsize, space->name);
-#endif
+    laik_log(1, "new 1d data '%s': elemsize %d, space '%s'\n",
+             d->name, d->elemsize, space->name);
 
     return d;
 }
@@ -100,11 +97,8 @@ Laik_Data* laik_alloc_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2)
     Laik_Space* space = laik_new_space_2d(g->inst, s1, s2);
     Laik_Data* d = laik_alloc(g, space, t);
 
-#ifdef LAIK_DEBUG
-    printf("LAIK %d/%d - new 2d data '%s': elemsize %d, space '%s'\n",
-           space->inst->myid, space->inst->size,
-           d->name, d->elemsize, space->name);
-#endif
+    laik_log(1, "new 2d data '%s': elemsize %d, space '%s'\n",
+             d->name, d->elemsize, space->name);
 
     return d;
 }
@@ -166,13 +160,12 @@ Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
             m->base = (d->allocator->malloc)(d, count * d->elemsize);
     }
 
-#ifdef LAIK_DEBUG
-    char s[100];
-    laik_getIndexStr(s, p->space->dims, &(m->baseIdx), false);
-    printf("LAIK %d/%d - new map for '%s': [%s+%d, elemsize %d, base %p\n",
-           d->space->inst->myid, d->space->inst->size,
-           d->name, s, m->count, d->elemsize, m->base);
-#endif
+    if (laik_logshown(1)) {
+        char s[100];
+        laik_getIndexStr(s, p->space->dims, &(m->baseIdx), false);
+        laik_log(1, "new map for '%s': [%s+%d, elemsize %d, base %p\n",
+                 d->name, s, m->count, d->elemsize, m->base);
+    }
 
     return m;
 }
@@ -182,11 +175,8 @@ void freeMap(Laik_Mapping* m)
 {
     Laik_Data* d = m->data;
 
-#ifdef LAIK_DEBUG
-    printf("LAIK %d/%d - free map for '%s' (count %d, base %p)\n",
-           d->space->inst->myid, d->space->inst->size,
-           d->name, m->count, m->base);
-#endif
+    laik_log(1, "free map for '%s' (count %d, base %p)\n",
+             d->name, m->count, m->base);
 
     if (m && m->base) {
         // TODO: different policies
@@ -225,13 +215,10 @@ void copyMap(Laik_Transition* t, Laik_Mapping* toMap, Laik_Mapping* fromMap)
         char*    fromPtr   = fromMap->base + fromStart * d->elemsize;
         char*    toPtr     = toMap->base   + toStart * d->elemsize;
 
-#ifdef LAIK_DEBUG
-        printf("LAIK %d/%d - copy map for '%s': "
-               "%d x %d from [%lu global [%lu to [%lu, %p => %p\n",
-               d->space->inst->myid, d->space->inst->size, d->name,
-               count, d->elemsize, fromStart, s->from.i[0], toStart,
-               fromPtr, toPtr);
-#endif
+        laik_log(1, "copy map for '%s': "
+                    "%d x %d from [%lu global [%lu to [%lu, %p => %p\n",
+                 d->name, count, d->elemsize, fromStart, s->from.i[0], toStart,
+                fromPtr, toPtr);
 
         if (count>0)
             memcpy(toPtr, fromPtr, count * d->elemsize);
@@ -285,12 +272,8 @@ void initMap(Laik_Transition* t, Laik_Mapping* toMap)
         }
         else assert(0);
 
-#ifdef LAIK_DEBUG
-        printf("LAIK %d/%d - init map for '%s': %d x at [%lu\n",
-               d->space->inst->myid, d->space->inst->size, d->name,
-               count, s->from.i[0]);
-#endif
-
+        laik_log(1, "init map for '%s': %d x at [%lu\n",
+                 d->name, count, s->from.i[0]);
     }
 }
 

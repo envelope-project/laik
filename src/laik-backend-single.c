@@ -35,10 +35,7 @@ Laik_Instance* laik_init_single()
     g->myid = 0;
     g->task[0] = 0;
 
-#ifdef LAIK_DEBUG
-    printf("LAIK %d/%d - Single backend initialized\n",
-           inst->myid, inst->size);
-#endif
+    laik_log(1, "Single backend initialized\n");
 
     single_instance = inst;
     return inst;
@@ -70,12 +67,9 @@ void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
         assert(toBase != 0);
         assert(to > from);
 
-#ifdef LAIK_DEBUG
-            printf("LAIK %d/%d - Single reduce: "
-                   "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
-                   d->space->inst->myid, d->space->inst->size,
-                   from, to, d->elemsize, fromBase, toBase);
-#endif
+        laik_log(1, "Single reduce: "
+                    "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
+                 from, to, d->elemsize, fromBase, toBase);
 
         memcpy(toBase, fromBase, (to-from) * fromMap->data->elemsize);
     }

@@ -75,11 +75,7 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     g->myid = inst->myid;
     g->task[0] = 0; // TODO
 
-#ifdef LAIK_DEBUG
-
-    printf("LAIK %d/%d - MPI backend initialized (location %s)\n",
-           inst->myid, inst->size, inst->mylocation);
-#endif
+    laik_log(1, "MPI backend initialized (location '%s')\n", inst->mylocation);
 
     mpi_instance = inst;
     return inst;
@@ -128,12 +124,9 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             else if (d->type == laik_Float) mpiDateType = MPI_FLOAT;
             else assert(0);
 
-#ifdef LAIK_DEBUG
-            printf("LAIK %d/%d - MPI Reduce: "
-                   "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
-                   d->space->inst->myid, d->space->inst->size,
-                   from, to, d->elemsize, fromBase, toBase);
-#endif
+            laik_log(1, "MPI Reduce: "
+                        "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
+                     from, to, d->elemsize, fromBase, toBase);
 
             if (t->redRoot[i] == -1) {
                 MPI_Allreduce(fromBase, toBase, to - from,
@@ -185,12 +178,9 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             default: assert(0);
             }
 
-#ifdef LAIK_DEBUG
-            printf("LAIK %d/%d - MPI Recv from T%d: "
-                   "local [%lu-%lu], elemsize %d, to base %p\n",
-                   d->space->inst->myid, d->space->inst->size, t->recvFrom[i],
-                   from, to-1, d->elemsize, toBase);
-#endif
+            laik_log(1, "MPI Recv from T%d: "
+                        "local [%lu-%lu], elemsize %d, to base %p\n",
+                     t->recvFrom[i], from, to-1, d->elemsize, toBase);
 
             MPI_Status s;
             // TODO:
@@ -219,14 +209,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             default: assert(0);
             }
 
-#ifdef LAIK_DEBUG
-            printf("LAIK %d/%d - MPI Send to T%d: "
-                   "local [%lu-%lu], elemsize %d, from base %p\n",
-                   d->space->inst->myid, d->space->inst->size, t->sendTo[i],
-                   from, to-1, d->elemsize, fromBase);
-#endif
+            laik_log(1, "MPI Send to T%d: "
+                        "local [%lu-%lu], elemsize %d, from base %p\n",
+                     t->sendTo[i], from, to-1, d->elemsize, fromBase);
 
-            // FIXME: may deadlock (use 2 phases)
             // TODO: tag 1 may conflict with application
             MPI_Send(fromBase + from * d->elemsize, to - from,
                      mpiDateType, t->sendTo[i], 1, comm);

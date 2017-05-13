@@ -370,12 +370,11 @@ Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1)
     space->dims = 1;
     space->size[0] = s1;
 
-#ifdef LAIK_DEBUG
-    char s[100];
-    getSpaceStr(s, space);
-    printf("LAIK %d/%d - new 1d space '%s': %s\n",
-           space->inst->myid, space->inst->size, space->name, s);
-#endif
+    if (laik_logshown(1)) {
+        char s[100];
+        getSpaceStr(s, space);
+        laik_log(1, "new 1d space '%s': %s\n", space->name, s);
+    }
 
     return space;
 }
@@ -388,12 +387,11 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i,
     space->size[0] = s1;
     space->size[1] = s2;
 
-#ifdef LAIK_DEBUG
-    char s[100];
-    getSpaceStr(s, space);
-    printf("LAIK %d/%d - new 2d space '%s': %s\n",
-           space->inst->myid, space->inst->size, space->name, s);
-#endif
+    if (laik_logshown(1)) {
+        char s[100];
+        getSpaceStr(s, space);
+        laik_log(1, "new 2d space '%s': %s\n", space->name, s);
+    }
 
     return space;
 }
@@ -407,12 +405,11 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i,
     space->size[1] = s2;
     space->size[2] = s3;
 
-#ifdef LAIK_DEBUG
-    char s[100];
-    getSpaceStr(s, space);
-    printf("LAIK %d/%d - new 3d space '%s': %s\n",
-           space->inst->myid, space->inst->size, space->name, s);
-#endif
+    if (laik_logshown(1)) {
+        char s[100];
+        getSpaceStr(s, space);
+        laik_log(1, "new 3d space '%s': %s\n", space->name, s);
+    }
 
     return space;
 }
@@ -498,14 +495,13 @@ laik_new_base_partitioning(Laik_Space* space,
     p->access = ap;
     p->type = pt;
 
-#ifdef LAIK_DEBUG
-    char s[100];
-    getPartitioningTypeStr(s, p->type);
-    getAccessBehaviorStr(s+50, p->access);
-    printf("LAIK %d/%d - new partitioning '%s': type %s, access %s, group %d\n",
-           space->inst->myid, space->inst->size, p->name,
-           s, s+50, p->group->gid);
-#endif
+    if (laik_logshown(1)) {
+        char s[100];
+        getPartitioningTypeStr(s, p->type);
+        getAccessBehaviorStr(s+50, p->access);
+        laik_log(1, "new partitioning '%s': type %s, access %s, group %d\n",
+                 p->name, s, s+50, p->group->gid);
+    }
 
     return p;
 }
@@ -740,20 +736,19 @@ bool laik_update_partitioning(Laik_Partitioning* p)
 
     p->bordersValid = true;
 
-#ifdef LAIK_DEBUG
-    char str[1000];
-    int off;
-    off = sprintf(str, "partitioning '%s' (group %d) updated: ",
-                  p->name, p->group->gid);
-    for(int task = 0; task < count; task++) {
-        if (task>0)
-            off += sprintf(str+off, ", ");
-        off += sprintf(str+off, "%d:", task);
-        off += getSliceStr(str+off, p->space->dims, &(p->borders[task]));
+    if (laik_logshown(1)) {
+        char str[1000];
+        int off;
+        off = sprintf(str, "partitioning '%s' (group %d) updated: ",
+                      p->name, p->group->gid);
+        for(int task = 0; task < count; task++) {
+            if (task>0)
+                off += sprintf(str+off, ", ");
+            off += sprintf(str+off, "%d:", task);
+            off += getSliceStr(str+off, p->space->dims, &(p->borders[task]));
+        }
+        laik_log(1, "%s\n", str);
     }
-    printf("LAIK %d/%d - %s\n",
-           p->group->inst->myid, p->group->inst->size, str);
-#endif
 
     return true;
 }
@@ -909,19 +904,17 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         }
     }
 
-#ifdef LAIK_DEBUG
+    if (laik_logshown(1)) {
         char s[1000];
         int len = getTransitionStr(s, t);
         if (len == 0)
-            printf("LAIK %d/%d - transition %s => %s: (nothing)\n",
-                   space->inst->myid, space->inst->size,
-                   from ? from->name : "(none)", to ? to->name : "(none)");
+            laik_log(1, "transition %s => %s: (nothing)\n",
+                     from ? from->name : "(none)", to ? to->name : "(none)");
         else
-            printf("LAIK %d/%d - transition %s => %s:\n%s",
-                   space->inst->myid, space->inst->size,
-                   from ? from->name : "(none)", to ? to->name : "(none)",
-                   s);
-#endif
+            laik_log(1, "transition %s => %s:\n%s",
+                     from ? from->name : "(none)", to ? to->name : "(none)",
+                     s);
+    }
 
     return t;
 }

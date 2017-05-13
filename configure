@@ -7,7 +7,7 @@
 import sys, getopt
 import os
 
-defs = "-DLAIK_DEBUG"
+defs = ""
 cc = ""
 subdirs = "examples"
 ipath = "/usr/include"

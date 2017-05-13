@@ -6,8 +6,14 @@
 #include "laik-internal.h"
 
 #include <assert.h>
+#include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
+// default log level
+static Laik_LogLevel laik_loglevel = LAIK_LL_Error;
+static Laik_Instance* laik_loginst = 0;
 
 int laik_size(Laik_Group* g)
 {
@@ -54,6 +60,15 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
 
     laik_data_init();
 
+    // logging (TODO: multiple instances)
+    laik_loginst = instance;
+    char* str = getenv("LAIK_LOG");
+    if (str) {
+        int l = atoi(str);
+        if (l > 0)
+            laik_loglevel = l;
+    }
+
     return instance;
 }
 
@@ -87,4 +102,45 @@ Laik_Group* laik_world(Laik_Instance* i)
     assert(g->size == i->size);
 
     return g;
+}
+
+// Logging
+
+// to overwrite environment variable LAIK_LOG
+void laik_set_loglevel(Laik_LogLevel l)
+{
+    laik_loglevel = l;
+}
+
+// check for log level: return true if given log level will be shown
+bool laik_logshown(Laik_LogLevel l)
+{
+    return (l >= laik_loglevel);
+}
+
+// log a message, similar to printf
+void laik_log(Laik_LogLevel l, char* msg, ...)
+{
+    if (l < laik_loglevel) return;
+
+    assert(laik_loginst != 0);
+    const char* lstr = "";
+    switch(l) {
+        case LAIK_LL_Warning: lstr = "Warning "; break;
+        case LAIK_LL_Error:   lstr = "ERROR "; break;
+        case LAIK_LL_Panic:   lstr = "PANIC "; break;
+        default: break;
+    }
+
+    // print at once to not mix output from multiple (MPI) tasks
+    char format[1000];
+    sprintf(format, "LAIK %d/%d%s - %s",
+            laik_loginst->myid, laik_loginst->size, lstr, msg);
+
+    va_list args;
+    va_start(args, msg);
+    vfprintf(stderr, format, args);
+
+    // terminate program on panic
+    if (l == LAIK_LL_Panic) exit(1);
 }

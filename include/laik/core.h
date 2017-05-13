@@ -22,6 +22,8 @@
 #error "include laik.h instead"
 #endif
 
+#include <stdbool.h>
+
 // configuration for a LAIK instance (there may be multiple)
 typedef struct _Laik_Instance Laik_Instance;
 
@@ -59,5 +61,29 @@ int laik_size(Laik_Group*);
 // return rank of calling LAIK task (within this instance)
 int laik_myid(Laik_Group*);
 
+
+// Logging
+
+// Log levels control whether a log message should be shown to user.
+// Default is to only show Error/Panic messages.
+// Set environment variable LAIK_LOG to minimum level (integer) to see.
+typedef enum _Laik_LogLevel {
+    LAIK_LL_None = 0,
+    LAIK_LL_Debug,
+    LAIK_LL_Info,
+    LAIK_LL_Warning, // prefix with "Warning"
+    LAIK_LL_Error,   // prefix with "Error"
+    LAIK_LL_Panic    // prefix with "Panic" and immediately exit
+} Laik_LogLevel;
+
+// log a message, similar to printf
+void laik_log(Laik_LogLevel l, char* msg, ...);
+
+// check for log level: return true if given log level will be shown
+// use this to guard possibly complex calculations for debug output
+bool laik_logshown(Laik_LogLevel l);
+
+// to overwrite environment variable LAIK_LOG
+void laik_set_loglevel(Laik_LogLevel l);
 
 #endif // _LAIK_CORE_H_
