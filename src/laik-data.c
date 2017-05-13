@@ -355,7 +355,7 @@ void laik_fill_double(Laik_Data* d, double v)
 // allocate new layout object with a layout hint, to use in laik_map
 Laik_Layout* laik_new_layout(Laik_LayoutType t)
 {
-    Laik_Layout* l = (Laik_Layout*) malloc(sizeof(Laik_LayoutType));
+    Laik_Layout* l = (Laik_Layout*) malloc(sizeof(Laik_Layout));
 
     l->type = t;
     l->isFixed = false;
