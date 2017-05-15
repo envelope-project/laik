@@ -92,7 +92,7 @@ void msg_cb (
 	/* The function pointer must be blocking until the processing is done!!!! */
 	ret = laik_fp(laikmsg);
 	assert(ret == 0);
-	
+
 	laik_ext_msg__free_unpacked(laikmsg, NULL);
 }
 
