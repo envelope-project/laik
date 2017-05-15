@@ -7,7 +7,6 @@
  */
 
 #include <stdlib.h>
-#include "lauSim_com_intf.h"
 #include "mqttclient.h"
 #include "laik_ext.pb-c.h"
 

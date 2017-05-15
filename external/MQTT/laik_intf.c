@@ -15,7 +15,6 @@
 
 #include "laik_intf.h"
 #include "mqttclient.h"
-#include "lauSim_com_intf.h"
 
 static
 com_backend_t com;
