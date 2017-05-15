@@ -6,7 +6,7 @@
 #define PROTOBUF_C__NO_DEPRECATED
 #endif
 
-#include "proto/laik_ext.pb-c.h"
+#include "laik_ext.pb-c.h"
 void   laik_ext_msg__init
                      (LaikExtMsg         *message)
 {

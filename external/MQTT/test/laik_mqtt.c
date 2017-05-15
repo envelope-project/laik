@@ -9,8 +9,7 @@
 #include <stdio.h>
 #include "laik_intf.h"
 
-#define LAIK_MQTT_CLIENT
-
+// #define LAIK_MQTT_CLIENT
 #ifdef LAIK_MQTT_CLIENT
 
 int laik_handler (

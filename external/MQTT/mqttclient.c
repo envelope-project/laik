@@ -173,6 +173,8 @@ void msg_handler(
 	mqtt_cb_list_t** callbacks;
 	mqtt_cb_list_t* current;
 
+	(void)mosq;
+	
 	hnd = (mqtt_msg_handler_data_t*) pData;
 	callbacks = hnd->callbacks;
 
@@ -222,8 +224,8 @@ void mqtt_cleanup(
 
 
 int mqtt_publish(
-	const char* topic,
-	const char* buffer,
+	char* topic,
+	char* buffer,
 	int   length,
 	com_backend_t* com
 ){

@@ -9,7 +9,7 @@
 #ifndef INC_BACKEND_MOSQUITTO_LAIK_INTF_H_
 #define INC_BACKEND_MOSQUITTO_LAIK_INTF_H_
 
-#include "proto/laik_ext.pb-c.h"
+#include "laik_ext.pb-c.h"
 
 #define NODE_STATUS_TOPIC "envelope/status"
 #define MAX_LAIK_MSG_SIZE 2048

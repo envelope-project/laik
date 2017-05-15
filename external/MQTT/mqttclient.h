@@ -50,8 +50,8 @@ void mqtt_cleanup(
 );
 
 int mqtt_publish(
-	const char* topic,
-	const char* buffer,
+	char* topic,
+	char* buffer,
 	int   length,
 	com_backend_t* com
 );

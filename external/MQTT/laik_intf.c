@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <stdio.h>
+#include <uuid/uuid.h>
 
 #include "laik_intf.h"
 #include "mqttclient.h"
@@ -38,27 +39,29 @@ void init_ext_com(
 	char* 				password	/* unsupported yet */
 ){
 	int ret = 0;
-	char hostname[64];
 	char* clientid;
 	char* topic[1] = {NODE_STATUS_TOPIC};
 	FP_MSG_CB callbacks[1] = {msg_cb};
+	uuid_t uuid;
+	char uuid_str[37];
 
+	/* Unused currently TODO!! */
+	(void) username;
+	(void) password;
 
 	assert(fp_backend);
 	laik_fp = fp_backend;
 	laik_cleanup = cleanup;
 
+	/* generate UUID */
+	uuid_generate_time_safe(uuid);
+	uuid_unparse_lower(uuid, uuid_str);
+
 	memset(&com, 0x0, sizeof(com_backend_t));
 
-	/* according to posix 1.0 */
-	gethostname(hostname, 64);
-	if(hostname[64] != '\0'){
-		hostname[64] = '\0';
-	}
-
 	/* generate a new client id */
-	clientid = (char*) malloc (strlen(hostname) + sizeof("LAIK_") + 1);
-	sprintf(clientid, "LAIKpart_%s", hostname);
+	clientid = (char*) malloc (37 + sizeof("LAIKpart_") + 1);
+	sprintf(clientid, "LAIKpart_%s", uuid);
 
 	/* get a new mqtt instance */
 	ret = mqtt_init(clientid, addr, port, keepalive, &com);

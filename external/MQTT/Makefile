@@ -1,0 +1,40 @@
+# Makefile Recreated by Dai Yang
+#
+#	MQTT Client using Mosquitto for LAIK
+# Dependencies: libprotobuf-c, libmosquitto
+#
+# (C) 2017 LRR, Technische Universitaet Muenchen
+#
+
+SHELL= /bin/sh
+CC= cc
+CXX= c++
+FLAGS= -std=gnu99
+CFLAGS= -fPIC -Wall -g -Wextra -ggdb3
+LDFLAGS= -lprotobuf-c -lmosquitto -luuid -shared
+DEBUGFLAGS= -O0 -D DEBUG
+RELEASEFLAGS= -O2 -D NDEBUG -combine -fwhole-program
+
+
+TARGET  = liblaikmqtt.so
+SOURCES = $(shell echo *.c)
+HEADERS = $(shell echo *.h)
+OBJECTS = $(SOURCES:.c=.o)
+
+PREFIX = $(DESTDIR)/usr/local
+BINDIR = $(PREFIX)/bin
+
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	$(CC) $(FLAGS) $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $(TARGET) $(OBJECTS)
+
+clean:
+	rm -f *.o
+	rm -f *.d
+	rm -f liblaikmqtt.so
+
+.PHONY: all clean
+
+# Dependencies tracking:
+-include *.d

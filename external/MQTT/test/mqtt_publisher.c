@@ -9,10 +9,10 @@
 #include <stdlib.h>
 #include "lauSim_com_intf.h"
 #include "mqttclient.h"
-#include "proto/laik_ext.pb-c.h"
+#include "laik_ext.pb-c.h"
 
 
-#define MQTT_PUBLISH
+// #define MQTT_PUBLISH
 
 #ifdef MQTT_PUBLISH
 
