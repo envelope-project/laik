@@ -79,6 +79,7 @@ void msg_cb (
 	int msglen
 ){
 	LaikExtMsg* laikmsg;
+	int ret = 0xFF;
 
 	assert(msglen);
 	assert(msg);
@@ -87,8 +88,11 @@ void msg_cb (
 	if(!laikmsg){
 		fprintf(stderr, "Omitted 1 MQTT Msg, Cannot unpack. Size: %d", msglen);
 	}
-	laik_fp(laikmsg);
 
+	/* The function pointer must be blocking until the processing is done!!!! */
+	ret = laik_fp(laikmsg);
+	assert(ret == 0);
+	
 	laik_ext_msg__free_unpacked(laikmsg, NULL);
 }
 
