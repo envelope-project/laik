@@ -34,7 +34,7 @@ examples: liblaik.a
 	cd examples && $(MAKE)
 
 external/MQTT: liblaik.a
-	cd external/MQTT && $(MAKE) CC=$(CC) CFLAGS='$(DEFS)'
+	cd external/MQTT && $(MAKE) CC=$(CC)
 
 # tests
 test: examples
