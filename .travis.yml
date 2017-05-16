@@ -2,4 +2,4 @@ language: c
 
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get install -y libopenmpi-dev libmosquitto0-dev libprotobuf-c0-dev protobuf-c-compiler libuuid1
+  - sudo apt-get install -y libopenmpi-dev libmosquitto0-dev libprotobuf-c0-dev protobuf-c-compiler uuid uuid-dev
