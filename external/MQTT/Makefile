@@ -6,32 +6,41 @@
 # (C) 2017 LRR, Technische Universitaet Muenchen
 #
 
-SHELL= /bin/sh
 CC= cc
+PROTOCC= protoc-c
 CXX= c++
 FLAGS= -std=gnu99
 CFLAGS= -fPIC -Wall -g -Wextra -ggdb3
 LDFLAGS= -lprotobuf-c -lmosquitto -luuid -shared
 DEBUGFLAGS= -O0 -D DEBUG
 RELEASEFLAGS= -O2 -D NDEBUG -combine -fwhole-program
+PROTOCFLAGS= --c_out=
 
-
+PROTOS = $(wildcard *.proto)
 TARGET  = liblaikmqtt.so
-SOURCES = $(shell echo *.c)
-HEADERS = $(shell echo *.h)
+SOURCES = $(wildcard *.c)
+HEADERS = $(wildcard *.h)
 OBJECTS = $(SOURCES:.c=.o)
+PROTOCOLC = $(PROTOS:.proto=.pb-c.c)
+PROTOCOLH = $(PROTOS:.proto=.pb-c.h)
 
+PROTODIR =.
 PREFIX = $(DESTDIR)/usr/local
 BINDIR = $(PREFIX)/bin
 
-all: $(TARGET)
+all: $(PROTOCOLC) $(TARGET)
 
-$(TARGET): $(OBJECTS)
+$(PROTOCOLC): $(PROTOS)
+	$(PROTOCC) $(PROTOCFLAGS)$(PROTODIR) $(PROTOS)
+
+
+$(TARGET):  $(OBJECTS)
 	$(CC) $(FLAGS) $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $(TARGET) $(OBJECTS)
 
 clean:
 	rm -f *.o
 	rm -f *.d
+	rm -f *.pb-c.*
 	rm -f liblaikmqtt.so
 
 .PHONY: all clean
