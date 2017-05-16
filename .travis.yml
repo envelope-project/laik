@@ -1,5 +1,7 @@
 language: c
 
 before_install:
+  - sudo add-apt-repository ppa:mosquitto-dev/mosquitto-ppa -y
   - sudo apt-get -qq update
-  - sudo apt-get install -y libopenmpi-dev libmosquitto-dev mosquitto-dev libprotobuf-c0-dev protobuf-c-compiler uuid uuid-dev
+  - sudo apt-get install -y libopenmpi-dev libmosquitto-dev libprotobuf-c0-dev protobuf-c-compiler uuid uuid-dev
+  
