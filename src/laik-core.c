@@ -68,7 +68,8 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
         if (l > 0)
             laik_loglevel = l;
     }
-
+    //TEMPORARY
+    //laik_loglevel = 1;
     return instance;
 }
 

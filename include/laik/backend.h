@@ -22,12 +22,18 @@
 #error "include laik.h instead"
 #endif
 
+//Move to ext.h
+#include "laik/ext.h"
+#include "../external/MQTT/laik_intf.h"
+
 // LAIK communication back-end
 typedef struct _Laik_Backend Laik_Backend;
 struct _Laik_Backend {
   char* name;
   void (*finalize)(Laik_Instance*);
   void (*execTransition)(Laik_Data*, Laik_Transition*, Laik_Mapping* to);
+  void (*gatherInts)(int send, int* recv);
+  void (*switchOffNodes)(int* failing, int id);
 
   // TODO: async interface: start sending / register receiving / probe
 };

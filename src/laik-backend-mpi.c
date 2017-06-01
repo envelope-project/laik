@@ -10,14 +10,19 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 
 void laik_mpi_finalize();
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t,
                              Laik_Mapping* toMap);
+void laik_mpi_gatherInts(int send, int* recv);
+void laik_mpi_switchOffNodes(int* failing, int id);
 
 static Laik_Backend laik_backend_mpi = {"MPI Backend",
                                         laik_mpi_finalize,
-                                        laik_mpi_execTransition };
+                                        laik_mpi_execTransition,
+                                        laik_mpi_gatherInts,
+                                        laik_mpi_switchOffNodes };
 static Laik_Instance* mpi_instance = 0;
 
 #ifndef USE_MPI
@@ -219,6 +224,32 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
         }
     
     }
+}
+
+//TODO: Maybe more general?
+void laik_mpi_gatherInts(int send, int* recv)
+{
+  MPI_Comm comm = ((MPIData*)mpi_instance->backend_data)->comm;
+  int size; 
+  MPI_Comm_size(comm, &size);
+  MPI_Allgather(&send, 1, MPI_INT, recv, 1, MPI_INT, comm);
+}
+
+void laik_mpi_switchOffNodes(int* failing, int id)
+{
+    MPI_Comm comm = ((MPIData*)mpi_instance->backend_data)->comm;
+    MPI_Comm new_comm;
+    MPI_Comm_split(comm, failing[id] ? MPI_UNDEFINED : 0, id, &new_comm);
+        
+    ((MPIData*)mpi_instance->backend_data)->comm = new_comm;
+    
+    //Goodbye cruel world
+    if(failing[id])
+    {
+      MPI_Finalize();
+      exit(0);
+    }
+    
 }
 
 #endif // USE_MPI

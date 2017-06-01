@@ -22,9 +22,12 @@
 
 #ifdef USE_MPI
 #include "laik-backend-mpi.h"
+#include "laik-ext-mqtt.h"
 #else
 #include "laik-backend-single.h"
 #endif
+#include "laik-internal.h"
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -117,6 +120,9 @@ int main(int argc, char* argv[])
     Laik_Data* inpD = laik_alloc(world, s, laik_Double);
     // for global normalization, to broadcast a vector sum to all
     Laik_Data* sumD = laik_alloc_1d(world, laik_Double, 1);
+    
+    Laik_Data* data[3]; data[2] = resD; data[1] = inpD; data[0] = sumD;
+    Laik_RepartitionControl* ctrl = init_ext_mqtt(inst);
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioning* p;
@@ -191,7 +197,14 @@ int main(int argc, char* argv[])
         for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
 
         // react on repartitioning wishes
-        //allowRepartitioning(p);
+        if(iter == 3)
+        {
+          ctrl->allowRepartitioning(world, data, 3);
+          //LOL
+          printf("After repartitioning\n");
+        //  printf("LAIK stopped...\n");
+        //  while(1);
+        }
     }
 
     // push result to master
