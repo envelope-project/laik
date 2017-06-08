@@ -110,8 +110,4 @@ struct _Laik_Transition {
 // LAIK internal
 int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1);
 
-//For repartitioning:
-void setBlockBorders(Laik_Partitioning* p, int* failing);
-bool laik_update_partitioning_internal(Laik_Partitioning* p, int* failing);
-
 #endif // _LAIK_SPACE_INTERNAL_H_
