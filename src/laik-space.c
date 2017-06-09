@@ -597,13 +597,31 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
     p->name = strdup(n);
 }
 
-static
-void setBlockBorders(Laik_Partitioning* p)
+int nextNonFailing(int task, int* failing, int count)
+{
+  if(!failing)
+    return task;
+    
+  while(task<count && failing[task]) task++;
+  
+  return task;
+}
+
+void setBlockBorders(Laik_Partitioning* p, int* failing)
 {
     assert(p->borders != 0);
     assert(p->type == LAIK_PT_Block);
 
     int count = p->group->size;
+    
+    //How many are not failing
+    int activeCount = p->group->size;
+    if(failing)
+    {
+      for(int i = 0; i < count; i++)
+        if(failing[i]) activeCount--;
+    }
+    
     int pdim = p->pdim;
     uint64_t size = p->space->size[pdim];
     if (p->getIdxW) {
@@ -612,26 +630,65 @@ void setBlockBorders(Laik_Partitioning* p)
         Laik_Index idx;
         setIndex(&idx, 0, 0, 0);
         double total = 0.0;
+        
         for(uint64_t i = 0; i < size; i++) {
             idx.i[pdim] = i;
             total += (p->getIdxW)(&idx, p->idxUserData);
         }
-        double perPart = total / count;
+        
+        double perPart = total / activeCount;
         double w = 0.0;
-        int task = 0;
-        p->borders[task].from.i[pdim] = 0;
-        for(uint64_t i = 0; i < size; i++) {
-            idx.i[pdim] = i;
-            w += (p->getIdxW)(&idx, p->idxUserData);
-            if (w >= perPart) {
-                w = w - perPart;
-                if (task+1 == count) break;
-                p->borders[task].to.i[pdim] = i;
-                task++;
-                p->borders[task].from.i[pdim] = i;
-            }
+        int task = nextNonFailing(0, failing, count);
+        uint64_t lasti = 0;
+        //Changes begin
+        
+        //Unset all borders
+        for(int i = 0; i < count; i++)
+        {
+              p->borders[i].from.i[pdim] = 0;
+              p->borders[i].to.i[pdim] = 0;
         }
-        assert(task+1 == count);
+        
+        //Set borders on only the non failing nodes
+        for(uint64_t i = 0; i < size; i++) {
+          idx.i[pdim] = i;
+          w += (p->getIdxW)(&idx, p->idxUserData);
+          
+          if (w >= perPart) {
+            w = w - perPart;
+            
+            if(nextNonFailing(task+1, failing, count) == count) break;
+            p->borders[task].to.i[pdim] = i;
+            task = nextNonFailing(task+1, failing, count);
+            p->borders[task].from.i[pdim] = i;
+          }
+            /*
+            if(!failing || (false==failing[task]))
+            {
+              p->borders[task].from.i[pdim] = lasti;
+              p->borders[task].to.i[pdim] = i;
+              
+              if (incTask(task, failing, count) == count)
+              {
+                p->borders[task].to.i[pdim] = size;
+                break;
+              }
+              
+              lasti = i;
+              task = incTask(task, failing, count);
+            }
+            else
+            {
+              p->borders[task].from.i[pdim] = 0;
+              p->borders[task].to.i[pdim] = 0;
+              
+              if (incTask(task, failing, count) == count) break;
+              task = incTask(task, failing, count);
+            }
+            */
+          }
+        
+        assert(nextNonFailing(task+1, failing, count) == count);
         p->borders[task].to.i[pdim] = size;
         return;
     }
@@ -645,33 +702,53 @@ void setBlockBorders(Laik_Partitioning* p)
         if (totalTW > 0.0)
             useTW = true;
     }
+    
+    
 
     uint64_t idx = 0, inc;
     for(int task = 0; task < count; task++) {
         Laik_Slice* b = &(p->borders[task]);
 
-        b->from.i[pdim] = idx;
-        if (useTW) {
-            double f = (p->getTaskW)(task, p->taskUserData) / totalTW;
-            inc = (uint64_t)(f * size);
-        }
-        else {
-            // equal-sized blocks
-            inc = size / count;
-        }
 
-        idx += inc;
-        // last border always must be <size>
-        if ((idx > size) || (task+1 == count))
-            idx = size;
-        b->to.i[pdim] = idx;
+        laik_log(2, "2RUNNING task: %d\n", task);
+        if(NULL==failing || 0!=failing[task])
+        {
+        
+          laik_log(2, "2DOING task: %d\n", task);
+          
+          b->from.i[pdim] = idx;
+          
+          if (useTW) {
+              double f = (p->getTaskW)(task, p->taskUserData) / totalTW;
+              inc = (uint64_t)(f * size);
+          }
+          else {
+              // equal-sized blocks
+              inc = size / count;
+          }
+
+          idx += inc;
+          // last border always must be <size>
+          //TODO: last block fails?
+          if ((idx > size) || (task+1 == count))
+              idx = size;
+          
+          b->to.i[pdim] = idx;
+        }
+        else
+        {
+        
+          laik_log(2, "2SKIPPINg task: %d\n", task);
+          b->from.i[pdim] = 0;
+          b->to.i[pdim] = 0;
+        }
+        
     }
 }
 
 
-// make sure partitioning borders are up to date
-// returns true on changes (if borders had to be updated)
-bool laik_update_partitioning(Laik_Partitioning* p)
+//Internal version, also used for repartitioning
+bool laik_update_partitioning_internal(Laik_Partitioning* p, int* failing)
 {
     Laik_Slice* baseBorders = 0;
     Laik_Space* s = p->space;
@@ -679,7 +756,7 @@ bool laik_update_partitioning(Laik_Partitioning* p)
     int basepdim;
 
     if (p->base) {
-        if (laik_update_partitioning(p->base))
+        if (laik_update_partitioning_internal(p->base, failing))
             p->bordersValid = false;
 
         baseBorders = p->base->borders;
@@ -716,7 +793,8 @@ bool laik_update_partitioning(Laik_Partitioning* p)
         break;
 
     case LAIK_PT_Block:
-        setBlockBorders(p);
+        setBlockBorders(p, failing);
+        
         break;
 
     case LAIK_PT_Copy:
@@ -733,7 +811,7 @@ bool laik_update_partitioning(Laik_Partitioning* p)
         assert(0); // TODO
         break;
     }
-
+    
     p->bordersValid = true;
 
     if (laik_logshown(1)) {
@@ -753,6 +831,13 @@ bool laik_update_partitioning(Laik_Partitioning* p)
     return true;
 }
 
+
+// make sure partitioning borders are up to date
+// returns true on changes (if borders had to be updated)
+bool laik_update_partitioning(Laik_Partitioning* p)
+{
+  return laik_update_partitioning_internal(p, NULL);
+}
 
 
 // append a partitioning to a partioning group whose consistency should

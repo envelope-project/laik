@@ -71,7 +71,6 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     if(msg->n_failing_nodes == 0)
       return;
 
-  printf("LAIK %d/%d - Started repartitioning\n", current_group->inst->myid, current_group->inst->size);
 
     //Extract info from msg
     int killMyself = false;
@@ -103,19 +102,15 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
       }
     }
     */
-    //DEBUG: Just switch off nodes with number 1,2
+    //DEBUG: Just switch off nodes with number 1
     if(current_group->myid == 1)
       killMyself = true;
-    if(current_group->myid == 2)
-      killMyself = true;
-    if(current_group->myid == 6)
-      killMyself = true;
-    
+
     //Exchange information on which nodes kill themselves
     int* failing;
     failing = malloc(current_group->size * sizeof(int));
     current_group->inst->backend->gatherInts(killMyself, failing);
-        
+      
     //Compute how many nodes are failing
     int num_failing = 0;
     for(int i = 0; i < current_group->size; i++)
@@ -125,13 +120,56 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     //Redistribute data between the nodes
     //Currently only redistributes on block partitioning
     //LAIK_PT_All: should not need this as data is already everywhere
-    //LAIK_PT_Master: Can master fail? If yes choose new one...
+    //LAIK_PT_Master: Can master fail? If yes choose new one... <- DO
     //TODO: Other types?
     for(int i = 0; i < num_data; i++)
     {
       if(data[i]->activePartitioning->type == LAIK_PT_Block)
       {
-        laik_set_partitioning_internal(data[i], data[i]->activePartitioning, failing);
+        //A crude copy of the active partitioning, TODO: make more robust
+        Laik_Partitioning* old = data[i]->activePartitioning;
+        Laik_Partitioning* p;
+        p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
+
+        //LOL, only for debug
+        p->id = 42;
+        p->name = strdup("partng-0     ");
+        sprintf(p->name, "partng-%d", p->id);
+
+        p->space = data[i]->activePartitioning->space;
+        p->next = data[i]->activePartitioning->space->first_partitioning;
+        p->space->first_partitioning = p;
+
+        p->access = data[i]->activePartitioning->access;
+        p->type = data[i]->activePartitioning->type;
+        p->group = laik_world(data[i]->activePartitioning->space->inst);
+        p->pdim = data[i]->activePartitioning->pdim;
+
+        p->getIdxW = data[i]->activePartitioning->getIdxW;
+        p->idxUserData = data[i]->activePartitioning->idxUserData;
+        p->getTaskW = data[i]->activePartitioning->getTaskW;
+        p->taskUserData = data[i]->activePartitioning->taskUserData;
+
+        p->base = data[i]->activePartitioning->base;
+        p->haloWidth = data[i]->activePartitioning->haloWidth;
+
+        p->bordersValid = false;
+        p->borders = false;
+        
+        laik_set_partitioning_internal(data[i], p, failing);
+        
+        uint64_t rcount;
+        double* res;
+        laik_map_def1(data[2], (void**) &res, &rcount);
+        for(uint64_t i = 0; i < rcount; i++)
+          laik_log(2, "res bef %i: %f\n", i, res[i]);
+        
+        old->bordersValid = false;
+        laik_set_partitioning_internal(data[i], old, failing);
+        
+        laik_map_def1(data[2], (void**) &res, &rcount);
+        for(uint64_t i = 0; i < rcount; i++)
+          laik_log(2, "res aft %i: %f\n", i, res[i]);
       }
     }
     
@@ -141,12 +179,17 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     if(!failing[id])
       for(int i = 0; i < id; i++)
         if(!failing[i]) new_id++;
-        
+    
+
+    int old_size = current_group->size;
     current_group->size -= num_failing;
     current_group->inst->size -= num_failing;
     
     current_group->myid = new_id;
     current_group->inst->myid = new_id;
+    
+    //Perform backup specific changes.
+    current_group->inst->backend->switchOffNodes(failing, id);
     
     //Update Mappings, now another task is responsible
     //TODO: check if more things need updating? Mapping is only shortly active
@@ -154,155 +197,47 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     for(int i = 0; i < num_data; i++)
     {
       data[i]->activeMapping->task = new_id;
+      data[i]->activeMapping->baseIdx = 
+        data[i]->activePartitioning->borders[id].from;
     }
     
     //Group has changed, update partitionings to reflect that.
     //TODO: Again only changes on LAIK_PT_BLOCK type so far
     //This should also be possible on other types, as we are not using anything
     //new, however it deadlocks, same problem as the deadlock in spmv2 perhaps?
+    //Now:
+    //Don't repartition. instead just rewrite borders
+    
     for(int i = 0; i < num_data; i++)
     {
-      if(data[i]->activePartitioning->type == LAIK_PT_Block)
+      Laik_Slice* new_borders = malloc(current_group->size * sizeof(Laik_Slice));
+      //Copy all borders which are still necessary
+      int j_ = 0;
+      for(int j = 0; j < old_size; j++)
       {
-        data[i]->activePartitioning->bordersValid=false;
-        data[i]->activePartitioning->borders = 0;
-        laik_set_partitioning(data[i], data[i]->activePartitioning);
+        if(!failing[j])
+        {
+          new_borders[j_] = data[i]->activePartitioning->borders[j];
+          j_++;
+        }
       }
+      free(data[i]->activePartitioning->borders);
+      data[i]->activePartitioning->borders = new_borders;
+      data[i]->activePartitioning->bordersValid = false;
     }
-    
-    //Perform backup specific changes.
-    current_group->inst->backend->switchOffNodes(failing, id);
+    /*
+    for(unsigned i = 0; i < current_group->size; i++)
+    {
+      laik_log(2, "part %i from %i to %i\n", i,s
+        data[i]->activePartitioning->borders[i].from.i[0],
+        data[i]->activePartitioning->borders[i].to.i[0]
+      );
+        
+    }*/
     
     //Cleanup
     free(failing);
 }
-    /*
-    //TODO: Will I shut of?
-    int killMyself = false;   
-
-    //Gather all failing nodes
-    //TODO: Somehow abstract?
-    for(int i = 0; i < msg->n_failing_nodes; i++)
-    {
-      printf("Msg: %s\n", msg->failing_nodes[i]);
-      //if(strcmp(laik_mylocation(p->group->inst), msg->failing_nodes[i]))
-      if(strcmp("n0", msg->failing_nodes[i]) && p->group->myid == 0)
-      {
-        killMyself = true;
-        break;
-      }
-      if(strcmp("n1", msg->failing_nodes[i]) && p->group->myid == 1)
-      {
-        killMyself = true;
-        break;
-      }
-      if(strcmp("n2", msg->failing_nodes[i]) && p->group->myid == 2)
-      {
-        killMyself = true;
-        break;
-      }
-      if(strcmp("n3", msg->failing_nodes[i]) && p->group->myid == 3)
-      {
-        killMyself = true;
-        break;
-      }
-    }
-    
-    if(killMyself)
-      printf("LAIK %d/%d - Underlying node is failing, starting repartitioning...\n", p->group->inst->myid, p->group->inst->size);
-    
-    MPI_Comm comm = ((MPIData*)p->group->inst->backend_data)->comm;
-    
-    int* failing = malloc(p->group->size * sizeof(int));
-    
-    MPI_Allgather(&killMyself, 1, MPI_INT, failing, 1, MPI_INT, comm);
-    
-    printf("Kill: %i", killMyself); 
-    
-    int num_failing = 0;
-    for(int i = 0; i < p->group->size; i++)
-      if(failing[i])
-        num_failing++;
-    
-    //Clear partitioning
-    
-    Laik_Partitioning** backup_partitionings = malloc(num_data * sizeof(Laik_Partitioning*));
-    */
-    /*
-    for(int i = 0; i < num_data; i++)
-    {
-      backup_partitionings[i] = data[i]->activePartitioning;
-      
-      laik_set_new_partitioning(data[i], LAIK_PT_All, LAIK_AB_WriteAll, NULL);
-      printf("LAIK %i : After rep: %i\n", p->group->inst->myid, i);
-    }
-    */
-    /*
-    //Change group/inst numbering
-    int id = p->group->myid;
-    int new_id = 0;
-    if(!failing[id])
-    {
-      for(int i = 0; i < id; i++)
-      {
-        if(!failing[i])
-          new_id++;
-      }
-    */
-      /*
-      for(int i = new_id-1; i >=0; i--)
-      {
-        if(failing[i])
-          new_id = i;
-        else
-          break;
-      }
-      */
-    /* 
-    }
-    
-    p->group->size -= num_failing;
-    p->group->inst->size -= num_failing;
-    
-    p->group->myid = new_id;
-    p->group->inst->myid = new_id;
-    
-    //Mapping for all data s?? Only task should be necessary, rest by set_partitioning
-    for(int i = 0; i < num_data; i++)
-    {
-      data[i]->activeMapping->task = new_id;
-    } 
-    
-    //Change MPI backend communicator
-    MPI_Comm new_comm;
-    MPI_Comm_split(comm, failing[id] ? MPI_UNDEFINED : 0, id, &new_comm);
-    
-    if(killMyself)
-    {
-      MPI_Finalize();
-      exit(0);
-    }
-    
-    ((MPIData*)p->group->inst->backend_data)->comm = new_comm;
-    */
-    /*
-    printf("DEBUG after %i \n\n", new_id);
-    //Restore partitions on changed group
-    for(int i = 0; i < num_data; i++)
-    {
-      //laik_set_partitioning(data[i], backup_partitionings[i], NULL);
-      laik_set_partitioning(data[i], data[i]->activePartitioning, NULL);
-    }
-    */
-    /*
-    //Cleanup
-    ext_message = NULL;
-    //free(backup_partitionings);
-    //free(failing);
-    
-    if(killMyself)
-      while(1); //Something better here ;)
-  */
 
 static Laik_RepartitionControl laik_repartitioningcontrol_mqtt =
 {

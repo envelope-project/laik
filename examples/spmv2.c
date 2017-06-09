@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioning* p;
-    p = laik_new_base_partitioning(s, LAIK_PT_Block, LAIK_AB_ReadWrite);
+    p = laik_new_base_partitioning(s, LAIK_PT_All, LAIK_AB_ReadWrite);
     laik_set_index_weight(p, getEW, m);
     laik_set_partitioning(resD, p);
 
@@ -200,11 +200,8 @@ int main(int argc, char* argv[])
         if(iter == 3)
         {
           ctrl->allowRepartitioning(world, data, 3);
-          //LOL
-          printf("After repartitioning\n");
-        //  printf("LAIK stopped...\n");
-        //  while(1);
         }
+        
     }
 
     // push result to master
