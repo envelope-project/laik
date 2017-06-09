@@ -92,4 +92,7 @@ struct _Laik_Mapping {
 // initialize the LAIK data module, called from laik_new_instance
 void laik_data_init();
 
+//For repartitioning
+void laik_set_partitioning_internal(Laik_Data* d, Laik_Partitioning* p);
+
 #endif // _LAIK_DATA_INTERNAL_H_

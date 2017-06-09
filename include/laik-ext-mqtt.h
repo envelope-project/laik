@@ -15,28 +15,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_EXT_H_
-#define _LAIK_EXT_H_
+#ifndef _LAIK_EXT_MQTT_H_
+#define _LAIK_EXT_MQTT_H_
 
 #include "laik.h"
+#include "laik/ext.h"
 
-// LAIK application-external interfaces
-//
-// currently only repartitioning requests are supported
+Laik_RepartitionControl* init_ext_mqtt(Laik_Instance* inst);
 
-
-// external control for repartitioning
-typedef struct _Laik_RepartitionControl Laik_RepartitionControl;
-struct _Laik_RepartitionControl {
-    // initialization function to be called by Laik
-    void (*init)(Laik_Instance*);
-    // finalize function to be called by Laik
-    void (*finalize)(Laik_Instance*);
-
-    // called when application allows repartitioning
-    // can change partitioning policy, force recalculation of borders
-    void (*allowRepartitioning)(Laik_Group* current_group, Laik_Data** data, int num_data);
-};
-
-
-#endif // _LAIK_EXT_H_
+#endif // _LAIK_EXT_MQTT_H_

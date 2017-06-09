@@ -52,16 +52,24 @@ struct _Laik_Partitioning {
     int id;     // for debugging
 
     Laik_Group* group;
-    Laik_PartitionType type;
     Laik_AccessBehavior access;
     Laik_Space* space; // space to partition
     int pdim; // for 2d/3d: dimension to partition
 
+    /* Partitioning Parameters */
+
+    Laik_PartitionType type;
+
     // weighted partitioning (Block) uses callbacks
+    
     Laik_GetIdxWeight_t getIdxW;
     void* idxUserData;
     Laik_GetTaskWeight_t getTaskW;
     void* taskUserData;
+
+    // for failed nodes 
+    Laik_Task** excluded_tasks;
+    int n_excluded_tasks;
 
     // coupling to another partitioning (potentially other space)
     Laik_Partitioning* base;
@@ -109,5 +117,9 @@ struct _Laik_Transition {
 
 // LAIK internal
 int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1);
+
+//For repartitioning:
+void setBlockBorders(Laik_Partitioning* p);
+bool laik_update_partitioning_internal(Laik_Partitioning* p);
 
 #endif // _LAIK_SPACE_INTERNAL_H_
