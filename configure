@@ -4,8 +4,8 @@
 # - tests for required/wanted packages
 # - generates a Makefile.config
 
-import sys, getopt
 import os
+import distutils.spawn
 
 defs = ""
 cc = ""
@@ -13,31 +13,41 @@ subdirs = "examples"
 ipath = "/usr/include"
 
 # Mosquitto/MQTT
-mqtt_found = os.path.isfile(ipath + "/mosquitto.h")
+#  check for mosquitto header
+mosq_found = os.path.isfile(ipath + "/mosquitto.h")
+#  check for protobuf header
 protobuf_found = os.path.isfile(ipath + "/protobuf-c/protobuf-c.h")
 if not protobuf_found:
     # on precise/trusty header is in /usr/include/google
     protobuf_found = os.path.isfile(ipath + "/google/protobuf-c/protobuf-c.h")
     if protobuf_found:
         defs += " -I/usr/include/google"
+#  check for protobuf compiler
+protoc_found = distutils.spawn.find_executable("protoc-c")
 
-if not mqtt_found:
-    print("Mosquitto include file not found. MQTT disabled.")
-    print("On Ubuntu, install 'libmosquitto-dev' or 'libmosquitto0-dev' (trusty).")
-if not protobuf_found:
-    print("Protobuf C include file not found. MQTT disabled.")
-    print("On Ubuntu, install 'libprotobuf-c-dev' or 'libprotobuf-c0-dev' (trusty).")
-if mqtt_found and protobuf_found:
-    print("Mosquitto/Protobuf headers found, enabled MQTT support.")
+mqtt_enabled = mosq_found and protobuf_found and protoc_found
+if mqtt_enabled:
+    print("Mosquitto/Protobuf found. MQTT enabled.")
     defs += " -DUSE_MQTT"
     subdirs += " external/MQTT"
+else:
+    print("MQTT support disabled:")
+    if not mosq_found:
+        print(" Mosquitto include file not found.")
+        print("  On Ubuntu, install 'libmosquitto-dev' or 'libmosquitto0-dev' (trusty).")
+    if not protobuf_found:
+        print(" Protobuf C include file not found.")
+        print("  On Ubuntu, install 'libprotobuf-c-dev' or 'libprotobuf-c0-dev' (trusty).")
+    if not protoc_found:
+        print(" Protobuf compiler not found.")
+        print("  On Ubuntu, install 'protobuf-c-compiler'")
 
 # LAIK-internal MPI support
 if not os.path.isfile(ipath + "/mpi/mpi.h"):
-    print("MPI not found, disabled LAIK MPI backend.")
-    print("On Ubuntu, install 'libopenmpi-dev'.")
+    print("MPI not found. LAIK MPI backend disabled.")
+    print("  On Ubuntu, install 'libopenmpi-dev'.")
 else:
-    print("MPI header found in " + ipath + "/mpi, enabled MPI backend, using 'mpicc'.")
+    print("MPI header found in '" + ipath + "/mpi'. MPI enabled, using 'mpicc'.")
     defs += " -DUSE_MPI"
     cc = "mpicc"
 
