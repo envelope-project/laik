@@ -476,6 +476,9 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     p->getTaskW = 0;
     p->taskUserData = 0;
 
+    p->n_excluded_tasks = 0;
+    p->excluded_tasks = 0;
+
     p->base = 0;
     p->haloWidth = 0;
 
@@ -570,6 +573,41 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
     return p;
 }
 
+Laik_Partitioning*
+laik_clone_partitioning(const Laik_Partitioning* from){
+    Laik_Partitioning* p = (Laik_Partitioning*) 
+        malloc (sizeof(Laik_Partitioning));
+
+         p->space = from->space;
+        p->next = from->space->first_partitioning;
+        p->space->first_partitioning = p;
+
+        p->access = from->access;
+        p->type = from->type;
+        p->group = laik_world(from->space->inst);
+        p->pdim = from->pdim;
+
+        p->getIdxW = from->getIdxW;
+        p->idxUserData = from->idxUserData;
+        p->getTaskW = from->getTaskW;
+        p->taskUserData = from->taskUserData;
+
+        p->base = from->base;
+        p->haloWidth = from->haloWidth;
+
+        p->n_excluded_tasks = 0;
+        p->bordersValid = false;
+        p->borders = false;
+        
+    //memcpy(p, from, sizeof(Laik_Partitioning));
+
+    p->borders = 0;
+    p->bordersValid = false;
+
+    return p;
+}
+
+
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p)
 {
@@ -597,23 +635,30 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
     p->name = strdup(n);
 }
 
-int nextNonFailing(int task, int* failing, int count)
-{
-  if(!failing)
-    return task;
-    
-  while(task<count && failing[task]) task++;
-  
-  return task;
+int isExcluded(int t, Laik_Partitioning* p){
+    int i = 0;
+    for(i=0; i<p->n_excluded_tasks; i++){
+        if(p->excluded_tasks[i]->rank == t){
+            return 1;
+        }
+    }
+    return 0;
 }
 
-void setBlockBorders(Laik_Partitioning* p, int* failing)
+double primitivEW(Laik_Index* bla, void* uData){
+    (void)bla;
+    (void)uData;
+    return 1.0;
+}
+
+void setBlockBorders(Laik_Partitioning* p)
 {
     assert(p->borders != 0);
     assert(p->type == LAIK_PT_Block);
 
     int count = p->group->size;
     
+    /*
     //How many are not failing
     int activeCount = p->group->size;
     if(failing)
@@ -621,10 +666,12 @@ void setBlockBorders(Laik_Partitioning* p, int* failing)
       for(int i = 0; i < count; i++)
         if(failing[i]) activeCount--;
     }
-    
+    */
     int pdim = p->pdim;
     uint64_t size = p->space->size[pdim];
     if (p->getIdxW) {
+        p->getIdxW = primitivEW;
+    }
         // element-wise weighting
         // TODO: also task-wise weighting
         Laik_Index idx;
@@ -636,9 +683,13 @@ void setBlockBorders(Laik_Partitioning* p, int* failing)
             total += (p->getIdxW)(&idx, p->idxUserData);
         }
         
-        double perPart = total / activeCount;
+        double perPart = total / (p->group->size - p->n_excluded_tasks);
         double w = 0.0;
-        int task = nextNonFailing(0, failing, count);
+
+        int task = 0;
+        while(isExcluded(task, p)){
+            task++;
+        }
         uint64_t lasti = 0;
         //Changes begin
         
@@ -648,7 +699,7 @@ void setBlockBorders(Laik_Partitioning* p, int* failing)
               p->borders[i].from.i[pdim] = 0;
               p->borders[i].to.i[pdim] = 0;
         }
-        
+    
         //Set borders on only the non failing nodes
         for(uint64_t i = 0; i < size; i++) {
           idx.i[pdim] = i;
@@ -656,10 +707,11 @@ void setBlockBorders(Laik_Partitioning* p, int* failing)
           
           if (w >= perPart) {
             w = w - perPart;
-            
-            if(nextNonFailing(task+1, failing, count) == count) break;
             p->borders[task].to.i[pdim] = i;
-            task = nextNonFailing(task+1, failing, count);
+            task++;
+            while(isExcluded(task, p)){
+                task++;
+            }
             p->borders[task].from.i[pdim] = i;
           }
             /*
@@ -688,11 +740,11 @@ void setBlockBorders(Laik_Partitioning* p, int* failing)
             */
           }
         
-        assert(nextNonFailing(task+1, failing, count) == count);
+        assert(task == count);
         p->borders[task].to.i[pdim] = size;
         return;
-    }
-
+    
+#if 0 
     // use task-wise weighting?
     bool useTW = false;
     double totalTW = 0.0;
@@ -704,7 +756,6 @@ void setBlockBorders(Laik_Partitioning* p, int* failing)
     }
     
     
-
     uint64_t idx = 0, inc;
     for(int task = 0; task < count; task++) {
         Laik_Slice* b = &(p->borders[task]);
@@ -744,11 +795,12 @@ void setBlockBorders(Laik_Partitioning* p, int* failing)
         }
         
     }
+#endif
 }
 
 
 //Internal version, also used for repartitioning
-bool laik_update_partitioning_internal(Laik_Partitioning* p, int* failing)
+bool laik_update_partitioning_internal(Laik_Partitioning* p)
 {
     Laik_Slice* baseBorders = 0;
     Laik_Space* s = p->space;
@@ -756,7 +808,7 @@ bool laik_update_partitioning_internal(Laik_Partitioning* p, int* failing)
     int basepdim;
 
     if (p->base) {
-        if (laik_update_partitioning_internal(p->base, failing))
+        if (laik_update_partitioning_internal(p->base))
             p->bordersValid = false;
 
         baseBorders = p->base->borders;
@@ -793,7 +845,7 @@ bool laik_update_partitioning_internal(Laik_Partitioning* p, int* failing)
         break;
 
     case LAIK_PT_Block:
-        setBlockBorders(p, failing);
+        setBlockBorders(p);
         
         break;
 
@@ -836,7 +888,7 @@ bool laik_update_partitioning_internal(Laik_Partitioning* p, int* failing)
 // returns true on changes (if borders had to be updated)
 bool laik_update_partitioning(Laik_Partitioning* p)
 {
-  return laik_update_partitioning_internal(p, NULL);
+  return laik_update_partitioning_internal(p);
 }
 
 

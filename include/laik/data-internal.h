@@ -93,7 +93,6 @@ struct _Laik_Mapping {
 void laik_data_init();
 
 //For repartitioning
-void laik_set_partitioning_internal(Laik_Data* d, Laik_Partitioning* p, 
-  int* failing);
+void laik_set_partitioning_internal(Laik_Data* d, Laik_Partitioning* p);
 
 #endif // _LAIK_DATA_INTERNAL_H_

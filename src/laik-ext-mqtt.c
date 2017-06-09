@@ -54,6 +54,8 @@ void mqtt_finalize_(Laik_Instance* inst)
 	//Do I have to close anything?
 }
 
+
+
 //Called by application to signal that the partitioning can be changed now
 void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int num_data)
 {  
@@ -65,6 +67,7 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     dbgmsg.failing_nodes = NULL;
     msg = &dbgmsg;
     
+
     //Check if msg is usefull
     if(msg == NULL)
       return;
@@ -106,6 +109,7 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     if(current_group->myid == 1)
       killMyself = true;
 
+    
     //Exchange information on which nodes kill themselves
     int* failing;
     failing = malloc(current_group->size * sizeof(int));
@@ -116,6 +120,8 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     for(int i = 0; i < current_group->size; i++)
       if(failing[i])
         num_failing++;
+
+    if(!num_failing) return;
         
     //Redistribute data between the nodes
     //Currently only redistributes on block partitioning
@@ -124,12 +130,30 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     //TODO: Other types?
     for(int i = 0; i < num_data; i++)
     {
-      if(data[i]->activePartitioning->type == LAIK_PT_Block)
-      {
         //A crude copy of the active partitioning, TODO: make more robust
         Laik_Partitioning* old = data[i]->activePartitioning;
-        Laik_Partitioning* p;
+        Laik_Partitioning* p = laik_clone_partitioning(old);
+        assert(p->n_excluded_tasks == 0);
+
+        laik_log(1, "After Cloning Partioning... Data %s\n", data[i]->name);
+        //Fixme: must be num_failing
+        //Fixme: must be num_failing
+        //Fixme: must be num_failing
+        p->n_excluded_tasks = 1;  
+        Laik_Task** f_nodes = (Laik_Task**) malloc(1* sizeof(Laik_Task*));
+        static Laik_Task blatask;
+        blatask.rank = 1;
+        f_nodes[0] = &blatask;
+        // END Fixme
+
+        p->excluded_tasks = f_nodes;
+        laik_set_partitioning_internal(data[i], p);
+        laik_log(1, "\n\n\n\n\nAfter repartioning...\n");
+
+
+#if 0
         p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
+
 
         //LOL, only for debug
         p->id = 42;
@@ -170,10 +194,12 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
         laik_map_def1(data[2], (void**) &res, &rcount);
         for(uint64_t i = 0; i < rcount; i++)
           laik_log(2, "res aft %i: %f\n", i, res[i]);
-      }
-    }
     
+#endif
+    }
     //Data redistributed, Change laiks group/inst numbering
+
+    //FIXME: ReorderID()
     int id = current_group->myid;
     int new_id = 0;
     if(!failing[id])
@@ -191,16 +217,24 @@ void mqtt_allowRepartitioning_(Laik_Group* current_group, Laik_Data** data, int 
     //Perform backup specific changes.
     current_group->inst->backend->switchOffNodes(failing, id);
     
+
+    
     //Update Mappings, now another task is responsible
     //TODO: check if more things need updating? Mapping is only shortly active
     //as one repartitions in the new group right away
     for(int i = 0; i < num_data; i++)
     {
+      data[i]->activePartitioning->bordersValid = false;
+      data[i]->activePartitioning->n_excluded_tasks = 0;
+      free(data[i]->activePartitioning->excluded_tasks);
+      data[i]->activePartitioning->excluded_tasks = 0;
+#if 0
       data[i]->activeMapping->task = new_id;
-      data[i]->activeMapping->baseIdx = 
-        data[i]->activePartitioning->borders[id].from;
+      assert( data[i]->activeMapping->baseIdx == 
+        data[i]->activePartitioning->borders[id].from)
+#endif
     }
-    
+    /*
     //Group has changed, update partitionings to reflect that.
     //TODO: Again only changes on LAIK_PT_BLOCK type so far
     //This should also be possible on other types, as we are not using anything

@@ -174,6 +174,10 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
                                    Laik_PartitionType pt,
                                    Laik_AccessBehavior ap);
 
+// get an exact copy of a given paritioning, broders are not set
+Laik_Partitioning*
+laik_clone_partitioning(const Laik_Partitioning* from);
+
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p);
 

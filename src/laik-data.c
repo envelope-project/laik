@@ -280,14 +280,18 @@ void initMap(Laik_Transition* t, Laik_Mapping* toMap)
 
 // set and enforce partitioning, internal version which can also be used for 
 // repartitioning
-void laik_set_partitioning_internal(Laik_Data* d, Laik_Partitioning* p, 
-  int* failing)
+void laik_set_partitioning_internal(Laik_Data* d, Laik_Partitioning* p)
 {
+
+#if 0
     if(failing)
       p->bordersValid = false;
+#endif
 
     // calculate borders (TODO: may need global communication)
-    laik_update_partitioning_internal(p, failing);
+    laik_update_partitioning_internal(p);
+
+    laik_log(1, "After Update_partitioing_internal\n");
 
     // TODO: convert to realloc (with taking over layout)
     Laik_Mapping* toMap = allocMap(d, p, 0);
@@ -322,7 +326,7 @@ void laik_set_partitioning_internal(Laik_Data* d, Laik_Partitioning* p,
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 {
-  laik_set_partitioning_internal(d, p, NULL);
+  laik_set_partitioning_internal(d, p);
 }
 
 Laik_Partitioning* laik_set_new_partitioning(Laik_Data* d,
