@@ -828,7 +828,7 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                                        &(to->borders[myid]));
             if (slc != 0) {
                 assert(t->localCount < TRANSSLICES_MAX);
-                t->local[t->sendCount] = *slc;
+                t->local[t->localCount] = *slc;
                 t->localCount++;
             }
         }
