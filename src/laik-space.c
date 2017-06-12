@@ -851,55 +851,39 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
 
         // something to send?
         if (laik_is_write(from->access)) {
-            switch(from->type) {
-            case LAIK_PT_Master:
-            case LAIK_PT_All:
-            case LAIK_PT_Block:
-                if (!laik_slice_isEmpty(dims, &(from->borders[myid]))) {
-                    for(int task = 0; task < count; task++) {
-                        if (task == myid) continue;
+            if (!laik_slice_isEmpty(dims, &(from->borders[myid]))) {
+                for(int task = 0; task < count; task++) {
+                    if (task == myid) continue;
 
-                        slc = laik_slice_intersect(dims,
-                                                   &(from->borders[myid]),
-                                                   &(to->borders[task]));
-                        if (slc == 0) continue;
+                    slc = laik_slice_intersect(dims,
+                                               &(from->borders[myid]),
+                                               &(to->borders[task]));
+                    if (slc == 0) continue;
 
-                        assert(t->sendCount < TRANSSLICES_MAX);
-                        t->send[t->sendCount] = *slc;
-                        t->sendTo[t->sendCount] = task;
-                        t->sendCount++;
-                    }
+                    assert(t->sendCount < TRANSSLICES_MAX);
+                    t->send[t->sendCount] = *slc;
+                    t->sendTo[t->sendCount] = task;
+                    t->sendCount++;
                 }
-                break;
-            default:
-                break;
             }
         }
 
         // something to receive?
         if (!laik_is_reduction(from->access) && laik_is_read(to->access)) {
-            switch(to->type) {
-            case LAIK_PT_Master:
-            case LAIK_PT_All:
-            case LAIK_PT_Block:
-                if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
-                    for(int task = 0; task < count; task++) {
-                        if (task == myid) continue;
+            if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
+                for(int task = 0; task < count; task++) {
+                    if (task == myid) continue;
 
-                        slc = laik_slice_intersect(dims,
-                                                   &(to->borders[myid]),
-                                                   &(from->borders[task]));
-                        if (slc == 0) continue;
+                    slc = laik_slice_intersect(dims,
+                                               &(to->borders[myid]),
+                                               &(from->borders[task]));
+                    if (slc == 0) continue;
 
-                        assert(t->recvCount < TRANSSLICES_MAX);
-                        t->recv[t->recvCount] = *slc;
-                        t->recvFrom[t->recvCount] = task;
-                        t->recvCount++;
-                    }
+                    assert(t->recvCount < TRANSSLICES_MAX);
+                    t->recv[t->recvCount] = *slc;
+                    t->recvFrom[t->recvCount] = task;
+                    t->recvCount++;
                 }
-                break;
-            default:
-                break;
             }
         }
     }

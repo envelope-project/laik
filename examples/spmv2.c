@@ -90,6 +90,21 @@ double getEW(Laik_Index* i, void* d)
 //----------------------------------------------------------------------
 // main
 
+void help(char* err)
+{
+    if (err)
+        printf("Error parsing command line: %s\n", err);
+    printf("Usage: (nmpirun ...) spmv2 [options] [<itercount> [<size>]]\n\n");
+    printf("Arguments:\n"
+           " <itercount>     number of iterations to do (def: 10)\n"
+           " <size>          side length of sparse matrix (def: 10000)\n");
+    printf("Options:\n"
+           " -h              show this help and exit\n"
+           " -r              use all-reduction to aggregate result (def: block+copy)\n"
+           " -v              make LAIK verbose (same as LAIK_LOG=1)\n");
+    exit(1);
+}
+
 int main(int argc, char* argv[])
 {
 #ifdef USE_MPI
@@ -101,8 +116,32 @@ int main(int argc, char* argv[])
 
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
     int maxiter = 0, size = 0;
-    if (argc > 1) maxiter = atoi(argv[1]);
-    if (argc > 2) size = atoi(argv[2]);
+    bool useReduction = false;
+
+    int arg = 1, argno = 0;
+    while(arg < argc) {
+        if (argv[arg][0] == '-') {
+            if (argv[arg][1] == 'r')
+                useReduction = true;
+            else if (argv[arg][1] == 'v')
+                laik_set_loglevel(1);
+            else if (argv[arg][1] == 'h')
+                help(0);
+            else
+                help("unknown option");
+        }
+        else { // regular arguments
+            argno++;
+            if (argno == 1)
+                maxiter = atoi(argv[1]);
+            else if (argno == 2)
+                size = atoi(argv[2]);
+            else {
+                help("too many arguments");
+            }
+        }
+        arg++;
+    }
     if (maxiter == 0) maxiter = 10;
     if (size == 0) size = 10000;
 
@@ -177,15 +216,17 @@ int main(int argc, char* argv[])
             printf("Sum at iter %2d: %f\n", iter, sum);
         }
 
-#if 1
-        // make input vector writable, broadcast via sum reduction
-        laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_AB_Sum);
-#else
-        // variant 2: copy it directly without reduction
-        // FIXME: deadlock at the moment
-        laik_set_partitioning(inpD, p2);
-        fromRow = 0; // local indexing for writes into inp, as with res
-#endif
+        // scale owns results by global sum and write into input partitions
+        if (useReduction) {
+            // varian 1: broadcast written input values via sum reduction
+            // makes input vector writable for all, triggers (unneeded) initialization
+            laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_AB_Sum);
+        }
+        else {
+            // variant 2: broadcast written input values directly
+            laik_set_partitioning(inpD, p2);
+            fromRow = 0; // local indexing for writes into inp, as with res
+        }
         laik_map_def1(inpD, (void**) &inp, 0);
         // normalize values from my partition of result vector into next input
         for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
