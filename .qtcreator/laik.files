@@ -28,4 +28,6 @@
 ../examples/spmv.c
 ../examples/spmv2.c
 
+../doc/TODO.md
+
 ../README.md
