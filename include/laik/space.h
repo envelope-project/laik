@@ -45,27 +45,44 @@ typedef enum _Laik_PartitionType {
     LAIK_PT_Neighbor, // extend a partitioning with neighbor parts
 } Laik_PartitionType;
 
-// Access behavior of applications to indexes in partitions.
-//
-// Laik uses this information to derive what needs to be propagated
-// to/from a partition at switch time; no enforcement is done.
-// E.g. you can write to a ReadOnly partition, but you need to aware
-// that Laik will not propagate these value modifications.
-typedef enum _Laik_AccessBehavior {
-    LAIK_AB_None = 0,
+/**
+ * Data flow behavior of a phase for indexes in partitions.
+ * Laik uses this information to come up with minimal data transfers
+ * at the beginning/end of an access phase to a data container.
+ *
+ * This declares where values are coming from at start of phase (In),
+ * and used for at end of phase (Out).
+ * - No (In/Out): nothing to be preserved/transferred
+ * - Copy (In/Out): preserve values from previous/to next phase
+ * - Init (In): initialize with a given value at start of phase
+ * - Reduce (Out): value is used for a reduction
+ *
+ * The data flow behavior in a sequence of phases has to be consistent
+ * regarding stated data flow behavior and whether a value at an index
+ * is valid in only one or multiple tasks. Otherwise, an error will be
+ * raised.
+ * Consistency rules for phase A to B for a given index:
+ * - CopyOut from exactly one task in A: CopyIn or NoIn in B
+ * - NoOut from all tasks in A: Init or NoIn in B
+ * - ReduceOut from at least one task in A: CopyIn or NoIn in B
+ **/
+typedef enum _Laik_DataFlow {
+    LAIK_DF_Invalid = 0,
 
-    // one writer, multiple readers
-    LAIK_AB_ReadOnly,  // for copies, no changes to propagate to next
-    LAIK_AB_WriteAll,  // no prop. from previous, complete overwrite
-    LAIK_AB_ReadWrite, // propagate from previous and to next
+    LAIK_DF_None,           // no data transfers needed
+    LAIK_DF_CopyIn_NoOut,   // no values to propagate to next phase
+    LAIK_DF_NoIn_CopyOut,   // nothing from previous phase
+    LAIK_DF_CopyIn_CopyOut, // propagate from previous and to next
 
-    // reductions with multiple writers
-    // LAIK initializes partition unless WA (WriteAll) variant is used
-    LAIK_AB_Sum,  LAIK_AB_WASum,  // + reduction
-    LAIK_AB_Prod, LAIK_AB_WAProd, // * reduction
-    LAIK_AB_Min,  LAIK_AB_WAMin,  // min reduction
-    LAIK_AB_Max,  LAIK_AB_WAMax   // max reduction
-} Laik_AccessBehavior;
+    LAIK_DF_NoIn_SumReduceOut,   // output aggregated by sum reduction
+    LAIK_DF_InitIn_SumReduceOut, // initialize with 0, then sum reduction
+} Laik_DataFlow;
+
+// reduction operation
+typedef enum _Laik_ReductionOperation {
+    LAIK_RO_None = 0,
+    LAIK_RO_Sum
+} Laik_ReductionOperation;
 
 // a point in an index space
 typedef struct _Laik_Index Laik_Index;
@@ -101,11 +118,16 @@ typedef struct _Laik_Transition Laik_Transition;
  *********************************************************************/
 
 // is this a reduction?
-bool laik_is_reduction(Laik_AccessBehavior p);
-// includes this read access?
-bool laik_is_read(Laik_AccessBehavior);
-// includes this write access?
-bool laik_is_write(Laik_AccessBehavior);
+bool laik_is_reduction(Laik_DataFlow flow);
+// return the reduction operation from data flow behavior
+Laik_ReductionOperation laik_get_reduction(Laik_DataFlow flow);
+// do we need to copy values in?
+bool laik_do_copyin(Laik_DataFlow flow);
+// do we need to copy values out?
+bool laik_do_copyout(Laik_DataFlow flow);
+// Do we need to init values?
+bool laik_do_init(Laik_DataFlow flow);
+
 
 // create a new index space object (initially invalid)
 Laik_Space* laik_new_space(Laik_Instance* i);
@@ -140,7 +162,7 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
 Laik_Partitioning*
 laik_new_base_partitioning(Laik_Space* space,
                       Laik_PartitionType pt,
-                      Laik_AccessBehavior ap);
+                      Laik_DataFlow flow);
 
 // set index-wise weight getter, used when calculating BLOCK partitioning.
 // as getter is called in every LAIK task, weights have to be known globally
@@ -164,7 +186,7 @@ void laik_set_partitioning_dimension(Laik_Partitioning* p, int d);
 Laik_Partitioning*
 laik_new_coupled_partitioning(Laik_Partitioning* base,
                               Laik_PartitionType pt,
-                              Laik_AccessBehavior ap);
+                              Laik_DataFlow flow);
 
 // create a new partitioning based on another one on a different space
 // this also needs to know which dimensions should be coupled
@@ -172,7 +194,7 @@ Laik_Partitioning*
 laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
                                    Laik_Space* s, int from, int to,
                                    Laik_PartitionType pt,
-                                   Laik_AccessBehavior ap);
+                                   Laik_DataFlow flow);
 
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p);

@@ -56,20 +56,22 @@ funtionality via repartitioning is enough. This example also shows the use of a 
         // partial vector sum over own partition via direct access
         double mysum = 0.0, *base;
         uint64_t count, i;
-        laik_map(a, 0, (void**) &base, &count);
+        // map own partition to local memory space
+        // (using 1d identity mapping from indexes to addresses, from <base>)
+        laik_map_def1(a, (void**) &base, &count);
         for (i = 0; i < count; i++) mysum += base[i];
 
-        // for collecting partial sums at master, use LAIK's automatic
+        // for collecting partial sums at master, use LAIK's data flow
         // aggregation functionality when switching to new partitioning
         Laik_Data* sum = laik_alloc_1d(world, laik_Double, 1);
-        laik_set_partitioning(sum, LAIK_PT_All, LAIK_AB_Plus);
+        laik_set_partitioning(sum, LAIK_PT_All, LAIK_DF_SumReduceOut);
         // write partial sum
         laik_fill_double(sum, mysum);
         // master-only partitioning: add partial values to be read at master
-        laik_set_partitioning(sum, LAIK_PT_Master, LAIK_AB_ReadOnly);
+        laik_set_partitioning(sum, LAIK_PT_Master, LAIK_DF_CopyIn);
 
         if (laik_myid(inst) == 0) {
-            laik_map(sum, 0, (void**) &base, &count);
+            laik_map_def1(sum, (void**) &base, &count);
             printf("Result: %f\n", base[0]);
         }
         laik_finalize(inst);

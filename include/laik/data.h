@@ -78,7 +78,7 @@ void laik_set_partitioning(Laik_Data*, Laik_Partitioning*);
 // set and enforce a newly created partitioning, and return it
 Laik_Partitioning* laik_set_new_partitioning(Laik_Data*,
                                              Laik_PartitionType,
-                                             Laik_AccessBehavior);
+                                             Laik_DataFlow flow);
 
 void laik_fill_double(Laik_Data* data, double v);
 

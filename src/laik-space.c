@@ -167,28 +167,37 @@ int getPartitioningTypeStr(char* s, Laik_PartitionType type)
 {
     switch(type) {
     case LAIK_PT_All:    return sprintf(s, "all");
-    case LAIK_PT_Block: return sprintf(s, "block");
+    case LAIK_PT_Block:  return sprintf(s, "block");
     case LAIK_PT_Master: return sprintf(s, "master");
+    case LAIK_PT_Copy:   return sprintf(s, "copy");
+    default: assert(0);
     }
     return 0;
 }
 
 static
-int getAccessBehaviorStr(char* s, Laik_AccessBehavior ap)
+int getReductionStr(char* s, Laik_ReductionOperation op)
 {
-    switch(ap) {
-    case LAIK_AB_ReadOnly:  return sprintf(s, "readonly");
-    case LAIK_AB_WriteAll:  return sprintf(s, "writeall");
-    case LAIK_AB_ReadWrite: return sprintf(s, "readwrite");
+    switch(op) {
+    case LAIK_RO_None: return sprintf(s, "none");
+    case LAIK_RO_Sum:  return sprintf(s, "sum");
+    default: assert(0);
+    }
+    return 0;
+}
 
-    case LAIK_AB_Sum:       return sprintf(s, "plus");
-    case LAIK_AB_Prod:      return sprintf(s, "prod");
-    case LAIK_AB_Min:       return sprintf(s, "min");
-    case LAIK_AB_Max:       return sprintf(s, "max");
-    case LAIK_AB_WASum:     return sprintf(s, "writeall plus");
-    case LAIK_AB_WAProd:    return sprintf(s, "writeall prod");
-    case LAIK_AB_WAMin:     return sprintf(s, "writeall min");
-    case LAIK_AB_WAMax:     return sprintf(s, "writeall max");
+
+static
+int getDataFlowStr(char* s, Laik_DataFlow flow)
+{
+    switch(flow) {
+    case LAIK_DF_None:                return sprintf(s, "none");
+    case LAIK_DF_CopyIn_NoOut:        return sprintf(s, "copyin");
+    case LAIK_DF_NoIn_CopyOut:        return sprintf(s, "copyout");
+    case LAIK_DF_CopyIn_CopyOut:      return sprintf(s, "copyinout");
+    case LAIK_DF_NoIn_SumReduceOut:   return sprintf(s, "sumout");
+    case LAIK_DF_InitIn_SumReduceOut: return sprintf(s, "init-sumout");
+    default: assert(0);
     }
     return 0;
 }
@@ -212,7 +221,7 @@ int getTransitionStr(char* s, Laik_Transition* t)
         off += sprintf(s+off, "  init: ");
         for(int i=0; i<t->initCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
-            off += getAccessBehaviorStr(s+off, t->initRedOp[i]);
+            off += getReductionStr(s+off, t->initRedOp[i]);
             off += getSliceStr(s+off, t->dims, &(t->init[i]));
         }
         off += sprintf(s+off, "\n");
@@ -242,7 +251,7 @@ int getTransitionStr(char* s, Laik_Transition* t)
         off += sprintf(s+off, "  reduction: ");
         for(int i=0; i<t->redCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
-            off += getAccessBehaviorStr(s+off, t->redOp[i]);
+            off += getReductionStr(s+off, t->redOp[i]);
             off += getSliceStr(s+off, t->dims, &(t->red[i]));
             off += sprintf(s+off, " => %s (%d)",
                            (t->redRoot[i] == -1) ? "all":"master",
@@ -256,17 +265,11 @@ int getTransitionStr(char* s, Laik_Transition* t)
 }
 
 // is this a reduction?
-bool laik_is_reduction(Laik_AccessBehavior p)
+bool laik_is_reduction(Laik_DataFlow flow)
 {
-    switch(p) {
-    case LAIK_AB_Sum:
-    case LAIK_AB_WASum:
-    case LAIK_AB_Prod:
-    case LAIK_AB_WAProd:
-    case LAIK_AB_Min:
-    case LAIK_AB_WAMin:
-    case LAIK_AB_Max:
-    case LAIK_AB_WAMax:
+    switch(flow) {
+    case LAIK_DF_NoIn_SumReduceOut:
+    case LAIK_DF_InitIn_SumReduceOut:
         return true;
     default:
         break;
@@ -274,40 +277,25 @@ bool laik_is_reduction(Laik_AccessBehavior p)
     return false;
 }
 
-// return the reduction operation from access behavior
-// (we reuse the same type)
-Laik_AccessBehavior laik_get_reduction(Laik_AccessBehavior p)
+// return the reduction operation from data flow behavior
+Laik_ReductionOperation laik_get_reduction(Laik_DataFlow flow)
 {
-    switch(p) {
-    case LAIK_AB_Sum:
-    case LAIK_AB_WASum:
-        return LAIK_AB_Sum;
-    case LAIK_AB_Prod:
-    case LAIK_AB_WAProd:
-        return LAIK_AB_Prod;
-    case LAIK_AB_Min:
-    case LAIK_AB_WAMin:
-        return LAIK_AB_Min;
-    case LAIK_AB_Max:
-    case LAIK_AB_WAMax:
-        return LAIK_AB_Max;
+    switch(flow) {
+    case LAIK_DF_NoIn_SumReduceOut:
+    case LAIK_DF_InitIn_SumReduceOut:
+        return LAIK_RO_Sum;
     default:
         break;
     }
-    return LAIK_AB_None;
+    return LAIK_RO_None;
 }
 
-// do writers overwrite all elements in their partition?
-// - for reductions, this means that no initialization is required
-// - for regular access, this means no value propagation from previous
-bool laik_is_writeall(Laik_AccessBehavior p)
+// do we need to copy values in?
+bool laik_do_copyin(Laik_DataFlow flow)
 {
-    switch(p) {
-    case LAIK_AB_WriteAll:
-    case LAIK_AB_WASum:
-    case LAIK_AB_WAProd:
-    case LAIK_AB_WAMin:
-    case LAIK_AB_WAMax:
+    switch(flow) {
+    case LAIK_DF_CopyIn_NoOut:
+    case LAIK_DF_CopyIn_CopyOut:
         return true;
     default:
         break;
@@ -315,13 +303,12 @@ bool laik_is_writeall(Laik_AccessBehavior p)
     return false;
 }
 
-// Does the access behavior specify that we want to read the
-// values from previous partitioning? If so, we need to propagate them.
-bool laik_is_read(Laik_AccessBehavior p)
+// do we need to copy values out?
+bool laik_do_copyout(Laik_DataFlow flow)
 {
-    switch(p) {
-    case LAIK_AB_ReadOnly:
-    case LAIK_AB_ReadWrite:
+    switch(flow) {
+    case LAIK_DF_NoIn_CopyOut:
+    case LAIK_DF_CopyIn_CopyOut:
         return true;
     default:
         break;
@@ -329,19 +316,18 @@ bool laik_is_read(Laik_AccessBehavior p)
     return false;
 }
 
-// Does the access behavior specify that we will modify/write values
-// to eventually be passed on to next partitioning?
-bool laik_is_write(Laik_AccessBehavior p)
+// do we need to init values?
+bool laik_do_init(Laik_DataFlow flow)
 {
-    switch(p) {
-    case LAIK_AB_WriteAll:
-    case LAIK_AB_ReadWrite:
+    switch(flow) {
+    case LAIK_DF_InitIn_SumReduceOut:
         return true;
     default:
         break;
     }
     return false;
 }
+
 
 // create a new index space object (initially invalid)
 Laik_Space* laik_new_space(Laik_Instance* i)
@@ -462,14 +448,17 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     p->name = strdup("partng-0     ");
     sprintf(p->name, "partng-%d", p->id);
 
+    p->group = laik_world(s->inst);
     p->space = s;
+    p->pdim = 0;
     p->next = s->first_partitioning;
     s->first_partitioning = p;
 
-    p->access = LAIK_AB_None;
+    p->flow = LAIK_DF_Invalid;
     p->type = LAIK_PT_None;
-    p->group = laik_world(s->inst);
-    p->pdim = 0;
+    p->copyIn = false;
+    p->copyOut = false;
+    p->redOp = LAIK_RO_None;
 
     p->getIdxW = 0;
     p->idxUserData = 0;
@@ -485,21 +474,30 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     return p;
 }
 
+static
+void set_flow(Laik_Partitioning* p, Laik_DataFlow flow)
+{
+    p->flow = flow;
+    p->copyIn = laik_do_copyin(flow);
+    p->copyOut = laik_do_copyout(flow);
+    p->redOp = laik_get_reduction(flow);
+}
+
 Laik_Partitioning*
 laik_new_base_partitioning(Laik_Space* space,
                            Laik_PartitionType pt,
-                           Laik_AccessBehavior ap)
+                           Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
     p = laik_new_partitioning(space);
-    p->access = ap;
     p->type = pt;
+    set_flow(p, flow);
 
     if (laik_logshown(1)) {
         char s[100];
         getPartitioningTypeStr(s, p->type);
-        getAccessBehaviorStr(s+50, p->access);
-        laik_log(1, "new partitioning '%s': type %s, access %s, group %d\n",
+        getDataFlowStr(s+50, p->flow);
+        laik_log(1, "new partitioning '%s': type %s, data flow %s, group %d\n",
                  p->name, s, s+50, p->group->gid);
     }
 
@@ -540,13 +538,13 @@ void laik_set_partitioning_dimension(Laik_Partitioning* p, int d)
 Laik_Partitioning*
 laik_new_coupled_partitioning(Laik_Partitioning* base,
                               Laik_PartitionType pt,
-                              Laik_AccessBehavior ap)
+                              Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
     p = laik_new_partitioning(base->space);
-    p->access = ap;
     p->type = pt;
     p->base = base;
+    set_flow(p, flow);
 
     return p;
 }
@@ -557,13 +555,13 @@ Laik_Partitioning*
 laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
                                    Laik_Space* s, int from, int to,
                                    Laik_PartitionType pt,
-                                   Laik_AccessBehavior ap)
+                                   Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
     p = laik_new_partitioning(p->space);
-    p->access = ap;
     p->type = pt;
     p->base = base;
+    set_flow(p, flow);
 
     assert(0); // TODO
 
@@ -776,41 +774,54 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     t->recvCount = 0;
     t->redCount = 0;
 
+
     // either one of <from> and <to> has to be valid; same space, same group
     Laik_Space* space = 0;
     Laik_Group* group = 0;
-    if (from) {
+
+    // make sure requested data flow is consistent
+    if (from == 0) {
+        // start: we come from nothing, go to initial partitioning
+        assert(to != 0);
+        assert(!laik_do_copyin(to->flow));
+
+        space = to->space;
+        group = to->group;
+    }
+    else if (to == 0) {
+        // end: go to nothing
+        assert(from != 0);
+        assert(!laik_do_copyout(from->flow));
+
         space = from->space;
         group = from->group;
     }
-    if (to) {
-        if (space)
-            assert(space == to->space);
-        else
-            space = to->space;
-
-        if (group)
-            assert(group == to->group);
-        else
-            group = to->group;
+    else {
+        // to and from set
+        if (laik_do_copyin(to->flow)) {
+            // values must come from something
+            assert(laik_do_copyout(from->flow) ||
+                   laik_is_reduction(from->flow));
+        }
+        assert(from->space == to->space);
+        assert(from->group == to->group);
+        space = from->space;
+        group = from->group;
     }
-    assert(space != 0);
-    assert(group != 0);
 
     int dims = space->dims;
     int myid = group->inst->myid;
     int count = group->size;
     t->dims = dims;
 
-    // some reduction to be done where we need to initialize values?
-    if ((to != 0) &&
-        laik_is_reduction(to->access) &&
-        !laik_is_writeall(to->access)) {
+    // init values as next phase does a reduction?
+    if ((to != 0) && laik_is_reduction(to->flow)) {
 
         if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
             assert(t->initCount < TRANSSLICES_MAX);
             t->init[t->initCount] = to->borders[myid];
-            t->initRedOp[t->initCount] = laik_get_reduction(to->access);
+            assert(to->redOp != LAIK_RO_None);
+            t->initRedOp[t->initCount] = to->redOp;
             t->initCount++;
         }
     }
@@ -819,10 +830,8 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
 
         // determine local slice to keep?
         // (may need local copy if from/to mappings are different).
-        // reductions always are taken care by backend
-        if (!laik_is_reduction(from->access) &&
-            laik_is_write(from->access) &&
-            laik_is_read(to->access)) {
+        // reductions are not handled here, but by backend
+        if (laik_do_copyout(from->flow) && laik_do_copyin(to->flow)) {
             slc = laik_slice_intersect(dims,
                                        &(from->borders[myid]),
                                        &(to->borders[myid]));
@@ -834,23 +843,22 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         }
 
         // something to reduce?
-        if (laik_is_reduction(from->access)) {
+        if (laik_is_reduction(from->flow)) {
             // reductions always should involve everyone
             assert(from->type == LAIK_PT_All);
-            if ((to->access == LAIK_AB_ReadOnly) ||
-                (to->access == LAIK_AB_ReadWrite)) {
+            if (laik_do_copyin(to->flow)) {
                 assert(t->redCount < TRANSSLICES_MAX);
                 assert((to->type == LAIK_PT_Master) ||
                        (to->type == LAIK_PT_All));
                 t->red[t->redCount] = *sliceFromSpace(from->space);
-                t->redOp[t->redCount] = laik_get_reduction(from->access);
+                t->redOp[t->redCount] = from->redOp;
                 t->redRoot[t->redCount] = (to->type == LAIK_PT_All) ? -1 : 0;
                 t->redCount++;
             }
         }
 
         // something to send?
-        if (laik_is_write(from->access)) {
+        if (laik_do_copyout(from->flow)) {
             if (!laik_slice_isEmpty(dims, &(from->borders[myid]))) {
                 for(int task = 0; task < count; task++) {
                     if (task == myid) continue;
@@ -868,8 +876,8 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
             }
         }
 
-        // something to receive?
-        if (!laik_is_reduction(from->access) && laik_is_read(to->access)) {
+        // something to receive not coming from a reduction?
+        if (!laik_is_reduction(from->flow) && laik_do_copyin(to->flow)) {
             if (!laik_slice_isEmpty(dims, &(to->borders[myid]))) {
                 for(int task = 0; task < count; task++) {
                     if (task == myid) continue;

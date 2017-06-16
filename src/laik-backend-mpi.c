@@ -115,7 +115,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             MPI_Op mpiRedOp;
             switch(t->redOp[i]) {
-            case LAIK_AB_Sum: mpiRedOp = MPI_SUM; break;
+            case LAIK_RO_Sum: mpiRedOp = MPI_SUM; break;
             default: assert(0);
             }
 

@@ -52,10 +52,13 @@ struct _Laik_Partitioning {
     int id;     // for debugging
 
     Laik_Group* group;
-    Laik_PartitionType type;
-    Laik_AccessBehavior access;
     Laik_Space* space; // space to partition
     int pdim; // for 2d/3d: dimension to partition
+
+    Laik_PartitionType type;
+    Laik_DataFlow flow;
+    bool copyIn, copyOut;
+    Laik_ReductionOperation redOp;
 
     // weighted partitioning (Block) uses callbacks
     Laik_GetIdxWeight_t getIdxW;
@@ -88,7 +91,7 @@ struct _Laik_Transition {
     // the value depends on the reduction type (neutral element)
     int initCount;
     Laik_Slice init[TRANSSLICES_MAX];
-    int initRedOp[TRANSSLICES_MAX];
+    Laik_ReductionOperation initRedOp[TRANSSLICES_MAX];
 
     // slices to send to other task
     int sendCount;
@@ -103,7 +106,7 @@ struct _Laik_Transition {
     // slices to reduce
     int redCount;
     Laik_Slice red[TRANSSLICES_MAX];
-    int redOp[TRANSSLICES_MAX];
+    Laik_ReductionOperation redOp[TRANSSLICES_MAX];
     int redRoot[TRANSSLICES_MAX]; // -1: all
 };
 

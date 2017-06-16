@@ -39,10 +39,10 @@ struct _Laik_Type {
 
     // callbacks for reductions
     // initialize values of this type with neutral element
-    void (*init)(void* base, int count, Laik_AccessBehavior a);
+    void (*init)(void* base, int count, Laik_DataFlow a);
     // do a reduction on input arrays
     void (*reduce)(void* out, void* in1, void* in2,
-                   int count, Laik_AccessBehavior a);
+                   int count, Laik_DataFlow a);
 
     // callbacks for packing/unpacking
     int (*getLength)(Laik_Data*,Laik_Slice*);
@@ -61,7 +61,7 @@ struct _Laik_Data {
 
     // default partitioning
     Laik_PartitionType defaultPartitionType;
-    Laik_AccessBehavior defaultAccess;
+    Laik_DataFlow defaultFlow;
 
     // active partitioning (TODO: multiple may be active)
     Laik_Partitioning* activePartitioning;
