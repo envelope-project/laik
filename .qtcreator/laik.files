@@ -28,6 +28,9 @@
 ../examples/spmv.c
 ../examples/spmv2.c
 
+../tests/Makefile
+../tests/mpi/Makefile
+
 ../doc/TODO.md
 
 ../README.md

@@ -40,7 +40,7 @@ examples: liblaik.a
 
 # tests
 test: examples
-	echo "Dummy test is working!"
+	make -C tests
 
 # clean targets
 SUBDIRS_CLEAN=$(addprefix clean_, $(SUBDIRS))
