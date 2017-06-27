@@ -63,9 +63,13 @@ struct _Laik_Data {
     Laik_PartitionType defaultPartitionType;
     Laik_DataFlow defaultFlow;
 
-    // active partitioning (TODO: multiple may be active)
+    // active partitioning
     Laik_Partitioning* activePartitioning;
-    Laik_Mapping* activeMapping;
+
+    // active mappings (multiple possible, one per slice)
+    Laik_Mapping** activeMapping;
+    int activeMappingCount;
+
     Laik_Allocator* allocator;
 
     // can be set by backend

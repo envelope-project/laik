@@ -73,6 +73,10 @@ void laik_free(Laik_Data*);
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data*, Laik_Partitioning*);
 
+// get slice number <n> in own partition of data container <d>
+// returns 0 if partitioning is not set or slice number <n> is invalid
+Laik_Slice* laik_data_slice(Laik_Data* d, int n);
+
 // convenience functions
 
 // set and enforce a newly created partitioning, and return it

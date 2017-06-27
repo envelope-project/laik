@@ -596,6 +596,10 @@ Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n)
 
     int myid = p->group->myid;
     int o = p->borderOffsets[myid] + n;
+    if (o >= p->borderOffsets[myid+1]) {
+        // slice <n> is invalid
+        return 0;
+    }
     s = p->borders[o];
     return &s;
 }

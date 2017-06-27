@@ -13,7 +13,7 @@
 
 // forward decl
 void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
-                                Laik_Mapping* toMap);
+                                Laik_Mapping* fromMap, Laik_Mapping* toMap);
 
 static Laik_Backend laik_backend_single = {"Single Task Backend", 0,
                                            laik_single_execTransition };
@@ -51,10 +51,9 @@ Laik_Group* laik_single_world()
 }
 
 void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
-                                Laik_Mapping* toMap)
+                                Laik_Mapping* fromMap, Laik_Mapping* toMap)
 {
     Laik_Instance* inst = d->space->inst;
-    Laik_Mapping* fromMap = d->activeMapping;
     char* fromBase = fromMap ? fromMap->base : 0;
     char* toBase = toMap ? toMap->base : 0;
 

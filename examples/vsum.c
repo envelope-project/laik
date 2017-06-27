@@ -67,6 +67,7 @@ int main(int argc, char* argv[])
     // initialize at master (others do nothing, empty partition)
     p1 = laik_set_new_partitioning(a, LAIK_PT_Master, LAIK_DF_NoIn_CopyOut);
     if (laik_myid(world) == 0) {
+        // it is ensured this is exactly one slice
         m = laik_map_def1(a, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) base[i] = (double) i;
     }

@@ -13,7 +13,7 @@
 
 void laik_mpi_finalize();
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t,
-                             Laik_Mapping* toMap);
+                             Laik_Mapping* fromMap, Laik_Mapping* toMap);
 
 static Laik_Backend laik_backend_mpi = {"MPI Backend",
                                         laik_mpi_finalize,
@@ -93,11 +93,10 @@ void laik_mpi_finalize()
 }
 
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
-                             Laik_Mapping* toMap)
+                             Laik_Mapping* fromMap, Laik_Mapping* toMap)
 {
     Laik_Instance* inst = d->space->inst;
     MPI_Comm comm = mpiData(inst)->comm;
-    Laik_Mapping* fromMap = d->activeMapping;
     char* fromBase = fromMap ? fromMap->base : 0;
     char* toBase = toMap ? toMap->base : 0;
 

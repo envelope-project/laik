@@ -185,24 +185,31 @@ int main(int argc, char* argv[])
         // access to complete input vector (local indexing = global indexing)
         laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_DF_CopyIn_NoOut);
         laik_map_def1(inpD, (void**) &inp, 0);
-        // ensure access to my partition of result vector (local indexing, from 0)
-        laik_map_def1(resD, (void**) &res, &rcount);
-
-        // zero out result vector (only my partition)
-        for(i = 0; i < rcount; i++) res[i] = 0.0;
 
         // SpMV operation, for my range of rows
-        slc = laik_my_slice(p, 0);
-        fromRow = slc->from.i[0];
-        toRow = slc->to.i[0];
-        for(int r = fromRow; r < toRow; r++) {
-            for(int o = m->row[r]; o < m->row[r+1]; o++)
-                res[r - fromRow] += m->val[o] * inp[m->col[o]];
-        }
 
-        // partitial sum of result
+        // do a partial sum of result during traversal
         sum = 0.0;
-        for(i = 0; i < rcount; i++) sum += res[i];
+
+        // loop over all local slices
+        for(int sNo = 0; ; sNo++) {
+            slc = laik_my_slice(p, sNo);
+            if (slc == 0) break;
+
+            // my partition slice of result vector (local indexing, from 0)
+            laik_map_def(resD, sNo, (void**) &res, &rcount);
+
+            fromRow = slc->from.i[0];
+            toRow = slc->to.i[0];
+            for(int r = fromRow; r < toRow; r++) {
+                res[r - fromRow] = 0.0;
+                for(int o = m->row[r]; o < m->row[r+1]; o++)
+                    res[r - fromRow] += m->val[o] * inp[m->col[o]];
+            }
+
+            for(i = 0; i < rcount; i++)
+                sum += res[i];
+        }
 
         // compute global sum with LAIK, broadcast result to all
         laik_set_new_partitioning(sumD, LAIK_PT_All, LAIK_DF_NoIn_SumReduceOut);
@@ -221,15 +228,28 @@ int main(int argc, char* argv[])
             // varian 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
             laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_DF_InitIn_SumReduceOut);
+            laik_map_def1(inpD, (void**) &inp, 0);
+
+            // loop over all local slices of result vector
+            for(int sNo = 0; ; sNo++) {
+                slc = laik_my_slice(p, sNo);
+                if (slc == 0) break;
+                fromRow = slc->from.i[0];
+
+                laik_map_def(resD, sNo, (void**) &res, &rcount);
+                for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
+            }
         }
         else {
             // variant 2: broadcast written input values directly
             laik_set_partitioning(inpD, p2);
-            fromRow = 0; // local indexing for writes into inp, as with res
+            // loop over all local slices of result and input vector
+            for(int sNo = 0; laik_my_slice(p, sNo) != 0; sNo++) {
+                laik_map_def(resD, sNo, (void**) &res, &rcount);
+                laik_map_def(inpD, sNo, (void**) &inp, 0);
+                for(i = 0; i < rcount; i++) inp[i] = res[i] / sum;
+            }
         }
-        laik_map_def1(inpD, (void**) &inp, 0);
-        // normalize values from my partition of result vector into next input
-        for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
 
         // react on repartitioning wishes
         //allowRepartitioning(p);

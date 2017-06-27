@@ -76,6 +76,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
     d->defaultFlow = LAIK_DF_CopyIn_CopyOut;
     d->activePartitioning = 0;
     d->activeMapping = 0;
+    d->activeMappingCount = 0;
     d->allocator = 0; // default: malloc/free
 
     return d;
@@ -277,6 +278,19 @@ void initMap(Laik_Transition* t, Laik_Mapping* toMap)
     }
 }
 
+static
+void allocMappingArray(Laik_Data* d)
+{
+    assert(d->activeMapping == 0);
+    assert(d->activePartitioning != 0);
+
+    int c = laik_my_slicecount(d->activePartitioning);
+    d->activeMapping = (Laik_Mapping**) malloc(c * sizeof(Laik_Mapping*));
+    for(int i=0; i<c; i++)
+        d->activeMapping[i] = 0;
+    d->activeMappingCount = c;
+}
+
 
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
@@ -287,6 +301,7 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     // TODO: convert to realloc (with taking over layout)
     // TODO: partitioning can have multiple slices
     assert(laik_my_slicecount(p) == 1);
+    Laik_Mapping* fromMap = d->activeMapping ? d->activeMapping[0] : 0;
     Laik_Mapping* toMap = allocMap(d, p, 0, 0);
 
     // calculate actions to be done for switching
@@ -295,25 +310,34 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     // let backend do send/recv/reduce actions
     // TODO: use async interface
     assert(p->space->inst->backend->execTransition);
-    (p->space->inst->backend->execTransition)(d, t, toMap);
+    (p->space->inst->backend->execTransition)(d, t, fromMap, toMap);
 
     // local copy action
     if (t->localCount > 0)
-        copyMap(t, toMap, d->activeMapping);
+        copyMap(t, toMap, fromMap);
 
     // local init action
     if (t->initCount > 0)
         initMap(t, toMap);
 
     // free old mapping/partitioning
-    if (d->activeMapping)
-        freeMap(d->activeMapping);
+    if (fromMap)
+        freeMap(fromMap);
     if (d->activePartitioning)
         laik_free_partitioning(d->activePartitioning);
 
     // set new mapping/partitioning active
     d->activePartitioning = p;
-    d->activeMapping = toMap;
+    if (!d->activeMapping)
+        allocMappingArray(d);
+    d->activeMapping[0] = toMap;
+}
+
+// get slice number <n> in own partition
+Laik_Slice* laik_data_slice(Laik_Data* d, int n)
+{
+    if (d->activePartitioning == 0) return 0;
+    return laik_my_slice(d->activePartitioning, n);
 }
 
 Laik_Partitioning* laik_set_new_partitioning(Laik_Data* d,
@@ -338,6 +362,7 @@ void laik_fill_double(Laik_Data* d, double v)
     for (i = 0; i < count; i++)
         base[i] = v;
 }
+
 
 // allocate new layout object with a layout hint, to use in laik_map
 Laik_Layout* laik_new_layout(Laik_LayoutType t)
@@ -386,10 +411,17 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
     p = d->activePartitioning;
 
     // lazy allocation
-    if (!d->activeMapping)
-        d->activeMapping = allocMap(d, p, n, layout);
+    if (!d->activeMapping) {
+        allocMappingArray(d);
 
-    return d->activeMapping;
+        if (n < d->activeMappingCount)
+            d->activeMapping[n] = allocMap(d, p, n, layout);
+    }
+
+    if (n < d->activeMappingCount)
+        return d->activeMapping[n];
+    else
+        return 0;
 }
 
 // similar to laik_map, but force a default mapping
@@ -398,8 +430,8 @@ Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count)
     Laik_Layout* l = laik_new_layout(LAIK_LT_Default);
     Laik_Mapping* m = laik_map(d, n, l);
 
-    if (base) *base = m->base;
-    if (count) *count = m->count;
+    if (base) *base = m ? m->base : 0;
+    if (count) *count = m ? m->count : 0;
     return m;
 }
 
@@ -411,10 +443,13 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
     Laik_Mapping* m = laik_map(d, 0, l);
     assert(laik_my_slicecount(d->activePartitioning) == 1);
 
-    if (base) *base = m->base;
-    if (count) *count = m->count;
+    if (base) *base = m ? m->base : 0;
+    if (count) *count = m ? m->count : 0;
     return m;
 }
+
+
+
 
 
 void laik_free(Laik_Data* d)
