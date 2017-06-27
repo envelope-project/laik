@@ -116,11 +116,20 @@ Laik_LayoutType laik_layout_type(Laik_Layout* l);
 Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
 
 // make own partition available for direct access in local memory.
+//
+// own partition my consist of multiple slices, so <n> is the slice number
+// in the partition, starting from 0. Returns 0 for invalid slice numbers.
+// The number of slices in own partition is returned by
+//   laik_my_slicecount(laik_get_partitioning(<data>));
+//
 // if layout is 0, it will be choosen by LAIK, and can be requested with
 // laik_map_layout(). Otherwise a new layout with a hint can be provided,
 // and the layout object directly is written to the actually used layout.
 // TODO: API only works for single-slice layouts
-Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* layout);
+Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout);
+
+// similar to laik_map, but force a default mapping
+Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count);
 
 // similar to laik_map, but force a default mapping with only 1 slice
 Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count);

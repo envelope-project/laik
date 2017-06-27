@@ -117,37 +117,43 @@ Laik_Space* laik_get_space(Laik_Data* d)
 
 
 static
-Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
+Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, int n, Laik_Layout* l)
 {
+    int t = laik_myid(d->group);
+    if (p->borderOffsets[t] + n >= p->borderOffsets[t+1]) {
+        // there is no slice <n> in my partition
+        return 0;
+    }
+    int o = p->borderOffsets[t] + n;
+
     Laik_Mapping* m;
     m = (Laik_Mapping*) malloc(sizeof(Laik_Mapping));
 
-    int t = laik_myid(d->group);
     uint64_t count = 1;
     switch(p->space->dims) {
     case 3:
-        count *= p->borders[t].to.i[2] - p->borders[t].from.i[2];
+        count *= p->borders[o].to.i[2] - p->borders[o].from.i[2];
         // fall-through
     case 2:
-        count *= p->borders[t].to.i[1] - p->borders[t].from.i[1];
+        count *= p->borders[o].to.i[1] - p->borders[o].from.i[1];
         // fall-through
     case 1:
-        count *= p->borders[t].to.i[0] - p->borders[t].from.i[0];
+        count *= p->borders[o].to.i[0] - p->borders[o].from.i[0];
         break;
     }
     m->data = d;
     m->partitioning = p;
-    m->task = t;
+    m->sliceNo = n;
     m->count = count;
-    m->baseIdx = p->borders[t].from;
+    m->baseIdx = p->borders[o].from;
 
     if (l) {
         // TODO: actually use the requested order, eventually convert
         m->layout = l;
     }
     else {
-        // TODO: we promise 1 slice, default mapping order (1,2,3)
-        m->layout = laik_new_layout(LAIK_LT_Default1Slice);
+        // default mapping order (1,2,3)
+        m->layout = laik_new_layout(LAIK_LT_Default);
     }
 
     if (count == 0)
@@ -163,8 +169,8 @@ Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
     if (laik_logshown(1)) {
         char s[100];
         laik_getIndexStr(s, p->space->dims, &(m->baseIdx), false);
-        laik_log(1, "new map for '%s': [%s+%d, elemsize %d, base %p\n",
-                 d->name, s, m->count, d->elemsize, m->base);
+        laik_log(1, "new map for '%s'/%d: [%s+%d, elemsize %d, base %p\n",
+                 d->name, n, s, m->count, d->elemsize, m->base);
     }
 
     return m;
@@ -175,8 +181,8 @@ void freeMap(Laik_Mapping* m)
 {
     Laik_Data* d = m->data;
 
-    laik_log(1, "free map for '%s' (count %d, base %p)\n",
-             d->name, m->count, m->base);
+    laik_log(1, "free map for '%s'/%d (count %d, base %p)\n",
+             d->name, m->sliceNo, m->count, m->base);
 
     if (m && m->base) {
         // TODO: different policies
@@ -279,7 +285,9 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     laik_update_partitioning(p);
 
     // TODO: convert to realloc (with taking over layout)
-    Laik_Mapping* toMap = allocMap(d, p, 0);
+    // TODO: partitioning can have multiple slices
+    assert(laik_my_slicecount(p) == 1);
+    Laik_Mapping* toMap = allocMap(d, p, 0, 0);
 
     // calculate actions to be done for switching
     Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
@@ -325,6 +333,8 @@ void laik_fill_double(Laik_Data* d, double v)
     uint64_t count, i;
 
     laik_map_def1(d, (void**) &base, &count);
+    // TODO: partitioning can have multiple slices
+    assert(laik_my_slicecount(d->activePartitioning) == 1);
     for (i = 0; i < count; i++)
         base[i] = v;
 }
@@ -364,10 +374,9 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m)
 
 
 // make own partition available for direct access in local memory
-Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* layout)
+Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 {
     Laik_Partitioning* p;
-    Laik_Mapping* m;
 
     if (!d->activePartitioning)
         laik_set_new_partitioning(d,
@@ -378,18 +387,29 @@ Laik_Mapping* laik_map(Laik_Data* d, Laik_Layout* layout)
 
     // lazy allocation
     if (!d->activeMapping)
-        d->activeMapping = allocMap(d, p, layout);
+        d->activeMapping = allocMap(d, p, n, layout);
 
-    m = d->activeMapping;
+    return d->activeMapping;
+}
+
+// similar to laik_map, but force a default mapping
+Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count)
+{
+    Laik_Layout* l = laik_new_layout(LAIK_LT_Default);
+    Laik_Mapping* m = laik_map(d, n, l);
+
+    if (base) *base = m->base;
+    if (count) *count = m->count;
     return m;
 }
+
 
 // similar to laik_map, but force a default mapping with only 1 slice
 Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
 {
     Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
-    Laik_Mapping* m = laik_map(d, l);
-    assert(m->layout->type == LAIK_LT_Default1Slice);
+    Laik_Mapping* m = laik_map(d, 0, l);
+    assert(laik_my_slicecount(d->activePartitioning) == 1);
 
     if (base) *base = m->base;
     if (count) *count = m->count;
