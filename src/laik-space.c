@@ -469,6 +469,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     p->haloWidth = 0;
 
     p->bordersValid = false;
+    p->borderOffsets = 0;
     p->borders = 0;
 
     return p;
@@ -577,14 +578,25 @@ void laik_free_partitioning(Laik_Partitioning* p)
     // TODO
 }
 
-// get slice of this task
-Laik_Slice* laik_my_slice(Laik_Partitioning* p)
+// get number of slices of this task
+int laik_my_slicecount(Laik_Partitioning* p)
+{
+    laik_update_partitioning(p);
+
+    int myid = p->group->myid;
+    return p->borderOffsets[myid+1] - p->borderOffsets[myid];
+}
+
+// get slice number <n> from the slices of this task
+Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n)
 {
     static Laik_Slice s;
 
     laik_update_partitioning(p);
 
-    s = p->borders[p->group->myid];
+    int myid = p->group->myid;
+    int o = p->borderOffsets[myid] + n;
+    s = p->borders[o];
     return &s;
 }
 
@@ -690,8 +702,14 @@ bool laik_update_partitioning(Laik_Partitioning* p)
         return false;
 
     int count = p->group->size;
-    if (!p->borders)
+    if (!p->borders) {
+        // initialize borderOffsets: each task has one slice
+        p->borderOffsets = (int*) malloc((count+1) * sizeof(int));
+        for(int i = 0; i <= count; i++)
+            p->borderOffsets[i] = i;
+
         p->borders = (Laik_Slice*) malloc(count * sizeof(Laik_Slice));
+    }
 
     // init to all space indexes first
     for(int task = 0; task < count; task++) {

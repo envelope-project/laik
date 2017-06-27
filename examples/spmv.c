@@ -106,7 +106,7 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < count; i++)
         res[i] = 0.0;
     // SPMV on my part of matrix rows
-    slc = laik_my_slice(p);
+    slc = laik_my_slice(p, 0);
     fromRow = slc->from.i[0];
     toRow = slc->to.i[0];
     for(int r = fromRow; r < toRow; r++) {
@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
     // other way to push results to master: use sum reduction
     laik_set_new_partitioning(resD, LAIK_PT_All, LAIK_DF_InitIn_SumReduceOut);
     laik_map_def1(resD, (void**) &res, &count);
-    slc = laik_my_slice(p);
+    slc = laik_my_slice(p, 0);
     fromRow = slc->from.i[0];
     toRow = slc->to.i[0];
     for(int r = fromRow; r < toRow; r++) {

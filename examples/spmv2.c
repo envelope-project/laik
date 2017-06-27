@@ -192,7 +192,7 @@ int main(int argc, char* argv[])
         for(i = 0; i < rcount; i++) res[i] = 0.0;
 
         // SpMV operation, for my range of rows
-        slc = laik_my_slice(p);
+        slc = laik_my_slice(p, 0);
         fromRow = slc->from.i[0];
         toRow = slc->to.i[0];
         for(int r = fromRow; r < toRow; r++) {

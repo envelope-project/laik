@@ -45,6 +45,8 @@ struct _Laik_Space {
     Laik_Partitioning* first_partitioning;
 };
 
+
+
 // internal to allow for more irregular partitionings
 
 struct _Laik_Partitioning {
@@ -70,9 +72,10 @@ struct _Laik_Partitioning {
     Laik_Partitioning* base;
     int haloWidth;
 
-    // partitions borders (calculated lazy)
+    // partition borders (calculated lazy)
     bool bordersValid;
-    Laik_Slice* borders; // slice borders, one slice per participating task
+    int* borderOffsets; // offsets into borders array
+    Laik_Slice* borders; // slice borders, may be multiple per task
 
     Laik_Partitioning* next; // for list of partitionings same space
 };

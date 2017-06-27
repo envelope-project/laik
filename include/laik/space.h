@@ -199,8 +199,11 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p);
 
-// get slice of this task
-Laik_Slice* laik_my_slice(Laik_Partitioning* p);
+// get number of slices of this task
+int laik_my_slicecount(Laik_Partitioning* p);
+
+// get slice number <n> from the slices of this task
+Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n);
 
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
