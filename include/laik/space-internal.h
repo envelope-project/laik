@@ -74,7 +74,7 @@ struct _Laik_Partitioning {
 
     // partition borders (calculated lazy)
     bool bordersValid;
-    int* borderOffsets; // offsets into borders array
+    int* borderOff;      // offsets into borders array
     Laik_Slice* borders; // slice borders, may be multiple per task
 
     Laik_Partitioning* next; // for list of partitionings same space
@@ -82,35 +82,66 @@ struct _Laik_Partitioning {
 
 #define TRANSSLICES_MAX 10
 
+// sub-structures of Laik_Transition
+
+// slice staying local
+struct localTOp {
+    Laik_Slice slc;
+    int fromSliceNo, toSliceNo;
+};
+
+// slice to be initialized
+struct initTOp {
+    Laik_Slice slc;
+    int sliceNo;
+    Laik_ReductionOperation redOp;
+};
+
+// slice to send to a remote task
+struct sendTOp {
+    Laik_Slice slc;
+    int sliceNo;
+    int toTask;
+};
+
+// slice to receive from a remote task
+struct recvTOp {
+    Laik_Slice slc;
+    int sliceNo;
+    int fromTask;
+};
+
+// slice to reduce
+struct redTOp {
+    Laik_Slice slc;
+    Laik_ReductionOperation redOp;
+    int rootTask; // -1: all
+};
+
 struct _Laik_Transition {
     int dims;
 
     // local slices staying local;
     // may need copy when different from/to mappings are used
     int localCount;
-    Laik_Slice local[TRANSSLICES_MAX];
+    struct localTOp local[TRANSSLICES_MAX];
 
     // local slices that should be initialized;
     // the value depends on the reduction type (neutral element)
     int initCount;
-    Laik_Slice init[TRANSSLICES_MAX];
-    Laik_ReductionOperation initRedOp[TRANSSLICES_MAX];
+    struct initTOp init[TRANSSLICES_MAX];
 
     // slices to send to other task
     int sendCount;
-    Laik_Slice send[TRANSSLICES_MAX];
-    int sendTo[TRANSSLICES_MAX];
+    struct sendTOp send[TRANSSLICES_MAX];
 
     // slices to receive from other task
     int recvCount;
-    Laik_Slice recv[TRANSSLICES_MAX];
-    int recvFrom[TRANSSLICES_MAX];
+    struct recvTOp recv[TRANSSLICES_MAX];
 
     // slices to reduce
     int redCount;
-    Laik_Slice red[TRANSSLICES_MAX];
-    Laik_ReductionOperation redOp[TRANSSLICES_MAX];
-    int redRoot[TRANSSLICES_MAX]; // -1: all
+    struct redTOp red[TRANSSLICES_MAX];
 };
 
 // LAIK internal

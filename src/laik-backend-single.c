@@ -59,10 +59,11 @@ void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
 
     for(int i=0; i < t->redCount; i++) {
         assert(d->space->dims == 1);
-        uint64_t from = t->red[i].from.i[0];
-        uint64_t to   = t->red[i].to.i[0];
+        struct redTOp* op = &(t->red[i]);
+        uint64_t from = op->slc.from.i[0];
+        uint64_t to   = op->slc.to.i[0];
         assert(fromBase != 0);
-        assert((t->redRoot[i] == -1) || (t->redRoot[i] == inst->myid));
+        assert((op->rootTask == -1) || (op->rootTask == inst->myid));
         assert(toBase != 0);
         assert(to > from);
 

@@ -103,17 +103,18 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
     // TODO: do group != world
 
     if (t->redCount > 0) {
+        assert(d->space->dims == 1);
         for(int i=0; i < t->redCount; i++) {
-            assert(d->space->dims == 1);
-            uint64_t from = t->red[i].from.i[0];
-            uint64_t to   = t->red[i].to.i[0];
+            struct redTOp* op = &(t->red[i]);
+            uint64_t from = op->slc.from.i[0];
+            uint64_t to   = op->slc.to.i[0];
             assert(fromBase != 0);
             // if current task is receiver, toBase should be allocated
-            if ((t->redRoot[i] == -1) || (t->redRoot[i] == inst->myid))
+            if ((op->rootTask == -1) || (op->rootTask == inst->myid))
                 assert(toBase != 0);
 
             MPI_Op mpiRedOp;
-            switch(t->redOp[i]) {
+            switch(op->redOp) {
             case LAIK_RO_Sum: mpiRedOp = MPI_SUM; break;
             default: assert(0);
             }
@@ -127,14 +128,13 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                         "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
                      from, to, d->elemsize, fromBase, toBase);
 
-            if (t->redRoot[i] == -1) {
+            if (op->rootTask == -1) {
                 MPI_Allreduce(fromBase, toBase, to - from,
                               mpiDateType, mpiRedOp, comm);
             }
             else {
-
                 MPI_Reduce(fromBase, toBase, to - from,
-                           mpiDateType, mpiRedOp, t->redRoot[i], comm);
+                           mpiDateType, mpiRedOp, op->rootTask, comm);
             }
         }
     }
@@ -160,15 +160,16 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
         // receive
         for(int i=0; i < t->recvCount; i++) {
-            if (task != t->recvFrom[i]) continue;
+            struct recvTOp* op = &(t->recv[i]);
+            if (task != op->fromTask) continue;
             if (recvFromLower  && (myid < task)) continue;
             if (recvFromHigher && (myid > task)) continue;
 
-            assert(myid != t->recvFrom[i]);
+            assert(myid != op->fromTask);
             assert(d->space->dims == 1);
             // from global to receiver-local indexes
-            uint64_t from = t->recv[i].from.i[0] - toMap->baseIdx.i[0];
-            uint64_t to   = t->recv[i].to.i[0] - toMap->baseIdx.i[0];
+            uint64_t from = op->slc.from.i[0] - toMap->baseIdx.i[0];
+            uint64_t to   = op->slc.to.i[0] - toMap->baseIdx.i[0];
             assert(toBase != 0);
 
             MPI_Datatype mpiDateType;
@@ -179,27 +180,28 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             laik_log(1, "MPI Recv from T%d: "
                         "local [%lu-%lu], elemsize %d, to base %p\n",
-                     t->recvFrom[i], from, to-1, d->elemsize, toBase);
+                     op->fromTask, from, to-1, d->elemsize, toBase);
 
             MPI_Status s;
             // TODO:
             // - tag 1 may conflict with application
             // - check status
             MPI_Recv(toBase + from * d->elemsize, to - from,
-                     mpiDateType, t->recvFrom[i], 1, comm, &s);
+                     mpiDateType, op->fromTask, 1, comm, &s);
         }
 
         // send
         for(int i=0; i < t->sendCount; i++) {
-            if (task != t->sendTo[i]) continue;
+            struct sendTOp* op = &(t->send[i]);
+            if (task != op->toTask) continue;
             if (sendToLower  && (myid < task)) continue;
             if (sendToHigher && (myid > task)) continue;
 
-            assert(myid != t->sendTo[i]);
+            assert(myid != op->toTask);
             assert(d->space->dims == 1);
             // from global to sender-local indexes
-            uint64_t from = t->send[i].from.i[0] - fromMap->baseIdx.i[0];
-            uint64_t to   = t->send[i].to.i[0] - fromMap->baseIdx.i[0];
+            uint64_t from = op->slc.from.i[0] - fromMap->baseIdx.i[0];
+            uint64_t to   = op->slc.to.i[0] - fromMap->baseIdx.i[0];
             assert(fromBase != 0);
 
             MPI_Datatype mpiDateType;
@@ -210,11 +212,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             laik_log(1, "MPI Send to T%d: "
                         "local [%lu-%lu], elemsize %d, from base %p\n",
-                     t->sendTo[i], from, to-1, d->elemsize, fromBase);
+                     op->toTask, from, to-1, d->elemsize, fromBase);
 
             // TODO: tag 1 may conflict with application
             MPI_Send(fromBase + from * d->elemsize, to - from,
-                     mpiDateType, t->sendTo[i], 1, comm);
+                     mpiDateType, op->toTask, 1, comm);
         }
     
     }

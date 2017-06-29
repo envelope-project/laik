@@ -121,11 +121,11 @@ static
 Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, int n, Laik_Layout* l)
 {
     int t = laik_myid(d->group);
-    if (p->borderOffsets[t] + n >= p->borderOffsets[t+1]) {
+    if (p->borderOff[t] + n >= p->borderOff[t+1]) {
         // there is no slice <n> in my partition
         return 0;
     }
-    int o = p->borderOffsets[t] + n;
+    int o = p->borderOff[t] + n;
 
     Laik_Mapping* m;
     m = (Laik_Mapping*) malloc(sizeof(Laik_Mapping));
@@ -215,7 +215,7 @@ void copyMap(Laik_Transition* t, Laik_Mapping* toMap, Laik_Mapping* fromMap)
     assert(fromMap->data->space->dims == 1); // only for 1d now
     Laik_Data* d = toMap->data;
     for(int i = 0; i < t->localCount; i++) {
-        Laik_Slice* s = &(t->local[i]);
+        Laik_Slice* s = &(t->local[i].slc);
         int count = s->to.i[0] - s->from.i[0];
         uint64_t fromStart = s->from.i[0] - fromMap->baseIdx.i[0];
         uint64_t toStart   = s->from.i[0] - toMap->baseIdx.i[0];
@@ -244,14 +244,14 @@ void initMap(Laik_Transition* t, Laik_Mapping* toMap)
     assert(toMap->data->space->dims == 1); // only for 1d now
     Laik_Data* d = toMap->data;
     for(int i = 0; i < t->initCount; i++) {
-        Laik_Slice* s = &(t->init[i]);
+        Laik_Slice* s = &(t->init[i].slc);
         int count = s->to.i[0] - s->from.i[0];
 
         if (d->type == laik_Double) {
             double v;
             double* dbase = (double*) toMap->base;
 
-            switch(t->initRedOp[i]) {
+            switch(t->init[i].redOp) {
             case LAIK_RO_Sum: v = 0.0; break;
             default:
                 assert(0);
@@ -263,7 +263,7 @@ void initMap(Laik_Transition* t, Laik_Mapping* toMap)
             float v;
             float* dbase = (float*) toMap->base;
 
-            switch(t->initRedOp[i]) {
+            switch(t->init[i].redOp) {
             case LAIK_RO_Sum: v = 0.0; break;
             default:
                 assert(0);
