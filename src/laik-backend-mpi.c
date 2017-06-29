@@ -13,7 +13,7 @@
 
 void laik_mpi_finalize();
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t,
-                             Laik_Mapping* fromMap, Laik_Mapping* toMap);
+                             Laik_MappingList* fromList, Laik_MappingList* toList);
 
 static Laik_Backend laik_backend_mpi = {"MPI Backend",
                                         laik_mpi_finalize,
@@ -93,12 +93,10 @@ void laik_mpi_finalize()
 }
 
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
-                             Laik_Mapping* fromMap, Laik_Mapping* toMap)
+                             Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     Laik_Instance* inst = d->space->inst;
     MPI_Comm comm = mpiData(inst)->comm;
-    char* fromBase = fromMap ? fromMap->base : 0;
-    char* toBase = toMap ? toMap->base : 0;
 
     // TODO: do group != world
 
@@ -108,6 +106,15 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             struct redTOp* op = &(t->red[i]);
             uint64_t from = op->slc.from.i[0];
             uint64_t to   = op->slc.to.i[0];
+
+            assert(fromList->count == 1);
+            Laik_Mapping* fromMap = &(fromList->map[0]);
+            char* fromBase = fromMap ? fromMap->base : 0;
+
+            assert(toList->count == 1);
+            Laik_Mapping* toMap = &(toList->map[0]);
+            char* toBase = toMap ? toMap->base : 0;
+
             assert(fromBase != 0);
             // if current task is receiver, toBase should be allocated
             if ((op->rootTask == -1) || (op->rootTask == inst->myid))
@@ -167,6 +174,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             assert(myid != op->fromTask);
             assert(d->space->dims == 1);
+
+            assert(op->sliceNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[op->sliceNo]);
+            char* toBase = toMap ? toMap->base : 0;
+
             // from global to receiver-local indexes
             uint64_t from = op->slc.from.i[0] - toMap->baseIdx.i[0];
             uint64_t to   = op->slc.to.i[0] - toMap->baseIdx.i[0];
@@ -199,6 +211,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             assert(myid != op->toTask);
             assert(d->space->dims == 1);
+
+            assert(op->sliceNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[op->sliceNo]);
+            char* fromBase = fromMap ? fromMap->base : 0;
+
             // from global to sender-local indexes
             uint64_t from = op->slc.from.i[0] - fromMap->baseIdx.i[0];
             uint64_t to   = op->slc.to.i[0] - fromMap->baseIdx.i[0];

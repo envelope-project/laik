@@ -13,7 +13,7 @@
 
 // forward decl
 void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
-                                Laik_Mapping* fromMap, Laik_Mapping* toMap);
+                                Laik_MappingList* fromList, Laik_MappingList* toList);
 
 static Laik_Backend laik_backend_single = {"Single Task Backend", 0,
                                            laik_single_execTransition };
@@ -51,27 +51,33 @@ Laik_Group* laik_single_world()
 }
 
 void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
-                                Laik_Mapping* fromMap, Laik_Mapping* toMap)
+                                Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     Laik_Instance* inst = d->space->inst;
-    char* fromBase = fromMap ? fromMap->base : 0;
-    char* toBase = toMap ? toMap->base : 0;
+    if (t->redCount > 0) {
+        assert(fromList->count == 1);
+        assert(toList->count == 1);
+        Laik_Mapping* fromMap = &(fromList->map[0]);
+        Laik_Mapping* toMap = &(toList->map[0]);
+        char* fromBase = fromMap ? fromMap->base : 0;
+        char* toBase = toMap ? toMap->base : 0;
 
-    for(int i=0; i < t->redCount; i++) {
-        assert(d->space->dims == 1);
-        struct redTOp* op = &(t->red[i]);
-        uint64_t from = op->slc.from.i[0];
-        uint64_t to   = op->slc.to.i[0];
-        assert(fromBase != 0);
-        assert((op->rootTask == -1) || (op->rootTask == inst->myid));
-        assert(toBase != 0);
-        assert(to > from);
+        for(int i=0; i < t->redCount; i++) {
+            assert(d->space->dims == 1);
+            struct redTOp* op = &(t->red[i]);
+            uint64_t from = op->slc.from.i[0];
+            uint64_t to   = op->slc.to.i[0];
+            assert(fromBase != 0);
+            assert((op->rootTask == -1) || (op->rootTask == inst->myid));
+            assert(toBase != 0);
+            assert(to > from);
 
-        laik_log(1, "Single reduce: "
-                    "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
-                 from, to, d->elemsize, fromBase, toBase);
+            laik_log(1, "Single reduce: "
+                        "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
+                     from, to, d->elemsize, fromBase, toBase);
 
-        memcpy(toBase, fromBase, (to-from) * fromMap->data->elemsize);
+            memcpy(toBase, fromBase, (to-from) * fromMap->data->elemsize);
+        }
     }
 
     // the single backend should never need to do send/recv actions

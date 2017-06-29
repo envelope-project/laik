@@ -75,8 +75,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
     d->defaultPartitionType = LAIK_PT_Block;
     d->defaultFlow = LAIK_DF_CopyIn_CopyOut;
     d->activePartitioning = 0;
-    d->activeMapping = 0;
-    d->activeMappingCount = 0;
+    d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free
 
     return d;
@@ -118,104 +117,123 @@ Laik_Space* laik_get_space(Laik_Data* d)
 
 
 static
-Laik_Mapping* allocMap(Laik_Data* d, Laik_Partitioning* p, int n, Laik_Layout* l)
+Laik_MappingList* allocMaps(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
 {
     int t = laik_myid(d->group);
-    if (p->borderOff[t] + n >= p->borderOff[t+1]) {
-        // there is no slice <n> in my partition
-        return 0;
-    }
-    int o = p->borderOff[t] + n;
+    // number of own slices = number of separate maps
+    int n = p->borderOff[t+1] - p->borderOff[t];
+    if (n == 0) return 0;
 
-    Laik_Mapping* m;
-    m = (Laik_Mapping*) malloc(sizeof(Laik_Mapping));
+    Laik_MappingList* ml;
+    ml = (Laik_MappingList*) malloc(sizeof(Laik_MappingList) +
+                                    (n-1) * sizeof(Laik_Mapping));
+    ml->count = n;
 
-    uint64_t count = 1;
-    switch(p->space->dims) {
-    case 3:
-        count *= p->borders[o].to.i[2] - p->borders[o].from.i[2];
-        // fall-through
-    case 2:
-        count *= p->borders[o].to.i[1] - p->borders[o].from.i[1];
-        // fall-through
-    case 1:
-        count *= p->borders[o].to.i[0] - p->borders[o].from.i[0];
-        break;
-    }
-    m->data = d;
-    m->partitioning = p;
-    m->sliceNo = n;
-    m->count = count;
-    m->baseIdx = p->borders[o].from;
+    for(int i = 0; i < n; i++) {
+        Laik_Mapping* m = &(ml->map[i]);
+        int o = p->borderOff[t] + i;
 
-    if (l) {
-        // TODO: actually use the requested order, eventually convert
-        m->layout = l;
-    }
-    else {
-        // default mapping order (1,2,3)
-        m->layout = laik_new_layout(LAIK_LT_Default);
+        uint64_t count = 1;
+        switch(p->space->dims) {
+        case 3:
+            count *= p->borders[o].to.i[2] - p->borders[o].from.i[2];
+            // fall-through
+        case 2:
+            count *= p->borders[o].to.i[1] - p->borders[o].from.i[1];
+            // fall-through
+        case 1:
+            count *= p->borders[o].to.i[0] - p->borders[o].from.i[0];
+            break;
+        }
+
+        m->data = d;
+        m->partitioning = p;
+        m->sliceNo = i;
+        m->count = count;
+        m->baseIdx = p->borders[o].from;
+
+        if (l) {
+            // TODO: actually use the requested order, eventually convert
+            m->layout = l;
+        }
+        else {
+            // default mapping order (1,2,3)
+            m->layout = laik_new_layout(LAIK_LT_Default);
+        }
+
+        if (count == 0)
+            m->base = 0;
+        else {
+            // TODO: different policies
+            if ((!d->allocator) || (!d->allocator->malloc))
+                m->base = malloc(count * d->elemsize);
+            else
+                m->base = (d->allocator->malloc)(d, count * d->elemsize);
+        }
+
+        if (laik_logshown(1)) {
+            char s[100];
+            laik_getIndexStr(s, p->space->dims, &(m->baseIdx), false);
+            laik_log(1, "new map for '%s'/%d: [%s+%d, elemsize %d, base %p\n",
+                     d->name, i, s, m->count, d->elemsize, m->base);
+        }
     }
 
-    if (count == 0)
-        m->base = 0;
-    else {
-        // TODO: different policies
-        if ((!d->allocator) || (!d->allocator->malloc))
-            m->base = malloc(count * d->elemsize);
-        else
-            m->base = (d->allocator->malloc)(d, count * d->elemsize);
-    }
-
-    if (laik_logshown(1)) {
-        char s[100];
-        laik_getIndexStr(s, p->space->dims, &(m->baseIdx), false);
-        laik_log(1, "new map for '%s'/%d: [%s+%d, elemsize %d, base %p\n",
-                 d->name, n, s, m->count, d->elemsize, m->base);
-    }
-
-    return m;
+    return ml;
 }
 
 static
-void freeMap(Laik_Mapping* m)
+void freeMaps(Laik_MappingList* ml)
 {
-    Laik_Data* d = m->data;
+    if (ml == 0) return;
 
-    laik_log(1, "free map for '%s'/%d (count %d, base %p)\n",
-             d->name, m->sliceNo, m->count, m->base);
+    for(int i = 0; i < ml->count; i++) {
+        Laik_Mapping* m = &(ml->map[i]);
 
-    if (m && m->base) {
-        // TODO: different policies
-        if ((!d->allocator) || (!d->allocator->free))
-            free(m->base);
-        else
-            (d->allocator->free)(d, m->base);
+        Laik_Data* d = m->data;
+
+        laik_log(1, "free map for '%s'/%d (count %d, base %p)\n",
+                 d->name, m->sliceNo, m->count, m->base);
+
+        if (m && m->base) {
+            // TODO: different policies
+            if ((!d->allocator) || (!d->allocator->free))
+                free(m->base);
+            else
+                (d->allocator->free)(d, m->base);
+        }
     }
 
-    free(m);
+    free(ml);
 }
 
 static
-void copyMap(Laik_Transition* t, Laik_Mapping* toMap, Laik_Mapping* fromMap)
+void copyMaps(Laik_Transition* t,
+              Laik_MappingList* toList, Laik_MappingList* fromList)
 {
     assert(t->localCount > 0);
-    assert(toMap->data == fromMap->data);
-    if (toMap->count == 0) {
-        // no elements to copy to
-        return;
-    }
-    if (fromMap->base == 0) {
-        // nothing to copy from
-        assert(fromMap->count == 0);
-        return;
-    }
-
-    // calculate overlapping range between fromMap and toMap
-    assert(fromMap->data->space->dims == 1); // only for 1d now
-    Laik_Data* d = toMap->data;
     for(int i = 0; i < t->localCount; i++) {
-        Laik_Slice* s = &(t->local[i].slc);
+        struct localTOp* op = &(t->local[i]);
+        assert(op->fromSliceNo < fromList->count);
+        Laik_Mapping* fromMap = &(fromList->map[op->fromSliceNo]);
+        assert(op->toSliceNo < toList->count);
+        Laik_Mapping* toMap = &(toList->map[op->toSliceNo]);
+
+        assert(toMap->data == fromMap->data);
+        if (toMap->count == 0) {
+            // no elements to copy to
+            continue;
+        }
+        if (fromMap->base == 0) {
+            // nothing to copy from
+            assert(fromMap->count == 0);
+            continue;
+        }
+
+        // calculate overlapping range between fromMap and toMap
+        assert(fromMap->data->space->dims == 1); // only for 1d now
+        Laik_Data* d = toMap->data;
+        Laik_Slice* s = &(op->slc);
         int count = s->to.i[0] - s->from.i[0];
         uint64_t fromStart = s->from.i[0] - fromMap->baseIdx.i[0];
         uint64_t toStart   = s->from.i[0] - toMap->baseIdx.i[0];
@@ -233,18 +251,22 @@ void copyMap(Laik_Transition* t, Laik_Mapping* toMap, Laik_Mapping* fromMap)
 }
 
 static
-void initMap(Laik_Transition* t, Laik_Mapping* toMap)
+void initMaps(Laik_Transition* t, Laik_MappingList* toList)
 {
     assert(t->initCount > 0);
-    if (toMap->count == 0) {
-        // no elements to initialize
-        return;
-    }
-
-    assert(toMap->data->space->dims == 1); // only for 1d now
-    Laik_Data* d = toMap->data;
     for(int i = 0; i < t->initCount; i++) {
-        Laik_Slice* s = &(t->init[i].slc);
+        struct initTOp* op = &(t->init[i]);
+        assert(op->sliceNo < toList->count);
+        Laik_Mapping* toMap = &(toList->map[op->sliceNo]);
+
+        if (toMap->count == 0) {
+            // no elements to initialize
+            continue;
+        }
+
+        assert(toMap->data->space->dims == 1); // only for 1d now
+        Laik_Data* d = toMap->data;
+        Laik_Slice* s = &(op->slc);
         int count = s->to.i[0] - s->from.i[0];
 
         if (d->type == laik_Double) {
@@ -278,19 +300,6 @@ void initMap(Laik_Transition* t, Laik_Mapping* toMap)
     }
 }
 
-static
-void allocMappingArray(Laik_Data* d)
-{
-    assert(d->activeMapping == 0);
-    assert(d->activePartitioning != 0);
-
-    int c = laik_my_slicecount(d->activePartitioning);
-    d->activeMapping = (Laik_Mapping**) malloc(c * sizeof(Laik_Mapping*));
-    for(int i=0; i<c; i++)
-        d->activeMapping[i] = 0;
-    d->activeMappingCount = c;
-}
-
 
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
@@ -301,8 +310,8 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     // TODO: convert to realloc (with taking over layout)
     // TODO: partitioning can have multiple slices
     assert(laik_my_slicecount(p) == 1);
-    Laik_Mapping* fromMap = d->activeMapping ? d->activeMapping[0] : 0;
-    Laik_Mapping* toMap = allocMap(d, p, 0, 0);
+    Laik_MappingList* fromList = d->activeMappings;
+    Laik_MappingList* toList = allocMaps(d, p, 0);
 
     // calculate actions to be done for switching
     Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
@@ -310,27 +319,25 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     // let backend do send/recv/reduce actions
     // TODO: use async interface
     assert(p->space->inst->backend->execTransition);
-    (p->space->inst->backend->execTransition)(d, t, fromMap, toMap);
+    (p->space->inst->backend->execTransition)(d, t, fromList, toList);
 
     // local copy action
     if (t->localCount > 0)
-        copyMap(t, toMap, fromMap);
+        copyMaps(t, toList, fromList);
 
     // local init action
     if (t->initCount > 0)
-        initMap(t, toMap);
+        initMaps(t, toList);
 
     // free old mapping/partitioning
-    if (fromMap)
-        freeMap(fromMap);
+    if (fromList)
+        freeMaps(fromList);
     if (d->activePartitioning)
         laik_free_partitioning(d->activePartitioning);
 
     // set new mapping/partitioning active
     d->activePartitioning = p;
-    if (!d->activeMapping)
-        allocMappingArray(d);
-    d->activeMapping[0] = toMap;
+    d->activeMappings = toList;
 }
 
 // get slice number <n> in own partition
@@ -411,15 +418,11 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
     p = d->activePartitioning;
 
     // lazy allocation
-    if (!d->activeMapping) {
-        allocMappingArray(d);
+    if (!d->activeMappings)
+        d->activeMappings = allocMaps(d, p, layout);
 
-        if (n < d->activeMappingCount)
-            d->activeMapping[n] = allocMap(d, p, n, layout);
-    }
-
-    if (n < d->activeMappingCount)
-        return d->activeMapping[n];
+    if (n < d->activeMappings->count)
+        return &(d->activeMappings->map[n]);
     else
         return 0;
 }

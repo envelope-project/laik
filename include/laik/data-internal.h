@@ -22,6 +22,9 @@
 #error "include laik-internal.h instead"
 #endif
 
+#include "laik/data.h"
+
+typedef struct _Laik_MappingList Laik_MappingList;
 
 // kinds of data types supported by Laik
 typedef enum _Laik_TypeKind {
@@ -67,8 +70,7 @@ struct _Laik_Data {
     Laik_Partitioning* activePartitioning;
 
     // active mappings (multiple possible, one per slice)
-    Laik_Mapping** activeMapping;
-    int activeMappingCount;
+    Laik_MappingList* activeMappings;
 
     Laik_Allocator* allocator;
 
@@ -91,6 +93,11 @@ struct _Laik_Mapping {
 
     char* base; // start address of mapping
     int count; // number of elements mapped
+};
+
+struct _Laik_MappingList {
+    int count;
+    Laik_Mapping map[1];
 };
 
 // initialize the LAIK data module, called from laik_new_instance

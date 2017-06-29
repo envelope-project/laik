@@ -28,7 +28,7 @@ struct _Laik_Backend {
   char* name;
   void (*finalize)(Laik_Instance*);
   void (*execTransition)(Laik_Data*, Laik_Transition*,
-                         Laik_Mapping* from, Laik_Mapping* to);
+                         Laik_MappingList* from, Laik_MappingList* to);
 
   // TODO: async interface: start sending / register receiving / probe
 };

@@ -104,8 +104,11 @@ typedef enum _Laik_LayoutType {
 // a serialisation order of a LAIK container
 typedef struct _Laik_Layout Laik_Layout;
 
-// container part pinned to local memory space
+// one slice mapped to local memory space
 typedef struct _Laik_Mapping Laik_Mapping;
+
+// list of mappings for all multiple slices
+typedef struct _Laik_MappingList Laik_MappingList;
 
 // allocate new layout object with a layout hint, to use in laik_map
 Laik_Layout* laik_new_layout(Laik_LayoutType t);
