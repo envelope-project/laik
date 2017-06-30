@@ -45,7 +45,23 @@ struct _Laik_Space {
     Laik_Partitioning* first_partitioning;
 };
 
+struct _Laik_Partitioner {
+    Laik_PartitionType type;
+    Laik_Partitioning* partitioning; // partitioning to work on
+    void (*run)();
+};
 
+typedef struct _Laik_BlockPartitioner Laik_BlockPartitioner;
+struct _Laik_BlockPartitioner {
+    struct _Laik_Partitioner base;
+
+    // weighted partitioning (Block) uses callbacks
+    Laik_GetIdxWeight_t getIdxW;
+    void* idxUserData;
+    Laik_GetTaskWeight_t getTaskW;
+    void* taskUserData;
+};
+Laik_Partitioner* laik_newBlockPartitioner(Laik_Partitioning* p);
 
 // internal to allow for more irregular partitionings
 
@@ -62,15 +78,10 @@ struct _Laik_Partitioning {
     bool copyIn, copyOut;
     Laik_ReductionOperation redOp;
 
-    // weighted partitioning (Block) uses callbacks
-    Laik_GetIdxWeight_t getIdxW;
-    void* idxUserData;
-    Laik_GetTaskWeight_t getTaskW;
-    void* taskUserData;
+    Laik_Partitioner* partitioner;
 
     // coupling to another partitioning (potentially other space)
     Laik_Partitioning* base;
-    int haloWidth;
 
     // partition borders (calculated lazy)
     bool bordersValid;

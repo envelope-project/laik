@@ -29,10 +29,20 @@
 /* LAIK Spaces - Distributed partitioning of index spaces
  *********************************************************************/
 
+// A Partitioner implements a specific algorithm to partition
+// an index space. It is used in Partitioning objects.
+// There are predefined partitioners, but applications may
+// define their own.
+//
+// To use a predefined partitioner, use the corresponding
+// value from Laik_PartitionType in the construction of a
+// Partitioning.
+
+typedef struct _Laik_Partitioner Laik_Partitioner;
 
 // generic partition types, may need parameters
 typedef enum _Laik_PartitionType {
-    LAIK_PT_None = 0,
+    LAIK_PT_None = 0, // partitioner needs to be set explicitly
 
     // base
     LAIK_PT_Master,   // only one task has access to all elements
@@ -43,6 +53,10 @@ typedef enum _Laik_PartitionType {
     LAIK_PT_Copy,     // copy borders from base partitioning
     LAIK_PT_Halo,     // extend a partitioning at borders
     LAIK_PT_Neighbor, // extend a partitioning with neighbor parts
+
+    // application specific partitioners
+    LAIK_PT_Custom = 100
+
 } Laik_PartitionType;
 
 /**
@@ -164,20 +178,12 @@ laik_new_base_partitioning(Laik_Space* space,
                       Laik_PartitionType pt,
                       Laik_DataFlow flow);
 
-// set index-wise weight getter, used when calculating BLOCK partitioning.
-// as getter is called in every LAIK task, weights have to be known globally
-// (useful if workload per index is known)
-typedef double (*Laik_GetIdxWeight_t)(Laik_Index*, void* userData);
-void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f,
-                           void* userData);
+// may generate the partitioner object depending on partition type
+// to set a custom partitioner, call laik_set_partitioner first
+Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p);
 
-// set task-wise weight getter, used when calculating BLOCK partitioning.
-// as getter is called in every LAIK task, weights have to be known globally
-// (useful if relative performance per task is known)
-typedef double (*Laik_GetTaskWeight_t)(int rank, void* userData);
-void laik_set_task_weight(Laik_Partitioning* p, Laik_GetTaskWeight_t f,
-                          void* userData);
-
+// set custom partitioner to use
+void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr);
 
 // for multiple-dimensional spaces, set dimension to partition (default is 0)
 void laik_set_partitioning_dimension(Laik_Partitioning* p, int d);
@@ -236,6 +242,27 @@ void laik_repartition(Laik_Partitioning* p, Laik_PartitionType pt);
 // couple different LAIK instances via spaces:
 // one partition of calling task in outer space is mapped to inner space
 void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
+
+
+//----------------------------------
+// Predefined Partitioners
+
+// Block partitioner
+
+// set index-wise weight getter, used when calculating BLOCK partitioning.
+// as getter is called in every LAIK task, weights have to be known globally
+// (useful if workload per index is known)
+typedef double (*Laik_GetIdxWeight_t)(Laik_Index*, void* userData);
+void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f,
+                           void* userData);
+
+// set task-wise weight getter, used when calculating BLOCK partitioning.
+// as getter is called in every LAIK task, weights have to be known globally
+// (useful if relative performance per task is known)
+typedef double (*Laik_GetTaskWeight_t)(int rank, void* userData);
+void laik_set_task_weight(Laik_Partitioning* pr, Laik_GetTaskWeight_t f,
+                          void* userData);
+
 
 //------------------------------------------
 // automatic repartitioning
