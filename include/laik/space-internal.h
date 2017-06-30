@@ -24,6 +24,9 @@
 
 #include <stdbool.h>
 
+typedef struct _Laik_BlockPartitioner Laik_BlockPartitioner;
+typedef struct _Laik_BorderArray Laik_BorderArray;
+
 // internal as depending on communication backend
 
 struct _Laik_Task {
@@ -48,10 +51,10 @@ struct _Laik_Space {
 struct _Laik_Partitioner {
     Laik_PartitionType type;
     Laik_Partitioning* partitioning; // partitioning to work on
-    void (*run)();
+    void (*run)(Laik_Partitioner*, Laik_BorderArray*);
 };
 
-typedef struct _Laik_BlockPartitioner Laik_BlockPartitioner;
+
 struct _Laik_BlockPartitioner {
     struct _Laik_Partitioner base;
 
@@ -62,6 +65,30 @@ struct _Laik_BlockPartitioner {
     void* taskUserData;
 };
 Laik_Partitioner* laik_newBlockPartitioner(Laik_Partitioning* p);
+
+
+// the output of a partitioner is a Laik_BorderArray
+
+// used in BorderArray to map a slice to a task
+typedef struct _Laik_TaskSlice Laik_TaskSlice;
+struct _Laik_TaskSlice {
+    int task;
+    Laik_Slice s;
+};
+
+typedef struct _Laik_BorderArray Laik_BorderArray;
+struct _Laik_BorderArray {
+    int tasks;
+    int capacity;  // slices allocated
+    int count;     // slices used
+    int* off;      // offsets into border array with length <tasks>
+    Laik_TaskSlice* tslice; // slice borders, may be multiple per task
+};
+
+Laik_BorderArray* allocBorders(int tasks, int capacity);
+void appendSlice(Laik_BorderArray* a, int task, Laik_Slice* s);
+void sortBorderArray(Laik_BorderArray* a); // also sets the offsets
+void clearBorderArray(Laik_BorderArray* a);
 
 // internal to allow for more irregular partitionings
 
@@ -85,8 +112,7 @@ struct _Laik_Partitioning {
 
     // partition borders (calculated lazy)
     bool bordersValid;
-    int* borderOff;      // offsets into borders array
-    Laik_Slice* borders; // slice borders, may be multiple per task
+    Laik_BorderArray* borders;
 
     Laik_Partitioning* next; // for list of partitionings same space
 };

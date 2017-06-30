@@ -329,6 +329,10 @@ bool laik_do_init(Laik_DataFlow flow)
 }
 
 
+
+//-----------------------
+// Laik_Space
+
 // create a new index space object (initially invalid)
 Laik_Space* laik_new_space(Laik_Instance* i)
 {
@@ -438,6 +442,67 @@ void laik_change_space_3d(Laik_Space* s,
 }
 
 
+//-----------------------
+// Laik_BorderArray
+
+Laik_BorderArray* allocBorders(int tasks, int capacity)
+{
+    Laik_BorderArray* a;
+
+    // allocate struct with offset and slice arrays afterwards
+    a = (Laik_BorderArray*) malloc(sizeof(Laik_BorderArray) +
+                                   (tasks + 1) * sizeof(int) +
+                                   capacity * sizeof(Laik_TaskSlice));
+    a->off = (int*) ((char*) a + sizeof(Laik_BorderArray));
+    a->tslice = (Laik_TaskSlice*) ((char*) a->off + (tasks + 1) * sizeof(int));
+    a->tasks = tasks;
+    a->capacity = capacity;
+    a->count = 0;
+
+    return a;
+}
+
+void appendSlice(Laik_BorderArray* a, int task, Laik_Slice* s)
+{
+    assert(a->count < a->capacity);
+    a->tslice[a->count].task = task;
+    a->tslice[a->count].s = *s;
+    a->count++;
+}
+
+static
+int ts_cmp(const void *p1, const void *p2)
+{
+    const Laik_TaskSlice* ts1 = (const Laik_TaskSlice*) p1;
+    const Laik_TaskSlice* ts2 = (const Laik_TaskSlice*) p2;
+    return ts1->task - ts2->task;
+}
+
+void sortBorderArray(Laik_BorderArray* a)
+{
+    qsort( &(a->tslice[0]), a->count, sizeof(Laik_TaskSlice), ts_cmp);
+
+    int task, off = 0;
+    for(task = 0; task < a->tasks; task++) {
+        a->off[task] = off;
+        while((off < a->count) && (a->tslice[off].task <= task))
+            off++;
+    }
+    a->off[task] = off;
+    assert(off == a->count);
+}
+
+void clearBorderArray(Laik_BorderArray* a)
+{
+    // to remove all entries, it's enough to set count to 0
+    a->count = 0;
+}
+
+
+//-----------------------
+// Laik_Partitioning
+
+
 // create a new partitioning on a space
 Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
 {
@@ -464,7 +529,6 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     p->base = 0;
 
     p->bordersValid = false;
-    p->borderOff = 0;
     p->borders = 0;
 
     return p;
@@ -568,8 +632,9 @@ void laik_free_partitioning(Laik_Partitioning* p)
 {
     // FIXME: we need some kind of reference counting/GC here
 
-    //free(p->name);
     // TODO
+    //free(p->name);
+    //free(b->borders);
 }
 
 // get number of slices of this task
@@ -578,24 +643,22 @@ int laik_my_slicecount(Laik_Partitioning* p)
     laik_update_partitioning(p);
 
     int myid = p->group->myid;
-    return p->borderOff[myid+1] - p->borderOff[myid];
+    return p->borders->off[myid+1] - p->borders->off[myid];
 }
 
 // get slice number <n> from the slices of this task
 Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n)
 {
-    static Laik_Slice s;
-
     laik_update_partitioning(p);
 
     int myid = p->group->myid;
-    int o = p->borderOff[myid] + n;
-    if (o >= p->borderOff[myid+1]) {
+    int o = p->borders->off[myid] + n;
+    if (o >= p->borders->off[myid+1]) {
         // slice <n> is invalid
         return 0;
     }
-    s = p->borders[o];
-    return &s;
+    assert(p->borders->tslice[o].task == myid);
+    return &(p->borders->tslice[o].s);
 }
 
 
@@ -606,12 +669,11 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
 }
 
 
-
 // make sure partitioning borders are up to date
 // returns true on changes (if borders had to be updated)
 bool laik_update_partitioning(Laik_Partitioning* p)
 {
-    Laik_Slice* baseBorders = 0;
+    Laik_BorderArray* baseBorders = 0;
     Laik_Space* s = p->space;
     int pdim = p->pdim;
     int basepdim;
@@ -630,47 +692,43 @@ bool laik_update_partitioning(Laik_Partitioning* p)
         return false;
 
     int count = p->group->size;
-    if (!p->borders) {
-        // initialize borderOffsets: each task has one slice
-        p->borderOff = (int*) malloc((count+1) * sizeof(int));
-        for(int i = 0; i <= count; i++)
-            p->borderOff[i] = i;
-
-        p->borders = (Laik_Slice*) malloc(count * sizeof(Laik_Slice));
-    }
-
-    // init to all space indexes first
-    for(int task = 0; task < count; task++) {
-        Laik_Slice* b = &(p->borders[task]);
-        setIndex(&(b->from), 0, 0, 0);
-        setIndex(&(b->to), s->size[0], s->size[1], s->size[2]);
-    }
+    if (!p->borders)
+        p->borders = allocBorders(count, 2 * count);
+    else
+        clearBorderArray(p->borders);
+    Laik_BorderArray* ba = p->borders;
 
     // may trigger creation of partitioner object
     Laik_Partitioner* pr = laik_get_partitioner(p);
     if (pr)
-        (pr->run)(pr);
+        (pr->run)(pr, ba);
     else {
+        Laik_Slice slc;
+
         switch(p->type) {
         case LAIK_PT_All:
-            // init was fine, nothing to do
+            for(int task = 0; task < ba->tasks; task++) {
+                setIndex(&(slc.from), 0, 0, 0);
+                setIndex(&(slc.to), s->size[0], s->size[1], s->size[2]);
+                appendSlice(ba, task, &slc);
+            }
             break;
 
         case LAIK_PT_Master:
-            // set partitions for non-masters to empty
-            for(int task = 1; task < count; task++) {
-                Laik_Slice* b = &(p->borders[task]);
-                setIndex(&(b->to), 0, 0, 0);
-            }
+            // only full slice for master
+            setIndex(&(slc.from), 0, 0, 0);
+            setIndex(&(slc.to), s->size[0], s->size[1], s->size[2]);
+            appendSlice(ba, 0, &slc);
             break;
 
         case LAIK_PT_Copy:
             assert(baseBorders);
-            for(int task = 0; task < count; task++) {
-                Laik_Slice* b = &(p->borders[task]);
-
-                b->from.i[pdim] = baseBorders[task].from.i[basepdim];
-                b->to.i[pdim] = baseBorders[task].to.i[basepdim];
+            for(int i = 0; i < baseBorders->count; i++) {
+                setIndex(&(slc.from), 0, 0, 0);
+                setIndex(&(slc.to), s->size[0], s->size[1], s->size[2]);
+                slc.from.i[pdim] = baseBorders->tslice[i].s.from.i[basepdim];
+                slc.to.i[pdim] = baseBorders->tslice[i].s.to.i[basepdim];
+                appendSlice(ba, baseBorders->tslice[i].task, &slc);
             }
             break;
 
@@ -680,6 +738,7 @@ bool laik_update_partitioning(Laik_Partitioning* p)
         }
     }
 
+    sortBorderArray(ba);
     p->bordersValid = true;
 
     if (laik_logshown(1)) {
@@ -687,11 +746,12 @@ bool laik_update_partitioning(Laik_Partitioning* p)
         int off;
         off = sprintf(str, "partitioning '%s' (group %d) updated: ",
                       p->name, p->group->gid);
-        for(int task = 0; task < count; task++) {
-            if (task>0)
+        for(int i = 0; i < ba->count; i++) {
+            if (i>0)
                 off += sprintf(str+off, ", ");
-            off += sprintf(str+off, "%d:", task);
-            off += getSliceStr(str+off, p->space->dims, &(p->borders[task]));
+            off += sprintf(str+off, "%d:", p->borders->tslice[i].task);
+            off += getSliceStr(str+off, p->space->dims,
+                               &(p->borders->tslice[i].s));
         }
         laik_log(1, "%s\n", str);
     }
@@ -762,16 +822,19 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     int count = group->size;
     t->dims = dims;
 
+    Laik_BorderArray* fromBA = from ? from->borders : 0;
+    Laik_BorderArray* toBA = to ? to->borders : 0;
+
     // init values as next phase does a reduction?
     if ((to != 0) && laik_is_reduction(to->flow)) {
 
-        for(int o = to->borderOff[myid]; o < to->borderOff[myid+1]; o++) {
-            if (laik_slice_isEmpty(dims, &(to->borders[o]))) continue;
+        for(int o = toBA->off[myid]; o < toBA->off[myid+1]; o++) {
+            if (laik_slice_isEmpty(dims, &(toBA->tslice[o].s))) continue;
             assert(t->initCount < TRANSSLICES_MAX);
             assert(to->redOp != LAIK_RO_None);
             struct initTOp* op = &(t->init[t->initCount]);
-            op->slc = to->borders[o];
-            op->sliceNo = o - to->borderOff[myid];
+            op->slc = toBA->tslice[o].s;
+            op->sliceNo = o - toBA->off[myid];
             op->redOp = to->redOp;
             t->initCount++;
         }
@@ -783,18 +846,18 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         // (may need local copy if from/to mappings are different).
         // reductions are not handled here, but by backend
         if (laik_do_copyout(from->flow) && laik_do_copyin(to->flow)) {
-            for(int o1 = from->borderOff[myid]; o1 < from->borderOff[myid+1]; o1++) {
-                for(int o2 = to->borderOff[myid]; o2 < to->borderOff[myid+1]; o2++) {
+            for(int o1 = fromBA->off[myid]; o1 < fromBA->off[myid+1]; o1++) {
+                for(int o2 = toBA->off[myid]; o2 < toBA->off[myid+1]; o2++) {
                     slc = laik_slice_intersect(dims,
-                                               &(from->borders[o1]),
-                                               &(to->borders[o2]));
+                                               &(fromBA->tslice[o1].s),
+                                               &(toBA->tslice[o2].s));
                     if (slc == 0) continue;
 
                     assert(t->localCount < TRANSSLICES_MAX);
                     struct localTOp* op = &(t->local[t->localCount]);
                     op->slc = *slc;
-                    op->fromSliceNo = o1 - from->borderOff[myid];
-                    op->toSliceNo = o2 - to->borderOff[myid];
+                    op->fromSliceNo = o1 - fromBA->off[myid];
+                    op->toSliceNo = o2 - toBA->off[myid];
 
                     t->localCount++;
                 }
@@ -821,44 +884,47 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
 
         // something to send?
         if (laik_do_copyout(from->flow)) {
-            for(int o = from->borderOff[myid]; o < from->borderOff[myid+1]; o++) {
-                if (laik_slice_isEmpty(dims, &(from->borders[o]))) continue;
+            for(int o1 = fromBA->off[myid]; o1 < fromBA->off[myid+1]; o1++) {
                 for(int task = 0; task < count; task++) {
                     if (task == myid) continue;
+                    // we may send multiple messages to same task
+                    for(int o2 = toBA->off[task]; o2 < toBA->off[task+1]; o2++) {
 
-                    slc = laik_slice_intersect(dims,
-                                               &(from->borders[o]),
-                                               &(to->borders[task]));
-                    if (slc == 0) continue;
+                        slc = laik_slice_intersect(dims,
+                                                   &(fromBA->tslice[o1].s),
+                                                   &(toBA->tslice[o2].s));
+                        if (slc == 0) continue;
 
-                    assert(t->sendCount < TRANSSLICES_MAX);
-                    struct sendTOp* op = &(t->send[t->sendCount]);
-                    op->slc = *slc;
-                    op->sliceNo = o - from->borderOff[myid];
-                    op->toTask = task;
-                    t->sendCount++;
+                        assert(t->sendCount < TRANSSLICES_MAX);
+                        struct sendTOp* op = &(t->send[t->sendCount]);
+                        op->slc = *slc;
+                        op->sliceNo = o1 - fromBA->off[myid];
+                        op->toTask = task;
+                        t->sendCount++;
+                    }
                 }
             }
         }
 
         // something to receive not coming from a reduction?
         if (!laik_is_reduction(from->flow) && laik_do_copyin(to->flow)) {
-            for(int o = to->borderOff[myid]; o < to->borderOff[myid+1]; o++) {
-                if (laik_slice_isEmpty(dims, &(to->borders[o]))) continue;
-                for(int task = 0; task < count; task++) {
-                    if (task == myid) continue;
+            for(int task = 0; task < count; task++) {
+                if (task == myid) continue;
+                for(int o1 = fromBA->off[task]; o1 < fromBA->off[task+1]; o1++) {
+                    for(int o2 = toBA->off[myid]; o2 < toBA->off[myid+1]; o2++) {
 
-                    slc = laik_slice_intersect(dims,
-                                               &(to->borders[o]),
-                                               &(from->borders[task]));
-                    if (slc == 0) continue;
+                        slc = laik_slice_intersect(dims,
+                                                   &(fromBA->tslice[o1].s),
+                                                   &(toBA->tslice[o2].s));
+                        if (slc == 0) continue;
 
-                    assert(t->recvCount < TRANSSLICES_MAX);
-                    struct recvTOp* op = &(t->recv[t->recvCount]);
-                    op->slc = *slc;
-                    op->sliceNo = o - to->borderOff[myid];
-                    op->fromTask = task;
-                    t->recvCount++;
+                        assert(t->recvCount < TRANSSLICES_MAX);
+                        struct recvTOp* op = &(t->recv[t->recvCount]);
+                        op->slc = *slc;
+                        op->sliceNo = o2 - toBA->off[myid];
+                        op->fromTask = task;
+                        t->recvCount++;
+                    }
                 }
             }
         }
@@ -923,7 +989,7 @@ void laik_couple_nested(Laik_Space* outer, Laik_Space* inner)
 // Block partitioner
 
 // forward decl
-void runBlockPartitioner(Laik_BlockPartitioner* bp);
+void runBlockPartitioner(Laik_Partitioner* bp, Laik_BorderArray* ba);
 
 Laik_Partitioner* laik_newBlockPartitioner(Laik_Partitioning* p)
 {
@@ -970,15 +1036,21 @@ void laik_set_task_weight(Laik_Partitioning* p, Laik_GetTaskWeight_t f,
     p->bordersValid = false;
 }
 
-void runBlockPartitioner(Laik_BlockPartitioner* bp)
+void runBlockPartitioner(Laik_Partitioner* pr, Laik_BorderArray* ba)
 {
+    Laik_BlockPartitioner* bp = (Laik_BlockPartitioner*) pr;
     Laik_Partitioning* p = bp->base.partitioning;
     assert(p->borders != 0);
     assert(p->type == LAIK_PT_Block);
 
+    Laik_Space* s = p->space;
+    Laik_Slice slc;
+    setIndex(&(slc.from), 0, 0, 0);
+    setIndex(&(slc.to), s->size[0], s->size[1], s->size[2]);
+
     int count = p->group->size;
     int pdim = p->pdim;
-    uint64_t size = p->space->size[pdim];
+    uint64_t size = s->size[pdim];
     if (bp->getIdxW) {
         // element-wise weighting
         // TODO: also task-wise weighting
@@ -992,20 +1064,22 @@ void runBlockPartitioner(Laik_BlockPartitioner* bp)
         double perPart = total / count;
         double w = 0.0;
         int task = 0;
-        p->borders[task].from.i[pdim] = 0;
+        slc.from.i[pdim] = 0;
         for(uint64_t i = 0; i < size; i++) {
             idx.i[pdim] = i;
             w += (bp->getIdxW)(&idx, bp->idxUserData);
             if (w >= perPart) {
                 w = w - perPart;
                 if (task+1 == count) break;
-                p->borders[task].to.i[pdim] = i;
+                slc.to.i[pdim] = i;
+                appendSlice(ba, task, &slc);
                 task++;
-                p->borders[task].from.i[pdim] = i;
+                slc.from.i[pdim] = i;
             }
         }
         assert(task+1 == count);
-        p->borders[task].to.i[pdim] = size;
+        slc.to.i[pdim] = size;
+        appendSlice(ba, task, &slc);
         return;
     }
 
@@ -1021,9 +1095,7 @@ void runBlockPartitioner(Laik_BlockPartitioner* bp)
 
     uint64_t idx = 0, inc;
     for(int task = 0; task < count; task++) {
-        Laik_Slice* b = &(p->borders[task]);
-
-        b->from.i[pdim] = idx;
+        slc.from.i[pdim] = idx;
         if (useTW) {
             double f = (bp->getTaskW)(task, bp->taskUserData) / totalTW;
             inc = (uint64_t)(f * size);
@@ -1037,6 +1109,7 @@ void runBlockPartitioner(Laik_BlockPartitioner* bp)
         // last border always must be <size>
         if ((idx > size) || (task+1 == count))
             idx = size;
-        b->to.i[pdim] = idx;
+        slc.to.i[pdim] = idx;
+        appendSlice(ba, task, &slc);
     }
 }

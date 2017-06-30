@@ -120,8 +120,9 @@ static
 Laik_MappingList* allocMaps(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
 {
     int t = laik_myid(d->group);
+    Laik_BorderArray* ba = p->borders;
     // number of own slices = number of separate maps
-    int n = p->borderOff[t+1] - p->borderOff[t];
+    int n = ba->off[t+1] - ba->off[t];
     if (n == 0) return 0;
 
     Laik_MappingList* ml;
@@ -131,18 +132,19 @@ Laik_MappingList* allocMaps(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
 
     for(int i = 0; i < n; i++) {
         Laik_Mapping* m = &(ml->map[i]);
-        int o = p->borderOff[t] + i;
+        int o = ba->off[t] + i;
+        Laik_Slice* s = &(ba->tslice[o].s);
 
         uint64_t count = 1;
         switch(p->space->dims) {
         case 3:
-            count *= p->borders[o].to.i[2] - p->borders[o].from.i[2];
+            count *= s->to.i[2] - s->from.i[2];
             // fall-through
         case 2:
-            count *= p->borders[o].to.i[1] - p->borders[o].from.i[1];
+            count *= s->to.i[1] - s->from.i[1];
             // fall-through
         case 1:
-            count *= p->borders[o].to.i[0] - p->borders[o].from.i[0];
+            count *= s->to.i[0] - s->from.i[0];
             break;
         }
 
@@ -150,7 +152,7 @@ Laik_MappingList* allocMaps(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
         m->partitioning = p;
         m->sliceNo = i;
         m->count = count;
-        m->baseIdx = p->borders[o].from;
+        m->baseIdx = s->from;
 
         if (l) {
             // TODO: actually use the requested order, eventually convert
@@ -308,8 +310,6 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     laik_update_partitioning(p);
 
     // TODO: convert to realloc (with taking over layout)
-    // TODO: partitioning can have multiple slices
-    assert(laik_my_slicecount(p) == 1);
     Laik_MappingList* fromList = d->activeMappings;
     Laik_MappingList* toList = allocMaps(d, p, 0);
 
@@ -418,8 +418,11 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
     p = d->activePartitioning;
 
     // lazy allocation
-    if (!d->activeMappings)
+    if (!d->activeMappings) {
         d->activeMappings = allocMaps(d, p, layout);
+        if (d->activeMappings == 0)
+            return 0;
+    }
 
     if (n < d->activeMappings->count)
         return &(d->activeMappings->map[n]);
@@ -444,7 +447,7 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
 {
     Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
     Laik_Mapping* m = laik_map(d, 0, l);
-    assert(laik_my_slicecount(d->activePartitioning) == 1);
+    assert(laik_my_slicecount(d->activePartitioning) <= 1);
 
     if (base) *base = m ? m->base : 0;
     if (count) *count = m ? m->count : 0;

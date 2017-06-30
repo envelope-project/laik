@@ -107,12 +107,15 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             uint64_t from = op->slc.from.i[0];
             uint64_t to   = op->slc.to.i[0];
 
-            assert(fromList->count == 1);
+            // reductions go over all indexes => one slice covering all
+            assert((fromList != 0) && (fromList->count == 1));
             Laik_Mapping* fromMap = &(fromList->map[0]);
             char* fromBase = fromMap ? fromMap->base : 0;
 
-            assert(toList->count == 1);
-            Laik_Mapping* toMap = &(toList->map[0]);
+            // result goes to all tasks or just one => toList may be 0
+            if (toList)
+                assert(toList->count == 1);
+            Laik_Mapping* toMap = toList ? &(toList->map[0]) : 0;
             char* toBase = toMap ? toMap->base : 0;
 
             assert(fromBase != 0);
