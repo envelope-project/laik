@@ -25,6 +25,7 @@
 
 ../examples/Makefile
 ../examples/vsum.c
+../examples/vsum2.c
 ../examples/spmv.c
 ../examples/spmv2.c
 

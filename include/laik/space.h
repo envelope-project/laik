@@ -263,6 +263,9 @@ typedef double (*Laik_GetTaskWeight_t)(int rank, void* userData);
 void laik_set_task_weight(Laik_Partitioning* pr, Laik_GetTaskWeight_t f,
                           void* userData);
 
+// for block partitionings, we can specify how often we go around in cycles
+// to distribute chunks to tasks. Default is 1.
+void laik_set_cycle_count(Laik_Partitioning* p, int cycles);
 
 //------------------------------------------
 // automatic repartitioning

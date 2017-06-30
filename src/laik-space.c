@@ -1000,6 +1000,7 @@ Laik_Partitioner* laik_newBlockPartitioner(Laik_Partitioning* p)
     bp->base.partitioning = p;
     bp->base.run = runBlockPartitioner;
 
+    bp->cycles = 1;
     bp->getIdxW = 0;
     bp->idxUserData = 0;
     bp->getTaskW = 0;
@@ -1036,6 +1037,20 @@ void laik_set_task_weight(Laik_Partitioning* p, Laik_GetTaskWeight_t f,
     p->bordersValid = false;
 }
 
+void laik_set_cycle_count(Laik_Partitioning* p, int cycles)
+{
+    assert(p->type == LAIK_PT_Block);
+    Laik_BlockPartitioner* bp;
+    // may create block partitioner object if not existing yet
+    bp = (Laik_BlockPartitioner*) laik_get_partitioner(p);
+
+    if ((cycles < 0) || (cycles>10)) cycles = 1;
+    bp->cycles = cycles;
+
+    // borders have to be recalculated
+    p->bordersValid = false;
+}
+
 void runBlockPartitioner(Laik_Partitioner* pr, Laik_BorderArray* ba)
 {
     Laik_BlockPartitioner* bp = (Laik_BlockPartitioner*) pr;
@@ -1051,65 +1066,82 @@ void runBlockPartitioner(Laik_Partitioner* pr, Laik_BorderArray* ba)
     int count = p->group->size;
     int pdim = p->pdim;
     uint64_t size = s->size[pdim];
+
+    Laik_Index idx;
+    double totalW;
     if (bp->getIdxW) {
         // element-wise weighting
-        // TODO: also task-wise weighting
-        Laik_Index idx;
+        totalW = 0.0;
         setIndex(&idx, 0, 0, 0);
-        double total = 0.0;
         for(uint64_t i = 0; i < size; i++) {
             idx.i[pdim] = i;
-            total += (bp->getIdxW)(&idx, bp->idxUserData);
+            totalW += (bp->getIdxW)(&idx, bp->idxUserData);
         }
-        double perPart = total / count;
-        double w = 0.0;
-        int task = 0;
-        slc.from.i[pdim] = 0;
-        for(uint64_t i = 0; i < size; i++) {
-            idx.i[pdim] = i;
-            w += (bp->getIdxW)(&idx, bp->idxUserData);
-            if (w >= perPart) {
-                w = w - perPart;
-                if (task+1 == count) break;
-                slc.to.i[pdim] = i;
-                appendSlice(ba, task, &slc);
-                task++;
-                slc.from.i[pdim] = i;
-            }
-        }
-        assert(task+1 == count);
-        slc.to.i[pdim] = size;
-        appendSlice(ba, task, &slc);
-        return;
+    }
+    else {
+        // without weighting function, use weight 1 for every index
+        totalW = (double) size;
     }
 
-    // use task-wise weighting?
-    bool useTW = false;
     double totalTW = 0.0;
     if (bp->getTaskW) {
+        // task-wise weighting
+        totalTW = 0.0;
         for(int task = 0; task < count; task++)
             totalTW += (bp->getTaskW)(task, bp->taskUserData);
-        if (totalTW > 0.0)
-            useTW = true;
+    }
+    else {
+        // without task weighting function, use weight 1 for every task
+        totalTW = (double) count;
     }
 
-    uint64_t idx = 0, inc;
-    for(int task = 0; task < count; task++) {
-        slc.from.i[pdim] = idx;
-        if (useTW) {
-            double f = (bp->getTaskW)(task, bp->taskUserData) / totalTW;
-            inc = (uint64_t)(f * size);
-        }
-        else {
-            // equal-sized blocks
-            inc = size / count;
-        }
+    double perPart = totalW / count / bp->cycles;
+    double w = -0.5;
+    int task = 0;
+    int cycle = 0;
 
-        idx += inc;
-        // last border always must be <size>
-        if ((idx > size) || (task+1 == count))
-            idx = size;
-        slc.to.i[pdim] = idx;
-        appendSlice(ba, task, &slc);
+    // taskW is a correction factor, which is 1.0 without task weights
+    double taskW;
+    if (bp->getTaskW)
+        taskW = (bp->getTaskW)(task, bp->taskUserData)
+                * ((double) count) / totalTW;
+    else
+        taskW = 1.0;
+
+    slc.from.i[pdim] = 0;
+    for(uint64_t i = 0; i < size; i++) {
+        if (bp->getIdxW) {
+            idx.i[pdim] = i;
+            w += (bp->getIdxW)(&idx, bp->idxUserData);
+        }
+        else
+            w += 1.0;
+
+        while (w >= perPart * taskW) {
+            w = w - (perPart * taskW);
+            if ((task+1 == count) && (cycle+1 == bp->cycles)) break;
+            slc.to.i[pdim] = i;
+            if (slc.from.i[pdim] < slc.to.i[pdim])
+                appendSlice(ba, task, &slc);
+            task++;
+            if (task == count) {
+                task = 0;
+                cycle++;
+            }
+            // update taskW
+            if (bp->getTaskW)
+                taskW = (bp->getTaskW)(task, bp->taskUserData)
+                        * ((double) count) / totalTW;
+            else
+                taskW = 1.0;
+
+            // start new slice
+            slc.from.i[pdim] = i;
+        }
+        if ((task+1 == count) && (cycle+1 == bp->cycles)) break;
     }
+    assert((task+1 == count) && (cycle+1 == bp->cycles));
+    slc.to.i[pdim] = size;
+    appendSlice(ba, task, &slc);
 }
+

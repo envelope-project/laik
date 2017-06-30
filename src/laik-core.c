@@ -126,9 +126,9 @@ void laik_log(Laik_LogLevel l, char* msg, ...)
     assert(laik_loginst != 0);
     const char* lstr = "";
     switch(l) {
-        case LAIK_LL_Warning: lstr = "Warning "; break;
-        case LAIK_LL_Error:   lstr = "ERROR "; break;
-        case LAIK_LL_Panic:   lstr = "PANIC "; break;
+        case LAIK_LL_Warning: lstr = " Warning"; break;
+        case LAIK_LL_Error:   lstr = " ERROR"; break;
+        case LAIK_LL_Panic:   lstr = " PANIC"; break;
         default: break;
     }
 

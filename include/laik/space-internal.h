@@ -63,6 +63,9 @@ struct _Laik_BlockPartitioner {
     void* idxUserData;
     Laik_GetTaskWeight_t getTaskW;
     void* taskUserData;
+
+    // how many cycles (results in so many slics per task)
+    int cycles;
 };
 Laik_Partitioner* laik_newBlockPartitioner(Laik_Partitioning* p);
 

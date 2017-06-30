@@ -447,7 +447,10 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
 {
     Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
     Laik_Mapping* m = laik_map(d, 0, l);
-    assert(laik_my_slicecount(d->activePartitioning) <= 1);
+    int n = laik_my_slicecount(d->activePartitioning);
+    if (n > 1)
+        laik_log(LAIK_LL_Panic, "Request for single continuous mapping, "
+                                "but partition with %d slices!\n", n);
 
     if (base) *base = m ? m->base : 0;
     if (count) *count = m ? m->count : 0;
