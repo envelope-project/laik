@@ -1,6 +1,6 @@
 # same tests as in tests/, but using 4 MPI tasks
 
-TESTS=test-vsum test-spmv test-spmv2
+TESTS=test-vsum test-spmv test-spmv2 test-spmv2r
 
 .PHONY: $(TESTS)
 
@@ -16,6 +16,10 @@ test-spmv:
 
 test-spmv2:
 	mpirun -np 4 ../../examples/spmv2 | sort > test-spmv2.out
+	cmp test-spmv2.out test-spmv2.expected
+
+test-spmv2r:
+	mpirun -np 4 ../../examples/spmv2 -r | sort > test-spmv2.out
 	cmp test-spmv2.out test-spmv2.expected
 
 clean:

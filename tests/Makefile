@@ -1,4 +1,4 @@
-TESTS=test-vsum test-spmv test-spmv2
+TESTS=test-vsum test-spmv test-spmv2 test-spmv2r
 
 -include ../Makefile.config
 
@@ -19,6 +19,10 @@ test-spmv:
 
 test-spmv2:
 	../examples/spmv2 > test-spmv2.out
+	cmp test-spmv2.out test-spmv2.expected
+
+test-spmv2r:
+	../examples/spmv2 -r > test-spmv2.out
 	cmp test-spmv2.out test-spmv2.expected
 
 clean:
