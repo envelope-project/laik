@@ -3,3 +3,4 @@
 *.d
 *~
 Makefile.config
+*.DS_Store
