@@ -23,5 +23,6 @@
 #include "laik/space.h"
 #include "laik/data.h"
 #include "laik/backend.h"
+#include "laik/program.h"
 
 #endif // _LAIK_H_

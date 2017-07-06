@@ -33,6 +33,12 @@
 #include <stdio.h>
 #include <assert.h>
 
+typedef struct tag_my_phase myPhase;
+struct tag_my_phase{
+    int number;
+    char* name;
+};
+
 // for element-wise weighted partitioning: same as index
 double getEW(Laik_Index* i, void* d) { return (double) i->i[0]; }
 // for task-wise weighted partitioning: skip task given as user data
@@ -47,6 +53,11 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
+    myPhase* phase = (myPhase*) calloc (1, sizeof(myPhase));
+    phase->number = 0;
+    phase->name = "initialization";
+    laik_set_phase(inst, phase);
+
     double *base;
     uint64_t count;
 
@@ -60,6 +71,8 @@ int main(int argc, char* argv[])
     // allocate global 1d double array: 1 mio entries
     Laik_Data* a = laik_alloc_1d(world, laik_Double, 1000000);
 
+    phase->number = 1;
+    phase->name = "master only";
     // initialize at master (others do nothing, empty partition)
     p1 = laik_set_new_partitioning(a, LAIK_PT_Master, LAIK_DF_NoIn_CopyOut);
     if (laik_myid(world) == 0) {
@@ -71,6 +84,8 @@ int main(int argc, char* argv[])
     laik_map_def1(a, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[0] += base[i];
 
+    phase->number = 2;
+    phase->name = "equally Sized";
     // distribute data equally among all
     p2 = laik_new_base_partitioning(laik_get_space(a),
                                    LAIK_PT_Block, LAIK_DF_CopyIn_CopyOut);
@@ -82,6 +97,8 @@ int main(int argc, char* argv[])
         for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];
     }
 
+    phase->number = 3;
+    phase->name = "element weights";
     // distribution using element-wise weights equal to index
     p3 = laik_new_base_partitioning(laik_get_space(a),
                                    LAIK_PT_Block, LAIK_DF_CopyIn_CopyOut);
@@ -94,6 +111,8 @@ int main(int argc, char* argv[])
         for(uint64_t i = 0; i < count; i++) mysum[2] += base[i];
     }
 
+    phase->number = 4;
+    phase->name = "task weights";
     if (laik_size(world) > 1) {
         // distribution using task-wise weights: without master
         p4 = laik_new_base_partitioning(laik_get_space(a),
@@ -113,6 +132,8 @@ int main(int argc, char* argv[])
     printf("Id %d: partitial sums %.0f, %.0f, %.0f, %.0f\n",
            laik_myid(world), mysum[0], mysum[1], mysum[2], mysum[3]);
 
+    phase->number = 5;
+    phase->name = "verification";
     // for collecting partial sums at master, use LAIK's automatic
     // aggregation functionality when switching to new partitioning
     Laik_Data* sum = laik_alloc_1d(world, laik_Double, 4);

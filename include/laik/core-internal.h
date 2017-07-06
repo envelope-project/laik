@@ -49,6 +49,9 @@ struct _Laik_Instance {
   Laik_Group* group[MAX_GROUPS];
   Laik_Data* data[MAX_DATAS];
   Laik_Mapping* mapping[MAX_MAPPINGS]; // active mappings
+
+  Laik_Program_Control* control; //new, for iteration numer and program phase
+  
 };
 
 struct _Laik_Error {

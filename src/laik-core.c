@@ -28,6 +28,7 @@ int laik_myid(Laik_Group* g)
 void laik_finalize(Laik_Instance* i)
 {
     assert(i);
+    free(i->control);
     if (i->backend && i->backend->finalize)
         (*i->backend->finalize)(i);
 }
@@ -59,6 +60,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     instance->mapping_count = 0;
 
     laik_data_init();
+    instance->control = laik_program_control_init();
 
     // logging (TODO: multiple instances)
     laik_loginst = instance;
