@@ -25,10 +25,12 @@ if not protobuf_found:
         defs += " -I/usr/include/google"
 #  check for protobuf compiler
 protoc_found = distutils.spawn.find_executable("protoc-c")
+#  check for UUID header
+uuid_found = os.path.isfile(ipath + "/uuid/uuid.h")
 
-mqtt_enabled = mosq_found and protobuf_found and protoc_found
+mqtt_enabled = mosq_found and protobuf_found and protoc_found and uuid_found
 if mqtt_enabled:
-    print("Mosquitto/Protobuf found. MQTT enabled.")
+    print("Mosquitto/Protobuf/UUID found. MQTT enabled.")
     defs += " -DUSE_MQTT"
     subdirs += " external/MQTT"
 else:
@@ -42,13 +44,16 @@ else:
     if not protoc_found:
         print(" Protobuf compiler not found.")
         print("  On Ubuntu, install 'protobuf-c-compiler'")
+    if not uuid_found:
+        print(" UUID header file not found.")
+        print("  On Ubuntu, install 'uuid-dev'")
 
 # LAIK-internal MPI support
 if not os.path.isfile(ipath + "/mpi/mpi.h"):
     print("MPI not found. LAIK MPI backend disabled.")
     print("  On Ubuntu, install 'libopenmpi-dev'.")
 else:
-    print("MPI header found in '" + ipath + "/mpi'. MPI enabled, using 'mpicc'.")
+    print("MPI header found. MPI enabled, using 'mpicc'.")
     defs += " -DUSE_MPI"
     cc = "mpicc"
     test_subdirs += " mpi"
