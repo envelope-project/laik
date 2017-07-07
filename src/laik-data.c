@@ -309,6 +309,10 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     // calculate borders (TODO: may need global communication)
     laik_update_partitioning(p);
 
+    // active partitioning must have borders set
+    if (d->activePartitioning)
+        assert(d->activePartitioning->bordersValid);
+
     // TODO: convert to realloc (with taking over layout)
     Laik_MappingList* fromList = d->activeMappings;
     Laik_MappingList* toList = allocMaps(d, p, 0);
