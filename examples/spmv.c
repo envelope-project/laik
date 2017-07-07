@@ -41,12 +41,6 @@ struct _SpM {
     double* val;
 };
 
-typedef struct tag_my_phase myPhase;
-struct tag_my_phase{
-    int number;
-    char* name;
-};
-
 // for element-wise weighted partitioning: number of elems in row
 double getEW(Laik_Index* i, void* d)
 {
@@ -65,10 +59,7 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
-    myPhase* phase = (myPhase*) calloc (1, sizeof(myPhase));
-    phase->number = 0;
-    phase->name = "Initialization";
-    laik_set_phase (inst, phase);
+    laik_set_phase (inst, 0, "Init", NULL);
 
     // generate diagonal matrix in CSR format
     SpM* m = (SpM*) malloc(sizeof(SpM));
@@ -112,8 +103,7 @@ int main(int argc, char* argv[])
 
     // do SPMV, first time
 
-    phase->number = 1;
-    phase->name = "First Time SPMV";
+    laik_set_phase (inst, 1, "1st SpmV", NULL);
     // init result vector (only my partition)
     laik_map_def1(resD, (void**) &res, &count);
     for(uint64_t i = 0; i < count; i++)
@@ -136,9 +126,10 @@ int main(int argc, char* argv[])
         printf("Res sum (regular): %f\n", sum);
     }
 
-    phase->number = 2;
-    phase->name = "Second Time SPMV";
-    laik_set_iteration(inst, 0);
+    
+    laik_iter_reset(inst);
+    laik_set_phase (inst, 2, "2nd SpmV", NULL);
+
     // do SPMV, second time
 
     // other way to push results to master: use sum reduction
@@ -161,6 +152,5 @@ int main(int argc, char* argv[])
     }
 
     laik_finalize(inst);
-    free(phase);
     return 0;
 }

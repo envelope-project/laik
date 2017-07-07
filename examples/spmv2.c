@@ -43,12 +43,6 @@ struct _SpM {
     int row[1]; // variable size
 };
 
-typedef struct tag_my_phase myPhase;
-struct tag_my_phase{
-    int number;
-    char* name;
-};
-
 // generate an (somehow arbitrary) triangular matrix in CSR format
 SpM* newSpM(int size)
 {
@@ -119,15 +113,12 @@ int main(int argc, char* argv[])
     Laik_Instance* inst = laik_init_single();
 #endif
     Laik_Group* world = laik_world(inst);
-    myPhase* phase = (myPhase*) calloc (1, sizeof (myPhase));
 
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
     int maxiter = 0, size = 0;
     bool useReduction = false;
 
-    phase->number = 0;
-    phase->name = "Initialization";
-    laik_set_phase(inst, phase);
+    laik_set_phase (inst, 0, "Init", NULL);
 
     int arg = 1, argno = 0;
     while(arg < argc) {
@@ -189,8 +180,7 @@ int main(int argc, char* argv[])
     laik_map_def1(inpD, (void**) &inp, &icount);
     for(i = 0; i < icount; i++) inp[i] = 1.0;
 
-    phase->number = 1;
-    phase->name = "First SpMV";
+    laik_set_phase (inst, 1, "1st SpmV", NULL);
     // do a sequence of SpMV, starting with v as input vector,
     // normalize result after each step to use as input for the next round
     for(int iter = 0; iter < maxiter; iter++) {
@@ -269,9 +259,9 @@ int main(int argc, char* argv[])
         //allowRepartitioning(p);
     }
     
-    laik_set_iteration(inst, 0);
-    phase->number = 2;
-    phase->name = "Push result";
+    laik_iter_reset(inst);
+    laik_set_phase (inst, 2, "Post Processing", NULL);
+
     // push result to master
     laik_set_new_partitioning(inpD, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);
     laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);
@@ -287,6 +277,5 @@ int main(int argc, char* argv[])
     }
 
     laik_finalize(inst);
-    free(phase);
     return 0;
 }

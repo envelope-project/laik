@@ -14,10 +14,16 @@
 
 struct tag_laik_program_control
 {
-    // current program phase
-    void* cur_phase;
+    int cur_phase;
+    char* cur_phase_name;
+    // user controlled structure
+    void* pData;
     // current iteration number iterations
     int cur_iteration;    
+
+
+    int argc;
+    char*** argv;
 };
 
 #endif //LAIK_PROGRAM_INTERNAL

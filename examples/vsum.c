@@ -38,12 +38,6 @@
 #include <assert.h>
 
 
-typedef struct tag_my_phase myPhase;
-struct tag_my_phase{
-    int number;
-    char* name;
-};
-
 // for element-wise weighted partitioning: same as index
 double getEW(Laik_Index* i, void* d) { return (double) i->i[0]; }
 // for task-wise weighted partitioning: skip task given as user data
@@ -58,10 +52,8 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
-    myPhase* phase = (myPhase*) calloc (1, sizeof(myPhase));
-    phase->number = 0;
-    phase->name = "initialization";
-    laik_set_phase(inst, phase);
+    laik_set_phase (inst, 0, "Init", NULL);
+
 
     double *base;
     uint64_t count;
@@ -93,8 +85,8 @@ int main(int argc, char* argv[])
     laik_map_def1(a, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];
     
-    phase->number = 1;
-    phase->name = "element";
+    laik_set_phase (inst, 1, "element-wise", NULL);
+
     // distribution using element-wise weights equal to index
     p3 = laik_new_base_partitioning(laik_get_space(a),
                                    LAIK_PT_Block, LAIK_DF_CopyIn_CopyOut);
@@ -104,8 +96,8 @@ int main(int argc, char* argv[])
     laik_map_def1(a, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[2] += base[i];
 
-    phase->number = 2;
-    phase->name = "Task-wise Weight";
+    laik_set_phase (inst, 2, "task-wise", NULL);
+
     if (laik_size(world) > 1) {
         // distribution using task-wise weights: without master
         p4 = laik_new_base_partitioning(laik_get_space(a),
@@ -130,8 +122,8 @@ int main(int argc, char* argv[])
     assert(count == 4);
     for(int i = 0; i < 4; i++) base[i] = mysum[i];
 
-    phase->number = 3;
-    phase->name = "master-only";    
+    laik_set_phase (inst, 3, "Master-Only", NULL);
+ 
     // master-only partitioning: add partial values to be read at master
     laik_set_new_partitioning(sum, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);
     if (laik_myid(world) == 0) {
@@ -141,6 +133,5 @@ int main(int argc, char* argv[])
     }
 
     laik_finalize(inst);
-    free(phase);
     return 0;
 }

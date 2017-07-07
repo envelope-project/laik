@@ -24,8 +24,11 @@ void laik_set_iteration (Laik_Instance*, int );
 int laik_get_iteration (Laik_Instance*);
 
 //set current program phase control
-void laik_set_phase (Laik_Instance*, void*);
+void laik_set_phase (Laik_Instance*, int, char*, void*);
 //get current program phase control
-void* laik_get_phase (Laik_Instance*);
+void laik_get_phase (Laik_Instance*, int*, char**, void**);
+
+//reset iternation
+void laik_iter_reset (Laik_Instance*);
 
 #endif //LAIK_PROGRAM_H
