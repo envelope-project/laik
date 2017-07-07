@@ -2,9 +2,7 @@ Some TODOs
 
 # Tests
 
-* start: use the debug output from examples with different task counts
-* add a way to "normalize" ordering in debug output (allow piping into "sort")
-* set up Travis
+* unit tests
 
 # More examples
 
@@ -22,10 +20,12 @@ Some TODOs
 
 Driven by example code we want to work (see above)
 
-* list of slices in a partition
 * more data types
 * couple index spaces / partitionings
-* ...
+
+# Refactoring and design
+
+* split acess/data flow from partitiong
 
 # Features not yet implemented
 
