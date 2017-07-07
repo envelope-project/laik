@@ -19,11 +19,14 @@ struct tag_laik_program_control
     // user controlled structure
     void* pData;
     // current iteration number iterations
-    int cur_iteration;    
+    int cur_iteration;
 
+    // internal counter: incremented on every phase change
+    int phase_counter;
 
-    int* argc;
-    char*** argv;
+    // allow automatic re-launches if set
+    int argc;    // 0: invalid
+    char** argv;
 };
 
 #endif //LAIK_PROGRAM_INTERNAL

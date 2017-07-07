@@ -23,19 +23,21 @@ int laik_get_iteration (
     return (i->control->cur_iteration);
 }
 
-//set current program phase control
+// set current program phase control
 void laik_set_phase (
     Laik_Instance* i, 
     int n_phase,
-    char* name,         /* Must be presistant */
+    char* name,         /* Must be persistant */
     void* pData
 ){
     i->control->cur_phase = n_phase;
     i->control->cur_phase_name = name;
     i->control->pData = pData;
+
+    i->control->phase_counter++;
 }
 
-//get current program phase control
+// get current program phase control
 void laik_get_phase (
     Laik_Instance* i,
     int* phase,
@@ -45,6 +47,12 @@ void laik_get_phase (
     *phase = i->control->cur_phase;
     *name = i->control->cur_phase_name;
     *pData = i->control->pData;
+}
+
+void laik_set_args(Laik_Instance* i, int argc, char** argv)
+{
+    i->control->argc = argc;
+    i->control->argv = argv;
 }
 
 void laik_iter_reset(

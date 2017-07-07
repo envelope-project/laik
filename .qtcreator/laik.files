@@ -5,6 +5,7 @@
 ../src/laik-backend-single.c
 ../src/laik-backend-mpi.c
 ../src/laik-core.c
+../src/laik-program.c
 ../src/laik-data.c
 ../src/laik-space.c
 
@@ -16,6 +17,8 @@
 ../include/laik/backend.h
 ../include/laik/core.h
 ../include/laik/core-internal.h
+../include/laik/program.h
+../include/laik/program-internal.h
 ../include/laik/data.h
 ../include/laik/data-internal.h
 ../include/laik/space.h

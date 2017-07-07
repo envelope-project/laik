@@ -53,7 +53,6 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
         d->didInit = true;
     }
 
-
     int size, rank;
     MPI_Comm_size(d->comm, &size);
     MPI_Comm_rank(d->comm, &rank);
@@ -66,10 +65,6 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_mpi, size, rank,
                              processor_name, d);
-
-    //save command line parameters
-    inst->control->argc = argc;
-    inst->control->argv = argv;
 
     // group world
     Laik_Group* g = laik_create_group(inst);
