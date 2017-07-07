@@ -22,14 +22,17 @@
 ../include/laik/space-internal.h
 
 ../Makefile
+../.gitignore
 
 ../examples/Makefile
+../examples/.gitignore
 ../examples/vsum.c
 ../examples/vsum2.c
 ../examples/spmv.c
 ../examples/spmv2.c
 
 ../tests/Makefile
+../tests/.gitignore
 ../tests/mpi/Makefile
 
 ../doc/TODO.md
