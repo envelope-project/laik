@@ -567,6 +567,11 @@ Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p)
         case LAIK_PT_Block:
             p->partitioner = laik_newBlockPartitioner(p);
             break;
+        case LAIK_PT_All:
+        case LAIK_PT_Master:
+        case LAIK_PT_Copy:
+            // built-in algorithms do not require partitioner
+            break;
         default:
             laik_log(LAIK_LL_Panic, "Not Implemented!\n");
             break;
@@ -702,6 +707,8 @@ bool laik_update_partitioning(Laik_Partitioning* p)
     if (pr)
         (pr->run)(pr, ba);
     else {
+        // handle simple built-in partitioning algorithms
+
         Laik_Slice slc;
 
         switch(p->type) {
