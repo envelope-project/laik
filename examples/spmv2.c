@@ -118,7 +118,8 @@ int main(int argc, char* argv[])
     int maxiter = 0, size = 0;
     bool useReduction = false;
 
-    laik_set_phase (inst, 0, "Init", NULL);
+    // better debug output
+    laik_set_phase(inst, 0, "init", NULL);
 
     int arg = 1, argno = 0;
     while(arg < argc) {
@@ -180,11 +181,16 @@ int main(int argc, char* argv[])
     laik_map_def1(inpD, (void**) &inp, &icount);
     for(i = 0; i < icount; i++) inp[i] = 1.0;
 
-    laik_set_phase (inst, 1, "1st SpmV", NULL);
+    // better debug output
+    laik_set_phase(inst, 1, "SpmV", NULL);
+
     // do a sequence of SpMV, starting with v as input vector,
     // normalize result after each step to use as input for the next round
     for(int iter = 0; iter < maxiter; iter++) {
-        
+
+        // better debug output
+        laik_set_iteration(inst, iter);
+
         // access to complete input vector (local indexing = global indexing)
         laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_DF_CopyIn_NoOut);
         laik_map_def1(inpD, (void**) &inp, 0);
@@ -254,13 +260,12 @@ int main(int argc, char* argv[])
             }
         }
 
-        laik_set_iteration(inst, iter);
         // react on repartitioning wishes
         //allowRepartitioning(p);
     }
     
     laik_iter_reset(inst);
-    laik_set_phase (inst, 2, "Post Processing", NULL);
+    laik_set_phase(inst, 2, "post-proc", NULL);
 
     // push result to master
     laik_set_new_partitioning(inpD, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);

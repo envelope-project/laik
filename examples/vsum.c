@@ -52,8 +52,7 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
-    laik_set_phase (inst, 0, "Init", NULL);
-
+    laik_set_phase(inst, 0, "init", NULL);
 
     double *base;
     uint64_t count;
@@ -85,7 +84,7 @@ int main(int argc, char* argv[])
     laik_map_def1(a, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];
     
-    laik_set_phase (inst, 1, "element-wise", NULL);
+    laik_set_phase(inst, 1, "element-wise", NULL);
 
     // distribution using element-wise weights equal to index
     p3 = laik_new_base_partitioning(laik_get_space(a),
@@ -96,7 +95,7 @@ int main(int argc, char* argv[])
     laik_map_def1(a, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[2] += base[i];
 
-    laik_set_phase (inst, 2, "task-wise", NULL);
+    laik_set_phase(inst, 2, "task-wise", NULL);
 
     if (laik_size(world) > 1) {
         // distribution using task-wise weights: without master
@@ -122,7 +121,7 @@ int main(int argc, char* argv[])
     assert(count == 4);
     for(int i = 0; i < 4; i++) base[i] = mysum[i];
 
-    laik_set_phase (inst, 3, "Master-Only", NULL);
+    laik_set_phase(inst, 3, "master-only", NULL);
  
     // master-only partitioning: add partial values to be read at master
     laik_set_new_partitioning(sum, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);

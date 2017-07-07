@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
-    laik_set_phase (inst, 0, "Init", NULL);
+    laik_set_phase(inst, 0, "init", NULL);
 
     // generate diagonal matrix in CSR format
     SpM* m = (SpM*) malloc(sizeof(SpM));
@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
 
     // do SPMV, first time
 
-    laik_set_phase (inst, 1, "1st SpmV", NULL);
+    laik_set_phase(inst, 1, "1st SpmV", NULL);
     // init result vector (only my partition)
     laik_map_def1(resD, (void**) &res, &count);
     for(uint64_t i = 0; i < count; i++)
@@ -128,7 +128,7 @@ int main(int argc, char* argv[])
 
     
     laik_iter_reset(inst);
-    laik_set_phase (inst, 2, "2nd SpmV", NULL);
+    laik_set_phase(inst, 2, "2nd SpmV", NULL);
 
     // do SPMV, second time
 

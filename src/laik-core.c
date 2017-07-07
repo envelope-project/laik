@@ -120,28 +120,77 @@ bool laik_logshown(Laik_LogLevel l)
     return (l >= laik_loglevel);
 }
 
-// log a message, similar to printf
+/* Log a message, similar to printf
+ *
+ * A prefix is added which allows sorting to get stable output
+ * from the arbitrarily interleaved output of multiple MPI tasks:
+ *
+ * == LAIK-<phasectr>.<iter> T<task>/<tasks> <phasemsgctr>.<line> <pname>
+ *
+ * <phasectr>    a counter incremented on every phase change
+ * <iter>        iteration counter set by application
+ * <task>        task rank in this LAIK instance
+ * <phasemsgctr> log message counter, reset at each phase change
+ * <pname>       phase name set by application
+*/
 void laik_log(Laik_LogLevel l, char* msg, ...)
 {
     if (l < laik_loglevel) return;
 
     assert(laik_loginst != 0);
-    const char* lstr = "";
+    const char* lstr = 0;
     switch(l) {
-        case LAIK_LL_Warning: lstr = " Warning"; break;
-        case LAIK_LL_Error:   lstr = " ERROR"; break;
-        case LAIK_LL_Panic:   lstr = " PANIC"; break;
+        case LAIK_LL_Warning: lstr = "Warning"; break;
+        case LAIK_LL_Error:   lstr = "ERROR"; break;
+        case LAIK_LL_Panic:   lstr = "PANIC"; break;
         default: break;
     }
 
-    // print at once to not mix output from multiple (MPI) tasks
-    char format[1000];
-    sprintf(format, "LAIK %d/%d%s - %s",
-            laik_loginst->myid, laik_loginst->size, lstr, msg);
-
+    static char buf1[2000];
     va_list args;
     va_start(args, msg);
-    vfprintf(stderr, format, args);
+    vsprintf(buf1, msg, args);
+
+    // counters for stable output
+    static int counter = 0;
+    static int last_phase_counter = 0;
+    int line_counter = 0;
+    if (last_phase_counter != laik_loginst->control->phase_counter) {
+        counter = 0;
+        last_phase_counter = laik_loginst->control->phase_counter;
+    }
+    counter++;
+
+    // print at once to not mix output from multiple (MPI) tasks
+    static char buf2[3000];
+    int off1 = 0, off2 = 0, off;
+
+    char* phase = laik_loginst->control->cur_phase_name;
+    if (!phase) phase = "";
+
+    // append prefix at beginning of each line of msg
+    while(buf1[off1]) {
+
+        // prefix
+        line_counter++;
+        off2 += sprintf(buf2+off2,
+                        "== LAIK-%04d.%02d T%2d/%d %04d.%02d %-15s ",
+                        laik_loginst->control->phase_counter,
+                        laik_loginst->control->cur_iteration,
+                        laik_loginst->myid, laik_loginst->size,
+                        counter, line_counter, phase);
+        if (lstr)
+                off2 += sprintf(buf2+off2, "%-7s: ",
+                                (line_counter == 1) ? lstr : "");
+
+        // line of message
+        off = off1;
+        while(buf1[off] && (buf1[off] != '\n')) off++;
+        if (buf1[off] == '\n') buf1[off++] = 0;
+        off2 += sprintf(buf2+off2, "%s\n", buf1 + off1);
+        off1 = off;
+    }
+    fprintf(stderr, "%s", buf2);
 
     // terminate program on panic
     if (l == LAIK_LL_Panic) exit(1);
