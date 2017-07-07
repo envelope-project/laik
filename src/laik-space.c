@@ -30,13 +30,18 @@ int getSpaceStr(char* s, Laik_Space* spc)
 {
     switch(spc->dims) {
     case 1:
-        return sprintf(s, "[0-%llu]", spc->size[0]-1);
+        return sprintf(s, "[0-%llu]",
+                       (unsigned long long) spc->size[0]-1);
     case 2:
         return sprintf(s, "[0-%llu/0-%llu]",
-                       spc->size[0]-1, spc->size[1]-1);
+                       (unsigned long long) spc->size[0]-1,
+                       (unsigned long long) spc->size[1]-1);
     case 3:
         return sprintf(s, "[0-%llu/0-%llu/0-%llu]",
-                       spc->size[0]-1, spc->size[1]-1, spc->size[2]-1);
+                       (unsigned long long) spc->size[0]-1,
+                       (unsigned long long) spc->size[1]-1,
+                       (unsigned long long) spc->size[2]-1);
+    default: assert(0);
     }
     return 0;
 }
@@ -55,11 +60,17 @@ int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1)
 
     switch(dims) {
     case 1:
-        return sprintf(s, "%llu", i1);
+        return sprintf(s, "%llu", (unsigned long long) i1);
     case 2:
-        return sprintf(s, "%llu/%llu", i1, i2);
+        return sprintf(s, "%llu/%llu",
+                       (unsigned long long) i1,
+                       (unsigned long long) i2);
     case 3:
-        return sprintf(s, "%llu/%llu/%llu", i1, i2, i3);
+        return sprintf(s, "%llu/%llu/%llu",
+                       (unsigned long long) i1,
+                       (unsigned long long) i2,
+                       (unsigned long long) i3);
+    default: assert(0);
     }
     return 0;
 }
@@ -114,21 +125,6 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2)
         }
     }
     return &s;
-}
-
-static
-void laik_slice_sub(int dims, Laik_Slice* s, Laik_Index* from)
-{
-    s->from.i[0] -= from->i[0];
-    s->to.i[0] -= from->i[0];
-    if (dims > 1) {
-        s->from.i[1] -= from->i[1];
-        s->to.i[1] -= from->i[1];
-        if (dims > 2) {
-            s->from.i[2] -= from->i[2];
-            s->to.i[2] -= from->i[2];
-        }
-    }
 }
 
 static
@@ -620,7 +616,7 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
                                    Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
-    p = laik_new_partitioning(p->space);
+    p = laik_new_partitioning(s);
     p->type = pt;
     p->base = base;
     set_flow(p, flow);
@@ -952,7 +948,7 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
 Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
                                        Laik_PartGroup* to)
 {
-    Laik_Transition* t;
+    // Laik_Transition* t;
 
     assert(0); // TODO
 }
