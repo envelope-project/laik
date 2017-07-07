@@ -24,7 +24,6 @@
 
 #include "laik/data.h"
 
-typedef struct _Laik_MappingList Laik_MappingList;
 
 // kinds of data types supported by Laik
 typedef enum _Laik_TypeKind {

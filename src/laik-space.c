@@ -30,12 +30,12 @@ int getSpaceStr(char* s, Laik_Space* spc)
 {
     switch(spc->dims) {
     case 1:
-        return sprintf(s, "[0-%lu]", spc->size[0]-1);
+        return sprintf(s, "[0-%llu]", spc->size[0]-1);
     case 2:
-        return sprintf(s, "[0-%lu/0-%lu]",
+        return sprintf(s, "[0-%llu/0-%llu]",
                        spc->size[0]-1, spc->size[1]-1);
     case 3:
-        return sprintf(s, "[0-%lu/0-%lu/0-%lu]",
+        return sprintf(s, "[0-%llu/0-%llu/0-%llu]",
                        spc->size[0]-1, spc->size[1]-1, spc->size[2]-1);
     }
     return 0;
@@ -55,11 +55,11 @@ int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1)
 
     switch(dims) {
     case 1:
-        return sprintf(s, "%lu", i1);
+        return sprintf(s, "%llu", i1);
     case 2:
-        return sprintf(s, "%lu/%lu", i1, i2);
+        return sprintf(s, "%llu/%llu", i1, i2);
     case 3:
-        return sprintf(s, "%lu/%lu/%lu", i1, i2, i3);
+        return sprintf(s, "%llu/%llu/%llu", i1, i2, i3);
     }
     return 0;
 }
@@ -571,6 +571,9 @@ Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p)
         case LAIK_PT_Block:
             p->partitioner = laik_newBlockPartitioner(p);
             break;
+        default:
+            laik_log(LAIK_LL_Panic, "Not Implemented!\n");
+            break;
         }
     }
     return p->partitioner;
@@ -1005,6 +1008,8 @@ Laik_Partitioner* laik_newBlockPartitioner(Laik_Partitioning* p)
     bp->idxUserData = 0;
     bp->getTaskW = 0;
     bp->taskUserData = 0;
+
+    return (Laik_Partitioner*) bp;
 }
 
 void laik_set_index_weight(Laik_Partitioning* p, Laik_GetIdxWeight_t f,

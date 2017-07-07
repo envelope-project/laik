@@ -79,7 +79,6 @@ struct _Laik_TaskSlice {
     Laik_Slice s;
 };
 
-typedef struct _Laik_BorderArray Laik_BorderArray;
 struct _Laik_BorderArray {
     int tasks;
     int capacity;  // slices allocated
