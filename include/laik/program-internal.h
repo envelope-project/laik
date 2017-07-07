@@ -22,7 +22,7 @@ struct tag_laik_program_control
     int cur_iteration;    
 
 
-    int argc;
+    int* argc;
     char*** argv;
 };
 
