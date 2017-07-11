@@ -92,8 +92,7 @@ int main(int argc, char* argv[])
 
     // block partitioning according to elems in matrix rows
     Laik_Partitioning* p;
-    p = laik_new_base_partitioning(world, s,
-                                   LAIK_PT_Block, LAIK_DF_NoIn_CopyOut);
+    p = laik_new_base_partitioning(world, s, LAIK_PT_Block, LAIK_DF_CopyOut);
     laik_set_index_weight(p, getEW, m);
     laik_set_partitioning(resD, p);
 
@@ -119,7 +118,7 @@ int main(int argc, char* argv[])
         laik_set_iteration(inst, r-fromRow);
     }
     // push result to master
-    laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);
+    laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_DF_CopyIn);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;
@@ -134,7 +133,8 @@ int main(int argc, char* argv[])
     // do SPMV, second time
 
     // other way to push results to master: use sum reduction
-    laik_set_new_partitioning(resD, LAIK_PT_All, LAIK_DF_InitIn_SumReduceOut);
+    laik_set_new_partitioning(resD, LAIK_PT_All,
+                              LAIK_DF_Init|LAIK_DF_ReduceOut|LAIK_DF_Sum);
     laik_map_def1(resD, (void**) &res, &count);
     slc = laik_my_slice(p, 0);
     fromRow = slc->from.i[0];
@@ -144,7 +144,7 @@ int main(int argc, char* argv[])
             res[r] += m->val[o] * v[m->col[o]];
         laik_set_iteration(inst, r-fromRow);
     }
-    laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);
+    laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_DF_CopyIn);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;

@@ -60,36 +60,37 @@ typedef enum _Laik_PartitionType {
 } Laik_PartitionType;
 
 /**
- * Data flow behavior of a phase for indexes in partitions.
- * Laik uses this information to come up with minimal data transfers
- * at the beginning/end of an access phase to a data container.
+ * Set of flags describing how the application accesses its
+ * partition of a LAIK data container in a phase, and thus how
+ * data needs to be preserved from previous and to next phase.
  *
- * This declares where values are coming from at start of phase (In),
- * and used for at end of phase (Out).
- * - No (In/Out): nothing to be preserved/transferred
- * - Copy (In/Out): preserve values from previous/to next phase
- * - Init (In): initialize with a given value at start of phase
- * - Reduce (Out): value is used for a reduction
+ * This is used to decide which data needs to be transfered or
+ * copied, and whether memory resources can be shared among
+ * LAIK tasks.
  *
- * The data flow behavior in a sequence of phases has to be consistent
- * regarding stated data flow behavior and whether a value at an index
- * is valid in only one or multiple tasks. Otherwise, an error will be
- * raised.
- * Consistency rules for phase A to B for a given index:
- * - CopyOut from exactly one task in A: CopyIn or NoIn in B
- * - NoOut from all tasks in A: Init or NoIn in B
- * - ReduceOut from at least one task in A: CopyIn or NoIn in B
+ * Flags:
+ * - CopyIn:  data needs to be preserved from previous phase
+ * - CopyOut: data needs to be preserved for next phase
+ * - Init:    values need to be initialized for reduction
+ * - ReduceOut: values will added for next phase
+ *
+ * - Sharable: it is safe for LAIK tasks to use shared memory
+ *
+ * Consistency rules:
+ * - CopyIn only possible if previous phase is CopyOut or
+ *   ReduceOut
  **/
 typedef enum _Laik_DataFlow {
-    LAIK_DF_Invalid = 0,
+    LAIK_DF_None       = 0,
 
-    LAIK_DF_None,           // no data transfers needed
-    LAIK_DF_CopyIn_NoOut,   // no values to propagate to next phase
-    LAIK_DF_NoIn_CopyOut,   // nothing from previous phase
-    LAIK_DF_CopyIn_CopyOut, // propagate from previous and to next
+    LAIK_DF_CopyIn     = 1,     // preserve values of previous phase
+    LAIK_DF_CopyOut    = 2,     // propagate values to next phase
+    LAIK_DF_Init       = 4,     // Initialize, needs reduction operation
+    LAIK_DF_ReduceOut  = 8,     // output aggregated, needs reduction operation
 
-    LAIK_DF_NoIn_SumReduceOut,   // output aggregated by sum reduction
-    LAIK_DF_InitIn_SumReduceOut, // initialize with 0, then sum reduction
+    LAIK_DF_Sharable   = 16,    // tasks can share memory
+
+    LAIK_DF_Sum        = 1<<16  // sum reduction (for Init/ReduceOut)
 } Laik_DataFlow;
 
 // reduction operation

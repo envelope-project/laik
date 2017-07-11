@@ -182,15 +182,14 @@ int main(int argc, char* argv[])
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioning* p;
-    p = laik_new_base_partitioning(world, s,
-                                   LAIK_PT_Block, LAIK_DF_NoIn_CopyOut);
+    p = laik_new_base_partitioning(world, s, LAIK_PT_Block, LAIK_DF_CopyOut);
     laik_set_index_weight(p, getEW, m);
     laik_set_partitioning(resD, p);
 
     // same partitioning, used to broadcast partitial input to all
     // TODO: This is a bad API - needs rethinking
     Laik_Partitioning* p2;
-    p2 = laik_new_coupled_partitioning(p, LAIK_PT_Copy, LAIK_DF_NoIn_CopyOut);
+    p2 = laik_new_coupled_partitioning(p, LAIK_PT_Copy, LAIK_DF_CopyOut);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i;
@@ -198,7 +197,7 @@ int main(int argc, char* argv[])
     int fromRow, toRow;
 
     // initialize input vector at master, broadcast to all
-    laik_set_new_partitioning(inpD, LAIK_PT_Master, LAIK_DF_NoIn_CopyOut);
+    laik_set_new_partitioning(inpD, LAIK_PT_Master, LAIK_DF_CopyOut);
     laik_map_def1(inpD, (void**) &inp, &icount);
     for(i = 0; i < icount; i++) inp[i] = 1.0;
 
@@ -213,7 +212,7 @@ int main(int argc, char* argv[])
         laik_set_iteration(inst, iter);
 
         // access to complete input vector (local indexing = global indexing)
-        laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_DF_CopyIn_NoOut);
+        laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_DF_CopyIn);
         laik_map_def1(inpD, (void**) &inp, 0);
 
         // SpMV operation, for my range of rows
@@ -246,10 +245,11 @@ int main(int argc, char* argv[])
         t1 += wtime() - tt1;
 
         // compute global sum with LAIK, broadcast result to all
-        laik_set_new_partitioning(sumD, LAIK_PT_All, LAIK_DF_NoIn_SumReduceOut);
+        laik_set_new_partitioning(sumD, LAIK_PT_All,
+                                  LAIK_DF_ReduceOut|LAIK_DF_Sum);
         laik_map_def1(sumD, (void**) &sumPtr, 0);
         *sumPtr = sum;
-        laik_set_new_partitioning(sumD, LAIK_PT_All, LAIK_DF_CopyIn_NoOut);
+        laik_set_new_partitioning(sumD, LAIK_PT_All, LAIK_DF_CopyIn);
         laik_map_def1(sumD, (void**) &sumPtr, 0);
         sum = *sumPtr;
 
@@ -266,7 +266,8 @@ int main(int argc, char* argv[])
         if (useReduction) {
             // varian 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
-            laik_set_new_partitioning(inpD, LAIK_PT_All, LAIK_DF_InitIn_SumReduceOut);
+            laik_set_new_partitioning(inpD, LAIK_PT_All,
+                                      LAIK_DF_Init|LAIK_DF_ReduceOut|LAIK_DF_Sum);
             laik_map_def1(inpD, (void**) &inp, 0);
 
             // loop over all local slices of result vector
@@ -298,8 +299,8 @@ int main(int argc, char* argv[])
     laik_set_phase(inst, 2, "post-proc", NULL);
 
     // push result to master
-    laik_set_new_partitioning(inpD, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);
-    laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_DF_CopyIn_NoOut);
+    laik_set_new_partitioning(inpD, LAIK_PT_Master, LAIK_DF_CopyIn);
+    laik_set_new_partitioning(resD, LAIK_PT_Master, LAIK_DF_CopyIn);
     if (laik_myid(world) == 0) {
         double sum = 0.0;
         laik_map_def1(resD, (void**) &res, &rcount);

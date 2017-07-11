@@ -73,7 +73,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
 
     d->backend_data = 0;
     d->defaultPartitionType = LAIK_PT_Block;
-    d->defaultFlow = LAIK_DF_CopyIn_CopyOut;
+    d->defaultFlow = LAIK_DF_None;
     d->activePartitioning = 0;
     d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free

@@ -206,16 +206,21 @@ int getReductionStr(char* s, Laik_ReductionOperation op)
 static
 int getDataFlowStr(char* s, Laik_DataFlow flow)
 {
-    switch(flow) {
-    case LAIK_DF_None:                return sprintf(s, "none");
-    case LAIK_DF_CopyIn_NoOut:        return sprintf(s, "copyin");
-    case LAIK_DF_NoIn_CopyOut:        return sprintf(s, "copyout");
-    case LAIK_DF_CopyIn_CopyOut:      return sprintf(s, "copyinout");
-    case LAIK_DF_NoIn_SumReduceOut:   return sprintf(s, "sumout");
-    case LAIK_DF_InitIn_SumReduceOut: return sprintf(s, "init-sumout");
-    default: assert(0);
+    int o = 0;
+
+    if (flow & LAIK_DF_CopyIn)    o += sprintf(s+o, "copyin|");
+    if (flow & LAIK_DF_CopyOut)   o += sprintf(s+o, "copyout|");
+    if (flow & LAIK_DF_Init)      o += sprintf(s+o, "init|");
+    if (flow & LAIK_DF_ReduceOut) o += sprintf(s+o, "reduceout|");
+    if (flow & LAIK_DF_Sum)       o += sprintf(s+o, "sum|");
+    if (o > 0) {
+        o--;
+        s[o] = 0;
     }
-    return 0;
+    else
+        o += sprintf(s+o, "none");
+
+    return o;
 }
 
 
@@ -283,67 +288,42 @@ int getTransitionStr(char* s, Laik_Transition* t)
 // is this a reduction?
 bool laik_is_reduction(Laik_DataFlow flow)
 {
-    switch(flow) {
-    case LAIK_DF_NoIn_SumReduceOut:
-    case LAIK_DF_InitIn_SumReduceOut:
+    if (flow & LAIK_DF_ReduceOut)
         return true;
-    default:
-        break;
-    }
     return false;
 }
 
 // return the reduction operation from data flow behavior
 Laik_ReductionOperation laik_get_reduction(Laik_DataFlow flow)
 {
-    switch(flow) {
-    case LAIK_DF_NoIn_SumReduceOut:
-    case LAIK_DF_InitIn_SumReduceOut:
+    if (flow & LAIK_DF_Sum)
         return LAIK_RO_Sum;
-    default:
-        break;
-    }
     return LAIK_RO_None;
 }
 
 // do we need to copy values in?
 bool laik_do_copyin(Laik_DataFlow flow)
 {
-    switch(flow) {
-    case LAIK_DF_CopyIn_NoOut:
-    case LAIK_DF_CopyIn_CopyOut:
+    if (flow & LAIK_DF_CopyIn)
         return true;
-    default:
-        break;
-    }
     return false;
 }
 
 // do we need to copy values out?
 bool laik_do_copyout(Laik_DataFlow flow)
 {
-    switch(flow) {
-    case LAIK_DF_NoIn_CopyOut:
-    case LAIK_DF_CopyIn_CopyOut:
+    if (flow & LAIK_DF_CopyOut)
         return true;
-    default:
-        break;
-    }
     return false;
 }
 
 // do we need to init values?
 bool laik_do_init(Laik_DataFlow flow)
 {
-    switch(flow) {
-    case LAIK_DF_InitIn_SumReduceOut:
+    if (flow & LAIK_DF_Init)
         return true;
-    default:
-        break;
-    }
     return false;
 }
-
 
 
 //-----------------------
@@ -563,7 +543,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
     p->space = s;
     p->pdim = 0;
 
-    p->flow = LAIK_DF_Invalid;
+    p->flow = LAIK_DF_None;
     p->type = LAIK_PT_None;
     p->copyIn = false;
     p->copyOut = false;
