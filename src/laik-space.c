@@ -779,15 +779,20 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                                        Laik_Partitioning* to)
 {
     Laik_Slice* slc;
-    Laik_Transition* t;
 
-    t = (Laik_Transition*) malloc(sizeof(Laik_Transition));
-    t->localCount = 0;
-    t->initCount = 0;
-    t->sendCount = 0;
-    t->recvCount = 0;
-    t->redCount = 0;
+#define TRANSSLICES_MAX 100
+    struct localTOp local[TRANSSLICES_MAX];
+    struct initTOp init[TRANSSLICES_MAX];
+    struct sendTOp send[TRANSSLICES_MAX];
+    struct recvTOp recv[TRANSSLICES_MAX];
+    struct redTOp red[TRANSSLICES_MAX];
+    int localCount, initCount, sendCount, recvCount, redCount;
 
+    localCount = 0;
+    initCount = 0;
+    sendCount = 0;
+    recvCount = 0;
+    redCount = 0;
 
     // either one of <from> and <to> has to be valid; same space, same group
     Laik_Space* space = 0;
@@ -826,7 +831,6 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     int dims = space->dims;
     int myid = group->inst->myid;
     int count = group->size;
-    t->dims = dims;
 
     Laik_BorderArray* fromBA = from ? from->borders : 0;
     Laik_BorderArray* toBA = to ? to->borders : 0;
@@ -836,13 +840,13 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
 
         for(int o = toBA->off[myid]; o < toBA->off[myid+1]; o++) {
             if (laik_slice_isEmpty(dims, &(toBA->tslice[o].s))) continue;
-            assert(t->initCount < TRANSSLICES_MAX);
+            assert(initCount < TRANSSLICES_MAX);
             assert(to->redOp != LAIK_RO_None);
-            struct initTOp* op = &(t->init[t->initCount]);
+            struct initTOp* op = &(init[initCount]);
             op->slc = toBA->tslice[o].s;
             op->sliceNo = o - toBA->off[myid];
             op->redOp = to->redOp;
-            t->initCount++;
+            initCount++;
         }
     }
 
@@ -859,13 +863,13 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                                                &(toBA->tslice[o2].s));
                     if (slc == 0) continue;
 
-                    assert(t->localCount < TRANSSLICES_MAX);
-                    struct localTOp* op = &(t->local[t->localCount]);
+                    assert(localCount < TRANSSLICES_MAX);
+                    struct localTOp* op = &(local[localCount]);
                     op->slc = *slc;
                     op->fromSliceNo = o1 - fromBA->off[myid];
                     op->toSliceNo = o2 - toBA->off[myid];
 
-                    t->localCount++;
+                    localCount++;
                 }
             }
         }
@@ -875,16 +879,16 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
             // reductions always should involve everyone
             assert(from->type == LAIK_PT_All);
             if (laik_do_copyin(to->flow)) {
-                assert(t->redCount < TRANSSLICES_MAX);
+                assert(redCount < TRANSSLICES_MAX);
                 assert((to->type == LAIK_PT_Master) ||
                        (to->type == LAIK_PT_All));
 
-                struct redTOp* op = &(t->red[t->redCount]);
+                struct redTOp* op = &(red[redCount]);
                 op->slc = *sliceFromSpace(from->space); // complete space
                 op->redOp = from->redOp;
                 op->rootTask = (to->type == LAIK_PT_All) ? -1 : 0;
 
-                t->redCount++;
+                redCount++;
             }
         }
 
@@ -901,12 +905,12 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                                                    &(toBA->tslice[o2].s));
                         if (slc == 0) continue;
 
-                        assert(t->sendCount < TRANSSLICES_MAX);
-                        struct sendTOp* op = &(t->send[t->sendCount]);
+                        assert(sendCount < TRANSSLICES_MAX);
+                        struct sendTOp* op = &(send[sendCount]);
                         op->slc = *slc;
                         op->sliceNo = o1 - fromBA->off[myid];
                         op->toTask = task;
-                        t->sendCount++;
+                        sendCount++;
                     }
                 }
             }
@@ -924,17 +928,50 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
                                                    &(toBA->tslice[o2].s));
                         if (slc == 0) continue;
 
-                        assert(t->recvCount < TRANSSLICES_MAX);
-                        struct recvTOp* op = &(t->recv[t->recvCount]);
+                        assert(recvCount < TRANSSLICES_MAX);
+                        struct recvTOp* op = &(recv[recvCount]);
                         op->slc = *slc;
                         op->sliceNo = o2 - toBA->off[myid];
                         op->fromTask = task;
-                        t->recvCount++;
+                        recvCount++;
                     }
                 }
             }
         }
     }
+
+    // allocate space as needed
+    int localSize = localCount * sizeof(struct localTOp);
+    int initSize  = initCount  * sizeof(struct initTOp);
+    int sendSize  = sendCount  * sizeof(struct sendTOp);
+    int recvSize  = recvCount  * sizeof(struct recvTOp);
+    int redSize   = redCount   * sizeof(struct redTOp);
+    int tsize = sizeof(Laik_Transition) +
+                localSize + initSize + sendSize + recvSize + redSize;
+    int localOff = sizeof(Laik_Transition);
+    int initOff  = localOff + localSize;
+    int sendOff  = initOff  + initSize;
+    int recvOff  = sendOff  + sendSize;
+    int redOff   = recvOff  + recvSize;
+    assert(redOff + redSize == tsize);
+
+    Laik_Transition* t = (Laik_Transition*) malloc(tsize);
+    t->dims = dims;
+    t->local = (struct localTOp*) (((char*)t) + localOff);
+    t->init  = (struct initTOp*)  (((char*)t) + initOff);
+    t->send  = (struct sendTOp*)  (((char*)t) + sendOff);
+    t->recv  = (struct recvTOp*)  (((char*)t) + recvOff);
+    t->red   = (struct redTOp*)   (((char*)t) + redOff);
+    t->localCount = localCount;
+    t->initCount  = initCount;
+    t->sendCount  = sendCount;
+    t->recvCount  = recvCount;
+    t->redCount   = redCount;
+    memcpy(t->local, local, localSize);
+    memcpy(t->init, init,  initSize);
+    memcpy(t->send, send,  sendSize);
+    memcpy(t->recv, recv,  recvSize);
+    memcpy(t->red,  red,   redSize);
 
     if (laik_logshown(1)) {
         char s[1000];

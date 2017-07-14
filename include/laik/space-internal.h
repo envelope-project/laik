@@ -119,8 +119,6 @@ struct _Laik_Partitioning {
     Laik_Partitioning* next; // for list of partitionings same space
 };
 
-#define TRANSSLICES_MAX 10
-
 // sub-structures of Laik_Transition
 
 // slice staying local
@@ -163,24 +161,24 @@ struct _Laik_Transition {
     // local slices staying local;
     // may need copy when different from/to mappings are used
     int localCount;
-    struct localTOp local[TRANSSLICES_MAX];
+    struct localTOp *local;
 
     // local slices that should be initialized;
     // the value depends on the reduction type (neutral element)
     int initCount;
-    struct initTOp init[TRANSSLICES_MAX];
+    struct initTOp *init;
 
     // slices to send to other task
     int sendCount;
-    struct sendTOp send[TRANSSLICES_MAX];
+    struct sendTOp *send;
 
     // slices to receive from other task
     int recvCount;
-    struct recvTOp recv[TRANSSLICES_MAX];
+    struct recvTOp *recv;
 
     // slices to reduce
     int redCount;
-    struct redTOp red[TRANSSLICES_MAX];
+    struct redTOp *red;
 };
 
 // LAIK internal
