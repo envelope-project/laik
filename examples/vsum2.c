@@ -108,7 +108,7 @@ int main(int argc, char* argv[])
         // distribution using task-wise weights: without master
         p4 = laik_new_base_partitioning(laik_get_space(a),
                                         LAIK_PT_Block, LAIK_DF_CopyIn_CopyOut);
-        laik_set_cycle_count(p3, 2);
+        laik_set_cycle_count(p4, 2);
         laik_set_task_weight(p4, getTW, 0); // without master
         laik_set_partitioning(a, p4);
         // partial sum using blocks sized by task weights

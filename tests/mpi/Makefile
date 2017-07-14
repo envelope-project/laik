@@ -10,9 +10,9 @@ test-vsum:
 	mpirun -np 4 ../../examples/vsum | sort > test-vsum.out
 	cmp test-vsum.out test-vsum.expected
 
-test-vsum:
-	mpirun -np 4 ../../examples/vsum | sort > test-vsum2.out
-	cmp test-vsum2.out test-vsum.expected
+test-vsum2:
+	mpirun -np 4 ../../examples/vsum2 | sort > test-vsum2.out
+	cmp test-vsum2.out test-vsum2.expected
 
 test-spmv:
 	mpirun -np 4 ../../examples/spmv | sort > test-spmv.out
