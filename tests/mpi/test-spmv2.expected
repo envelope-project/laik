@@ -1,5 +1,6 @@
 Input sum: 1.000000 (should be 1.0)
 Result sum: 4518230.767287 (should be same as last iter sum)
+Running 10 iterations, SpM side 10000 (~600.0 MB), 4 tasks
 Sum at iter  0: 166666665000.000000
 Sum at iter  1: 14997499.900000
 Sum at iter  2: 11901190.412720

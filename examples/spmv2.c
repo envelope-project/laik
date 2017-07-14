@@ -29,7 +29,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <sys/time.h>
 
+double wtime()
+{
+  struct timeval tv;
+  gettimeofday(&tv, 0);
+
+  return tv.tv_sec+1e-6*tv.tv_usec;
+}
 
 //----------------------------------------------------------------------
 // sparse matrix in CSR format
@@ -118,6 +126,9 @@ int main(int argc, char* argv[])
     int maxiter = 0, size = 0;
     bool useReduction = false;
 
+    // timing: t1 raw computation, t2: everything without init
+    double t1 = 0.0, t2 = 0.0, tt1, tt2, tt;
+
     // better debug output
     laik_set_phase(inst, 0, "init", NULL);
 
@@ -136,9 +147,9 @@ int main(int argc, char* argv[])
         else { // regular arguments
             argno++;
             if (argno == 1)
-                maxiter = atoi(argv[1]);
+                maxiter = atoi(argv[arg]);
             else if (argno == 2)
-                size = atoi(argv[2]);
+                size = atoi(argv[arg]);
             else {
                 help("too many arguments");
             }
@@ -148,8 +159,17 @@ int main(int argc, char* argv[])
     if (maxiter == 0) maxiter = 10;
     if (size == 0) size = 10000;
 
+    if (laik_myid(world) == 0) {
+        printf("Running %d iterations, SpM side %d (~%.1f MB), %d tasks\n",
+               maxiter, size, .000001*size*size*6, laik_size(world));
+    }
+    tt = wtime();
+
     // generate a sparse matrix
     SpM* m = newSpM(size);
+
+    tt2 = wtime();
+    laik_log(2, "Init done (%.3fs)\n", tt2 - tt);
 
     // 1d space to partition matrix rows and result vector
     Laik_Space* s = laik_new_space_1d(inst, size);
@@ -199,6 +219,7 @@ int main(int argc, char* argv[])
 
         // do a partial sum of result during traversal
         sum = 0.0;
+        tt1 = wtime();
 
         // loop over all local slices
         for(int sNo = 0; ; sNo++) {
@@ -219,6 +240,7 @@ int main(int argc, char* argv[])
             for(i = 0; i < rcount; i++)
                 sum += res[i];
         }
+        t1 += wtime() - tt1;
 
         // compute global sum with LAIK, broadcast result to all
         laik_set_new_partitioning(sumD, LAIK_PT_All, LAIK_DF_NoIn_SumReduceOut);
@@ -231,6 +253,11 @@ int main(int argc, char* argv[])
         if (laik_myid(world) == 0) {
             printf("Sum at iter %2d: %f\n", iter, sum);
         }
+
+        tt = wtime();
+        t2 += tt - tt2;
+        tt2 = tt;
+        laik_log(2, "Timing: %.3fs comp / %.3fs\n", t1, t2);
 
         // scale owns results by global sum and write into input partitions
         if (useReduction) {
@@ -280,6 +307,10 @@ int main(int argc, char* argv[])
         for(i = 0; i < icount; i++) sum += inp[i];
         printf("Input sum: %f (should be 1.0)\n", sum);
     }
+
+    t2 += wtime() - tt2;
+    laik_log(2, "Timing: %.3fs comp/iter, %.3fs total/iter, %.3fs total\n",
+             t1 / maxiter, t2 / maxiter, t2);
 
     laik_finalize(inst);
     return 0;
