@@ -48,12 +48,24 @@ else:
         print(" UUID header file not found.")
         print("  On Ubuntu, install 'uuid-dev'")
 
+
+#------------------------------------
 # LAIK-internal MPI support
-if not os.path.isfile(ipath + "/mpi/mpi.h"):
+
+# header may be in different directory. If found, we expect mpicc
+# to do the right thing
+mpi_found = os.path.isfile(ipath + "/mpi.h")
+mpi_ipath = ipath
+if not mpi_found:
+    mpi_found = os.path.isfile(ipath + "/mpi/mpi.h")
+    mpi_ipath = ipath + "/mpi"
+
+if not mpi_found:
     print("MPI not found. LAIK MPI backend disabled.")
     print("  On Ubuntu, install 'libopenmpi-dev'.")
 else:
-    print("MPI header found. MPI enabled, using 'mpicc'.")
+    print("MPI header found (in '" + mpi_ipath +
+          "'). MPI enabled, using 'mpicc'.")
     defs += " -DUSE_MPI"
     cc = "mpicc"
     test_subdirs += " mpi"
