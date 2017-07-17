@@ -39,5 +39,6 @@
 ../tests/mpi/Makefile
 
 ../doc/TODO.md
+../doc/Debugging.md
 
 ../README.md

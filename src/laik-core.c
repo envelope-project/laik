@@ -14,6 +14,9 @@
 // default log level
 static Laik_LogLevel laik_loglevel = LAIK_LL_Error;
 static Laik_Instance* laik_loginst = 0;
+// filter
+static int laik_log_fromtask = -1;
+static int laik_log_totask = -1;
 
 int laik_size(Laik_Group* g)
 {
@@ -69,6 +72,18 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
         int l = atoi(str);
         if (l > 0)
             laik_loglevel = l;
+        char* p = index(str, ':');
+        if (p) {
+            p++;
+            laik_log_fromtask = atoi(p);
+            p = index(p, '-');
+            if (p) {
+                p++;
+                laik_log_totask = atoi(p);
+            }
+            else
+                laik_log_totask = laik_log_fromtask;
+        }
     }
 
     return instance;
@@ -136,6 +151,11 @@ bool laik_logshown(Laik_LogLevel l)
 void laik_log(Laik_LogLevel l, char* msg, ...)
 {
     if (l < laik_loglevel) return;
+    if (laik_log_fromtask >= 0) {
+        assert(laik_log_totask >= laik_log_fromtask);
+        if (laik_loginst->myid < laik_log_fromtask) return;
+        if (laik_loginst->myid > laik_log_totask) return;
+    }
 
     assert(laik_loginst != 0);
     const char* lstr = 0;
