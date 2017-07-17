@@ -85,7 +85,7 @@ omp_enabled = False
 mycc = cc;
 if not cc:
     mycc = "cc"
-ccout = subprocess.check_output([cc, '--version'])
+ccout = subprocess.check_output([mycc, '--version'])
 if ccout[:3] == "gcc":
     omp_enabled = True
 if omp_enabled:
