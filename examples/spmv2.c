@@ -115,6 +115,8 @@ void help(char* err)
 
 int main(int argc, char* argv[])
 {
+
+    printf("Initialization.....\n");
 #ifdef USE_MPI
     Laik_Instance* inst = laik_init_mpi(&argc, &argv);
 #else
@@ -231,7 +233,9 @@ int main(int argc, char* argv[])
 
             fromRow = slc->from.i[0];
             toRow = slc->to.i[0];
-            for(int r = fromRow; r < toRow; r++) {
+            
+#pragma omp parallel for schedule(dynamic)
+	    for(int r = fromRow; r < toRow; r++) {
                 res[r - fromRow] = 0.0;
                 for(int o = m->row[r]; o < m->row[r+1]; o++)
                     res[r - fromRow] += m->val[o] * inp[m->col[o]];
