@@ -30,27 +30,30 @@ Example (showing LAIK debug output):
 
 ```
     == LAIK-0000.00 T 0/2 0001.01                 MPI backend initialized
+    == LAIK-0000.00 T 1/2 0001.01                 MPI backend initialized
     == LAIK-0001.00 T 0/2 0001.01 init            new 1d space 'space-0'
     == LAIK-0001.00 T 0/2 0002.01 init            new 1d data 'data-0'
-    == LAIK-0000.00 T 1/2 0001.01                 MPI backend initialized
     == LAIK-0001.00 T 1/2 0001.01 init            new 1d space 'space-0': [0-999999]
     == LAIK-0001.00 T 1/2 0002.01 init            new 1d data 'data-0'
     == LAIK-0002.00 T 1/2 0001.01 element-wise    new partitioning 'partng-2'
     ...
 ```
 
-The prefix uses the following format:
+The prefix uses phases and iteration counters (specified by applications via
+`laik_set_phase` and `laik_set_iteration`), and it has the following format:
 
 ```
     == LAIK-<phasectr>.<iter> T<task>/<tasks> <phasemsgctr>.<line> <pname>
 ```
 
 With
-* <phasectr>    : a counter incremented on every phase change
-* <iter>        : iteration counter set by application
-* <task>        : task rank in this LAIK instance
-* <phasemsgctr> : log message counter, reset at each phase change
-* <pname>       : phase name set by application
+* phasectr    : a counter incremented on every phase change
+* iter        : iteration counter set by application
+* task        : task rank in this LAIK instance
+* phasemsgctr : log message counter, reset at each phase change
+* pname       : phase name set by application
+
+A Phases and iteration counters enable applications to give
 
 
 ### Logging Control
