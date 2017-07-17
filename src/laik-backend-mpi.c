@@ -115,7 +115,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (toList)
                 assert(toList->count == 1);
             Laik_Mapping* toMap = toList ? &(toList->map[0]) : 0;
-            if (toMap) laik_allocateMap(toMap);
+            if (toMap && (toMap->base == 0)) {
+                // we can do IN_PLACE reduction
+                toMap->base = fromBase;
+                if (fromMap) fromMap->base = 0; // take over memory
+            }
             char* toBase = toMap ? toMap->base : 0;
 
             assert(fromBase != 0);
@@ -139,12 +143,20 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                      from, to, d->elemsize, fromBase, toBase);
 
             if (op->rootTask == -1) {
-                MPI_Allreduce(fromBase, toBase, to - from,
-                              mpiDateType, mpiRedOp, comm);
+                if (fromBase == toBase)
+                    MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
+                                  mpiDateType, mpiRedOp, comm);
+                else
+                    MPI_Allreduce(fromBase, toBase, to - from,
+                                  mpiDateType, mpiRedOp, comm);
             }
             else {
-                MPI_Reduce(fromBase, toBase, to - from,
-                           mpiDateType, mpiRedOp, op->rootTask, comm);
+                if (fromBase == toBase)
+                    MPI_Reduce(MPI_IN_PLACE, toBase, to - from,
+                               mpiDateType, mpiRedOp, op->rootTask, comm);
+                else
+                    MPI_Reduce(fromBase, toBase, to - from,
+                               mpiDateType, mpiRedOp, op->rootTask, comm);
             }
         }
     }

@@ -75,6 +75,18 @@ int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1)
     return 0;
 }
 
+bool laik_index_isEqual(int dims, Laik_Index* i1, Laik_Index* i2)
+{
+    if (i1->i[0] != i2->i[0]) return false;
+    if (dims == 1) return true;
+
+    if (i1->i[1] != i2->i[1]) return false;
+    if (dims == 1) return true;
+
+    if (i1->i[2] != i2->i[2]) return false;
+    return true;
+}
+
 // is the given slice empty?
 bool laik_slice_isEmpty(int dims, Laik_Slice* slc)
 {
@@ -126,6 +138,14 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2)
     }
     return &s;
 }
+
+bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
+{
+    if (!laik_index_isEqual(dims, &(s1->from), &(s2->from))) return false;
+    if (!laik_index_isEqual(dims, &(s1->to), &(s2->to))) return false;
+    return true;
+}
+
 
 static
 Laik_Slice* sliceFromSpace(Laik_Space* s)

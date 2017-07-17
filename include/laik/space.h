@@ -166,11 +166,17 @@ void laik_change_space_2d(Laik_Space* s,
 void laik_change_space_3d(Laik_Space* s,
                           uint64_t s1, uint64_t s2, uint64_t s3);
 
+// are the indexes equal?
+bool laik_index_isEqual(int dims, Laik_Index* i1, Laik_Index* i2);
+
 // is the given slice empty?
 bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
 
 // get the intersection of 2 slices; return 0 if intersection is empty
 Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
+
+// are the slices equal?
+bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
 // create a new partitioning on a space
 Laik_Partitioning*

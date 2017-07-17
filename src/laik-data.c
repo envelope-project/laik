@@ -183,19 +183,25 @@ void freeMaps(Laik_MappingList* ml)
 
     for(int i = 0; i < ml->count; i++) {
         Laik_Mapping* m = &(ml->map[i]);
+        assert(m != 0);
 
         Laik_Data* d = m->data;
 
-        laik_log(1, "free map for '%s'/%d (count %d, base %p)\n",
-                 d->name, m->sliceNo, m->count, m->base);
+        if (m->base) {
+            laik_log(1, "free map for '%s'/%d (count %d, base %p)\n",
+                     d->name, m->sliceNo, m->count, m->base);
 
-        if (m && m->base) {
             // TODO: different policies
             if ((!d->allocator) || (!d->allocator->free))
                 free(m->base);
             else
                 (d->allocator->free)(d, m->base);
+
+            m->base = 0;
         }
+        else
+            laik_log(1, "free map for '%s'/%d (count %d): not needed\n",
+                     d->name, m->sliceNo, m->count);
     }
 
     free(ml);
@@ -282,7 +288,8 @@ void copyMaps(Laik_Transition* t,
 }
 
 static
-void initMaps(Laik_Transition* t, Laik_MappingList* toList)
+void initMaps(Laik_Transition* t,
+              Laik_MappingList* toList, Laik_MappingList* fromList)
 {
     assert(t->initCount > 0);
     for(int i = 0; i < t->initCount; i++) {
@@ -295,10 +302,33 @@ void initMaps(Laik_Transition* t, Laik_MappingList* toList)
             continue;
         }
 
-        // ensure the mapping is backed by real memory
-        laik_allocateMap(toMap);
+        int dims = toMap->data->space->dims;
+        if (toMap->base == 0) {
+            // if we find a fitting mapping in fromList, use that
+            if (fromList) {
+                for(int sNo = 0; sNo < fromList->count; sNo++) {
+                    Laik_Mapping* fromMap = &(fromList->map[sNo]);
+                    if (fromMap->base == 0) continue;
+                    if (!laik_index_isEqual(dims,
+                                            &(toMap->baseIdx),
+                                            &(fromMap->baseIdx))) continue;
+                    if (toMap->count != fromMap->count) continue;
 
-        assert(toMap->data->space->dims == 1); // only for 1d now
+                    toMap->base = fromMap->base;
+                    fromMap->base = 0; // taken over
+
+                    laik_log(1, "during init for '%s'/%d: used old %d at %p\n",
+                             toMap->data->name, op->sliceNo, sNo, toMap->base);
+                    break;
+                }
+            }
+            if (toMap->base == 0) {
+                // nothing found, allocate memory
+                laik_allocateMap(toMap);
+            }
+        }
+
+        assert(dims == 1); // only for 1d now
         Laik_Data* d = toMap->data;
         Laik_Slice* s = &(op->slc);
         int count = s->to.i[0] - s->from.i[0];
@@ -329,8 +359,8 @@ void initMaps(Laik_Transition* t, Laik_MappingList* toList)
         }
         else assert(0);
 
-        laik_log(1, "init map for '%s': %d x at [%lu\n",
-                 d->name, count, s->from.i[0]);
+        laik_log(1, "init map for '%s'/%d: %d x at [%lu\n",
+                 d->name, op->sliceNo, count, s->from.i[0]);
     }
 }
 
@@ -357,13 +387,13 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     assert(p->space->inst->backend->execTransition);
     (p->space->inst->backend->execTransition)(d, t, fromList, toList);
 
-    // local copy action
+    // local copy action (may use old mappings)
     if (t->localCount > 0)
         copyMaps(t, toList, fromList);
 
-    // local init action
+    // local init action (may use old mappings)
     if (t->initCount > 0)
-        initMaps(t, toList);
+        initMaps(t, toList, fromList);
 
     // free old mapping/partitioning
     if (fromList)
