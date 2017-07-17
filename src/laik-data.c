@@ -117,7 +117,8 @@ Laik_Space* laik_get_space(Laik_Data* d)
 
 
 static
-Laik_MappingList* allocMaps(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
+Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
+                              Laik_Layout* l)
 {
     int t = laik_myid(d->group);
     Laik_BorderArray* ba = p->borders;
@@ -153,6 +154,7 @@ Laik_MappingList* allocMaps(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
         m->sliceNo = i;
         m->count = count;
         m->baseIdx = s->from;
+        m->base = 0; // allocation happens lazy in copyMaps()
 
         if (l) {
             // TODO: actually use the requested order, eventually convert
@@ -163,21 +165,11 @@ Laik_MappingList* allocMaps(Laik_Data* d, Laik_Partitioning* p, Laik_Layout* l)
             m->layout = laik_new_layout(LAIK_LT_Default);
         }
 
-        if (count == 0)
-            m->base = 0;
-        else {
-            // TODO: different policies
-            if ((!d->allocator) || (!d->allocator->malloc))
-                m->base = malloc(count * d->elemsize);
-            else
-                m->base = (d->allocator->malloc)(d, count * d->elemsize);
-        }
-
         if (laik_logshown(1)) {
             char s[100];
             laik_getIndexStr(s, p->space->dims, &(m->baseIdx), false);
-            laik_log(1, "new map for '%s'/%d: [%s+%d, elemsize %d, base %p\n",
-                     d->name, i, s, m->count, d->elemsize, m->base);
+            laik_log(1, "prepare map for '%s'/%d: from %s, count %d, elemsize %d\n",
+                     d->name, i, s, m->count, d->elemsize);
         }
     }
 
@@ -209,6 +201,22 @@ void freeMaps(Laik_MappingList* ml)
     free(ml);
 }
 
+void laik_allocateMap(Laik_Mapping* m)
+{
+    if (m->base) return;
+    if (m->count == 0) return;
+    Laik_Data* d = m->data;
+
+    // TODO: different policies
+    if ((!d->allocator) || (!d->allocator->malloc))
+        m->base = malloc(m->count * d->elemsize);
+    else
+        m->base = (d->allocator->malloc)(d, m->count * d->elemsize);
+
+    laik_log(1, "allocated memory for '%s'/%d: %d x %d at %p\n",
+             d->name, m->sliceNo, m->count, d->elemsize, m->base);
+}
+
 static
 void copyMaps(Laik_Transition* t,
               Laik_MappingList* toList, Laik_MappingList* fromList)
@@ -237,18 +245,39 @@ void copyMaps(Laik_Transition* t,
         Laik_Data* d = toMap->data;
         Laik_Slice* s = &(op->slc);
         int count = s->to.i[0] - s->from.i[0];
+        assert(count > 0);
         uint64_t fromStart = s->from.i[0] - fromMap->baseIdx.i[0];
         uint64_t toStart   = s->from.i[0] - toMap->baseIdx.i[0];
+
+        // we can use old mapping if we would copy complete old to new mapping
+        if ((fromStart == 0) && (fromMap->count == count) &&
+            (toStart == 0) && (toMap->count == count)) {
+            // should not be allocated yet
+            assert(toMap->base == 0);
+            toMap->base = fromMap->base;
+            fromMap->base = 0; // nothing to free
+
+            laik_log(1, "copy map for '%s': %d x %d "
+                        "from global [%lu local [%lu/%d ==> [%lu/%d, using old map\n",
+                     d->name, count, d->elemsize, s->from.i[0],
+                     fromStart, op->fromSliceNo, toStart, op->toSliceNo);
+            continue;
+        }
+
+        if (toMap->base == 0) {
+            // need to allocate memory
+            laik_allocateMap(toMap);
+        }
         char*    fromPtr   = fromMap->base + fromStart * d->elemsize;
         char*    toPtr     = toMap->base   + toStart * d->elemsize;
 
-        laik_log(1, "copy map for '%s': "
-                    "%d x %d from [%lu global [%lu to [%lu, %p => %p\n",
-                 d->name, count, d->elemsize, fromStart, s->from.i[0], toStart,
-                fromPtr, toPtr);
+        laik_log(1, "copy map for '%s': %d x %d "
+                    "from global [%lu local %p + [%lu/%d ==> %p + [%lu/%d\n",
+                 d->name, count, d->elemsize, s->from.i[0],
+                 fromMap->base, fromStart, op->fromSliceNo,
+                 toMap->base, toStart, op->toSliceNo);
 
-        if (count>0)
-            memcpy(toPtr, fromPtr, count * d->elemsize);
+        memcpy(toPtr, fromPtr, count * d->elemsize);
     }
 }
 
@@ -265,6 +294,9 @@ void initMaps(Laik_Transition* t, Laik_MappingList* toList)
             // no elements to initialize
             continue;
         }
+
+        // ensure the mapping is backed by real memory
+        laik_allocateMap(toMap);
 
         assert(toMap->data->space->dims == 1); // only for 1d now
         Laik_Data* d = toMap->data;
@@ -315,7 +347,7 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 
     // TODO: convert to realloc (with taking over layout)
     Laik_MappingList* fromList = d->activeMappings;
-    Laik_MappingList* toList = allocMaps(d, p, 0);
+    Laik_MappingList* toList = prepareMaps(d, p, 0);
 
     // calculate actions to be done for switching
     Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
@@ -423,15 +455,19 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 
     // lazy allocation
     if (!d->activeMappings) {
-        d->activeMappings = allocMaps(d, p, layout);
+        d->activeMappings = prepareMaps(d, p, layout);
         if (d->activeMappings == 0)
             return 0;
     }
 
-    if (n < d->activeMappings->count)
-        return &(d->activeMappings->map[n]);
-    else
+    if (n >= d->activeMappings->count)
         return 0;
+
+    Laik_Mapping* m = &(d->activeMappings->map[n]);
+    // ensure the mapping is backed by real memory
+    laik_allocateMap(m);
+
+    return m;
 }
 
 // similar to laik_map, but force a default mapping

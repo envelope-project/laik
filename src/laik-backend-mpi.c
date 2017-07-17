@@ -115,6 +115,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (toList)
                 assert(toList->count == 1);
             Laik_Mapping* toMap = toList ? &(toList->map[0]) : 0;
+            if (toMap) laik_allocateMap(toMap);
             char* toBase = toMap ? toMap->base : 0;
 
             assert(fromBase != 0);
@@ -179,6 +180,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             assert(op->sliceNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[op->sliceNo]);
+            if (toMap) laik_allocateMap(toMap);
             char* toBase = toMap ? toMap->base : 0;
 
             // from global to receiver-local indexes

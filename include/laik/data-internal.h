@@ -102,4 +102,7 @@ struct _Laik_MappingList {
 // initialize the LAIK data module, called from laik_new_instance
 void laik_data_init();
 
+// ensure that the mapping is backed by memory (called by backends)
+void laik_allocateMap(Laik_Mapping* m);
+
 #endif // _LAIK_DATA_INTERNAL_H_
