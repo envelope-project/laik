@@ -700,7 +700,7 @@ bool laik_update_partitioning(Laik_Partitioning* p)
     Laik_BorderArray* baseBorders = 0;
     Laik_Space* s = p->space;
     int pdim = p->pdim;
-    int basepdim;
+    int basepdim = 0;
 
     if (p->base) {
         if (laik_update_partitioning(p->base))
