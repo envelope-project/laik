@@ -37,11 +37,12 @@ typedef struct _Laik_Backend Laik_Backend;
 typedef struct _Laik_Group Laik_Group;
 
 /*********************************************************************/
-/* Core LAIK API
+/* Core LAIK API: task groups and elasticity
  *********************************************************************/
 
 // allocate space for a new LAIK instance
-Laik_Instance* laik_new_instance(Laik_Backend* b, int size, int myid, char* location, void* data);
+Laik_Instance* laik_new_instance(Laik_Backend* b, int size, int myid,
+                                 char* location, void* data);
 
 // shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance*);
@@ -58,9 +59,48 @@ Laik_Group* laik_world(Laik_Instance* i);
 // return number of LAIK tasks available (within this instance)
 int laik_size(Laik_Group*);
 
-// return rank of calling LAIK task (within this instance)
+// return my task id in group <g>. By default, the group master
+// has task ID 0, which can be changed.
+// Warning: on every shrinking/enlarging, task IDs may change!
 int laik_myid(Laik_Group*);
 
+// create a clone of <g>, derived from <g>.
+Laik_Group* laik_clone_group(Laik_Group* g);
+
+// TODO: API for...
+// Shrinking controlled by master in a group (collective).
+// <len>/<list> only needs to be valid at master, and provides a
+// list of task IDs to remove from group. Master cannot be removed.
+// For successful shrinking, in any partitionings defined on this group,
+// partitions of tasks to be removed need to be empty. Furthermore, any
+// groups derived from this group also get shrinked.
+// On shrinking, task IDs may change.
+
+// Returns shrinked group, by removing the <len> tasks in <list>
+Laik_Group* laik_shrink_group(Laik_Group* g, int len, int* list);
+
+// Enlarging controlled by master in a group (collective)
+bool laik_enlarge_group(Laik_Group* g, int len, char** list);
+
+// change the master to task <id>. Return if successful
+bool laik_set_master(Laik_Group* g, int id);
+
+// get the ID if the master task in this group
+int laik_get_master(Laik_Group* g);
+
+// return true if I am master
+bool laik_is_master(Laik_Group* g);
+
+// Return true if own process is managed by LAIK instance
+// a process may become unmanaged by shrinking the world group.
+bool laik_is_managed(Laik_Instance* i);
+
+
+
+
+/*********************************************************************/
+/* Core LAIK API: task groups and elasticity
+ *********************************************************************/
 
 // Logging
 

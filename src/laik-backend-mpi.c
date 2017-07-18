@@ -11,15 +11,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-void laik_mpi_finalize();
-void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t,
-                             Laik_MappingList* fromList, Laik_MappingList* toList);
-
-static Laik_Backend laik_backend_mpi = {"MPI Backend",
-                                        laik_mpi_finalize,
-                                        laik_mpi_execTransition };
-static Laik_Instance* mpi_instance = 0;
-
 #ifndef USE_MPI
 
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
@@ -34,11 +25,30 @@ void laik_mpi_finalize() {}
 
 #include <mpi.h>
 
+void laik_mpi_finalize();
+void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t,
+                             Laik_MappingList* fromList,
+                             Laik_MappingList* toList);
+// update backend specific data for group if needed
+void laik_mpi_updateGroup(Laik_Group*);
+
+static Laik_Backend laik_backend_mpi = {"MPI Backend",
+                                        laik_mpi_finalize,
+                                        laik_mpi_execTransition,
+                                        laik_mpi_updateGroup};
+static Laik_Instance* mpi_instance = 0;
+
 typedef struct _MPIData MPIData;
 struct _MPIData {
     MPI_Comm comm;
     bool didInit;
 };
+
+typedef struct _MPIGroupData MPIGroupData;
+struct _MPIGroupData {
+    MPI_Comm comm;
+};
+
 
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
@@ -67,12 +77,16 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
                              processor_name, d);
 
     // group world
+
+    MPIGroupData* gd = (MPIGroupData*) malloc(sizeof(MPIGroupData));
+    gd->comm = MPI_COMM_WORLD;
+
     Laik_Group* g = laik_create_group(inst);
     g->inst = inst;
     g->gid = 0;
     g->size = inst->size;
     g->myid = inst->myid;
-    g->task[0] = 0; // TODO
+    g->backend_data = gd;
 
     laik_log(1, "MPI backend initialized (location '%s')\n", inst->mylocation);
 
@@ -90,6 +104,37 @@ void laik_mpi_finalize()
     if (mpiData(mpi_instance)->didInit)
         MPI_Finalize();
 }
+
+// calculate MPI communicator for group <g>
+void laik_mpi_updateGroup(Laik_Group* g)
+{
+    if (!g->parent) return;
+
+    MPIGroupData* gd = (MPIGroupData*) g->backend_data;
+    if (gd) return; // already calculated
+
+    // mapping from parent id
+    int fromParent[g->size];
+    int o = 0;
+    for(int i = 0; i < g->size; i++) {
+        if (g->ptask[o] > i) {
+            fromParent[i] = -1;
+        }
+        else {
+            fromParent[i] = o;
+            o++;
+        }
+    }
+
+    MPIGroupData* gdParent = (MPIGroupData*) g->parent->backend_data;
+
+    gd = (MPIGroupData*) malloc(sizeof(MPIGroupData));
+    g->backend_data = gd;
+    MPI_Comm_split(gdParent->comm,
+                   (fromParent[g->parent->myid] < 0) ? MPI_UNDEFINED : 0,
+                   g->parent->myid, &(gd->comm));
+}
+
 
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                              Laik_MappingList* fromList, Laik_MappingList* toList)

@@ -29,6 +29,9 @@ struct _Laik_Backend {
   void (*execTransition)(Laik_Data*, Laik_Transition*,
                          Laik_MappingList* from, Laik_MappingList* to);
 
+  // update backend specific data for group if needed
+  void (*updateGroup)(Laik_Group*);
+
   // TODO: async interface: start sending / register receiving / probe
 };
 

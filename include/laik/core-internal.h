@@ -1,4 +1,4 @@
-/* 
+/*
  * This file is part of the LAIK parallel container library.
  * Copyright (c) 2017 Josef Weidendorfer
  * 
@@ -22,17 +22,21 @@
 #error "include laik-internal.h instead"
 #endif
 
-#define MAX_GROUPS   10
-#define MAX_SPACES   10
-#define MAX_DATAS    10
-#define MAX_MAPPINGS 50
+#define MAX_GROUPS        10
+#define MAX_SPACES        10
+#define MAX_PARTITIONINGS 10
+#define MAX_DATAS         10
+#define MAX_MAPPINGS      10
 
 struct _Laik_Group {
     Laik_Instance* inst;
     int gid;
     int size;
     int myid;
-    int task[1];
+    void* backend_data;
+
+    Laik_Group* parent;
+    int ptask[1]; // mapping to task in parent
 };
 
 struct _Laik_Instance {

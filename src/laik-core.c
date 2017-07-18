@@ -102,6 +102,8 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     g->inst = i;
     g->gid = i->group_count;
     g->size = 0; // yet invalid
+    g->parent = 0;
+    g->backend_data = 0;
 
     i->group_count++;
 
@@ -120,6 +122,52 @@ Laik_Group* laik_world(Laik_Instance* i)
 
     return g;
 }
+
+// create a clone of <g>, derived from <g>.
+Laik_Group* laik_clone_group(Laik_Group* g)
+{
+    Laik_Group* g2 = laik_create_group(g->inst);
+    g2->parent = g;
+    g2->size = g->size;
+    g2->myid = g->myid;
+    for(int i=0; i < g->size; i++)
+        g2->ptask[i] = i;
+
+    return g;
+}
+
+
+// Shrinking (collective)
+Laik_Group* laik_shrink_group(Laik_Group* g, int len, int* list)
+{
+    Laik_Group* g2 = laik_clone_group(g);
+
+    int fromParent[g->size];
+    for(int i = 0; i < g->size; i++)
+        fromParent[i] = 0;
+    for(int i = 0; i < len; i++) {
+        assert((list[i] >= 0) && (list[i] < g->size));
+        fromParent[list[i]] = -1;
+    }
+    int o = 0;
+    for(int i = 0; i < g->size; i++) {
+        if (fromParent[i] < 0) continue;
+        g2->ptask[o] = i;
+        fromParent[i] = o;
+        o++;
+    }
+    g2->size = o;
+
+    if (g->inst->backend->updateGroup)
+        (g->inst->backend->updateGroup)(g2);
+
+    return g2;
+}
+
+
+
+
+
 
 // Logging
 
