@@ -36,7 +36,8 @@ struct _Laik_Group {
     void* backend_data;
 
     Laik_Group* parent;
-    int ptask[1]; // mapping to task in parent
+    int* toParent;   // mapping local task IDs to parent task IDs
+    int* fromParent; // mapping parent task IDs to local task IDs
 };
 
 struct _Laik_Instance {

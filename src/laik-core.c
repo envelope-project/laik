@@ -96,17 +96,19 @@ Laik_Group* laik_create_group(Laik_Instance* i)
 
     Laik_Group* g;
 
-    g = (Laik_Group*) malloc(sizeof(Laik_Group) + (i->size) * sizeof(int));
+    g = (Laik_Group*) malloc(sizeof(Laik_Group) + 2 * (i->size) * sizeof(int));
     i->group[i->group_count] = g;
 
     g->inst = i;
     g->gid = i->group_count;
     g->size = 0; // yet invalid
-    g->parent = 0;
     g->backend_data = 0;
+    g->parent = 0;
+    // space after struct
+    g->toParent   = (int*) ((char*)g) + sizeof(Laik_Group);
+    g->fromParent = g->toParent + i->size;
 
     i->group_count++;
-
     return g;
 }
 
@@ -130,8 +132,11 @@ Laik_Group* laik_clone_group(Laik_Group* g)
     g2->parent = g;
     g2->size = g->size;
     g2->myid = g->myid;
-    for(int i=0; i < g->size; i++)
-        g2->ptask[i] = i;
+
+    for(int i=0; i < g->size; i++) {
+        g2->toParent[i] = i;
+        g2->fromParent[i] = i;
+    }
 
     return g;
 }
@@ -142,18 +147,18 @@ Laik_Group* laik_shrink_group(Laik_Group* g, int len, int* list)
 {
     Laik_Group* g2 = laik_clone_group(g);
 
-    int fromParent[g->size];
     for(int i = 0; i < g->size; i++)
-        fromParent[i] = 0;
+        g2->fromParent[i] = 0; // init
+
     for(int i = 0; i < len; i++) {
         assert((list[i] >= 0) && (list[i] < g->size));
-        fromParent[list[i]] = -1;
+        g2->fromParent[list[i]] = -1; // mark removed
     }
     int o = 0;
     for(int i = 0; i < g->size; i++) {
-        if (fromParent[i] < 0) continue;
-        g2->ptask[o] = i;
-        fromParent[i] = o;
+        if (g2->fromParent[i] < 0) continue;
+        g2->fromParent[i] = o;
+        g2->toParent[o] = i;
         o++;
     }
     g2->size = o;

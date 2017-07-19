@@ -99,6 +99,11 @@ MPIData* mpiData(Laik_Instance* i)
     return (MPIData*) i->backend_data;
 }
 
+MPIGroupData* mpiGroupData(Laik_Group* g)
+{
+    return (MPIGroupData*) g->backend_data;
+}
+
 void laik_mpi_finalize()
 {
     if (mpiData(mpi_instance)->didInit)
@@ -113,25 +118,12 @@ void laik_mpi_updateGroup(Laik_Group* g)
     MPIGroupData* gd = (MPIGroupData*) g->backend_data;
     if (gd) return; // already calculated
 
-    // mapping from parent id
-    int fromParent[g->size];
-    int o = 0;
-    for(int i = 0; i < g->size; i++) {
-        if (g->ptask[o] > i) {
-            fromParent[i] = -1;
-        }
-        else {
-            fromParent[i] = o;
-            o++;
-        }
-    }
-
     MPIGroupData* gdParent = (MPIGroupData*) g->parent->backend_data;
 
     gd = (MPIGroupData*) malloc(sizeof(MPIGroupData));
     g->backend_data = gd;
     MPI_Comm_split(gdParent->comm,
-                   (fromParent[g->parent->myid] < 0) ? MPI_UNDEFINED : 0,
+                   (g->fromParent[g->parent->myid] < 0) ? MPI_UNDEFINED : 0,
                    g->parent->myid, &(gd->comm));
 }
 
@@ -140,7 +132,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                              Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     Laik_Instance* inst = d->space->inst;
-    MPI_Comm comm = mpiData(inst)->comm;
+    MPI_Comm comm = mpiGroupData(d->group)->comm;
 
     // TODO: do group != world
 
