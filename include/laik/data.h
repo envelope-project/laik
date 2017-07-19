@@ -67,6 +67,9 @@ void laik_set_data_name(Laik_Data* d, char* n);
 // get space used for data
 Laik_Space* laik_get_space(Laik_Data*);
 
+// get task group used for data
+Laik_Group* laik_get_group(Laik_Data* d);
+
 // free resources for a data container
 void laik_free(Laik_Data*);
 

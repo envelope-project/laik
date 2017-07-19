@@ -182,7 +182,8 @@ int main(int argc, char* argv[])
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioning* p;
-    p = laik_new_base_partitioning(s, LAIK_PT_Block, LAIK_DF_NoIn_CopyOut);
+    p = laik_new_base_partitioning(world, s,
+                                   LAIK_PT_Block, LAIK_DF_NoIn_CopyOut);
     laik_set_index_weight(p, getEW, m);
     laik_set_partitioning(resD, p);
 

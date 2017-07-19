@@ -178,11 +178,14 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
 // are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
-// create a new partitioning on a space
+// create a new partitioning on a space (invalid partitioning type)
+Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s);
+
+// create a new partitioning on a space with given partitioning type
 Laik_Partitioning*
-laik_new_base_partitioning(Laik_Space* space,
-                      Laik_PartitionType pt,
-                      Laik_DataFlow flow);
+laik_new_base_partitioning(Laik_Group* g, Laik_Space* space,
+                           Laik_PartitionType pt,
+                           Laik_DataFlow flow);
 
 // may generate the partitioner object depending on partition type
 // to set a custom partitioner, call laik_set_partitioner first

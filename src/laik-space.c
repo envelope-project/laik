@@ -545,7 +545,7 @@ void clearBorderArray(Laik_BorderArray* a)
 
 
 // create a new partitioning on a space
-Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
+Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
 {
     Laik_Partitioning* p;
     p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
@@ -554,8 +554,8 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     p->name = strdup("partng-0     ");
     sprintf(p->name, "partng-%d", p->id);
 
-    // FIXME: allow arbitrary groups, needs API change
-    p->group = laik_world(s->inst);
+    assert(g->inst == s->inst);
+    p->group = g;
     p->space = s;
     p->pdim = 0;
 
@@ -589,12 +589,12 @@ void set_flow(Laik_Partitioning* p, Laik_DataFlow flow)
 }
 
 Laik_Partitioning*
-laik_new_base_partitioning(Laik_Space* space,
+laik_new_base_partitioning(Laik_Group* g, Laik_Space* space,
                            Laik_PartitionType pt,
                            Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
-    p = laik_new_partitioning(space);
+    p = laik_new_partitioning(g, space);
     p->type = pt;
     set_flow(p, flow);
 
@@ -653,7 +653,7 @@ laik_new_coupled_partitioning(Laik_Partitioning* base,
                               Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
-    p = laik_new_partitioning(base->space);
+    p = laik_new_partitioning(base->group, base->space);
     p->type = pt;
     p->base = base;
     set_flow(p, flow);
@@ -670,7 +670,7 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
                                    Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
-    p = laik_new_partitioning(s);
+    p = laik_new_partitioning(base->group, s);
     p->type = pt;
     p->base = base;
     set_flow(p, flow);

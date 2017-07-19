@@ -115,6 +115,12 @@ Laik_Space* laik_get_space(Laik_Data* d)
     return d->space;
 }
 
+// get task group used for data
+Laik_Group* laik_get_group(Laik_Data* d)
+{
+    return d->group;
+}
+
 
 static
 Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
@@ -417,7 +423,8 @@ Laik_Partitioning* laik_set_new_partitioning(Laik_Data* d,
                                              Laik_PartitionType pt,
                                              Laik_DataFlow flow)
 {
-    Laik_Partitioning* p = laik_new_base_partitioning(d->space, pt, flow);
+    Laik_Partitioning* p;
+    p = laik_new_base_partitioning(d->group, d->space, pt, flow);
     laik_set_partitioning(d, p);
 
     return p;
