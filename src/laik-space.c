@@ -519,10 +519,8 @@ int ts_cmp(const void *p1, const void *p2)
     return ts1->task - ts2->task;
 }
 
-void sortBorderArray(Laik_BorderArray* a)
+void updateBorderArrayOffsets(Laik_BorderArray* a)
 {
-    qsort( &(a->tslice[0]), a->count, sizeof(Laik_TaskSlice), ts_cmp);
-
     int task, off = 0;
     for(task = 0; task < a->tasks; task++) {
         a->off[task] = off;
@@ -531,6 +529,12 @@ void sortBorderArray(Laik_BorderArray* a)
     }
     a->off[task] = off;
     assert(off == a->count);
+}
+
+void sortBorderArray(Laik_BorderArray* a)
+{
+    qsort( &(a->tslice[0]), a->count, sizeof(Laik_TaskSlice), ts_cmp);
+    updateBorderArrayOffsets(a);
 }
 
 void clearBorderArray(Laik_BorderArray* a)
@@ -1075,6 +1079,48 @@ void laik_repartition(Laik_Partitioning* p, Laik_PartitionType pt)
 void laik_couple_nested(Laik_Space* outer, Laik_Space* inner)
 {
     assert(0); // TODO
+}
+
+
+// migrate a partitioning defined on one task group to another group
+bool laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* g)
+{
+    Laik_Group* oldg = p->group;
+    // only migration to shrinked group, with parent being old group
+    assert(g->parent == oldg);
+    if (p->base) {
+        if (!laik_partitioning_migrate(p->base, g))
+            return false;
+    }
+    if (p->bordersValid) {
+        // need to migrate IDs in borders
+        assert(p->borders && (p->borders->tasks == oldg->size));
+        assert(g->size < oldg->size); // TODO: only shrinking
+
+        // check that partitions of all task to be removed are empty
+        for(int i = 0; i < oldg->size; i++) {
+            if (g->fromParent[i] < 0)
+                if (p->borders->off[i] < p->borders->off[i+1])
+                    return false;
+        }
+
+        // now re-label IDs
+        for(int i = 0; i < p->borders->count; i++) {
+            int oldT = p->borders->tslice[i].task;
+            assert((oldT >= 0) && (oldT < oldg->size));
+            int newT = g->fromParent[oldT];
+            assert((newT >= 0) && (newT < g->size));
+            p->borders->tslice[i].task = newT;
+        }
+        p->borders->tasks = g->size;
+
+        updateBorderArrayOffsets(p->borders);
+    }
+    laik_removeGroupUser(oldg, p);
+    laik_addGroupUser(g, p);
+    p->group = g;
+
+    return true;
 }
 
 

@@ -252,6 +252,11 @@ void laik_repartition(Laik_Partitioning* p, Laik_PartitionType pt);
 // one partition of calling task in outer space is mapped to inner space
 void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
 
+// migrate a partitioning defined on one task group to another group
+// if borders are set, this only is successful if partitions of
+// tasks which are not in the new group are empty.
+// return true if migration was successful.
+bool laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* g);
 
 //----------------------------------
 // Predefined Partitioners
