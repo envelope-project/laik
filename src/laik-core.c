@@ -104,12 +104,37 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     g->size = 0; // yet invalid
     g->backend_data = 0;
     g->parent = 0;
+    g->firstGroupUser = 0;
+
     // space after struct
     g->toParent   = (int*) ((char*)g) + sizeof(Laik_Group);
     g->fromParent = g->toParent + i->size;
 
     i->group_count++;
     return g;
+}
+
+void laik_addGroupUser(Laik_Group* g, Laik_Partitioning* p)
+{
+    assert(p->nextGroupUser == 0);
+    p->nextGroupUser = g->firstGroupUser;
+    g->firstGroupUser = p;
+}
+
+void laik_removeGroupUser(Laik_Group* g, Laik_Partitioning* p)
+{
+    if (g->firstGroupUser == p) {
+        g->firstGroupUser = p->nextGroupUser;
+    }
+    else {
+        // search for previous item
+        Laik_Partitioning* pp = g->firstGroupUser;
+        while(pp->nextGroupUser != p)
+            pp = pp->nextGroupUser;
+        assert(pp != 0); // not found, should not happen
+        pp->nextGroupUser = p->nextGroupUser;
+    }
+    p->nextGroupUser = 0;
 }
 
 Laik_Group* laik_world(Laik_Instance* i)
@@ -137,6 +162,8 @@ Laik_Group* laik_clone_group(Laik_Group* g)
         g2->toParent[i] = i;
         g2->fromParent[i] = i;
     }
+
+    assert(g->firstGroupUser == 0); // still empty
 
     return g;
 }

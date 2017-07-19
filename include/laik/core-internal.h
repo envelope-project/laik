@@ -38,7 +38,13 @@ struct _Laik_Group {
     Laik_Group* parent;
     int* toParent;   // mapping local task IDs to parent task IDs
     int* fromParent; // mapping parent task IDs to local task IDs
+
+    Laik_Partitioning* firstGroupUser; // linked list head
 };
+
+// add/remove partitioning to/from group
+void laik_addGroupUser(Laik_Group* g, Laik_Partitioning* p);
+void laik_removeGroupUser(Laik_Group* g, Laik_Partitioning* p);
 
 struct _Laik_Instance {
   int size;

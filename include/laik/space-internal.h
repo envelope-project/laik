@@ -45,8 +45,13 @@ struct _Laik_Space {
     Laik_Space* next; // for list of spaces used in instance
 
     // linked list of partitionings for this space
-    Laik_Partitioning* first_partitioning;
+    Laik_Partitioning* firstSpaceUser;
 };
+
+// add/remove partitioning to/from space
+void laik_addSpaceUser(Laik_Space* s, Laik_Partitioning* p);
+void laik_removeSpaceUser(Laik_Space* s, Laik_Partitioning* p);
+
 
 struct _Laik_Partitioner {
     Laik_PartitionType type;
@@ -116,7 +121,10 @@ struct _Laik_Partitioning {
     bool bordersValid;
     Laik_BorderArray* borders;
 
-    Laik_Partitioning* next; // for list of partitionings same space
+     // for list of partitionings same space
+    Laik_Partitioning* nextSpaceUser;
+    // for list of partitionings same space
+    Laik_Partitioning* nextGroupUser;
 };
 
 // sub-structures of Laik_Transition

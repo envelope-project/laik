@@ -360,7 +360,7 @@ Laik_Space* laik_new_space(Laik_Instance* i)
 
     space->inst = i;
     space->dims = 0; // invalid
-    space->first_partitioning = 0;
+    space->firstSpaceUser = 0;
 
     // append this space to list of spaces used by LAIK instance
     space->next = i->firstspace;
@@ -458,6 +458,31 @@ void laik_change_space_3d(Laik_Space* s,
 }
 
 
+void laik_addSpaceUser(Laik_Space* s, Laik_Partitioning* p)
+{
+    assert(p->nextSpaceUser == 0);
+    p->nextSpaceUser = s->firstSpaceUser;
+    s->firstSpaceUser = p;
+}
+
+void laik_removeSpaceUser(Laik_Space* s, Laik_Partitioning* p)
+{
+    if (s->firstSpaceUser == p) {
+        s->firstSpaceUser = p->nextSpaceUser;
+    }
+    else {
+        // search for previous item
+        Laik_Partitioning* pp = s->firstSpaceUser;
+        while(pp->nextSpaceUser != p)
+            pp = pp->nextSpaceUser;
+        assert(pp != 0); // not found, should not happen
+        pp->nextSpaceUser = p->nextSpaceUser;
+    }
+    p->nextSpaceUser = 0;
+}
+
+
+
 //-----------------------
 // Laik_BorderArray
 
@@ -529,11 +554,10 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     p->name = strdup("partng-0     ");
     sprintf(p->name, "partng-%d", p->id);
 
+    // FIXME: allow arbitrary groups, needs API change
     p->group = laik_world(s->inst);
     p->space = s;
     p->pdim = 0;
-    p->next = s->first_partitioning;
-    s->first_partitioning = p;
 
     p->flow = LAIK_DF_Invalid;
     p->type = LAIK_PT_None;
@@ -547,6 +571,11 @@ Laik_Partitioning* laik_new_partitioning(Laik_Space* s)
     p->bordersValid = false;
     p->borders = 0;
 
+    p->nextSpaceUser = 0;
+    p->nextGroupUser = 0;
+
+    laik_addSpaceUser(s, p);
+    laik_addGroupUser(p->group, p);
     return p;
 }
 
@@ -654,11 +683,14 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p)
 {
-    // FIXME: we need some kind of reference counting/GC here
+    // FIXME: need to maintain users, no users should exist
 
-    // TODO
-    //free(p->name);
-    //free(b->borders);
+    if (0) {
+        laik_removeGroupUser(p->group, p);
+        laik_removeSpaceUser(p->space, p);
+        free(p->name);
+        free(p->borders);
+    }
 }
 
 // get number of slices of this task
