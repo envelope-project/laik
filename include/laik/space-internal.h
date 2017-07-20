@@ -55,10 +55,12 @@ void laik_removeSpaceUser(Laik_Space* s, Laik_Partitioning* p);
 
 struct _Laik_Partitioner {
     Laik_PartitionType type;
-    Laik_Partitioning* partitioning; // partitioning to work on
-    void (*run)(Laik_Partitioner*, Laik_BorderArray*);
+    char* name;
+    Laik_Partitioning* base;
+    void (*run)(Laik_Partitioner*, Laik_Partitioning*, Laik_BorderArray*);
 };
 
+Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t);
 
 struct _Laik_BlockPartitioner {
     struct _Laik_Partitioner base;
@@ -72,7 +74,7 @@ struct _Laik_BlockPartitioner {
     // how many cycles (results in so many slics per task)
     int cycles;
 };
-Laik_Partitioner* laik_newBlockPartitioner(Laik_Partitioning* p);
+Laik_Partitioner* laik_newBlockPartitioner();
 
 
 // the output of a partitioner is a Laik_BorderArray
@@ -107,15 +109,11 @@ struct _Laik_Partitioning {
     Laik_Space* space; // space to partition
     int pdim; // for 2d/3d: dimension to partition
 
-    Laik_PartitionType type;
     Laik_DataFlow flow;
     bool copyIn, copyOut;
     Laik_ReductionOperation redOp;
 
     Laik_Partitioner* partitioner;
-
-    // coupling to another partitioning (potentially other space)
-    Laik_Partitioning* base;
 
     // partition borders (calculated lazy)
     bool bordersValid;

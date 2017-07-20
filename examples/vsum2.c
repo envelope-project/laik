@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
     p2 = laik_new_base_partitioning(laik_get_group(a), laik_get_space(a),
                                     LAIK_PT_Block,
                                     LAIK_DF_CopyIn | LAIK_DF_CopyOut);
-    laik_set_cycle_count(p2, 2);
+    laik_set_cycle_count(laik_get_partitioner(p2), 2);
     laik_set_partitioning(a, p2);
     // partial sum using equally-sized blocks, outer loop over slices
     for(int sNo = 0;; sNo++) {
@@ -95,8 +95,8 @@ int main(int argc, char* argv[])
     p3 = laik_new_base_partitioning(laik_get_group(a), laik_get_space(a),
                                    LAIK_PT_Block,
                                     LAIK_DF_CopyIn | LAIK_DF_CopyOut);
-    laik_set_cycle_count(p3, 2);
-    laik_set_index_weight(p3, getEW, 0);
+    laik_set_cycle_count(laik_get_partitioner(p3), 2);
+    laik_set_index_weight(laik_get_partitioner(p3), getEW, 0);
     laik_set_partitioning(a, p3);
     // partial sum using blocks sized by element weights
     for(int sNo = 0;; sNo++) {
@@ -111,8 +111,8 @@ int main(int argc, char* argv[])
         p4 = laik_new_base_partitioning(laik_get_group(a), laik_get_space(a),
                                         LAIK_PT_Block,
                                         LAIK_DF_CopyIn | LAIK_DF_CopyOut);
-        laik_set_cycle_count(p4, 2);
-        laik_set_task_weight(p4, getTW, 0); // without master
+        laik_set_cycle_count(laik_get_partitioner(p4), 2);
+        laik_set_task_weight(laik_get_partitioner(p4), getTW, 0); // without master
         laik_set_partitioning(a, p4);
         // partial sum using blocks sized by task weights
         for(int sNo = 0;; sNo++) {
