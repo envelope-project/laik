@@ -107,7 +107,7 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     g->firstGroupUser = 0;
 
     // space after struct
-    g->toParent   = (int*) ((char*)g) + sizeof(Laik_Group);
+    g->toParent   = (int*) (((char*)g) + sizeof(Laik_Group));
     g->fromParent = g->toParent + i->size;
 
     i->group_count++;
