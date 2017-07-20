@@ -121,11 +121,19 @@ struct _Laik_Partitioning {
     bool bordersValid;
     Laik_BorderArray* borders;
 
+    // head of list of data containers with this paritioning active
+    Laik_Data* firstPartitioningUser;
+
      // for list of partitionings same space
     Laik_Partitioning* nextSpaceUser;
     // for list of partitionings same space
     Laik_Partitioning* nextGroupUser;
 };
+
+// add/remove data container as user to/from partitioning
+void laik_addPartitioningUser(Laik_Partitioning* p, Laik_Data* d);
+void laik_removePartitioningUser(Laik_Partitioning* p, Laik_Data* d);
+
 
 // sub-structures of Laik_Transition
 

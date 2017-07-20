@@ -557,6 +557,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
 
     p->nextSpaceUser = 0;
     p->nextGroupUser = 0;
+    p->firstPartitioningUser = 0;
 
     laik_addSpaceUser(s, p);
     laik_addGroupUser(p->group, p);
@@ -592,6 +593,31 @@ laik_new_base_partitioning(Laik_Group* g, Laik_Space* space,
 
     return p;
 }
+
+
+void laik_addPartitioningUser(Laik_Partitioning* p, Laik_Data* d)
+{
+    assert(d->nextPartitioningUser == 0);
+    d->nextPartitioningUser = p->firstPartitioningUser;
+    p->firstPartitioningUser = d;
+}
+
+void laik_removePartitioningUser(Laik_Partitioning* p, Laik_Data* d)
+{
+    if (p->firstPartitioningUser == d) {
+        p->firstPartitioningUser = d->nextPartitioningUser;
+    }
+    else {
+        // search for previous item
+        Laik_Data* dd = p->firstPartitioningUser;
+        while(dd->nextPartitioningUser != d)
+            dd = dd->nextPartitioningUser;
+        assert(dd != 0); // not found, should not happen
+        dd->nextPartitioningUser = d->nextPartitioningUser;
+    }
+    d->nextPartitioningUser = 0;
+}
+
 
 Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p)
 {
@@ -667,9 +693,9 @@ laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p)
 {
-    // FIXME: need to maintain users, no users should exist
-
-    if (0) {
+    // FIXME: needs some kind of reference counting
+    return;
+    if (p->firstPartitioningUser == 0) {
         laik_removeGroupUser(p->group, p);
         laik_removeSpaceUser(p->space, p);
         free(p->name);
@@ -683,6 +709,8 @@ int laik_my_slicecount(Laik_Partitioning* p)
     laik_update_partitioning(p);
 
     int myid = p->group->myid;
+    if (myid < 0) return 0; // this task is not part of task group
+    assert(myid < p->group->size);
     return p->borders->off[myid+1] - p->borders->off[myid];
 }
 
@@ -1099,6 +1127,14 @@ bool laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* g)
     laik_removeGroupUser(oldg, p);
     laik_addGroupUser(g, p);
     p->group = g;
+
+    // make partitioning users (data containers) migrate to new group
+    Laik_Data* d = p->firstPartitioningUser;
+    while(d) {
+        assert(d->group == oldg);
+        d->group = g;
+        d = d->nextPartitioningUser;
+    }
 
     return true;
 }

@@ -115,9 +115,10 @@ int main(int argc, char* argv[])
         laik_partitioning_migrate(p4, g2);
         printf("My world ID %d, in shrinked group: %d\n",
                laik_myid(world), laik_myid(g2));
-        //laik_map_def1(a, (void**) &base, &count);
-        //mysum[3] = 0;
-        //for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
+        assert(laik_get_group(a) == g2);
+        laik_map_def1(a, (void**) &base, &count);
+        mysum[3] = 0;
+        for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
     }
     else
         mysum[3] = mysum[0];

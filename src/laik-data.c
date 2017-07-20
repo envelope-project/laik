@@ -75,6 +75,7 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
     d->defaultPartitionType = LAIK_PT_Block;
     d->defaultFlow = LAIK_DF_None;
     d->activePartitioning = 0;
+    d->nextPartitioningUser = 0;
     d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free
 
@@ -126,10 +127,13 @@ static
 Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
                               Laik_Layout* l)
 {
-    int t = laik_myid(d->group);
+    int myid = laik_myid(d->group);
+    assert(myid < d->group->size);
+    if (myid < 0) return 0; // this task is not part of the task group
+
     Laik_BorderArray* ba = p->borders;
     // number of own slices = number of separate maps
-    int n = ba->off[t+1] - ba->off[t];
+    int n = ba->off[myid+1] - ba->off[myid];
     if (n == 0) return 0;
 
     Laik_MappingList* ml;
@@ -139,7 +143,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
 
     for(int i = 0; i < n; i++) {
         Laik_Mapping* m = &(ml->map[i]);
-        int o = ba->off[t] + i;
+        int o = ba->off[myid] + i;
         Laik_Slice* s = &(ba->tslice[o].s);
 
         uint64_t count = 1;
@@ -374,6 +378,10 @@ void initMaps(Laik_Transition* t,
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 {
+    // new partitioning needs to be defined over same LAIK task group
+    if (p)
+        assert(p->group == d->group);
+
     // calculate borders (TODO: may need global communication)
     laik_update_partitioning(p);
 
@@ -404,11 +412,16 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     // free old mapping/partitioning
     if (fromList)
         freeMaps(fromList);
-    if (d->activePartitioning)
+
+    if (d->activePartitioning) {
+        laik_removePartitioningUser(d->activePartitioning, d);
         laik_free_partitioning(d->activePartitioning);
+    }
 
     // set new mapping/partitioning active
     d->activePartitioning = p;
+    if (p)
+        laik_addPartitioningUser(p, d);
     d->activeMappings = toList;
 }
 

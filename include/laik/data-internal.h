@@ -67,6 +67,8 @@ struct _Laik_Data {
 
     // active partitioning
     Laik_Partitioning* activePartitioning;
+    // linked list of data objects with same active partitioning
+    Laik_Data* nextPartitioningUser;
 
     // active mappings (multiple possible, one per slice)
     Laik_MappingList* activeMappings;
