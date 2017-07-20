@@ -19,6 +19,7 @@
 #define _LAIK_EXT_H_
 
 #include "laik.h"
+#include "interface/agent.h"
 
 // LAIK application-external interfaces
 //
@@ -38,7 +39,9 @@ struct _Laik_RepartitionControl {
     void (*allowRepartitioning)(Laik_Partitioning*);
 };
 
-
+laik_agent* laik_ext_loadagent_static(laik_agent_init_static, int, char**);
+laik_agent* laik_ext_loadagent (char* path, int argc, char** argv);
+void laik_ext_cleanup(laik_agent* agent);
 
 
 #endif // _LAIK_EXT_H_

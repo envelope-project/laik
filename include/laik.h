@@ -24,5 +24,6 @@
 #include "laik/data.h"
 #include "laik/backend.h"
 #include "laik/program.h"
+#include "laik/ext.h"
 
 #endif // _LAIK_H_
