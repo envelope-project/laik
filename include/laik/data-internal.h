@@ -61,12 +61,9 @@ struct _Laik_Data {
     Laik_Group* group;
     Laik_Type* type;
 
-    // default partitioning
-    Laik_PartitionType defaultPartitionType;
-    Laik_DataFlow defaultFlow;
-
     // active partitioning
     Laik_Partitioning* activePartitioning;
+    Laik_DataFlow activeFlow;
     // linked list of data objects with same active partitioning
     Laik_Data* nextPartitioningUser;
 

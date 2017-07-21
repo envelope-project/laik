@@ -72,9 +72,8 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
     d->elemsize = t->size; // TODO: other than POD types
 
     d->backend_data = 0;
-    d->defaultPartitionType = LAIK_PT_Block;
-    d->defaultFlow = LAIK_DF_None;
     d->activePartitioning = 0;
+    d->activeFlow = LAIK_DF_None;
     d->nextPartitioningUser = 0;
     d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free
@@ -376,7 +375,8 @@ void initMaps(Laik_Transition* t,
 
 
 // set and enforce partitioning
-void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
+void laik_set_partitioning(Laik_Data* d,
+                           Laik_Partitioning* p, Laik_DataFlow flow)
 {
     if (d->group->inst->do_profiling)
         d->group->inst->timer_total = laik_wtime();
@@ -391,20 +391,18 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 
     // calculate actions to be done for switching
     Laik_BorderArray *fromBA = 0, *toBA = 0;
-    Laik_DataFlow fromFlow = LAIK_DF_None, toFlow = LAIK_DF_None;
+    Laik_DataFlow fromFlow = d->activeFlow, toFlow = flow;
     Laik_Partitioning* fromP = d->activePartitioning;
     if (fromP) {
         // active partitioning must have borders set
         assert(fromP->bordersValid);
         fromBA = fromP->borders;
-        fromFlow = fromP->flow;
     }
     if (p) {
         // new partitioning needs to be defined over same LAIK task group
         assert(p->group == d->group);
         assert(p->bordersValid);
         toBA = p->borders;
-        toFlow = p->flow;
     }
 
 
@@ -455,6 +453,7 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 
     // set new mapping/partitioning active
     d->activePartitioning = p;
+    d->activeFlow = flow;
     if (p)
         laik_addPartitioningUser(p, d);
     d->activeMappings = toList;
@@ -477,10 +476,9 @@ Laik_Partitioning* laik_set_new_partitioning(Laik_Data* d,
 {
     Laik_Partitioning* p;
     p = laik_new_partitioning(d->group, d->space);
-    laik_set_flow(p, flow);
     laik_set_partitioner(p, laik_new_partitioner(pt));
 
-    laik_set_partitioning(d, p);
+    laik_set_partitioning(d, p, flow);
     return p;
 }
 
@@ -535,17 +533,13 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m)
 // make own partition available for direct access in local memory
 Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 {
-    Laik_Partitioning* p;
+    // we must be an active partitioning
+    assert(d->activePartitioning);
 
-    if (!d->activePartitioning)
-        laik_set_new_partitioning(d,
-                                  d->defaultPartitionType,
-                                  d->defaultFlow);
+    Laik_Partitioning* p = d->activePartitioning;
 
-    p = d->activePartitioning;
-
-    // lazy allocation
     if (!d->activeMappings) {
+        // lazy allocation
         d->activeMappings = prepareMaps(d, p, layout);
         if (d->activeMappings == 0)
             return 0;

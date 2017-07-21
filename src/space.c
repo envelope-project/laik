@@ -581,11 +581,6 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
     p->space = s;
     p->pdim = 0;
 
-    p->flow = LAIK_DF_None;
-    p->copyIn = false;
-    p->copyOut = false;
-    p->redOp = LAIK_RO_None;
-
     p->partitioner = 0;
 
     p->bordersValid = false;
@@ -605,14 +600,6 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
     }
 
     return p;
-}
-
-void laik_set_flow(Laik_Partitioning* p, Laik_DataFlow flow)
-{
-    p->flow = flow;
-    p->copyIn = laik_do_copyin(flow);
-    p->copyOut = laik_do_copyout(flow);
-    p->redOp = laik_get_reduction(flow);
 }
 
 void laik_addPartitioningUser(Laik_Partitioning* p, Laik_Data* d)

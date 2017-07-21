@@ -188,9 +188,6 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 // create a new partitioning on a space (invalid partitioning type)
 Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s);
 
-// set a data flow for a partitioning
-void laik_set_flow(Laik_Partitioning* p, Laik_DataFlow flow);
-
 // return partitioner set for a partitioning
 Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p);
 

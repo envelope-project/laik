@@ -108,10 +108,6 @@ struct _Laik_Partitioning {
     Laik_Space* space; // space to partition
     int pdim; // for 2d/3d: dimension to partition
 
-    Laik_DataFlow flow;
-    bool copyIn, copyOut;
-    Laik_ReductionOperation redOp;
-
     Laik_Partitioner* partitioner;
 
     // partition borders (calculated lazy)

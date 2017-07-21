@@ -91,13 +91,11 @@ int main(int argc, char* argv[])
     Laik_Data* resD = laik_alloc(world, s, laik_Double);
 
     // block partitioning according to elems in matrix rows
-    Laik_Partitioning* p;
-    p = laik_new_partitioning(world, s);
-    laik_set_flow(p, LAIK_DF_CopyOut);
     Laik_Partitioner* pr = laik_new_block_partitioner();
     laik_set_index_weight(pr, getEW, m);
+    Laik_Partitioning* p = laik_new_partitioning(world, s);
     laik_set_partitioner(p, pr);
-    laik_set_partitioning(resD, p);
+    laik_set_partitioning(resD, p, LAIK_DF_CopyOut);
 
     double* res;
     uint64_t count;

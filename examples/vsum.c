@@ -59,6 +59,7 @@ int main(int argc, char* argv[])
 
     // different partitionings used
     Laik_Partitioning *p1, *p2, *p3, *p4;
+    Laik_Partitioner *pr;
     Laik_Mapping* m;
 
     // do partial sums using different partitionings
@@ -88,11 +89,11 @@ int main(int argc, char* argv[])
     laik_set_phase(inst, 1, "element-wise", NULL);
 
     // distribution using element-wise weights equal to index
-    p3 = laik_new_partitioning(laik_get_group(a), laik_get_space(a));
-    laik_set_flow(p3, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
-    laik_set_partitioner(p3, laik_new_partitioner(LAIK_PT_Block));
-    laik_set_index_weight(laik_get_partitioner(p3), getEW, 0);
-    laik_set_partitioning(a, p3);
+    p3 = laik_new_partitioning(world, laik_get_space(a));
+    pr = laik_new_block_partitioner();
+    laik_set_index_weight(pr, getEW, 0);
+    laik_set_partitioner(p3, pr);
+    laik_set_partitioning(a, p3, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
     // partial sum using blocks sized by element weights
     laik_map_def1(a, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[2] += base[i];
@@ -101,11 +102,11 @@ int main(int argc, char* argv[])
 
     if (laik_size(world) > 1) {
         // distribution using task-wise weights: without master
-        p4 = laik_new_partitioning(laik_get_group(a), laik_get_space(a));
-        laik_set_flow(p4, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
-        laik_set_partitioner(p4, laik_new_partitioner(LAIK_PT_Block));
-        laik_set_task_weight(laik_get_partitioner(p4), getTW, 0); // without master
-        laik_set_partitioning(a, p4);
+        p4 = laik_new_partitioning(world, laik_get_space(a));
+        pr = laik_new_block_partitioner();
+        laik_set_task_weight(pr, getTW, 0); // without master
+        laik_set_partitioner(p4, pr);
+        laik_set_partitioning(a, p4, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
         // partial sum using blocks sized by task weights
         laik_map_def1(a, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
@@ -129,7 +130,8 @@ int main(int argc, char* argv[])
     // for collecting partial sums at master, use LAIK's automatic
     // aggregation functionality when switching to new partitioning
     Laik_Data* sum = laik_alloc_1d(world, laik_Double, 4);
-    laik_set_new_partitioning(sum, LAIK_PT_All, LAIK_DF_ReduceOut|LAIK_DF_Sum);
+    laik_set_new_partitioning(sum, LAIK_PT_All,
+                              LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_map_def1(sum, (void**) &base, &count);
     assert(count == 4);
     for(int i = 0; i < 4; i++) base[i] = mysum[i];

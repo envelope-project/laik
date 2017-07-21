@@ -74,7 +74,7 @@ Laik_Group* laik_get_group(Laik_Data* d);
 void laik_free(Laik_Data*);
 
 // set and enforce partitioning
-void laik_set_partitioning(Laik_Data*, Laik_Partitioning*);
+void laik_set_partitioning(Laik_Data*, Laik_Partitioning*, Laik_DataFlow flow);
 
 // get slice number <n> in own partition of data container <d>
 // returns 0 if partitioning is not set or slice number <n> is invalid

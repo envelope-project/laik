@@ -183,20 +183,11 @@ int main(int argc, char* argv[])
     Laik_Data* sumD = laik_alloc_1d(world, laik_Double, 1);
 
     // block partitioning according to number of non-zero elems in matrix rows
-    Laik_Partitioning* p;
-    p = laik_new_partitioning(world, s);
-    laik_set_flow(p, LAIK_DF_CopyOut);
     Laik_Partitioner* pr = laik_new_block_partitioner();
     laik_set_index_weight(pr, getEW, m);
+    Laik_Partitioning* p = laik_new_partitioning(world, s);
     laik_set_partitioner(p, pr);
-    laik_set_partitioning(resD, p);
-
-    // same partitioning, used to broadcast partitial input to all
-    // TODO: This is a bad API - needs rethinking
-    Laik_Partitioning* p2;
-    p2 = laik_new_partitioning(world, s);
-    laik_set_flow(p2, LAIK_DF_CopyOut);
-    laik_set_partitioner(p2, laik_new_copy_partitioner(p));
+    laik_set_partitioning(resD, p, LAIK_DF_CopyOut);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i;
@@ -289,7 +280,7 @@ int main(int argc, char* argv[])
         }
         else {
             // variant 2: broadcast written input values directly
-            laik_set_partitioning(inpD, p2);
+            laik_set_partitioning(inpD, p, LAIK_DF_CopyOut);
             // loop over all local slices of result and input vector
             for(int sNo = 0; laik_my_slice(p, sNo) != 0; sNo++) {
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
