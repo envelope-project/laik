@@ -87,14 +87,15 @@ struct _Laik_TaskSlice {
 };
 
 struct _Laik_BorderArray {
-    int tasks;
+    Laik_Group* group; // task IDs used belong from this group
+    Laik_Space* space; // slices cover this space
     int capacity;  // slices allocated
     int count;     // slices used
-    int* off;      // offsets into border array with length <tasks>
+    int* off;      // offsets from task IDs into border array
     Laik_TaskSlice* tslice; // slice borders, may be multiple per task
 };
 
-Laik_BorderArray* allocBorders(int tasks, int capacity);
+Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity);
 void appendSlice(Laik_BorderArray* a, int task, Laik_Slice* s);
 void sortBorderArray(Laik_BorderArray* a); // also sets the offsets
 void clearBorderArray(Laik_BorderArray* a);

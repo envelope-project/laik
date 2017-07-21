@@ -139,6 +139,29 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2)
     return &s;
 }
 
+// is slice within space borders?
+bool laik_slice_isWithin(Laik_Slice* slc, Laik_Space* sp)
+{
+    if (slc->from.i[0] < slc->to.i[0]) {
+        // not empty
+        if (slc->to.i[0] > sp->size[0]) return false;
+    }
+    if (sp->dims == 1) return true;
+
+    if (slc->from.i[1] < slc->to.i[1]) {
+        // not empty
+        if (slc->to.i[1] > sp->size[1]) return false;
+    }
+    if (sp->dims == 2) return true;
+
+    if (slc->from.i[2] < slc->to.i[2]) {
+        // not empty
+        if (slc->to.i[2] > sp->size[2]) return false;
+    }
+    return true;
+}
+
+// are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
 {
     if (!laik_index_isEqual(dims, &(s1->from), &(s2->from))) return false;
@@ -452,17 +475,19 @@ void laik_removeSpaceUser(Laik_Space* s, Laik_Partitioning* p)
 //-----------------------
 // Laik_BorderArray
 
-Laik_BorderArray* allocBorders(int tasks, int capacity)
+Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
 {
     Laik_BorderArray* a;
 
     // allocate struct with offset and slice arrays afterwards
     a = (Laik_BorderArray*) malloc(sizeof(Laik_BorderArray) +
-                                   (tasks + 1) * sizeof(int) +
+                                   (g->size + 1) * sizeof(int) +
                                    capacity * sizeof(Laik_TaskSlice));
     a->off = (int*) ((char*) a + sizeof(Laik_BorderArray));
-    a->tslice = (Laik_TaskSlice*) ((char*) a->off + (tasks + 1) * sizeof(int));
-    a->tasks = tasks;
+    a->tslice = (Laik_TaskSlice*) ((char*) a->off +
+                                   (g->size + 1) * sizeof(int));
+    a->group = g;
+    a->space = s;
     a->capacity = capacity;
     a->count = 0;
 
@@ -472,6 +497,9 @@ Laik_BorderArray* allocBorders(int tasks, int capacity)
 void appendSlice(Laik_BorderArray* a, int task, Laik_Slice* s)
 {
     assert(a->count < a->capacity);
+    assert((task >= 0) && (task < a->group->size));
+    assert(laik_slice_isWithin(s, a->space));
+
     a->tslice[a->count].task = task;
     a->tslice[a->count].s = *s;
     a->count++;
@@ -488,7 +516,7 @@ int ts_cmp(const void *p1, const void *p2)
 void updateBorderArrayOffsets(Laik_BorderArray* a)
 {
     int task, off = 0;
-    for(task = 0; task < a->tasks; task++) {
+    for(task = 0; task < a->group->size; task++) {
         a->off[task] = off;
         while((off < a->count) && (a->tslice[off].task <= task))
             off++;
@@ -707,6 +735,29 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
 }
 
 
+// check if borders cover full space
+static
+bool coversSpace(Laik_BorderArray* ba)
+{
+    // TODO: only 1 dim for now
+    assert(ba->space->dims == 1);
+
+    assert(ba->count > 0);
+    uint64_t min = ba->tslice[0].s.from.i[0];
+    uint64_t max = ba->tslice[0].s.to.i[0];
+    for(int b = 1; b < ba->count; b++) {
+        if (min > ba->tslice[b].s.from.i[0])
+            min = ba->tslice[b].s.from.i[0];
+        if (max < ba->tslice[b].s.to.i[0])
+            max = ba->tslice[b].s.to.i[0];
+    }
+
+    if ((min == 0) && (max == ba->space->size[0]))
+        return true;
+    return false;
+}
+
+
 // make sure partitioning borders are up to date
 // returns true on changes (if borders had to be updated)
 bool laik_update_partitioning(Laik_Partitioning* p)
@@ -716,7 +767,7 @@ bool laik_update_partitioning(Laik_Partitioning* p)
 
     int count = p->group->size;
     if (!p->borders)
-        p->borders = allocBorders(count, 2 * count);
+        p->borders = allocBorders(p->group, p->space, 2 * count);
     else
         clearBorderArray(p->borders);
     Laik_BorderArray* ba = p->borders;
@@ -742,6 +793,8 @@ bool laik_update_partitioning(Laik_Partitioning* p)
         laik_log(1, "%s\n", str);
     }
 
+    if (!coversSpace(ba))
+        laik_log(LAIK_LL_Panic, "Borders does not covering space");
     return true;
 }
 
@@ -1015,7 +1068,7 @@ bool laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* g)
 
     if (p->bordersValid) {
         // need to migrate IDs in borders
-        assert(p->borders && (p->borders->tasks == oldg->size));
+        assert(p->borders && (p->borders->group == oldg));
         assert(g->size < oldg->size); // TODO: only shrinking
 
         // check that partitions of all task to be removed are empty
@@ -1033,7 +1086,7 @@ bool laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* g)
             assert((newT >= 0) && (newT < g->size));
             p->borders->tslice[i].task = newT;
         }
-        p->borders->tasks = g->size;
+        p->borders->group = g;
 
         updateBorderArrayOffsets(p->borders);
     }
@@ -1064,7 +1117,7 @@ void runAllPartitioner(Laik_Partitioner* pr, Laik_Partitioning* p,
     Laik_Slice slc;
     Laik_Space* s = p->space;
 
-    for(int task = 0; task < ba->tasks; task++) {
+    for(int task = 0; task < ba->group->size; task++) {
         setIndex(&(slc.from), 0, 0, 0);
         setIndex(&(slc.to), s->size[0], s->size[1], s->size[2]);
         appendSlice(ba, task, &slc);

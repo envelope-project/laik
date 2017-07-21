@@ -176,6 +176,9 @@ bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
 // get the intersection of 2 slices; return 0 if intersection is empty
 Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
+// is slice within space borders?
+bool laik_slice_isWithin(Laik_Slice* slc, Laik_Space* sp);
+
 // are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
