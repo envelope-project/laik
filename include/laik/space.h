@@ -200,6 +200,10 @@ void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr);
 
 // create a built-in partitioner
 Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t);
+Laik_Partitioner* laik_new_all_partitioner();
+Laik_Partitioner* laik_new_master_partitioner();
+Laik_Partitioner* laik_new_block_partitioner();
+Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* p);
 
 // some partitioners need a base to derive from
 void laik_set_base_partitioning(Laik_Partitioner* pr, Laik_Partitioning* p);

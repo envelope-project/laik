@@ -1161,6 +1161,8 @@ void runCopyPartitioner(Laik_Partitioner* pr, Laik_Partitioning* p,
 
 Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t)
 {
+    if (t == LAIK_PT_None) return 0;
+
     if (t == LAIK_PT_Block)
         return laik_newBlockPartitioner();
 
@@ -1191,6 +1193,30 @@ Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t)
     }
     return pr;
 }
+
+Laik_Partitioner* laik_new_all_partitioner()
+{
+    return laik_new_partitioner(LAIK_PT_All);
+}
+
+Laik_Partitioner* laik_new_master_partitioner()
+{
+    return laik_new_partitioner(LAIK_PT_Master);
+}
+
+Laik_Partitioner* laik_new_block_partitioner()
+{
+    return laik_new_partitioner(LAIK_PT_Block);
+}
+
+Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* p)
+{
+    Laik_Partitioner* pr = laik_new_partitioner(LAIK_PT_All);
+    pr->base = p;
+    return pr;
+}
+
+
 
 // for partitioners needing a base
 void laik_set_base_partitioning(Laik_Partitioner* pr, Laik_Partitioning* p)

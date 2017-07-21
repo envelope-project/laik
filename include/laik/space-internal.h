@@ -60,8 +60,6 @@ struct _Laik_Partitioner {
     void (*run)(Laik_Partitioner*, Laik_Partitioning*, Laik_BorderArray*);
 };
 
-Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t);
-
 struct _Laik_BlockPartitioner {
     struct _Laik_Partitioner base;
 
