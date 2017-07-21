@@ -99,8 +99,7 @@ int main(int argc, char* argv[])
 
     double* res;
     uint64_t count;
-    Laik_Slice* slc;
-    int fromRow, toRow;
+    uint64_t fromRow, toRow;
 
     // do SPMV, first time
 
@@ -110,9 +109,7 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < count; i++)
         res[i] = 0.0;
     // SPMV on my part of matrix rows
-    slc = laik_my_slice(p, 0);
-    fromRow = slc->from.i[0];
-    toRow = slc->to.i[0];
+    laik_my_slice1(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
             res[r - fromRow] += m->val[o] * v[m->col[o]];
@@ -135,18 +132,15 @@ int main(int argc, char* argv[])
 
     // other way to push results to master: use sum reduction
     laik_switchto_new(resD, LAIK_PT_All,
-                                   LAIK_DF_Init | LAIK_DF_ReduceOut |LAIK_DF_Sum);
+                      LAIK_DF_Init | LAIK_DF_ReduceOut |LAIK_DF_Sum);
     laik_map_def1(resD, (void**) &res, &count);
-    slc = laik_my_slice(p, 0);
-    fromRow = slc->from.i[0];
-    toRow = slc->to.i[0];
+    laik_my_slice1(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
             res[r] += m->val[o] * v[m->col[o]];
         laik_set_iteration(inst, r-fromRow);
     }
-    laik_switchto_new(resD, LAIK_PT_Master,
-                                   LAIK_DF_CopyIn);
+    laik_switchto_new(resD, LAIK_PT_Master, LAIK_DF_CopyIn);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;

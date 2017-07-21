@@ -222,6 +222,10 @@ int laik_my_slicecount(Laik_Partitioning* p);
 // get slice number <n> from the slices of this task
 Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n);
 
+// get from/to values for 1d slice with number <n> assigned to this task
+Laik_Slice* laik_my_slice1(Laik_Partitioning* p, int n,
+                           uint64_t* from, uint64_t* to);
+
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
 

@@ -686,6 +686,17 @@ Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n)
     return &(p->borders->tslice[o].s);
 }
 
+Laik_Slice* laik_my_slice1(Laik_Partitioning* p, int n,
+                           uint64_t* from, uint64_t* to)
+{
+    assert(p->space->dims == 1);
+    Laik_Slice* s = laik_my_slice(p, n);
+    if (from) *from = s ? s->from.i[0] : 0;
+    if (to) *to = s ? s->to.i[0] : 0;
+
+    return s;
+}
+
 
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n)

@@ -190,9 +190,8 @@ int main(int argc, char* argv[])
     laik_switchto(resD, p, LAIK_DF_CopyOut);
 
     double *inp, *res, sum, *sumPtr;
-    uint64_t icount, rcount, i;
+    uint64_t icount, rcount, i, fromRow, toRow;
     Laik_Slice* slc;
-    int fromRow, toRow;
 
     // initialize input vector at master, broadcast to all
     laik_switchto_new(inpD, LAIK_PT_Master, LAIK_DF_CopyOut);
@@ -221,17 +220,13 @@ int main(int argc, char* argv[])
 
         // loop over all local slices
         for(int sNo = 0; ; sNo++) {
-            slc = laik_my_slice(p, sNo);
-            if (slc == 0) break;
+            if (!laik_my_slice1(p, sNo, &fromRow, &toRow)) break;
 
             // my partition slice of result vector (local indexing, from 0)
             laik_map_def(resD, sNo, (void**) &res, &rcount);
 
-            fromRow = slc->from.i[0];
-            toRow = slc->to.i[0];
-            
 #pragma omp parallel for schedule(dynamic,50)
-	    for(int r = fromRow; r < toRow; r++) {
+            for(uint64_t r = fromRow; r < toRow; r++) {
                 res[r - fromRow] = 0.0;
                 for(int o = m->row[r]; o < m->row[r+1]; o++)
                     res[r - fromRow] += m->val[o] * inp[m->col[o]];
@@ -270,9 +265,7 @@ int main(int argc, char* argv[])
 
             // loop over all local slices of result vector
             for(int sNo = 0; ; sNo++) {
-                slc = laik_my_slice(p, sNo);
-                if (slc == 0) break;
-                fromRow = slc->from.i[0];
+                if (!laik_my_slice1(p, sNo, &fromRow, &toRow)) break;
 
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
                 for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
