@@ -8,6 +8,20 @@
  * template for creating external control agents. 
  */
 
+enum tag_laik_ext_agent_t{
+    LAIK_AGENT_STATIC = 0,
+    LAIK_AGENT_DYNAMIC = 1,
+    LAIK_AGENT_SIMULATOR = 2,
+
+    LAIK_AGENT_NONE = 255
+};
+
+enum tag_laik_ext_agent_cap{
+    LAIK_AGENT_GET_FAIL = 1,
+    LAIK_AGENT_GET_SPARE = 2,
+    LAIK_AGENT_RESET_NODE = 4,
+};
+
 typedef struct tag_laik_ext_agent laik_agent;
 typedef enum tag_laik_ext_agent_t laik_agent_t;
 typedef enum tag_laik_ext_agent_cap laik_agent_cap;
@@ -26,20 +40,6 @@ typedef int (*laik_agent_clear) (laik_agent*);
 typedef void (*laik_agent_set_iter) (laik_agent*, const int);
 typedef void (*laik_agent_set_phase) (laik_agent*, const int, const char*, const void*);
 
-enum tag_laik_ext_agent_t{
-    LAIK_AGENT_STATIC = 0,
-    LAIK_AGENT_DYNAMIC = 1,
-    LAIK_AGENT_SIMULATOR = 2,
-
-
-    LAIK_AGENT_NONE = 255
-};
-
-enum tag_laik_ext_agent_cap{
-    LAIK_AGENT_GET_FAIL = 1,
-    LAIK_AGENT_GET_SPARE = 2,
-    LAIK_AGENT_RESET_NODE = 4,
-};
 
 struct tag_laik_ext_agent{
     int id;

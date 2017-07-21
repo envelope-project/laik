@@ -64,6 +64,8 @@ install_laik: liblaik.a $(HEADERS)
 	cp $(wildcard include/*.h) $(PREFIX)/include
 	mkdir -p $(PREFIX)/include/laik
 	cp $(wildcard include/laik/*.h) $(PREFIX)/include/laik
+	mkdir -p $(PREFIX)/include/interface
+	cp $(wildcard include/interface/*.h) $(PREFIX)/include/interface
 	mkdir -p $(PREFIX)/lib
 	cp liblaik.a $(PREFIX)/lib
 
