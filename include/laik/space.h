@@ -123,6 +123,9 @@ typedef struct _Laik_Partitioning Laik_Partitioning;
 // set of partitionings to make consistent at the same time
 typedef struct _Laik_PartGroup Laik_PartGroup;
 
+// calculated partitioning borders
+typedef struct _Laik_BorderArray Laik_BorderArray;
+
 // communication requirements when switching partitioning groups
 typedef struct _Laik_Transition Laik_Transition;
 
@@ -245,9 +248,12 @@ bool laik_update_partitioning(Laik_Partitioning* p);
 // be enforced at the same point in time
 void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p);
 
-// Calculate communication required for transitioning between partitionings
-Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
-                                       Laik_Partitioning* to);
+// Calculate communication required for transitioning between
+// calculated borders of partitionings
+Laik_Transition*
+laik_calc_transition(Laik_Group* group, Laik_Space* space,
+                     Laik_BorderArray* fromBA, Laik_DataFlow fromFlow,
+                     Laik_BorderArray* toBA, Laik_DataFlow toFlow);
 
 // Calculate communication for transitioning between partitioning groups
 Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,

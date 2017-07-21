@@ -378,23 +378,45 @@ void initMaps(Laik_Transition* t,
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 {
-    // new partitioning needs to be defined over same LAIK task group
-    if (p)
-        assert(p->group == d->group);
-
     // calculate borders (TODO: may need global communication)
     laik_update_partitioning(p);
-
-    // active partitioning must have borders set
-    if (d->activePartitioning)
-        assert(d->activePartitioning->bordersValid);
 
     // TODO: convert to realloc (with taking over layout)
     Laik_MappingList* fromList = d->activeMappings;
     Laik_MappingList* toList = prepareMaps(d, p, 0);
 
     // calculate actions to be done for switching
-    Laik_Transition* t = laik_calc_transitionP(d->activePartitioning, p);
+    Laik_BorderArray *fromBA = 0, *toBA = 0;
+    Laik_DataFlow fromFlow = LAIK_DF_None, toFlow = LAIK_DF_None;
+    Laik_Partitioning* fromP = d->activePartitioning;
+    if (fromP) {
+        // active partitioning must have borders set
+        assert(fromP->bordersValid);
+        fromBA = fromP->borders;
+        fromFlow = fromP->flow;
+    }
+    if (p) {
+        // new partitioning needs to be defined over same LAIK task group
+        assert(p->group == d->group);
+        assert(p->bordersValid);
+        toBA = p->borders;
+        toFlow = p->flow;
+    }
+    Laik_Transition* t;
+    t = laik_calc_transition(d->group, d->space,
+                             fromBA, fromFlow, toBA, toFlow);
+
+    if (laik_logshown(1)) {
+        char s[1000];
+        int len = laik_getTransitionStr(s, t);
+        if (len == 0)
+            laik_log(1, "transition %s => %s: (nothing)\n",
+                     fromP ? fromP->name : "(none)", p ? p->name : "(none)");
+        else
+            laik_log(1, "transition %s => %s:\n%s",
+                     fromP ? fromP->name : "(none)", p ? p->name : "(none)",
+                     s);
+    }
 
     // let backend do send/recv/reduce actions
     // TODO: use async interface

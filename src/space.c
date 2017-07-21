@@ -233,8 +233,7 @@ int getDataFlowStr(char* s, Laik_DataFlow flow)
 }
 
 
-static
-int getTransitionStr(char* s, Laik_Transition* t)
+int laik_getTransitionStr(char* s, Laik_Transition* t)
 {
     int off = 0;
 
@@ -537,6 +536,31 @@ void clearBorderArray(Laik_BorderArray* a)
     a->count = 0;
 }
 
+// do borders cover complete space in all tasks?
+// assumption: task slices sorted according to task ID
+bool bordersIsAll(Laik_BorderArray* ba)
+{
+    if (ba->count != ba->group->size) return false;
+    Laik_Slice* slc = sliceFromSpace(ba->space);
+    for(int i = 0; i < ba->count; i++) {
+        if (ba->tslice[i].task != i) return false;
+        if (!laik_slice_isEqual(ba->space->dims, &(ba->tslice[i].s), slc))
+            return false;
+    }
+    return true;
+}
+
+// do borders cover complete space exactly in one task?
+// return -1 if no, else task ID
+int bordersIsSingle(Laik_BorderArray* ba)
+{
+    Laik_Slice* slc = sliceFromSpace(ba->space);
+    if (ba->count != 1) return -1;
+    if (!laik_slice_isEqual(ba->space->dims, &(ba->tslice[0].s), slc))
+        return -1;
+
+    return ba->tslice[0].task;
+}
 
 //-----------------------
 // Laik_Partitioning
@@ -808,8 +832,10 @@ void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p)
 }
 
 // Calculate communication required for transitioning between partitionings
-Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
-                                       Laik_Partitioning* to)
+Laik_Transition*
+laik_calc_transition(Laik_Group* group, Laik_Space* space,
+                     Laik_BorderArray* fromBA, Laik_DataFlow fromFlow,
+                     Laik_BorderArray* toBA, Laik_DataFlow toFlow)
 {
     Laik_Slice* slc;
 
@@ -827,68 +853,59 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     recvCount = 0;
     redCount = 0;
 
-    // either one of <from> and <to> has to be valid; same space, same group
-    Laik_Space* space = 0;
-    Laik_Group* group = 0;
-
-    // make sure requested data flow is consistent
-    if (from == 0) {
+    // make sure requested operation is consistent
+    if (fromBA == 0) {
         // start: we come from nothing, go to initial partitioning
-        assert(to != 0);
-        assert(!laik_do_copyin(to->flow));
-
-        space = to->space;
-        group = to->group;
+        assert(toBA != 0);
+        assert(!laik_do_copyin(toFlow));
+        assert(toBA->group == group);
+        assert(toBA->space == space);
     }
-    else if (to == 0) {
+    else if (toBA == 0) {
         // end: go to nothing
-        assert(from != 0);
-        assert(!laik_do_copyout(from->flow));
-
-        space = from->space;
-        group = from->group;
+        assert(fromBA != 0);
+        assert(!laik_do_copyout(fromFlow));
+        assert(fromBA->group == group);
+        assert(fromBA->space == space);
     }
     else {
         // to and from set
-        if (laik_do_copyin(to->flow)) {
+        if (laik_do_copyin(toFlow)) {
             // values must come from something
-            assert(laik_do_copyout(from->flow) ||
-                   laik_is_reduction(from->flow));
+            assert(laik_do_copyout(fromFlow) ||
+                   laik_is_reduction(fromFlow));
         }
-        assert(from->space == to->space);
-        assert(from->group == to->group);
-        space = from->space;
-        group = from->group;
+        assert(fromBA->group == group);
+        assert(fromBA->space == space);
+        assert(toBA->group == group);
+        assert(toBA->space == space);
     }
 
     int dims = space->dims;
     int myid = group->inst->myid;
     int count = group->size;
 
-    Laik_BorderArray* fromBA = from ? from->borders : 0;
-    Laik_BorderArray* toBA = to ? to->borders : 0;
-
     // init values as next phase does a reduction?
-    if ((to != 0) && laik_is_reduction(to->flow)) {
+    if ((toBA != 0) && laik_is_reduction(toFlow)) {
 
         for(int o = toBA->off[myid]; o < toBA->off[myid+1]; o++) {
             if (laik_slice_isEmpty(dims, &(toBA->tslice[o].s))) continue;
             assert(initCount < TRANSSLICES_MAX);
-            assert(to->redOp != LAIK_RO_None);
             struct initTOp* op = &(init[initCount]);
             op->slc = toBA->tslice[o].s;
             op->sliceNo = o - toBA->off[myid];
-            op->redOp = to->redOp;
+            op->redOp = laik_get_reduction(toFlow);
+            assert(op->redOp != LAIK_RO_None);
             initCount++;
         }
     }
 
-    if ((from != 0) && (to != 0)) {
+    if ((fromBA != 0) && (toBA != 0)) {
 
         // determine local slices to keep
         // (may need local copy if from/to mappings are different).
         // reductions are not handled here, but by backend
-        if (laik_do_copyout(from->flow) && laik_do_copyin(to->flow)) {
+        if (laik_do_copyout(fromFlow) && laik_do_copyin(toFlow)) {
             for(int o1 = fromBA->off[myid]; o1 < fromBA->off[myid+1]; o1++) {
                 for(int o2 = toBA->off[myid]; o2 < toBA->off[myid+1]; o2++) {
                     slc = laik_slice_intersect(dims,
@@ -908,25 +925,26 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         }
 
         // something to reduce?
-        if (laik_is_reduction(from->flow)) {
+        if (laik_is_reduction(fromFlow)) {
             // reductions always should involve everyone
-            assert(from->partitioner->type == LAIK_PT_All);
-            if (laik_do_copyin(to->flow)) {
+            assert(bordersIsAll(fromBA));
+            if (laik_do_copyin(toFlow)) {
                 assert(redCount < TRANSSLICES_MAX);
-                assert((to->partitioner->type == LAIK_PT_Master) ||
-                       (to->partitioner->type == LAIK_PT_All));
+                // reduction result either goes to all or master
+                int root = bordersIsSingle(toBA);
+                assert(bordersIsAll(toBA) || (root == 0));
 
                 struct redTOp* op = &(red[redCount]);
-                op->slc = *sliceFromSpace(from->space); // complete space
-                op->redOp = from->redOp;
-                op->rootTask = (to->partitioner->type == LAIK_PT_All) ? -1 : 0;
+                op->slc = *sliceFromSpace(space); // complete space
+                op->redOp = laik_get_reduction(fromFlow);
+                op->rootTask = (root >= 0) ? root : -1;
 
                 redCount++;
             }
         }
 
         // something to send?
-        if (laik_do_copyout(from->flow)) {
+        if (laik_do_copyout(fromFlow)) {
             for(int o1 = fromBA->off[myid]; o1 < fromBA->off[myid+1]; o1++) {
                 for(int task = 0; task < count; task++) {
                     if (task == myid) continue;
@@ -950,7 +968,7 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
         }
 
         // something to receive not coming from a reduction?
-        if (!laik_is_reduction(from->flow) && laik_do_copyin(to->flow)) {
+        if (!laik_is_reduction(fromFlow) && laik_do_copyin(toFlow)) {
             for(int task = 0; task < count; task++) {
                 if (task == myid) continue;
                 for(int o1 = fromBA->off[task]; o1 < fromBA->off[task+1]; o1++) {
@@ -1006,20 +1024,9 @@ Laik_Transition* laik_calc_transitionP(Laik_Partitioning* from,
     memcpy(t->recv, recv,  recvSize);
     memcpy(t->red,  red,   redSize);
 
-    if (laik_logshown(1)) {
-        char s[1000];
-        int len = getTransitionStr(s, t);
-        if (len == 0)
-            laik_log(1, "transition %s => %s: (nothing)\n",
-                     from ? from->name : "(none)", to ? to->name : "(none)");
-        else
-            laik_log(1, "transition %s => %s:\n%s",
-                     from ? from->name : "(none)", to ? to->name : "(none)",
-                     s);
-    }
-
     return t;
 }
+
 
 // Calculate communication for transitioning between partitioning groups
 Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,

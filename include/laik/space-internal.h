@@ -25,7 +25,6 @@
 #include <stdbool.h>
 
 typedef struct _Laik_BlockPartitioner Laik_BlockPartitioner;
-typedef struct _Laik_BorderArray Laik_BorderArray;
 
 // internal as depending on communication backend
 
@@ -59,6 +58,8 @@ struct _Laik_Partitioner {
     Laik_Partitioning* base;
     void (*run)(Laik_Partitioner*, Laik_Partitioning*, Laik_BorderArray*);
 };
+
+Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t);
 
 struct _Laik_BlockPartitioner {
     struct _Laik_Partitioner base;
@@ -94,6 +95,7 @@ struct _Laik_BorderArray {
 };
 
 Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity);
+// to be used by implementations of partitioners
 void appendSlice(Laik_BorderArray* a, int task, Laik_Slice* s);
 void sortBorderArray(Laik_BorderArray* a); // also sets the offsets
 void clearBorderArray(Laik_BorderArray* a);
@@ -196,5 +198,6 @@ struct _Laik_Transition {
 
 // LAIK internal
 int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1);
+int laik_getTransitionStr(char* s, Laik_Transition* t);
 
 #endif // _LAIK_SPACE_INTERNAL_H_
