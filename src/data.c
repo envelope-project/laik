@@ -374,52 +374,55 @@ void initMaps(Laik_Transition* t,
 }
 
 
-// set and enforce partitioning
-void laik_set_partitioning(Laik_Data* d,
-                           Laik_Partitioning* p, Laik_DataFlow flow)
+// switch from active to another partitioning
+void laik_switchto(Laik_Data* d,
+                   Laik_Partitioning* toP, Laik_DataFlow toFlow)
 {
     if (d->group->inst->do_profiling)
         d->group->inst->timer_total = laik_wtime();
 
     // calculate borders (TODO: may need global communication)
-    if (!p->bordersValid)
-        laik_calc_partitioning(p);
+    if (!toP->bordersValid)
+        laik_calc_partitioning(toP);
 
     // TODO: convert to realloc (with taking over layout)
     Laik_MappingList* fromList = d->activeMappings;
-    Laik_MappingList* toList = prepareMaps(d, p, 0);
+    Laik_MappingList* toList = prepareMaps(d, toP, 0);
 
     // calculate actions to be done for switching
     Laik_BorderArray *fromBA = 0, *toBA = 0;
-    Laik_DataFlow fromFlow = d->activeFlow, toFlow = flow;
     Laik_Partitioning* fromP = d->activePartitioning;
     if (fromP) {
         // active partitioning must have borders set
         assert(fromP->bordersValid);
         fromBA = fromP->borders;
     }
-    if (p) {
+    if (toP) {
         // new partitioning needs to be defined over same LAIK task group
-        assert(p->group == d->group);
-        assert(p->bordersValid);
-        toBA = p->borders;
+        assert(toP->group == d->group);
+        assert(toP->bordersValid);
+        toBA = toP->borders;
     }
-
 
     Laik_Transition* t;
     t = laik_calc_transition(d->group, d->space,
-                             fromBA, fromFlow, toBA, toFlow);
+                             fromBA, d->activeFlow, toBA, toFlow);
 
     if (laik_logshown(1)) {
-        char s[1000];
-        int len = laik_getTransitionStr(s, t);
+        int o;
+        char s1[1000];
+        o = sprintf(s1, "transition %s/", fromP ? fromP->name : "(none)");
+        o += laik_getDataFlowStr(s1+o, d->activeFlow);
+        o += sprintf(s1+o, " => %s/", toP ? toP->name : "(none)");
+        o += laik_getDataFlowStr(s1+o, toFlow);
+
+        char s2[1000];
+        int len = laik_getTransitionStr(s2, t);
+
         if (len == 0)
-            laik_log(1, "transition %s => %s: (nothing)\n",
-                     fromP ? fromP->name : "(none)", p ? p->name : "(none)");
+            laik_log(1, "%s: (nothing)\n", s1);
         else
-            laik_log(1, "transition %s => %s:\n%s",
-                     fromP ? fromP->name : "(none)", p ? p->name : "(none)",
-                     s);
+            laik_log(1, "%s:\n%s", s1, s2);
     }
 
     if (d->group->inst->do_profiling)
@@ -427,8 +430,8 @@ void laik_set_partitioning(Laik_Data* d,
 
     // let backend do send/recv/reduce actions
     // TODO: use async interface
-    assert(p->space->inst->backend->execTransition);
-    (p->space->inst->backend->execTransition)(d, t, fromList, toList);
+    assert(toP->space->inst->backend->execTransition);
+    (toP->space->inst->backend->execTransition)(d, t, fromList, toList);
 
     if (d->group->inst->do_profiling)
         d->group->inst->time_backend += laik_wtime() -
@@ -452,10 +455,10 @@ void laik_set_partitioning(Laik_Data* d,
     }
 
     // set new mapping/partitioning active
-    d->activePartitioning = p;
-    d->activeFlow = flow;
-    if (p)
-        laik_addPartitioningUser(p, d);
+    d->activePartitioning = toP;
+    d->activeFlow = toFlow;
+    if (toP)
+        laik_addPartitioningUser(toP, d);
     d->activeMappings = toList;
 
     if (d->group->inst->do_profiling)
@@ -470,15 +473,15 @@ Laik_Slice* laik_data_slice(Laik_Data* d, int n)
     return laik_my_slice(d->activePartitioning, n);
 }
 
-Laik_Partitioning* laik_set_new_partitioning(Laik_Data* d,
-                                             Laik_PartitionType pt,
-                                             Laik_DataFlow flow)
+Laik_Partitioning* laik_switchto_new(Laik_Data* d,
+                                     Laik_PartitionType pt,
+                                     Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
     p = laik_new_partitioning(d->group, d->space);
     laik_set_partitioner(p, laik_new_partitioner(pt));
 
-    laik_set_partitioning(d, p, flow);
+    laik_switchto(d, p, flow);
     return p;
 }
 

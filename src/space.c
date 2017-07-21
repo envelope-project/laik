@@ -212,8 +212,7 @@ int getReductionStr(char* s, Laik_ReductionOperation op)
 }
 
 
-static
-int getDataFlowStr(char* s, Laik_DataFlow flow)
+int laik_getDataFlowStr(char* s, Laik_DataFlow flow)
 {
     int o = 0;
 
@@ -595,7 +594,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
 
     if (laik_logshown(1)) {
         laik_log(1, "new partitioning '%s': space '%s', group %d\n",
-                 p->name,
+                 p->name, s->name,
                  p->group->gid);
     }
 
@@ -738,8 +737,7 @@ void laik_calc_partitioning(Laik_Partitioning* p)
     if (laik_logshown(1)) {
         char str[1000];
         int off;
-        off = sprintf(str, "partitioning '%s' (group %d) updated: ",
-                      p->name, p->group->gid);
+        off = sprintf(str, "partitioning '%s' borders set: ", p->name);
         for(int i = 0; i < ba->count; i++) {
             if (i>0)
                 off += sprintf(str+off, ", ");
@@ -818,7 +816,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     int count = group->size;
 
     // init values as next phase does a reduction?
-    if ((toBA != 0) && laik_is_reduction(toFlow)) {
+    if ((toBA != 0) && laik_do_init(toFlow)) {
 
         for(int o = toBA->off[myid]; o < toBA->off[myid+1]; o++) {
             if (laik_slice_isEmpty(dims, &(toBA->tslice[o].s))) continue;

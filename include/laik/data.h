@@ -73,8 +73,8 @@ Laik_Group* laik_get_group(Laik_Data* d);
 // free resources for a data container
 void laik_free(Laik_Data*);
 
-// set and enforce partitioning
-void laik_set_partitioning(Laik_Data*, Laik_Partitioning*, Laik_DataFlow flow);
+// switch from active to another partitioning
+void laik_switchto(Laik_Data*, Laik_Partitioning*toP, Laik_DataFlow toFlow);
 
 // get slice number <n> in own partition of data container <d>
 // returns 0 if partitioning is not set or slice number <n> is invalid
@@ -82,10 +82,9 @@ Laik_Slice* laik_data_slice(Laik_Data* d, int n);
 
 // convenience functions
 
-// set and enforce a newly created partitioning, and return it
-Laik_Partitioning* laik_set_new_partitioning(Laik_Data*,
-                                             Laik_PartitionType,
-                                             Laik_DataFlow flow);
+// switch from active to a newly created partitioning, and return it
+Laik_Partitioning* laik_switchto_new(Laik_Data*,
+                                     Laik_PartitionType, Laik_DataFlow flow);
 
 void laik_fill_double(Laik_Data* data, double v);
 

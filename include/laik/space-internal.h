@@ -193,5 +193,6 @@ struct _Laik_Transition {
 // LAIK internal
 int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1);
 int laik_getTransitionStr(char* s, Laik_Transition* t);
+int laik_getDataFlowStr(char* s, Laik_DataFlow flow);
 
 #endif // _LAIK_SPACE_INTERNAL_H_
