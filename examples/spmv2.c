@@ -159,6 +159,8 @@ int main(int argc, char* argv[])
     if (maxiter == 0) maxiter = 10;
     if (size == 0) size = 10000;
 
+    laik_enable_profiling(inst);
+
     if (laik_myid(world) == 0) {
         printf("Running %d iterations, SpM side %d (~%.1f MB), %d tasks\n",
                maxiter, size, .000001*size*size*6, laik_size(world));
@@ -315,6 +317,9 @@ int main(int argc, char* argv[])
     t2 += wtime() - tt2;
     laik_log(2, "Timing: %.3fs comp/iter, %.3fs total/iter, %.3fs total\n",
              t1 / maxiter, t2 / maxiter, t2);
+
+    laik_log(2, "Timing: Laik total: %.3fs, backend: %.3fs\n",
+             laik_get_total_time(), laik_get_backend_time());
 
     laik_finalize(inst);
     return 0;

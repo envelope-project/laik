@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 
 // default log level
 static Laik_LogLevel laik_loglevel = LAIK_LL_Error;
@@ -64,6 +65,8 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
 
     laik_data_init();
     instance->control = laik_program_control_init();
+
+    instance->do_profiling = false;
 
     // logging (TODO: multiple instances)
     laik_loginst = instance;
@@ -199,10 +202,49 @@ Laik_Group* laik_shrink_group(Laik_Group* g, int len, int* list)
 
 
 
+// Profiling
+
+static Laik_Instance* laik_profinst = 0;
+
+void laik_enable_profiling(Laik_Instance* i)
+{
+    if (laik_profinst) {
+        if (laik_profinst == i) return;
+        laik_profinst->do_profiling = false;
+    }
+    laik_profinst = i;
+    if (!i) return;
+
+    i->do_profiling = true;
+    i->time_backend = 0.0;
+    i->time_total = 0.0;
+}
+
+double laik_get_total_time()
+{
+    if (!laik_profinst) return 0.0;
+
+    return laik_profinst->time_total;
+}
+
+double laik_get_backend_time()
+{
+    if (!laik_profinst) return 0.0;
+
+    return laik_profinst->time_backend;
+}
 
 
 
 // Logging
+
+double laik_wtime()
+{
+  struct timeval tv;
+  gettimeofday(&tv, 0);
+
+  return tv.tv_sec+1e-6*tv.tv_usec;
+}
 
 // to overwrite environment variable LAIK_LOG
 void laik_set_loglevel(Laik_LogLevel l)

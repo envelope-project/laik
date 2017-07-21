@@ -47,22 +47,26 @@ void laik_addGroupUser(Laik_Group* g, Laik_Partitioning* p);
 void laik_removeGroupUser(Laik_Group* g, Laik_Partitioning* p);
 
 struct _Laik_Instance {
-  int size;
-  int myid;
-  char* mylocation;
+    int size;
+    int myid;
+    char* mylocation;
 
-  Laik_Backend* backend;
-  void* backend_data;
+    Laik_Backend* backend;
+    void* backend_data;
 
-  Laik_Space* firstspace;
+    Laik_Space* firstspace;
 
-  int group_count, data_count, mapping_count;
-  Laik_Group* group[MAX_GROUPS];
-  Laik_Data* data[MAX_DATAS];
-  Laik_Mapping* mapping[MAX_MAPPINGS]; // active mappings
+    int group_count, data_count, mapping_count;
+    Laik_Group* group[MAX_GROUPS];
+    Laik_Data* data[MAX_DATAS];
+    Laik_Mapping* mapping[MAX_MAPPINGS]; // active mappings
 
-  Laik_Program_Control* control; //new, for iteration numer and program phase
-  
+    Laik_Program_Control* control; //new, for iteration numer and program phase
+
+    // profiling
+    bool do_profiling;
+    double timer_total, timer_backend;
+    double time_total, time_backend;
 };
 
 struct _Laik_Error {

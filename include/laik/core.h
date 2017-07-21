@@ -95,6 +95,12 @@ bool laik_is_master(Laik_Group* g);
 // a process may become unmanaged by shrinking the world group.
 bool laik_is_managed(Laik_Instance* i);
 
+// profiling
+
+// start profiling for given instance
+void laik_enable_profiling(Laik_Instance* i);
+double laik_get_total_time();
+double laik_get_backend_time();
 
 
 
@@ -125,5 +131,8 @@ bool laik_logshown(Laik_LogLevel l);
 
 // to overwrite environment variable LAIK_LOG
 void laik_set_loglevel(Laik_LogLevel l);
+
+// return wall clock time (seconds since 1.1.1971) with sub-second precision
+double laik_wtime();
 
 #endif // _LAIK_CORE_H_

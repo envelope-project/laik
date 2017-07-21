@@ -378,6 +378,9 @@ void initMaps(Laik_Transition* t,
 // set and enforce partitioning
 void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
 {
+    if (d->group->inst->do_profiling)
+        d->group->inst->timer_total = laik_wtime();
+
     // calculate borders (TODO: may need global communication)
     laik_update_partitioning(p);
 
@@ -402,6 +405,8 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
         toBA = p->borders;
         toFlow = p->flow;
     }
+
+
     Laik_Transition* t;
     t = laik_calc_transition(d->group, d->space,
                              fromBA, fromFlow, toBA, toFlow);
@@ -418,10 +423,17 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
                      s);
     }
 
+    if (d->group->inst->do_profiling)
+        d->group->inst->timer_backend = laik_wtime();
+
     // let backend do send/recv/reduce actions
     // TODO: use async interface
     assert(p->space->inst->backend->execTransition);
     (p->space->inst->backend->execTransition)(d, t, fromList, toList);
+
+    if (d->group->inst->do_profiling)
+        d->group->inst->time_backend += laik_wtime() -
+                                        d->group->inst->timer_backend;
 
     // local copy action (may use old mappings)
     if (t->localCount > 0)
@@ -445,6 +457,10 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
     if (p)
         laik_addPartitioningUser(p, d);
     d->activeMappings = toList;
+
+    if (d->group->inst->do_profiling)
+        d->group->inst->time_total += laik_wtime() -
+                                     d->group->inst->timer_total;
 }
 
 // get slice number <n> in own partition
