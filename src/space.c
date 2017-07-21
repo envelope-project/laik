@@ -597,41 +597,23 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
 
     laik_addSpaceUser(s, p);
     laik_addGroupUser(p->group, p);
+
+    if (laik_logshown(1)) {
+        laik_log(1, "new partitioning '%s': space '%s', group %d\n",
+                 p->name,
+                 p->group->gid);
+    }
+
     return p;
 }
 
-static
-void set_flow(Laik_Partitioning* p, Laik_DataFlow flow)
+void laik_set_flow(Laik_Partitioning* p, Laik_DataFlow flow)
 {
     p->flow = flow;
     p->copyIn = laik_do_copyin(flow);
     p->copyOut = laik_do_copyout(flow);
     p->redOp = laik_get_reduction(flow);
 }
-
-
-Laik_Partitioning*
-laik_new_base_partitioning(Laik_Group* g, Laik_Space* space,
-                           Laik_PartitionType pt,
-                           Laik_DataFlow flow)
-{
-    Laik_Partitioning* p;
-    p = laik_new_partitioning(g, space);
-    p->partitioner = laik_new_partitioner(pt);
-    set_flow(p, flow);
-
-    if (laik_logshown(1)) {
-        char s[100];
-        getDataFlowStr(s, p->flow);
-        laik_log(1, "new partitioning '%s': type %s, data flow %s, group %d\n",
-                 p->name,
-                 p->partitioner->name ? p->partitioner->name : "(none)",
-                 s, p->group->gid);
-    }
-
-    return p;
-}
-
 
 void laik_addPartitioningUser(Laik_Partitioning* p, Laik_Data* d)
 {
@@ -669,7 +651,6 @@ Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p)
 }
 
 
-
 // for multiple-dimensional spaces, set dimension to partition (default is 0)
 void laik_set_partitioning_dimension(Laik_Partitioning* p, int d)
 {
@@ -677,40 +658,6 @@ void laik_set_partitioning_dimension(Laik_Partitioning* p, int d)
     p->pdim = d;
 }
 
-
-// create a new partitioning based on another one on the same space
-Laik_Partitioning*
-laik_new_coupled_partitioning(Laik_Partitioning* base,
-                              Laik_PartitionType pt,
-                              Laik_DataFlow flow)
-{
-    Laik_Partitioning* p;
-    p = laik_new_partitioning(base->group, base->space);
-    p->partitioner = laik_new_partitioner(pt);
-    p->partitioner->base = base;
-    set_flow(p, flow);
-
-    return p;
-}
-
-// create a new partitioning based on another one on a different space
-// this also needs to know which dimensions should be coupled
-Laik_Partitioning*
-laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
-                                   Laik_Space* s, int from, int to,
-                                   Laik_PartitionType pt,
-                                   Laik_DataFlow flow)
-{
-    Laik_Partitioning* p;
-    p = laik_new_partitioning(base->group, s);
-    p->partitioner = laik_new_partitioner(pt);
-    p->partitioner->base = base;
-    set_flow(p, flow);
-
-    assert(0); // TODO
-
-    return p;
-}
 
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p)
@@ -728,7 +675,8 @@ void laik_free_partitioning(Laik_Partitioning* p)
 // get number of slices of this task
 int laik_my_slicecount(Laik_Partitioning* p)
 {
-    laik_update_partitioning(p);
+    if (!p->bordersValid)
+        laik_calc_partitioning(p);
 
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
@@ -739,7 +687,8 @@ int laik_my_slicecount(Laik_Partitioning* p)
 // get slice number <n> from the slices of this task
 Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n)
 {
-    laik_update_partitioning(p);
+    if (!p->bordersValid)
+        laik_calc_partitioning(p);
 
     int myid = p->group->myid;
     int o = p->borders->off[myid] + n;
@@ -782,19 +731,16 @@ bool coversSpace(Laik_BorderArray* ba)
 }
 
 
-// make sure partitioning borders are up to date
-// returns true on changes (if borders had to be updated)
-bool laik_update_partitioning(Laik_Partitioning* p)
+// calculate partition borders
+void laik_calc_partitioning(Laik_Partitioning* p)
 {
-    if (p->bordersValid)
-        return false;
-
-    int count = p->group->size;
-    if (!p->borders)
-        p->borders = allocBorders(p->group, p->space, 2 * count);
-    else
-        clearBorderArray(p->borders);
     Laik_BorderArray* ba = p->borders;
+    if (!ba) {
+        p->borders = allocBorders(p->group, p->space,
+                                  2 * p->group->size);
+        ba = p->borders;
+    }
+    clearBorderArray(ba);
 
     assert(p->partitioner);
     (p->partitioner->run)(p->partitioner, p, ba);
@@ -818,8 +764,7 @@ bool laik_update_partitioning(Laik_Partitioning* p)
     }
 
     if (!coversSpace(ba))
-        laik_log(LAIK_LL_Panic, "Borders does not covering space");
-    return true;
+        laik_log(LAIK_LL_Panic, "Borders do not covering space");
 }
 
 
@@ -1148,7 +1093,7 @@ void runCopyPartitioner(Laik_Partitioner* pr, Laik_Partitioning* p,
 {
     Laik_Slice slc;
     Laik_Space* s = p->space;
-    Laik_Partitioning* base = pr->base;
+    Laik_Partitioning* base = (Laik_Partitioning*) pr->data;
 
     assert(base);
     assert(base->bordersValid);
@@ -1166,18 +1111,166 @@ void runCopyPartitioner(Laik_Partitioner* pr, Laik_Partitioning* p,
     }
 }
 
+
+// Block partitioner
+
+static
+Laik_BlockPartitionerData* getBlockData(Laik_Partitioner* pr)
+{
+    if (!pr->data) {
+        Laik_BlockPartitionerData* data;
+        int dsize = sizeof(Laik_BlockPartitionerData);
+        data = (Laik_BlockPartitionerData*) malloc(dsize);
+        pr->data = (void*) data;
+
+        data->cycles = 1;
+        data->getIdxW = 0;
+        data->idxUserData = 0;
+        data->getTaskW = 0;
+        data->taskUserData = 0;
+    }
+    return (Laik_BlockPartitionerData*) pr->data;
+}
+
+void laik_set_index_weight(Laik_Partitioner* pr, Laik_GetIdxWeight_t f,
+                           void* userData)
+{
+    assert(pr->type == LAIK_PT_Block);
+    Laik_BlockPartitionerData* data = getBlockData(pr);
+
+    data->getIdxW = f;
+    data->idxUserData = userData;
+}
+
+void laik_set_task_weight(Laik_Partitioner* pr, Laik_GetTaskWeight_t f,
+                          void* userData)
+{
+    assert(pr->type == LAIK_PT_Block);
+    Laik_BlockPartitionerData* data = getBlockData(pr);
+
+    data->getTaskW = f;
+    data->taskUserData = userData;
+}
+
+void laik_set_cycle_count(Laik_Partitioner* pr, int cycles)
+{
+    assert(pr->type == LAIK_PT_Block);
+    Laik_BlockPartitionerData* data = getBlockData(pr);
+
+    if ((cycles < 0) || (cycles>10)) cycles = 1;
+    data->cycles = cycles;
+}
+
+void runBlockPartitioner(Laik_Partitioner* pr, Laik_Partitioning* p,
+                         Laik_BorderArray* ba)
+{
+    assert(pr->type == LAIK_PT_Block);
+    Laik_BlockPartitionerData* data;
+    data = (Laik_BlockPartitionerData*) pr->data;
+
+    assert(p->borders != 0);
+    assert(pr->type == LAIK_PT_Block);
+
+    Laik_Space* s = p->space;
+    Laik_Slice slc;
+    setIndex(&(slc.from), 0, 0, 0);
+    setIndex(&(slc.to), s->size[0], s->size[1], s->size[2]);
+
+    int count = p->group->size;
+    int pdim = p->pdim;
+    uint64_t size = s->size[pdim];
+
+    Laik_Index idx;
+    double totalW;
+    if (data && data->getIdxW) {
+        // element-wise weighting
+        totalW = 0.0;
+        setIndex(&idx, 0, 0, 0);
+        for(uint64_t i = 0; i < size; i++) {
+            idx.i[pdim] = i;
+            totalW += (data->getIdxW)(&idx, data->idxUserData);
+        }
+    }
+    else {
+        // without weighting function, use weight 1 for every index
+        totalW = (double) size;
+    }
+
+    double totalTW = 0.0;
+    if (data && data->getTaskW) {
+        // task-wise weighting
+        totalTW = 0.0;
+        for(int task = 0; task < count; task++)
+            totalTW += (data->getTaskW)(task, data->taskUserData);
+    }
+    else {
+        // without task weighting function, use weight 1 for every task
+        totalTW = (double) count;
+    }
+
+    int cycles = data ? data->cycles : 1;
+    double perPart = totalW / count / cycles;
+    double w = -0.5;
+    int task = 0;
+    int cycle = 0;
+
+    // taskW is a correction factor, which is 1.0 without task weights
+    double taskW;
+    if (data && data->getTaskW)
+        taskW = (data->getTaskW)(task, data->taskUserData)
+                * ((double) count) / totalTW;
+    else
+        taskW = 1.0;
+
+    slc.from.i[pdim] = 0;
+    for(uint64_t i = 0; i < size; i++) {
+        if (data && data->getIdxW) {
+            idx.i[pdim] = i;
+            w += (data->getIdxW)(&idx, data->idxUserData);
+        }
+        else
+            w += 1.0;
+
+        while (w >= perPart * taskW) {
+            w = w - (perPart * taskW);
+            if ((task+1 == count) && (cycle+1 == cycles)) break;
+            slc.to.i[pdim] = i;
+            if (slc.from.i[pdim] < slc.to.i[pdim])
+                appendSlice(ba, task, &slc);
+            task++;
+            if (task == count) {
+                task = 0;
+                cycle++;
+            }
+            // update taskW
+            if (data && data->getTaskW)
+                taskW = (data->getTaskW)(task, data->taskUserData)
+                        * ((double) count) / totalTW;
+            else
+                taskW = 1.0;
+
+            // start new slice
+            slc.from.i[pdim] = i;
+        }
+        if ((task+1 == count) && (cycle+1 == cycles)) break;
+    }
+    assert((task+1 == count) && (cycle+1 == cycles));
+    slc.to.i[pdim] = size;
+    appendSlice(ba, task, &slc);
+}
+
+
+
 Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t)
 {
     if (t == LAIK_PT_None) return 0;
-
-    if (t == LAIK_PT_Block)
-        return laik_newBlockPartitioner();
 
     Laik_Partitioner* pr;
     pr = (Laik_Partitioner*) malloc(sizeof(Laik_Partitioner));
 
     pr->type = t;
-    pr->base = 0;
+    pr->data = 0;
+
     switch(t) {
     case LAIK_PT_All:
         pr->name = "all";
@@ -1189,10 +1282,19 @@ Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t)
         pr->run = runMasterPartitioner;
         break;
 
+    case LAIK_PT_Block:
+        pr->name = "block";
+        pr->run = runBlockPartitioner;
+        break;
+
     case LAIK_PT_Copy:
         pr->name = "copy";
         pr->run = runCopyPartitioner;
         break;
+
+    case LAIK_PT_Custom:
+        pr->name = "custom";
+        pr->run = 0; // to be set
 
     default:
         assert(0);
@@ -1213,175 +1315,36 @@ Laik_Partitioner* laik_new_master_partitioner()
 
 Laik_Partitioner* laik_new_block_partitioner()
 {
-    return laik_new_partitioner(LAIK_PT_Block);
+    Laik_Partitioner* pr = laik_new_partitioner(LAIK_PT_Block);
+
+    Laik_BlockPartitionerData* data;
+    int dsize = sizeof(Laik_BlockPartitionerData);
+    data = (Laik_BlockPartitionerData*) malloc(dsize);
+    pr->data = (void*) data;
+
+    data->cycles = 1;
+    data->getIdxW = 0;
+    data->idxUserData = 0;
+    data->getTaskW = 0;
+    data->taskUserData = 0;
+
+    return pr;
 }
 
 Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* p)
 {
-    Laik_Partitioner* pr = laik_new_partitioner(LAIK_PT_All);
-    pr->base = p;
+    Laik_Partitioner* pr = laik_new_partitioner(LAIK_PT_Copy);
+    pr->data = (void*) p;
     return pr;
 }
 
-
-
-// for partitioners needing a base
-void laik_set_base_partitioning(Laik_Partitioner* pr, Laik_Partitioning* p)
+Laik_Partitioner*
+laik_new_custom_partitioner(laik_run_partitioner_t run, void* data)
 {
-    pr->base = p;
+    Laik_Partitioner* pr = laik_new_partitioner(LAIK_PT_Custom);
+    pr->run = run;
+    pr->data = (void*) data;
+    return pr;
 }
 
-
-// Block partitioner
-
-// forward decl
-void runBlockPartitioner(Laik_Partitioner* bp, Laik_Partitioning* p,
-                         Laik_BorderArray* ba);
-
-Laik_Partitioner* laik_newBlockPartitioner()
-{
-    Laik_BlockPartitioner* bp;
-    bp = (Laik_BlockPartitioner*) malloc(sizeof(Laik_BlockPartitioner));
-
-    bp->base.type = LAIK_PT_Block;
-    bp->base.name = "block";
-    bp->base.run = runBlockPartitioner;
-
-    bp->cycles = 1;
-    bp->getIdxW = 0;
-    bp->idxUserData = 0;
-    bp->getTaskW = 0;
-    bp->taskUserData = 0;
-
-    return (Laik_Partitioner*) bp;
-}
-
-void laik_set_index_weight(Laik_Partitioner* pr, Laik_GetIdxWeight_t f,
-                           void* userData)
-{
-    assert(pr->type == LAIK_PT_Block);
-    Laik_BlockPartitioner* bp;
-    // may create block partitioner object if not existing yet
-    bp = (Laik_BlockPartitioner*) pr;
-
-    bp->getIdxW = f;
-    bp->idxUserData = userData;
-}
-
-void laik_set_task_weight(Laik_Partitioner* pr, Laik_GetTaskWeight_t f,
-                          void* userData)
-{
-    assert(pr->type == LAIK_PT_Block);
-    Laik_BlockPartitioner* bp;
-    // may create block partitioner object if not existing yet
-    bp = (Laik_BlockPartitioner*) pr;
-
-    bp->getTaskW = f;
-    bp->taskUserData = userData;
-}
-
-void laik_set_cycle_count(Laik_Partitioner* pr, int cycles)
-{
-    assert(pr->type == LAIK_PT_Block);
-    Laik_BlockPartitioner* bp;
-    // may create block partitioner object if not existing yet
-    bp = (Laik_BlockPartitioner*) pr;
-
-    if ((cycles < 0) || (cycles>10)) cycles = 1;
-    bp->cycles = cycles;
-}
-
-void runBlockPartitioner(Laik_Partitioner* pr, Laik_Partitioning* p,
-                         Laik_BorderArray* ba)
-{
-    Laik_BlockPartitioner* bp = (Laik_BlockPartitioner*) pr;
-    assert(p->borders != 0);
-    assert(pr->type == LAIK_PT_Block);
-
-    Laik_Space* s = p->space;
-    Laik_Slice slc;
-    setIndex(&(slc.from), 0, 0, 0);
-    setIndex(&(slc.to), s->size[0], s->size[1], s->size[2]);
-
-    int count = p->group->size;
-    int pdim = p->pdim;
-    uint64_t size = s->size[pdim];
-
-    Laik_Index idx;
-    double totalW;
-    if (bp->getIdxW) {
-        // element-wise weighting
-        totalW = 0.0;
-        setIndex(&idx, 0, 0, 0);
-        for(uint64_t i = 0; i < size; i++) {
-            idx.i[pdim] = i;
-            totalW += (bp->getIdxW)(&idx, bp->idxUserData);
-        }
-    }
-    else {
-        // without weighting function, use weight 1 for every index
-        totalW = (double) size;
-    }
-
-    double totalTW = 0.0;
-    if (bp->getTaskW) {
-        // task-wise weighting
-        totalTW = 0.0;
-        for(int task = 0; task < count; task++)
-            totalTW += (bp->getTaskW)(task, bp->taskUserData);
-    }
-    else {
-        // without task weighting function, use weight 1 for every task
-        totalTW = (double) count;
-    }
-
-    double perPart = totalW / count / bp->cycles;
-    double w = -0.5;
-    int task = 0;
-    int cycle = 0;
-
-    // taskW is a correction factor, which is 1.0 without task weights
-    double taskW;
-    if (bp->getTaskW)
-        taskW = (bp->getTaskW)(task, bp->taskUserData)
-                * ((double) count) / totalTW;
-    else
-        taskW = 1.0;
-
-    slc.from.i[pdim] = 0;
-    for(uint64_t i = 0; i < size; i++) {
-        if (bp->getIdxW) {
-            idx.i[pdim] = i;
-            w += (bp->getIdxW)(&idx, bp->idxUserData);
-        }
-        else
-            w += 1.0;
-
-        while (w >= perPart * taskW) {
-            w = w - (perPart * taskW);
-            if ((task+1 == count) && (cycle+1 == bp->cycles)) break;
-            slc.to.i[pdim] = i;
-            if (slc.from.i[pdim] < slc.to.i[pdim])
-                appendSlice(ba, task, &slc);
-            task++;
-            if (task == count) {
-                task = 0;
-                cycle++;
-            }
-            // update taskW
-            if (bp->getTaskW)
-                taskW = (bp->getTaskW)(task, bp->taskUserData)
-                        * ((double) count) / totalTW;
-            else
-                taskW = 1.0;
-
-            // start new slice
-            slc.from.i[pdim] = i;
-        }
-        if ((task+1 == count) && (cycle+1 == bp->cycles)) break;
-    }
-    assert((task+1 == count) && (cycle+1 == bp->cycles));
-    slc.to.i[pdim] = size;
-    appendSlice(ba, task, &slc);
-}
 

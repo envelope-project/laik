@@ -188,14 +188,10 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 // create a new partitioning on a space (invalid partitioning type)
 Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s);
 
-// create a new partitioning on a space with given partitioning type
-Laik_Partitioning*
-laik_new_base_partitioning(Laik_Group* g, Laik_Space* space,
-                           Laik_PartitionType pt,
-                           Laik_DataFlow flow);
+// set a data flow for a partitioning
+void laik_set_flow(Laik_Partitioning* p, Laik_DataFlow flow);
 
-// may generate the partitioner object depending on partition type
-// to set a custom partitioner, call laik_set_partitioner first
+// return partitioner set for a partitioning
 Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p);
 
 // set the partitioner to use (can be custom, application-specific)
@@ -208,26 +204,17 @@ Laik_Partitioner* laik_new_master_partitioner();
 Laik_Partitioner* laik_new_block_partitioner();
 Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* p);
 
-// some partitioners need a base to derive from
-void laik_set_base_partitioning(Laik_Partitioner* pr, Laik_Partitioning* p);
+typedef
+void (*laik_run_partitioner_t)(Laik_Partitioner*,
+                               Laik_Partitioning*, Laik_BorderArray*);
+// create application-specific partitioner
+Laik_Partitioner* laik_new_custom_partitioner(laik_run_partitioner_t run,
+                                              void* data);
 
 
 // for multiple-dimensional spaces, set dimension to partition (default is 0)
 void laik_set_partitioning_dimension(Laik_Partitioning* p, int d);
 
-// create a new partitioning based on another one on the same space
-Laik_Partitioning*
-laik_new_coupled_partitioning(Laik_Partitioning* base,
-                              Laik_PartitionType pt,
-                              Laik_DataFlow flow);
-
-// create a new partitioning based on another one on a different space
-// this also needs to know which dimensions should be coupled
-Laik_Partitioning*
-laik_new_spacecoupled_partitioning(Laik_Partitioning* base,
-                                   Laik_Space* s, int from, int to,
-                                   Laik_PartitionType pt,
-                                   Laik_DataFlow flow);
 
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p);
@@ -241,8 +228,8 @@ Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n);
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
 
-// make sure partitioning borders are up to date (return true on changes)
-bool laik_update_partitioning(Laik_Partitioning* p);
+// calculate partition borders
+void laik_calc_partitioning(Laik_Partitioning* p);
 
 // append a partitioning to a partioning group whose consistency should
 // be enforced at the same point in time

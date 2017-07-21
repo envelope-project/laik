@@ -382,7 +382,8 @@ void laik_set_partitioning(Laik_Data* d, Laik_Partitioning* p)
         d->group->inst->timer_total = laik_wtime();
 
     // calculate borders (TODO: may need global communication)
-    laik_update_partitioning(p);
+    if (!p->bordersValid)
+        laik_calc_partitioning(p);
 
     // TODO: convert to realloc (with taking over layout)
     Laik_MappingList* fromList = d->activeMappings;
@@ -475,9 +476,11 @@ Laik_Partitioning* laik_set_new_partitioning(Laik_Data* d,
                                              Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
-    p = laik_new_base_partitioning(d->group, d->space, pt, flow);
-    laik_set_partitioning(d, p);
+    p = laik_new_partitioning(d->group, d->space);
+    laik_set_flow(p, flow);
+    laik_set_partitioner(p, laik_new_partitioner(pt));
 
+    laik_set_partitioning(d, p);
     return p;
 }
 

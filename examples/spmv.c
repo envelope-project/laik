@@ -92,7 +92,8 @@ int main(int argc, char* argv[])
 
     // block partitioning according to elems in matrix rows
     Laik_Partitioning* p;
-    p = laik_new_base_partitioning(world, s, LAIK_PT_None, LAIK_DF_CopyOut);
+    p = laik_new_partitioning(world, s);
+    laik_set_flow(p, LAIK_DF_CopyOut);
     Laik_Partitioner* pr = laik_new_block_partitioner();
     laik_set_index_weight(pr, getEW, m);
     laik_set_partitioner(p, pr);

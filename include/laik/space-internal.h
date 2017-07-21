@@ -55,15 +55,14 @@ void laik_removeSpaceUser(Laik_Space* s, Laik_Partitioning* p);
 struct _Laik_Partitioner {
     Laik_PartitionType type;
     char* name;
-    Laik_Partitioning* base;
-    void (*run)(Laik_Partitioner*, Laik_Partitioning*, Laik_BorderArray*);
+    void* data; // partitioner specific data
+    laik_run_partitioner_t run;
 };
 
 Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t);
 
-struct _Laik_BlockPartitioner {
-    struct _Laik_Partitioner base;
-
+typedef struct _Laik_BlockPartitionerData Laik_BlockPartitionerData;
+struct _Laik_BlockPartitionerData {
     // weighted partitioning (Block) uses callbacks
     Laik_GetIdxWeight_t getIdxW;
     void* idxUserData;
@@ -73,7 +72,6 @@ struct _Laik_BlockPartitioner {
     // how many cycles (results in so many slics per task)
     int cycles;
 };
-Laik_Partitioner* laik_newBlockPartitioner();
 
 
 // the output of a partitioner is a Laik_BorderArray
