@@ -1,18 +1,22 @@
+../Makefile
+../.gitignore
 ../.travis.yml
 ../configure
-../include/laik-ext.h
-../src/laik-backend.c
-../src/laik-backend-single.c
-../src/laik-backend-mpi.c
-../src/laik-core.c
-../src/laik-program.c
-../src/laik-data.c
-../src/laik-space.c
+
+../src/backend.c
+../src/backend-mpi.c
+../src/backend-single.c
+../src/core.c
+../src/data.c
+../src/external.c
+../src/program.c
+../src/space.c
 
 ../include/laik.h
 ../include/laik-internal.h
 ../include/laik-backend-single.h
 ../include/laik-backend-mpi.h
+../include/laik-ext.h
 
 ../include/laik/backend.h
 ../include/laik/core.h
@@ -23,9 +27,6 @@
 ../include/laik/data-internal.h
 ../include/laik/space.h
 ../include/laik/space-internal.h
-
-../Makefile
-../.gitignore
 
 ../examples/Makefile
 ../examples/.gitignore
