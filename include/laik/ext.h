@@ -29,19 +29,23 @@
 // external control for repartitioning
 typedef struct _Laik_RepartitionControl Laik_RepartitionControl;
 struct _Laik_RepartitionControl {
-    // initialization function to be called by Laik
-    void (*init)(Laik_Instance*);
-    // finalize function to be called by Laik
-    void (*finalize)(Laik_Instance*);
+    // Finalize function to release compute resource
+    void (* ext_shut_node)(void* uuid);
 
-    // called when application allows repartitioning
-    // can change partitioning policy, force recalculation of borders
-    void (*allowRepartitioning)(Laik_Partitioning*);
+    // Finalize function for application
+    void (*finalize)(Laik_Instance*);
+    
+    //List of agents to be queried    
+    laik_agent** agents;
+    int num_agents;
 };
 
 laik_agent* laik_ext_loadagent_static(laik_agent_init_static, int, char**);
 laik_agent* laik_ext_loadagent (char* path, int argc, char** argv);
 void laik_ext_cleanup(laik_agent* agent);
+
+int laik_allow_repartition(Laik_Instance* instance, Laik_RepartitionControl* ctrl, int num_groups, Laik_Group** groups);
+
 
 
 #endif // _LAIK_EXT_H_

@@ -3,7 +3,7 @@
  * Created Date: Thu Jul 20 2017
  * Author: Dai Yang
  * -----
- * Last Modified: Thu Jul 20 2017
+ * Last Modified: Sat Jul 22 2017
  * Modified By: Dai Yang
  * -----
  * Copyright (c) 2017 IfL LRR/I10, TU MUENCHEN
@@ -25,14 +25,17 @@
 
 static int aIter;
 static int fail_iter;
+static int isInited = 0;
 
-static const char* fail_nodes = "1";
+static char* failed_nodes[1];
+static char* st_fail_node = "1";
 static const int n_fail_node = 1;
 
 static
 void static_agent_detach (
     laik_agent* this
 ){
+    assert(isInited);
     free(this);
 }
 static 
@@ -40,6 +43,7 @@ void static_agent_setiter(
     laik_agent* this,
     const int iter
 ){
+    assert(isInited);
     (void)this;
     aIter = iter;
 }
@@ -50,6 +54,7 @@ void static_agent_setphase(
     const char* name_phase, 
     const void* pData
 ){
+    assert(isInited);
     (void) this;
     (void) num_phase;
     (void) name_phase;
@@ -63,11 +68,16 @@ void static_agent_getfailed(
     int* n_failed,
     char*** l_failed
 ){
+    assert(isInited);
     assert(this);
     assert(n_failed);
     assert(l_failed);
 
     (void)this;
+
+
+    
+    failed_nodes[0] = st_fail_node;
     
     if(aIter<fail_iter){
         return;
@@ -75,9 +85,7 @@ void static_agent_getfailed(
 
 
     //FIXME: Mem Leak. 
-    *l_failed = (char**) malloc (sizeof(char**));
-    *(*l_failed) = (char*) malloc (strlen(fail_nodes)+1);
-    strcpy(*(*l_failed), fail_nodes);
+    *l_failed = failed_nodes;
     *n_failed = n_fail_node;
 }
 
@@ -85,6 +93,7 @@ static
 int static_agent_peek(
     laik_agent* this
 ){
+    assert(isInited);
     (void) this;
     if(aIter<fail_iter){
         return 0;
@@ -119,5 +128,6 @@ laik_agent* static_agent_init(
     this->getfail = static_agent_getfailed;
     this->peekfail = static_agent_peek;
 
+    isInited = 1;
     return this;
 }

@@ -1,11 +1,21 @@
-/*
- * @Author: D. Yang 
- * @Date: 2017-07-06 07:49:13 
- * @Last Modified by: D. Yang
- * @Last Modified time: 2017-07-06 07:51:22
+/**
+ * File: /Users/dai/play/laik/include/interface/agent.h
+ * Created Date: Sat Jul 22 2017
+ * Author: Dai Yang
+ * -----
+ * Last Modified: Sat Jul 22 2017
+ * Modified By: Dai Yang
+ * -----
+ * Copyright (c) 2017 IfL LRR/I10, TU MUENCHEN
  * 
- * This interface proposal shall provide a implementation 
- * template for creating external control agents. 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT 
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ * DEALINGS IN THE SOFTWARE.
  */
 
 enum tag_laik_ext_agent_t{
