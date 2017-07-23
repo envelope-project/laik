@@ -84,7 +84,6 @@ struct _Laik_Layout {
 
 struct _Laik_Mapping {
     Laik_Data* data;
-    Laik_Partitioning* partitioning;
     int sliceNo; // slice number of own partition this mapping is for
     Laik_Layout* layout; // ordering layout used
     Laik_Index baseIdx; // global index at base address

@@ -110,27 +110,26 @@ void laik_set_data_name(Laik_Data* d, char* n)
 }
 
 // get space used for data
-Laik_Space* laik_get_space(Laik_Data* d)
+Laik_Space* laik_get_dspace(Laik_Data* d)
 {
     return d->space;
 }
 
 // get task group used for data
-Laik_Group* laik_get_group(Laik_Data* d)
+Laik_Group* laik_get_dgroup(Laik_Data* d)
 {
     return d->group;
 }
 
 
 static
-Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
+Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
                               Laik_Layout* l)
 {
     int myid = laik_myid(d->group);
     assert(myid < d->group->size);
     if (myid < 0) return 0; // this task is not part of the task group
 
-    Laik_BorderArray* ba = p->borders;
     // number of own slices = number of separate maps
     int n = ba->off[myid+1] - ba->off[myid];
     if (n == 0) return 0;
@@ -146,7 +145,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         Laik_Slice* s = &(ba->tslice[o].s);
 
         uint64_t count = 1;
-        switch(p->space->dims) {
+        switch(d->space->dims) {
         case 3:
             count *= s->to.i[2] - s->from.i[2];
             // fall-through
@@ -159,7 +158,6 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         }
 
         m->data = d;
-        m->partitioning = p;
         m->sliceNo = i;
         m->count = count;
         m->baseIdx = s->from;
@@ -176,7 +174,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
 
         if (laik_logshown(1)) {
             char s[100];
-            laik_getIndexStr(s, p->space->dims, &(m->baseIdx), false);
+            laik_getIndexStr(s, d->space->dims, &(m->baseIdx), false);
             laik_log(1, "prepare map for '%s'/%d: from %s, count %d, elemsize %d\n",
                      d->name, i, s, m->count, d->elemsize);
         }
@@ -373,6 +371,87 @@ void initMaps(Laik_Transition* t,
     }
 }
 
+static
+Laik_Transition* doSwitch(Laik_Data* d,
+                          Laik_MappingList* fromList,
+                          Laik_BorderArray* fromBA, Laik_DataFlow fromFlow,
+                          Laik_MappingList* toList,
+                          Laik_BorderArray* toBA, Laik_DataFlow toFlow)
+{
+    Laik_Transition* t = laik_calc_transition(d->group, d->space,
+                                              fromBA, fromFlow, toBA, toFlow);
+
+    // let backend do send/recv/reduce actions
+    if (d->group->inst->do_profiling)
+        d->group->inst->timer_backend = laik_wtime();
+
+    assert(d->space->inst->backend->execTransition);
+    (d->space->inst->backend->execTransition)(d, t, fromList, toList);
+
+    if (d->group->inst->do_profiling)
+        d->group->inst->time_backend += laik_wtime() -
+                                        d->group->inst->timer_backend;
+
+    // local copy action (may use old mappings)
+    if (t->localCount > 0)
+        copyMaps(t, toList, fromList);
+
+    // local init action (may use old mappings)
+    if (t->initCount > 0)
+        initMaps(t, toList, fromList);
+
+    // free old mapping/partitioning
+    if (fromList)
+        freeMaps(fromList);
+
+    return t;
+}
+
+// switch to new borders (new flow is derived from previous flow)
+void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
+{
+    // calculate actions to be done for switching
+    Laik_BorderArray *fromBA = 0;
+    Laik_Partitioning* part = d->activePartitioning;
+    if (part) {
+        // active partitioning must have borders set
+        assert(part->bordersValid);
+        fromBA = part->borders;
+    }
+
+    Laik_DataFlow toFlow;
+    if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeFlow))
+        toFlow = LAIK_DF_CopyIn | LAIK_DF_CopyOut;
+    else
+        return; // nothing to do
+
+    Laik_MappingList* toList = prepareMaps(d, toBA, 0);
+    Laik_Transition* t = doSwitch(d,
+                                  d->activeMappings, fromBA, d->activeFlow,
+                                  toList, toBA, toFlow);
+
+    if (laik_logshown(1)) {
+        int o;
+        char s1[1000];
+        o = sprintf(s1, "transition (data '%s'/partition '%s'), ",
+                    d->name, part ? part->name : "(none)");
+        o += laik_getDataFlowStr(s1+o, d->activeFlow);
+        o += sprintf(s1+o, " => ");
+        o += laik_getDataFlowStr(s1+o, toFlow);
+
+        char s2[1000];
+        int len = laik_getTransitionStr(s2, t);
+
+        if (len == 0)
+            laik_log(1, "%s: (nothing)\n", s1);
+        else
+            laik_log(1, "%s:\n%s", s1, s2);
+    }
+
+    // set new mapping/partitioning active
+    d->activeFlow = toFlow;
+    d->activeMappings = toList;
+}
 
 // switch from active to another partitioning
 void laik_switchto(Laik_Data* d,
@@ -384,10 +463,6 @@ void laik_switchto(Laik_Data* d,
     // calculate borders with configured partitioner if borders not set
     if (!toP->bordersValid)
         laik_calc_partitioning(toP);
-
-    // TODO: convert to realloc (with taking over layout)
-    Laik_MappingList* fromList = d->activeMappings;
-    Laik_MappingList* toList = prepareMaps(d, toP, 0);
 
     // calculate actions to be done for switching
     Laik_BorderArray *fromBA = 0, *toBA = 0;
@@ -404,9 +479,10 @@ void laik_switchto(Laik_Data* d,
         toBA = toP->borders;
     }
 
-    Laik_Transition* t;
-    t = laik_calc_transition(d->group, d->space,
-                             fromBA, d->activeFlow, toBA, toFlow);
+    Laik_MappingList* toList = prepareMaps(d, toBA, 0);
+    Laik_Transition* t = doSwitch(d,
+                                  d->activeMappings, fromBA, d->activeFlow,
+                                  toList, toBA, toFlow);
 
     if (laik_logshown(1)) {
         int o;
@@ -425,30 +501,6 @@ void laik_switchto(Laik_Data* d,
             laik_log(1, "%s:\n%s", s1, s2);
     }
 
-    if (d->group->inst->do_profiling)
-        d->group->inst->timer_backend = laik_wtime();
-
-    // let backend do send/recv/reduce actions
-    // TODO: use async interface
-    assert(toP->space->inst->backend->execTransition);
-    (toP->space->inst->backend->execTransition)(d, t, fromList, toList);
-
-    if (d->group->inst->do_profiling)
-        d->group->inst->time_backend += laik_wtime() -
-                                        d->group->inst->timer_backend;
-
-    // local copy action (may use old mappings)
-    if (t->localCount > 0)
-        copyMaps(t, toList, fromList);
-
-    // local init action (may use old mappings)
-    if (t->initCount > 0)
-        initMaps(t, toList, fromList);
-
-    // free old mapping/partitioning
-    if (fromList)
-        freeMaps(fromList);
-
     if (d->activePartitioning) {
         laik_removePartitioningUser(d->activePartitioning, d);
         laik_free_partitioning(d->activePartitioning);
@@ -457,9 +509,9 @@ void laik_switchto(Laik_Data* d,
     // set new mapping/partitioning active
     d->activePartitioning = toP;
     d->activeFlow = toFlow;
+    d->activeMappings = toList;
     if (toP)
         laik_addPartitioningUser(toP, d);
-    d->activeMappings = toList;
 
     if (d->group->inst->do_profiling)
         d->group->inst->time_total += laik_wtime() -
@@ -542,7 +594,7 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 
     if (!d->activeMappings) {
         // lazy allocation
-        d->activeMappings = prepareMaps(d, p, layout);
+        d->activeMappings = prepareMaps(d, p->borders, layout);
         if (d->activeMappings == 0)
             return 0;
     }

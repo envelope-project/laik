@@ -573,7 +573,8 @@ int bordersIsSingle(Laik_BorderArray* ba)
 
 
 // create a new partitioning on a space
-Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s, Laik_Partitioner* pr)
+Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
+                                         Laik_Partitioner* pr)
 {
     Laik_Partitioning* p;
     p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
@@ -640,6 +641,16 @@ void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr)
 Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p)
 {
     return p->partitioner;
+}
+
+Laik_Space* laik_get_pspace(Laik_Partitioning* p)
+{
+    return p->space;
+}
+
+Laik_Group* laik_get_pgroup(Laik_Partitioning* p)
+{
+    return p->group;
 }
 
 
@@ -747,15 +758,10 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     return ba;
 }
 
+
 // set new partitioning borders
 void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
 {
-    if (p->borders)
-        freeBorderArray(p->borders);
-
-    p->borders = ba;
-    p->bordersValid = true;
-
     if (laik_logshown(1)) {
         char str[1000];
         int off;
@@ -769,6 +775,18 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
         }
         laik_log(1, "%s\n", str);
     }
+
+    // visit all users of this partitioning
+    Laik_Data* d = p->firstPartitioningUser;
+    while(d) {
+        laik_switchto_borders(d, ba);
+        d = d->nextPartitioningUser;
+    }
+
+    if (p->borders)
+        freeBorderArray(p->borders);
+    p->borders = ba;
+    p->bordersValid = true;
 }
 
 // return currently set borders in partitioning
@@ -1036,7 +1054,7 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg)
     }
     else if (oldg->parent == newg) {
         // new group is parent of old
-        fromOld = oldg->fromParent;
+        fromOld = oldg->toParent;
     }
     else {
         // other cases not supported
@@ -1068,7 +1086,7 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg)
 }
 
 // migrate a partitioning defined on one task group to another group
-bool laik_partitioning_migrate(Laik_Partitioning* p,
+bool laik_migrate_partitioning(Laik_Partitioning* p,
                                Laik_Group* newg)
 {
     Laik_Group* oldg = p->group;

@@ -65,16 +65,19 @@ Laik_Data* laik_alloc_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2);
 void laik_set_data_name(Laik_Data* d, char* n);
 
 // get space used for data
-Laik_Space* laik_get_space(Laik_Data*);
+Laik_Space* laik_get_dspace(Laik_Data*);
 
 // get task group used for data
-Laik_Group* laik_get_group(Laik_Data* d);
+Laik_Group* laik_get_dgroup(Laik_Data* d);
 
 // free resources for a data container
 void laik_free(Laik_Data*);
 
+// switch to new borders (new flow is derived from previous flow)
+void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA);
+
 // switch from active to another partitioning
-void laik_switchto(Laik_Data*, Laik_Partitioning*toP, Laik_DataFlow toFlow);
+void laik_switchto(Laik_Data*, Laik_Partitioning* toP, Laik_DataFlow toFlow);
 
 // get slice number <n> in own partition of data container <d>
 // returns 0 if partitioning is not set or slice number <n> is invalid

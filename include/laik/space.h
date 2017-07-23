@@ -124,6 +124,10 @@ bool laik_do_copyout(Laik_DataFlow flow);
 bool laik_do_init(Laik_DataFlow flow);
 
 
+//
+// LAIK spaces, indexes, slices
+//
+
 // create a new index space object (initially invalid)
 Laik_Space* laik_new_space(Laik_Instance* i);
 
@@ -162,21 +166,10 @@ bool laik_slice_isWithin(Laik_Slice* slc, Laik_Space* sp);
 // are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
-// Create a new partitioning for a group on a space.
-// The provided partitioner will be used for
-// - calculating borders if not set when needed
-//   (when a data container is switched to use this partitioning)
-// - for repartitioning when partitioning is migrated to another group
-//   (done e.g. when group is shrinked/enlarged from external)
-Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
-                                         Laik_Partitioner* pr);
 
-// return partitioner set for a partitioning
-Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p);
-
-// set the partitioner to use (can be custom, application-specific)
-void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr);
-
+//
+// LAIK partitioners
+//
 
 // Signature for a partitioner:
 // we are given a new border object without any slices yet (2st par),
@@ -193,65 +186,9 @@ Laik_Partitioner* laik_new_partitioner(char* name,
                                        laik_run_partitioner_t f, void* d);
 
 
-
-// free a partitioning with related resources
-void laik_free_partitioning(Laik_Partitioning* p);
-
-// get number of slices of this task
-int laik_my_slicecount(Laik_Partitioning* p);
-
-// get slice number <n> from the slices of this task
-Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n);
-
-// get from/to values for 1d slice with number <n> assigned to this task
-Laik_Slice* laik_my_slice1(Laik_Partitioning* p, int n,
-                           uint64_t* from, uint64_t* to);
-
-// give a partitioning a name, for debug output
-void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
-
-// set new partitioning borders
-void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba);
-
-// return currently set borders in partitioning
-Laik_BorderArray* laik_get_borders(Laik_Partitioning* p);
-
-// calculate partition borders
-void laik_calc_partitioning(Laik_Partitioning* p);
-
-// append a partitioning to a partioning group whose consistency should
-// be enforced at the same point in time
-void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p);
-
-// Calculate communication required for transitioning between
-// calculated borders of partitionings
-Laik_Transition*
-laik_calc_transition(Laik_Group* group, Laik_Space* space,
-                     Laik_BorderArray* fromBA, Laik_DataFlow fromFlow,
-                     Laik_BorderArray* toBA, Laik_DataFlow toFlow);
-
-// Calculate communication for transitioning between partitioning groups
-Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
-                                       Laik_PartGroup* to);
-
-// enforce consistency for the partitioning group, depending on previous
-void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g);
-
-
-// couple different LAIK instances via spaces:
-// one partition of calling task in outer space is mapped to inner space
-void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
-
-// migrate a partitioning defined on one task group to another group
-// if borders are set, this only is successful if partitions of
-// tasks which are not in the new group are empty.
-// return true if migration was successful.
-bool laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
-
-//----------------------------------
 // Partitioners provided by LAIK
 
-// simple ones are available as singletons
+// simple partitioners are available as singletons
 extern Laik_Partitioner *laik_Master;
 extern Laik_Partitioner *laik_All;
 
@@ -294,6 +231,100 @@ void laik_set_task_weight(Laik_Partitioner* pr, Laik_GetTaskWeight_t f,
 // for block partitionings, we can specify how often we go around in cycles
 // to distribute chunks to tasks. Default is 1.
 void laik_set_cycle_count(Laik_Partitioner* p, int cycles);
+
+
+
+//
+// LAIK partitionings
+//
+
+// Create a new partitioning for a group on a space.
+// The provided partitioner will be used for
+// - calculating borders if not set when needed
+//   (when a data container is switched to use this partitioning)
+// - for repartitioning when partitioning is migrated to another group
+//   (done e.g. when group is shrinked/enlarged from external)
+Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
+                                         Laik_Partitioner* pr);
+
+// return partitioner set for a partitioning
+Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p);
+
+// set the partitioner to use (can be custom, application-specific)
+void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr);
+
+
+// get space used in partitioning
+Laik_Space* laik_get_pspace(Laik_Partitioning* p);
+
+// get task group used in partitioning
+Laik_Group* laik_get_pgroup(Laik_Partitioning* p);
+
+// free a partitioning with related resources
+void laik_free_partitioning(Laik_Partitioning* p);
+
+// get number of slices of this task
+int laik_my_slicecount(Laik_Partitioning* p);
+
+// get slice number <n> from the slices of this task
+Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n);
+
+// get from/to values for 1d slice with number <n> assigned to this task
+Laik_Slice* laik_my_slice1(Laik_Partitioning* p, int n,
+                           uint64_t* from, uint64_t* to);
+
+// give a partitioning a name, for debug output
+void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
+
+// run a partitioner, returning newly calculated borders
+// the partitioner may use old borders from <oldBA>
+Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
+                                       Laik_Group* g, Laik_Space* s,
+                                       Laik_BorderArray* oldBA);
+
+// set new partitioning borders
+void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba);
+
+// return currently set borders in partitioning
+Laik_BorderArray* laik_get_borders(Laik_Partitioning* p);
+
+// calculate partition borders
+void laik_calc_partitioning(Laik_Partitioning* p);
+
+// append a partitioning to a partioning group whose consistency should
+// be enforced at the same point in time
+void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p);
+
+// Calculate communication required for transitioning between
+// calculated borders of partitionings
+Laik_Transition*
+laik_calc_transition(Laik_Group* group, Laik_Space* space,
+                     Laik_BorderArray* fromBA, Laik_DataFlow fromFlow,
+                     Laik_BorderArray* toBA, Laik_DataFlow toFlow);
+
+// Calculate communication for transitioning between partitioning groups
+Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
+                                       Laik_PartGroup* to);
+
+// enforce consistency for the partitioning group, depending on previous
+void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g);
+
+
+// couple different LAIK instances via spaces:
+// one partition of calling task in outer space is mapped to inner space
+void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
+
+// migrate borders to new group without changing borders
+// - added tasks get empty partitions
+// - removed tasks must have empty partitiongs
+void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg);
+
+// migrate a partitioning defined on one task group to another group
+// if borders are set, this only is successful if partitions of
+// tasks which are not in the new group are empty.
+// return true if migration was successful.
+bool laik_migrate_partitioning(Laik_Partitioning* p, Laik_Group* newg);
+
 
 //------------------------------------------
 // automatic repartitioning

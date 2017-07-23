@@ -280,8 +280,18 @@ int main(int argc, char* argv[])
             }
         }
 
-        // react on repartitioning wishes
-        //allowRepartitioning(p);
+#if 0
+        // our own repartitioing: remove task 0 from world
+        Laik_Group* g = laik_get_pgroup(p);
+        if ((iter == 3) && (laik_size(g) > 1)) {
+            int removeList[1] = {0};
+            Laik_Group* g2 = laik_shrink_group(g, 1, removeList);
+            Laik_BorderArray* ba = laik_run_partitioner(pr, g2, s, 0);
+            laik_migrate_borders(ba, g);
+            laik_set_borders(p, ba);
+            laik_migrate_partitioning(p, g2);
+        }
+#endif
     }
     
     laik_iter_reset(inst);
