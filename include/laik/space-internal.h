@@ -115,7 +115,6 @@ struct _Laik_Partitioning {
 
     Laik_Group* group;
     Laik_Space* space; // space to partition
-    int pdim; // for 2d/3d: dimension to partition
 
     Laik_Partitioner* partitioner;
 

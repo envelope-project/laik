@@ -91,8 +91,7 @@ int main(int argc, char* argv[])
     // distribution using element-wise weights equal to index
     pr = laik_new_block_partitioner(0);
     laik_set_index_weight(pr, getEW, 0);
-    p3 = laik_new_partitioning(world, laik_get_space(a));
-    laik_set_partitioner(p3, pr);
+    p3 = laik_new_partitioning(world, laik_get_space(a), pr);
     laik_switchto(a, p3, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
     // partial sum using blocks sized by element weights
     laik_map_def1(a, (void**) &base, &count);
@@ -104,8 +103,7 @@ int main(int argc, char* argv[])
         // distribution using task-wise weights: without master
         pr = laik_new_block_partitioner(0);
         laik_set_task_weight(pr, getTW, 0); // without master
-        p4 = laik_new_partitioning(world, laik_get_space(a));
-        laik_set_partitioner(p4, pr);
+        p4 = laik_new_partitioning(world, laik_get_space(a), pr);
         laik_switchto(a, p4, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
         // partial sum using blocks sized by task weights
         laik_map_def1(a, (void**) &base, &count);

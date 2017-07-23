@@ -185,13 +185,11 @@ int main(int argc, char* argv[])
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner(0);
     laik_set_index_weight(pr, getEW, m);
-    Laik_Partitioning* p = laik_new_partitioning(world, s);
-    laik_set_partitioner(p, pr);
+    Laik_Partitioning* p = laik_new_partitioning(world, s, pr);
     laik_switchto(resD, p, LAIK_DF_CopyOut);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i, fromRow, toRow;
-    Laik_Slice* slc;
 
     // initialize input vector at master, broadcast to all
     laik_switchto_new(inpD, laik_new_master_partitioner(), LAIK_DF_CopyOut);

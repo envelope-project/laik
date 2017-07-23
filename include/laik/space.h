@@ -185,8 +185,14 @@ bool laik_slice_isWithin(Laik_Slice* slc, Laik_Space* sp);
 // are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
-// create a new partitioning on a space (invalid partitioning type)
-Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s);
+// Create a new partitioning for a group on a space.
+// The provided partitioner will be used for
+// - calculating borders if not set when needed
+//   (when a data container is switched to use this partitioning)
+// - for repartitioning when partitioning is migrated to another group
+//   (done e.g. when group is shrinked/enlarged from external)
+Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
+                                         Laik_Partitioner* pr);
 
 // return partitioner set for a partitioning
 Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p);
@@ -216,9 +222,6 @@ Laik_Partitioner* laik_new_custom_partitioner(laik_run_partitioner_t f,
                                               void* data);
 
 
-// for multiple-dimensional spaces, set dimension to partition (default is 0)
-void laik_set_partitioning_dimension(Laik_Partitioning* p, int d);
-
 
 // free a partitioning with related resources
 void laik_free_partitioning(Laik_Partitioning* p);
@@ -235,6 +238,12 @@ Laik_Slice* laik_my_slice1(Laik_Partitioning* p, int n,
 
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
+
+// set new partitioning borders
+void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba);
+
+// return currently set borders in partitioning
+Laik_BorderArray* laik_get_borders(Laik_Partitioning* p);
 
 // calculate partition borders
 void laik_calc_partitioning(Laik_Partitioning* p);

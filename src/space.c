@@ -573,7 +573,7 @@ int bordersIsSingle(Laik_BorderArray* ba)
 
 
 // create a new partitioning on a space
-Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
+Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s, Laik_Partitioner* pr)
 {
     Laik_Partitioning* p;
     p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
@@ -585,9 +585,8 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s)
     assert(g->inst == s->inst);
     p->group = g;
     p->space = s;
-    p->pdim = 0;
 
-    p->partitioner = 0;
+    p->partitioner = pr;
 
     p->bordersValid = false;
     p->borders = 0;
@@ -641,14 +640,6 @@ void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr)
 Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p)
 {
     return p->partitioner;
-}
-
-
-// for multiple-dimensional spaces, set dimension to partition (default is 0)
-void laik_set_partitioning_dimension(Laik_Partitioning* p, int d)
-{
-    assert((d >= 0) && (d < p->space->dims));
-    p->pdim = d;
 }
 
 
@@ -756,16 +747,11 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     return ba;
 }
 
-// calculate partition borders, overwriting old
-void laik_calc_partitioning(Laik_Partitioning* p)
+// set new partitioning borders
+void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
 {
-    Laik_BorderArray* ba;
-
-    if (p->borders) freeBorderArray(p->borders);
-
-    assert(p->partitioner);
-    ba = laik_run_partitioner(p->partitioner,
-                              p->group, p->space, 0);
+    if (p->borders)
+        freeBorderArray(p->borders);
 
     p->borders = ba;
     p->bordersValid = true;
@@ -783,6 +769,28 @@ void laik_calc_partitioning(Laik_Partitioning* p)
         }
         laik_log(1, "%s\n", str);
     }
+}
+
+// return currently set borders in partitioning
+Laik_BorderArray* laik_get_borders(Laik_Partitioning* p)
+{
+    if (p->bordersValid) {
+        assert(p->borders);
+        return p->borders;
+    }
+    return 0;
+}
+
+// calculate partition borders, overwriting old
+void laik_calc_partitioning(Laik_Partitioning* p)
+{
+    Laik_BorderArray* ba;
+
+    assert(p->partitioner);
+    ba = laik_run_partitioner(p->partitioner,
+                              p->group, p->space, 0);
+
+    laik_set_borders(p, ba);
 }
 
 

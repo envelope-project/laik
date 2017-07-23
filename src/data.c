@@ -478,8 +478,7 @@ Laik_Partitioning* laik_switchto_new(Laik_Data* d,
                                      Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
-    p = laik_new_partitioning(d->group, d->space);
-    laik_set_partitioner(p, pr);
+    p = laik_new_partitioning(d->group, d->space, pr);
 
     laik_switchto(d, p, flow);
     return p;
