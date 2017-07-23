@@ -63,6 +63,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     instance->data_count = 0;
     instance->mapping_count = 0;
 
+    laik_space_init();
     laik_data_init();
     instance->control = laik_program_control_init();
 

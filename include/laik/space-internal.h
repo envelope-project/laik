@@ -53,27 +53,26 @@ void laik_removeSpaceUser(Laik_Space* s, Laik_Partitioning* p);
 
 
 struct _Laik_Partitioner {
-    Laik_PartitionType type;
     char* name;
     void* data; // partitioner specific data
     laik_run_partitioner_t run;
 };
 
-Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t, char* name,
+Laik_Partitioner* laik_new_partitioner(char* name,
                                        laik_run_partitioner_t f, void* d);
 
 typedef struct _Laik_BlockPartitionerData Laik_BlockPartitionerData;
 struct _Laik_BlockPartitionerData {
-    int pdim; // dimension to partition, only supports 1d partitionings
-
-    // weighted partitioning (Block) uses callbacks
-    Laik_GetIdxWeight_t getIdxW;
-    void* idxUserData;
-    Laik_GetTaskWeight_t getTaskW;
-    void* taskUserData;
+     // dimension to partition, only supports 1d partitionings
+    int pdim;
 
     // how many cycles (results in so many slics per task)
     int cycles;
+
+    // weighted partitioning (Block) uses callbacks
+    Laik_GetIdxWeight_t getIdxW;
+    Laik_GetTaskWeight_t getTaskW;
+    void* userData;
 };
 
 typedef struct _Laik_CopyPartitionerData Laik_CopyPartitionerData;
@@ -202,5 +201,8 @@ struct _Laik_Transition {
 int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1);
 int laik_getTransitionStr(char* s, Laik_Transition* t);
 int laik_getDataFlowStr(char* s, Laik_DataFlow flow);
+
+// initialize the LAIK space module, called from laik_new_instance
+void laik_space_init();
 
 #endif // _LAIK_SPACE_INTERNAL_H_
