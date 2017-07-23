@@ -59,10 +59,13 @@ struct _Laik_Partitioner {
     laik_run_partitioner_t run;
 };
 
-Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t);
+Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t, char* name,
+                                       laik_run_partitioner_t f, void* d);
 
 typedef struct _Laik_BlockPartitionerData Laik_BlockPartitionerData;
 struct _Laik_BlockPartitionerData {
+    int pdim; // dimension to partition, only supports 1d partitionings
+
     // weighted partitioning (Block) uses callbacks
     Laik_GetIdxWeight_t getIdxW;
     void* idxUserData;
@@ -71,6 +74,12 @@ struct _Laik_BlockPartitionerData {
 
     // how many cycles (results in so many slics per task)
     int cycles;
+};
+
+typedef struct _Laik_CopyPartitionerData Laik_CopyPartitionerData;
+struct _Laik_CopyPartitionerData {
+    int fromDim, toDim; // only supports 1d partitionings
+    Laik_Partitioning* base;
 };
 
 
@@ -84,7 +93,7 @@ struct _Laik_TaskSlice {
 };
 
 struct _Laik_BorderArray {
-    Laik_Group* group; // task IDs used belong from this group
+    Laik_Group* group; // task IDs used belong to this group
     Laik_Space* space; // slices cover this space
     int capacity;  // slices allocated
     int count;     // slices used
@@ -95,8 +104,8 @@ struct _Laik_BorderArray {
 Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity);
 // to be used by implementations of partitioners
 void appendSlice(Laik_BorderArray* a, int task, Laik_Slice* s);
-void sortBorderArray(Laik_BorderArray* a); // also sets the offsets
 void clearBorderArray(Laik_BorderArray* a);
+void freeBorderArray(Laik_BorderArray* a);
 
 // internal to allow for more irregular partitionings
 

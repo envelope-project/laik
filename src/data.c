@@ -381,7 +381,7 @@ void laik_switchto(Laik_Data* d,
     if (d->group->inst->do_profiling)
         d->group->inst->timer_total = laik_wtime();
 
-    // calculate borders (TODO: may need global communication)
+    // calculate borders with configured partitioner if borders not set
     if (!toP->bordersValid)
         laik_calc_partitioning(toP);
 
@@ -474,12 +474,12 @@ Laik_Slice* laik_data_slice(Laik_Data* d, int n)
 }
 
 Laik_Partitioning* laik_switchto_new(Laik_Data* d,
-                                     Laik_PartitionType pt,
+                                     Laik_Partitioner* pr,
                                      Laik_DataFlow flow)
 {
     Laik_Partitioning* p;
     p = laik_new_partitioning(d->group, d->space);
-    laik_set_partitioner(p, laik_new_partitioner(pt));
+    laik_set_partitioner(p, pr);
 
     laik_switchto(d, p, flow);
     return p;

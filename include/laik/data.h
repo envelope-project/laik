@@ -84,7 +84,7 @@ Laik_Slice* laik_data_slice(Laik_Data* d, int n);
 
 // switch from active to a newly created partitioning, and return it
 Laik_Partitioning* laik_switchto_new(Laik_Data*,
-                                     Laik_PartitionType, Laik_DataFlow flow);
+                                     Laik_Partitioner* pr, Laik_DataFlow flow);
 
 void laik_fill_double(Laik_Data* data, double v);
 

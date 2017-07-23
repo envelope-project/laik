@@ -195,17 +195,24 @@ Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p);
 void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr);
 
 // create a built-in partitioner
-Laik_Partitioner* laik_new_partitioner(Laik_PartitionType t);
 Laik_Partitioner* laik_new_all_partitioner();
 Laik_Partitioner* laik_new_master_partitioner();
-Laik_Partitioner* laik_new_block_partitioner();
-Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* p);
+Laik_Partitioner* laik_new_block_partitioner(int pdim);
+Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* base,
+                                            int fromDim, int toDim);
 
-typedef
-void (*laik_run_partitioner_t)(Laik_Partitioner*,
-                               Laik_Partitioning*, Laik_BorderArray*);
+// Signature for a partitioner:
+// we are given a new border object without any slices yet (2st par),
+// which has to be populated with slices (calling laik_add_slice).
+// The border object specifies the group and space to run the partitioner on.
+// If 3rd par is not null, it provides old borders to allow incremental
+// partitioner algorithms
+typedef void
+(*laik_run_partitioner_t)(Laik_Partitioner*,
+                          Laik_BorderArray*, Laik_BorderArray*);
+
 // create application-specific partitioner
-Laik_Partitioner* laik_new_custom_partitioner(laik_run_partitioner_t run,
+Laik_Partitioner* laik_new_custom_partitioner(laik_run_partitioner_t f,
                                               void* data);
 
 
@@ -265,7 +272,7 @@ void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
 // if borders are set, this only is successful if partitions of
 // tasks which are not in the new group are empty.
 // return true if migration was successful.
-bool laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* g);
+bool laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
 
 //----------------------------------
 // Predefined Partitioners
