@@ -127,8 +127,8 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
                               Laik_Layout* l)
 {
     int myid = laik_myid(d->group);
+    if (myid == -1) return 0; // this task is not part of the task group
     assert(myid < d->group->size);
-    if (myid < 0) return 0; // this task is not part of the task group
 
     // number of own slices = number of separate maps
     int n = ba->off[myid+1] - ba->off[myid];
@@ -375,25 +375,26 @@ static
 void doTransition(Laik_Data* d, Laik_Transition* t,
                   Laik_MappingList* fromList, Laik_MappingList* toList)
 {
-    // let backend do send/recv/reduce actions
-    if (d->group->inst->do_profiling)
-        d->group->inst->timer_backend = laik_wtime();
+    if (t) {
+        // let backend do send/recv/reduce actions
+        if (d->group->inst->do_profiling)
+            d->group->inst->timer_backend = laik_wtime();
 
-    assert(d->space->inst->backend->execTransition);
-    (d->space->inst->backend->execTransition)(d, t, fromList, toList);
+        assert(d->space->inst->backend->execTransition);
+        (d->space->inst->backend->execTransition)(d, t, fromList, toList);
 
-    if (d->group->inst->do_profiling)
-        d->group->inst->time_backend += laik_wtime() -
-                                        d->group->inst->timer_backend;
+        if (d->group->inst->do_profiling)
+            d->group->inst->time_backend += laik_wtime() -
+                                            d->group->inst->timer_backend;
 
-    // local copy action (may use old mappings)
-    if (t->localCount > 0)
-        copyMaps(t, toList, fromList);
+        // local copy action (may use old mappings)
+        if (t->localCount > 0)
+            copyMaps(t, toList, fromList);
 
-    // local init action (may use old mappings)
-    if (t->initCount > 0)
-        initMaps(t, toList, fromList);
-
+        // local init action (may use old mappings)
+        if (t->initCount > 0)
+            initMaps(t, toList, fromList);
+    }
     // free old mapping/partitioning
     if (fromList)
         freeMaps(fromList);

@@ -109,6 +109,7 @@ void help(char* err)
     printf("Options:\n"
            " -h              show this help and exit\n"
            " -r              use all-reduction to aggregate result (def: block+copy)\n"
+           " -s <iter>       iteration after which to shrink by removing task 0\n"
            " -v              make LAIK verbose (same as LAIK_LOG=1)\n");
     exit(1);
 }
@@ -123,7 +124,7 @@ int main(int argc, char* argv[])
     Laik_Group* world = laik_world(inst);
 
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
-    int maxiter = 0, size = 0;
+    int maxiter = 0, size = 0, shrink = -1;
     bool useReduction = false;
 
     // timing: t1 raw computation, t2: everything without init
@@ -139,6 +140,13 @@ int main(int argc, char* argv[])
                 useReduction = true;
             else if (argv[arg][1] == 'v')
                 laik_set_loglevel(1);
+            else if (argv[arg][1] == 's') {
+                arg++;
+                if (arg < argc)
+                    shrink = atoi(argv[arg]);
+                else
+                    help("-s: no parameter");
+            }
             else if (argv[arg][1] == 'h')
                 help(0);
             else
@@ -288,19 +296,17 @@ int main(int argc, char* argv[])
             }
         }
 
-#if 0
         // our own repartitioing: remove task 0 from world
         Laik_Group* g = laik_get_pgroup(p);
-        if ((iter == 3) && (laik_size(g) > 1)) {
+        if ((iter == shrink) && (laik_size(g) > 1)) {
             int removeList[1] = {0};
             Laik_Group* g2 = laik_shrink_group(g, 1, removeList);
             Laik_BorderArray* ba = laik_run_partitioner(pr, g2, s, 0);
             laik_migrate_borders(ba, g);
             laik_set_borders(p, ba);
             laik_migrate_partitioning(p, g2);
+            // TODO: replace world with g2
         }
-#endif
-
     }
     
     laik_iter_reset(inst);
@@ -309,7 +315,7 @@ int main(int argc, char* argv[])
     // push result to master
     laik_switchto_new(inpD, laik_Master, LAIK_DF_CopyIn);
     laik_switchto_new(resD, laik_Master, LAIK_DF_CopyIn);
-    if (laik_myid(world) == 0) {
+    if (laik_myid(laik_get_dgroup(inpD)) == 0) {
         double sum = 0.0;
         laik_map_def1(resD, (void**) &res, &rcount);
         for(i = 0; i < rcount; i++) sum += res[i];

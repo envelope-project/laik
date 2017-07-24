@@ -234,6 +234,9 @@ int laik_getDataFlowStr(char* s, Laik_DataFlow flow)
 
 int laik_getTransitionStr(char* s, Laik_Transition* t)
 {
+    if (t == 0)
+        return 0;
+
     int off = 0;
 
     if (t->localCount>0) {
@@ -861,6 +864,10 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                      Laik_BorderArray* fromBA, Laik_DataFlow fromFlow,
                      Laik_BorderArray* toBA, Laik_DataFlow toFlow)
 {
+    // no action if not part of the group
+    if (group->myid == -1)
+        return 0;
+
     Laik_Slice* slc;
 
 #define TRANSSLICES_MAX 100
@@ -906,7 +913,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     }
 
     int dims = space->dims;
-    int myid = group->inst->myid;
+    int myid = group->myid;
     int count = group->size;
 
     // init values as next phase does a reduction?
