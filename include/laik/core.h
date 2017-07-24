@@ -99,6 +99,7 @@ bool laik_is_managed(Laik_Instance* i);
 
 // start profiling for given instance
 void laik_enable_profiling(Laik_Instance* i);
+void laik_reset_profiling(Laik_Instance* i);
 double laik_get_total_time();
 double laik_get_backend_time();
 

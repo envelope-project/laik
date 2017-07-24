@@ -3,7 +3,7 @@
  * Created Date: Thu Jul 20 2017
  * Author: Dai Yang
  * -----
- * Last Modified: Sat Jul 22 2017
+ * Last Modified: Mon Jul 24 2017
  * Modified By: Dai Yang
  * -----
  * Copyright (c) 2017 IfL LRR/I10, TU MUENCHEN
@@ -98,4 +98,6 @@ int laik_allow_repartition (
     * (2) Repartition of all data within a group
     */
     assert(0);
+
+    return 0;
 }
