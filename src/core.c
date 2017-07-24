@@ -230,6 +230,7 @@ void laik_reset_profiling(Laik_Instance* i){
             i->time_total = 0.0;
         }
     }
+    }
 }
 
 double laik_get_total_time()
