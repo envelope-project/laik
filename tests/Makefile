@@ -1,4 +1,4 @@
-TESTS=test-vsum test-vsum2 test-spmv test-spmv2 test-spmv2r
+TESTS=test-vsum test-vsum-log test-vsum2 test-spmv test-spmv2 test-spmv2r
 
 -include ../Makefile.config
 
@@ -11,6 +11,10 @@ mpi:
 
 test-vsum:
 	../examples/vsum > test-vsum.out
+	cmp test-vsum.out test-vsum.expected
+
+test-vsum-log:
+	LAIK_LOG=1:0 ../examples/vsum > test-vsum.out 2>/dev/null
 	cmp test-vsum.out test-vsum.expected
 
 test-vsum2:

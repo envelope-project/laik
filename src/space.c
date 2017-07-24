@@ -769,9 +769,9 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
         for(int i = 0; i < ba->count; i++) {
             if (i>0)
                 off += sprintf(str+off, ", ");
-            off += sprintf(str+off, "%d:", p->borders->tslice[i].task);
+            off += sprintf(str+off, "%d:", ba->tslice[i].task);
             off += getSliceStr(str+off, p->space->dims,
-                               &(p->borders->tslice[i].s));
+                               &(ba->tslice[i].s));
         }
         laik_log(1, "%s\n", str);
     }
