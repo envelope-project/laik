@@ -124,7 +124,7 @@ typedef enum _Laik_LogLevel {
 } Laik_LogLevel;
 
 // log a message, similar to printf
-void laik_log(Laik_LogLevel l, char* msg, ...);
+void laik_log(Laik_LogLevel l, const char* msg, ...);
 
 // check for log level: return true if given log level will be shown
 // use this to guard possibly complex calculations for debug output

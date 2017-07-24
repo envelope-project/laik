@@ -221,6 +221,17 @@ void laik_enable_profiling(Laik_Instance* i)
     i->time_total = 0.0;
 }
 
+void laik_reset_profiling(Laik_Instance* i){
+    if(laik_profinst){
+        if(laik_profinst == i) {
+            if(i->do_profiling){
+            i->do_profiling = true;
+            i->time_backend = 0.0;
+            i->time_total = 0.0;
+        }
+    }
+}
+
 double laik_get_total_time()
 {
     if (!laik_profinst) return 0.0;
@@ -272,7 +283,7 @@ bool laik_logshown(Laik_LogLevel l)
  * <phasemsgctr> log message counter, reset at each phase change
  * <pname>       phase name set by application
 */
-void laik_log(Laik_LogLevel l, char* msg, ...)
+void laik_log(Laik_LogLevel l, const char* msg, ...)
 {
     if (l < laik_loglevel) return;
     if (laik_log_fromtask >= 0) {
