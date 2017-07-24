@@ -62,7 +62,7 @@ Laik_Data* laik_alloc_1d(Laik_Group* g, Laik_Type* t, uint64_t s1);
 Laik_Data* laik_alloc_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2);
 
 // set a data name, for debug output
-void laik_set_data_name(Laik_Data* d, char* n);
+void laik_data_set_name(Laik_Data* d, char* n);
 
 // get space used for data
 Laik_Space* laik_get_dspace(Laik_Data*);

@@ -568,6 +568,52 @@ int bordersIsSingle(Laik_BorderArray* ba)
     return ba->tslice[0].task;
 }
 
+// check if borders cover full space
+static
+bool coversSpace(Laik_BorderArray* ba)
+{
+    // TODO: only 1 dim for now
+    assert(ba->space->dims == 1);
+
+    assert(ba->count > 0);
+    uint64_t min = ba->tslice[0].s.from.i[0];
+    uint64_t max = ba->tslice[0].s.to.i[0];
+    for(int b = 1; b < ba->count; b++) {
+        if (min > ba->tslice[b].s.from.i[0])
+            min = ba->tslice[b].s.from.i[0];
+        if (max < ba->tslice[b].s.to.i[0])
+            max = ba->tslice[b].s.to.i[0];
+    }
+
+    if ((min == 0) && (max == ba->space->size[0]))
+        return true;
+    return false;
+}
+
+int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
+{
+    int o;
+
+    if (!ba)
+        return sprintf(s, "(no borders)");
+
+    o = sprintf(s, "borders (%d slices in %d tasks on ",
+                ba->count, ba->group->size);
+    o += getSpaceStr(s+o, ba->space);
+    o += sprintf(s+o,"): ");
+    for(int i = 0; i < ba->count; i++) {
+        if (i>0)
+            o += sprintf(s+o, ", ");
+        o += sprintf(s+o, "%d:", ba->tslice[i].task);
+        o += getSliceStr(s+o, ba->space->dims, &(ba->tslice[i].s));
+    }
+
+    return o;
+}
+
+
+
+
 //-----------------------
 // Laik_Partitioning
 
@@ -714,46 +760,37 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
 }
 
 
-// check if borders cover full space
-static
-bool coversSpace(Laik_BorderArray* ba)
-{
-    // TODO: only 1 dim for now
-    assert(ba->space->dims == 1);
-
-    assert(ba->count > 0);
-    uint64_t min = ba->tslice[0].s.from.i[0];
-    uint64_t max = ba->tslice[0].s.to.i[0];
-    for(int b = 1; b < ba->count; b++) {
-        if (min > ba->tslice[b].s.from.i[0])
-            min = ba->tslice[b].s.from.i[0];
-        if (max < ba->tslice[b].s.to.i[0])
-            max = ba->tslice[b].s.to.i[0];
-    }
-
-    if ((min == 0) && (max == ba->space->size[0]))
-        return true;
-    return false;
-}
 
 // run a partitioner, returning newly calculated borders
 // the partitioner may use old borders from <oldBA>
 Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
-                                       Laik_Group* g, Laik_Space* s,
+                                       Laik_Group* g, Laik_Space* space,
                                        Laik_BorderArray* oldBA)
 {
     Laik_BorderArray* ba;
 
-    ba = allocBorders(g, s, 2 * g->size);
+    ba = allocBorders(g, space, 2 * g->size);
     if (oldBA) {
         assert(oldBA->group == g);
-        assert(oldBA->space == s);
+        assert(oldBA->space == space);
     }
     (pr->run)(pr, ba, oldBA);
     updateBorderArrayOffsets(ba);
 
     if (!coversSpace(ba))
-        laik_log(LAIK_LL_Panic, "Borders do not cover space");
+        laik_log(LAIK_LL_Panic, "borders do not cover space");
+
+    if (laik_logshown(1)) {
+        char s[1000];
+        int o;
+        o = sprintf(s, "run partitioner '%s' (group %d, myid %d, space '%s'):\n",
+                    pr->name, g->gid, g->myid, space->name);
+        o += sprintf(s+o, " old: ");
+        o += laik_getBorderArrayStr(s+o, oldBA);
+        o += sprintf(s+o, "\n new: ");
+        o += laik_getBorderArrayStr(s+o, ba);
+        laik_log(1, "%s\n", s);
+    }
 
     return ba;
 }
@@ -762,18 +799,16 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
 // set new partitioning borders
 void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
 {
+    assert(p->group == ba->group);
+    assert(p->space == ba->space);
+
     if (laik_logshown(1)) {
-        char str[1000];
-        int off;
-        off = sprintf(str, "partitioning '%s' borders set: ", p->name);
-        for(int i = 0; i < ba->count; i++) {
-            if (i>0)
-                off += sprintf(str+off, ", ");
-            off += sprintf(str+off, "%d:", ba->tslice[i].task);
-            off += getSliceStr(str+off, p->space->dims,
-                               &(ba->tslice[i].s));
-        }
-        laik_log(1, "%s\n", str);
+        char s[1000];
+        int o;
+        o = sprintf(s, "setting borders (part '%s', group %d, myid %d):\n ",
+                    p->name, ba->group->gid, ba->group->myid);
+        o += laik_getBorderArrayStr(s+o, ba);
+        laik_log(1, "%s\n", s);
     }
 
     // visit all users of this partitioning

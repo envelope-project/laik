@@ -201,6 +201,7 @@ struct _Laik_Transition {
 int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1);
 int laik_getTransitionStr(char* s, Laik_Transition* t);
 int laik_getDataFlowStr(char* s, Laik_DataFlow flow);
+int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba);
 
 // initialize the LAIK space module, called from laik_new_instance
 void laik_space_init();

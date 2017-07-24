@@ -177,16 +177,20 @@ int main(int argc, char* argv[])
     Laik_Space* s = laik_new_space_1d(inst, size);
     // LAIK container for result vector
     Laik_Data* resD = laik_alloc(world, s, laik_Double);
+    laik_data_set_name(resD, "result");
     // LAIK container for input vector
     Laik_Data* inpD = laik_alloc(world, s, laik_Double);
+    laik_data_set_name(inpD, "input");
     // for global normalization, to broadcast a vector sum to all
     Laik_Data* sumD = laik_alloc_1d(world, laik_Double, 1);
+    laik_data_set_name(sumD, "sum");
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner(0, 1, getEW, 0, m);
     laik_set_index_weight(pr, getEW, m);
     Laik_Partitioning* p = laik_new_partitioning(world, s, pr);
-    laik_switchto(resD, p, LAIK_DF_CopyOut);
+    // nothing to preserve between iterations (assume at least one iter)
+    laik_switchto(resD, p, LAIK_DF_None);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i, fromRow, toRow;
@@ -205,6 +209,10 @@ int main(int argc, char* argv[])
 
         // better debug output
         laik_set_iteration(inst, iter);
+
+        // flow for result: only at last iteration, copy out
+        if (iter + 1 == maxiter)
+            laik_switchto(resD, p, LAIK_DF_CopyOut);
 
         // access to complete input vector (local indexing = global indexing)
         laik_switchto_new(inpD, laik_All, LAIK_DF_CopyIn);
@@ -251,7 +259,7 @@ int main(int argc, char* argv[])
         tt = wtime();
         t2 += tt - tt2;
         tt2 = tt;
-        laik_log(2, "Timing: %.3fs comp / %.3fs\n", t1, t2);
+        laik_log(2, "Timing: %.3fs comp / %.3fs total\n", t1, t2);
 
         // scale owns results by global sum and write into input partitions
         if (useReduction) {
@@ -292,6 +300,7 @@ int main(int argc, char* argv[])
             laik_migrate_partitioning(p, g2);
         }
 #endif
+
     }
     
     laik_iter_reset(inst);

@@ -279,7 +279,7 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
 // run a partitioner, returning newly calculated borders
 // the partitioner may use old borders from <oldBA>
 Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
-                                       Laik_Group* g, Laik_Space* s,
+                                       Laik_Group* g, Laik_Space* space,
                                        Laik_BorderArray* oldBA);
 
 // set new partitioning borders

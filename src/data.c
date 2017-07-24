@@ -104,7 +104,7 @@ Laik_Data* laik_alloc_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2)
 }
 
 // set a data name, for debug output
-void laik_set_data_name(Laik_Data* d, char* n)
+void laik_data_set_name(Laik_Data* d, char* n)
 {
     d->name = n;
 }
@@ -372,15 +372,9 @@ void initMaps(Laik_Transition* t,
 }
 
 static
-Laik_Transition* doSwitch(Laik_Data* d,
-                          Laik_MappingList* fromList,
-                          Laik_BorderArray* fromBA, Laik_DataFlow fromFlow,
-                          Laik_MappingList* toList,
-                          Laik_BorderArray* toBA, Laik_DataFlow toFlow)
+void doTransition(Laik_Data* d, Laik_Transition* t,
+                  Laik_MappingList* fromList, Laik_MappingList* toList)
 {
-    Laik_Transition* t = laik_calc_transition(d->group, d->space,
-                                              fromBA, fromFlow, toBA, toFlow);
-
     // let backend do send/recv/reduce actions
     if (d->group->inst->do_profiling)
         d->group->inst->timer_backend = laik_wtime();
@@ -403,8 +397,6 @@ Laik_Transition* doSwitch(Laik_Data* d,
     // free old mapping/partitioning
     if (fromList)
         freeMaps(fromList);
-
-    return t;
 }
 
 // switch to new borders (new flow is derived from previous flow)
@@ -423,30 +415,38 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
     if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeFlow))
         toFlow = LAIK_DF_CopyIn | LAIK_DF_CopyOut;
     else
-        return; // nothing to do
+        toFlow = LAIK_DF_None;
 
     Laik_MappingList* toList = prepareMaps(d, toBA, 0);
-    Laik_Transition* t = doSwitch(d,
-                                  d->activeMappings, fromBA, d->activeFlow,
-                                  toList, toBA, toFlow);
+    Laik_Transition* t = laik_calc_transition(d->group, d->space,
+                                              fromBA, d->activeFlow,
+                                              toBA, toFlow);
 
     if (laik_logshown(1)) {
         int o;
         char s1[1000];
-        o = sprintf(s1, "transition (data '%s'/partition '%s'), ",
+        o = sprintf(s1, "transition (data '%s', partition '%s'):\n",
                     d->name, part ? part->name : "(none)");
+        o += sprintf(s1+o, " from ");
         o += laik_getDataFlowStr(s1+o, d->activeFlow);
-        o += sprintf(s1+o, " => ");
+        o += sprintf(s1+o, ", ");
+        o += laik_getBorderArrayStr(s1+o, fromBA);
+        o += sprintf(s1+o, "\n to ");
         o += laik_getDataFlowStr(s1+o, toFlow);
+        o += sprintf(s1+o, ", ");
+        o += laik_getBorderArrayStr(s1+o, toBA);
+        o += sprintf(s1+o, "\n actions:");
 
         char s2[1000];
         int len = laik_getTransitionStr(s2, t);
 
         if (len == 0)
-            laik_log(1, "%s: (nothing)\n", s1);
+            laik_log(1, "%s (nothing)\n", s1);
         else
-            laik_log(1, "%s:\n%s", s1, s2);
+            laik_log(1, "%s\n%s", s1, s2);
     }
+
+    doTransition(d, t, d->activeMappings, toList);
 
     // set new mapping/partitioning active
     d->activeFlow = toFlow;
@@ -480,14 +480,15 @@ void laik_switchto(Laik_Data* d,
     }
 
     Laik_MappingList* toList = prepareMaps(d, toBA, 0);
-    Laik_Transition* t = doSwitch(d,
-                                  d->activeMappings, fromBA, d->activeFlow,
-                                  toList, toBA, toFlow);
+    Laik_Transition* t = laik_calc_transition(d->group, d->space,
+                                              fromBA, d->activeFlow,
+                                              toBA, toFlow);
 
     if (laik_logshown(1)) {
         int o;
         char s1[1000];
-        o = sprintf(s1, "transition %s/", fromP ? fromP->name : "(none)");
+        o = sprintf(s1, "transition (data '%s'): part %s/",
+                    d->name, fromP ? fromP->name : "(none)");
         o += laik_getDataFlowStr(s1+o, d->activeFlow);
         o += sprintf(s1+o, " => %s/", toP ? toP->name : "(none)");
         o += laik_getDataFlowStr(s1+o, toFlow);
@@ -500,6 +501,8 @@ void laik_switchto(Laik_Data* d,
         else
             laik_log(1, "%s:\n%s", s1, s2);
     }
+
+    doTransition(d, t, d->activeMappings, toList);
 
     if (d->activePartitioning) {
         laik_removePartitioningUser(d->activePartitioning, d);
