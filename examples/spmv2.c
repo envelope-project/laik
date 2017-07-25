@@ -109,7 +109,7 @@ void help(char* err)
     printf("Options:\n"
            " -h              show this help and exit\n"
            " -r              use all-reduction to aggregate result (def: block+copy)\n"
-           " -s <iter>       iteration after which to shrink by removing task 0\n"
+           " -s <iter>       iterations after which to shrink by removing task 0\n"
            " -v              make LAIK verbose (same as LAIK_LOG=1)\n");
     exit(1);
 }
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
     Laik_Group* world = laik_world(inst);
 
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
-    int maxiter = 0, size = 0, shrink = -1;
+    int maxiter = 0, size = 0, nextshrink = -1, shrink = -1;
     bool useReduction = false;
 
     // timing: t1 raw computation, t2: everything without init
@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
             else if (argv[arg][1] == 's') {
                 arg++;
                 if (arg < argc)
-                    shrink = atoi(argv[arg]);
+                    nextshrink = shrink = atoi(argv[arg]);
                 else
                     help("-s: no parameter");
             }
@@ -298,14 +298,16 @@ int main(int argc, char* argv[])
 
         // our own repartitioing: remove task 0 from world
         Laik_Group* g = laik_get_pgroup(p);
-        if ((iter == shrink) && (laik_size(g) > 1)) {
+        if ((iter == nextshrink) && (laik_size(g) > 1)) {
             int removeList[1] = {0};
+            laik_log(2, "Shrink from size %d", laik_size(g));
             Laik_Group* g2 = laik_shrink_group(g, 1, removeList);
             Laik_BorderArray* ba = laik_run_partitioner(pr, g2, s, 0);
             laik_migrate_borders(ba, g);
             laik_set_borders(p, ba);
             laik_migrate_partitioning(p, g2);
             // TODO: replace world with g2
+            nextshrink += shrink;
         }
     }
     

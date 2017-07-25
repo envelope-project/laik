@@ -205,7 +205,7 @@ Laik_Group* laik_shrink_group(Laik_Group* g, int len, int* list)
         o++;
     }
     g2->size = o;
-    g2->myid = g2->fromParent[g->myid];
+    g2->myid = (g->myid < 0) ? -1 : g2->fromParent[g->myid];
 
     if (g->inst->backend->updateGroup)
         (g->inst->backend->updateGroup)(g2);

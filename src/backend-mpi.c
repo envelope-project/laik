@@ -113,15 +113,30 @@ void laik_mpi_finalize()
 // calculate MPI communicator for group <g>
 void laik_mpi_updateGroup(Laik_Group* g)
 {
-    if (!g->parent) return;
+    // TODO: only supports shrinking of parent for now
+    assert(g->parent);
+    assert(g->parent->size > g->size);
 
-    MPIGroupData* gd = (MPIGroupData*) g->backend_data;
-    if (gd) return; // already calculated
+
+    laik_log(1, "MPI backend updateGroup: parent %d (size %d, myid %d) "
+             "=> group %d (size %d, myid %d)",
+             g->parent->gid, g->parent->size, g->parent->myid,
+             g->gid, g->size, g->myid);
+
+    // only interesting if this task is still part of parent
+    if (g->parent->myid < 0) return;
 
     MPIGroupData* gdParent = (MPIGroupData*) g->parent->backend_data;
+    assert(gdParent);
 
+    MPIGroupData* gd = (MPIGroupData*) g->backend_data;
+    assert(gd == 0); // must not be updated yet
     gd = (MPIGroupData*) malloc(sizeof(MPIGroupData));
     g->backend_data = gd;
+
+    laik_log(1, "MPI Comm_split: old myid %d => new myid %d",
+             g->parent->myid, g->fromParent[g->parent->myid]);
+
     MPI_Comm_split(gdParent->comm,
                    (g->fromParent[g->parent->myid] < 0) ? MPI_UNDEFINED : 0,
                    g->parent->myid, &(gd->comm));
@@ -131,10 +146,22 @@ void laik_mpi_updateGroup(Laik_Group* g)
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                              Laik_MappingList* fromList, Laik_MappingList* toList)
 {
-    Laik_Instance* inst = d->space->inst;
-    MPI_Comm comm = mpiGroupData(d->group)->comm;
+    int myid  = d->group->myid;
 
-    // TODO: do group != world
+    laik_log(1, "MPI backend exec: data '%s', group %d (size %d, myid %d), "
+             "counts: red %d, send %d, recv %d",
+             d->name, d->group->gid, d->group->size, myid,
+             t->redCount, t->sendCount, t->recvCount);
+
+    if (myid < 0) {
+        // this task is not part of the communicator to use
+        return;
+    }
+
+    Laik_Instance* inst = d->group->inst;
+    MPIGroupData* gd = mpiGroupData(d->group);
+    assert(gd); // must have been updated by laik_mpi_updateGroup()
+    MPI_Comm comm = gd->comm;
 
     if (t->redCount > 0) {
         assert(d->space->dims == 1);
@@ -175,9 +202,15 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             else if (d->type == laik_Float) mpiDateType = MPI_FLOAT;
             else assert(0);
 
-            laik_log(1, "MPI Reduce: "
-                        "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
-                     from, to, d->elemsize, fromBase, toBase);
+            if (laik_logshown(1)) {
+                char rootstr[10];
+                sprintf(rootstr, "%d", op->rootTask);
+                laik_log(1, "MPI Reduce (root %s%s): from %lu, to %lu, "
+                            "elemsize %d, base from/to %p/%p\n",
+                         (op->rootTask == -1) ? "ALL" : rootstr,
+                         (fromBase == toBase) ? ", IN_PLACE" : "",
+                         from, to, d->elemsize, fromBase, toBase);
+            }
 
             if (op->rootTask == -1) {
                 if (fromBase == toBase)
@@ -206,10 +239,9 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
     //     - receive from <task count-Y> if it is higher rank
     //     - send to <task count-1-Y> if it is lower rank
     //
-    // TODO: sort transitions actions!
+    // TODO: prepare communication schedule with sorted transitions actions!
 
-    int myid  = d->space->inst->myid;
-    int count = d->space->inst->size;
+    int count = d->group->size;
     for(int phase = 0; phase < 2*count; phase++) {
         int task = (phase < count) ? phase : (2*count-phase-1);
         bool sendToHigher   = (phase < count);
