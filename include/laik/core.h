@@ -77,7 +77,7 @@ Laik_Group* laik_clone_group(Laik_Group* g);
 // On shrinking, task IDs may change.
 
 // Returns shrinked group, by removing the <len> tasks in <list>
-Laik_Group* laik_shrink_group(Laik_Group* g, int len, int* list);
+Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
 
 // Enlarging controlled by master in a group (collective)
 bool laik_enlarge_group(Laik_Group* g, int len, char** list);

@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
         for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
 
         int removeList[1] = {0};
-        Laik_Group* g2 = laik_shrink_group(world, 1, removeList);
+        Laik_Group* g2 = laik_new_shrinked_group(world, 1, removeList);
         laik_migrate_partitioning(p, g2);
         printf("My world ID %d, in shrinked group: %d\n",
                laik_myid(world), laik_myid(g2));

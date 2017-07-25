@@ -1130,6 +1130,7 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg)
 }
 
 // migrate a partitioning defined on one task group to another group
+// (no repartitioning: only works if partitions of removed tasks are empty)
 bool laik_migrate_partitioning(Laik_Partitioning* p,
                                Laik_Group* newg)
 {
@@ -1154,6 +1155,28 @@ bool laik_migrate_partitioning(Laik_Partitioning* p,
     }
 
     return true;
+}
+
+// migrate a partitioning defined on one task group to another group
+// for the required repartitioning, either use the default partitioner
+// or the given one. In the latter case, the partitioner is run
+// on old group and is expected to produce no partitions for tasks
+// to be removed
+void laik_migrate_and_repartition(Laik_Partitioning* p, Laik_Group* newg,
+                                  Laik_Partitioner* pr)
+{
+    Laik_BorderArray* ba;
+    if (pr) {
+        ba = laik_run_partitioner(pr, p->group, p->space,
+                                  p->bordersValid ? p->borders : 0);
+    }
+    else {
+        ba = laik_run_partitioner(p->partitioner, newg, p->space, 0);
+        laik_migrate_borders(ba, p->group);
+    }
+    laik_set_borders(p, ba);
+    bool res = laik_migrate_partitioning(p, newg);
+    assert(res);
 }
 
 

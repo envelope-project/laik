@@ -188,7 +188,7 @@ int getIntListStr(char* s, int len, int* list)
 
 
 // Shrinking (collective)
-Laik_Group* laik_shrink_group(Laik_Group* g, int len, int* list)
+Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
 {
     Laik_Group* g2 = laik_clone_group(g);
 

@@ -309,26 +309,11 @@ int main(int argc, char* argv[])
         if ((iter == nextshrink) && (laik_size(g) > 1)) {
             int removeList[1] = {0};
             laik_log(2, "Shrink from size %d", laik_size(g));
-            Laik_Group* g2 = laik_shrink_group(g, 1, removeList);
+            Laik_Group* g2 = laik_new_shrinked_group(g, 1, removeList);
 
-            // update partitioning <p>
-            Laik_BorderArray* ba = laik_run_partitioner(pr, g2, s, 0);
-            laik_migrate_borders(ba, g);
-            laik_set_borders(p, ba);
-            laik_migrate_partitioning(p, g2);
-
-            // update partitioning <allVec>
-            ba = laik_run_partitioner(laik_All, g2, s, 0);
-            laik_migrate_borders(ba, g);
-            laik_set_borders(allVec, ba);
-            laik_migrate_partitioning(allVec, g2);
-
-            // update partitioning <allVec>
-            ba = laik_run_partitioner(laik_All, g2,
-                                      laik_get_pspace(allSum), 0);
-            laik_migrate_borders(ba, g);
-            laik_set_borders(allSum, ba);
-            laik_migrate_partitioning(allSum, g2);
+            laik_migrate_and_repartition(p, g2, 0);
+            laik_migrate_and_repartition(allVec, g2, 0);
+            laik_migrate_and_repartition(allSum, g2, 0);
 
             // TODO: replace world with g2
             nextshrink += shrink;

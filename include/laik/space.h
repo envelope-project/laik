@@ -325,6 +325,11 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg);
 // return true if migration was successful.
 bool laik_migrate_partitioning(Laik_Partitioning* p, Laik_Group* newg);
 
+// migrate a partitioning defined on one task group to another group
+// for the required repartitioning, use the default partitioner
+void laik_migrate_and_repartition(Laik_Partitioning* p, Laik_Group* newg,
+                                  Laik_Partitioner* pr);
+
 
 //------------------------------------------
 // automatic repartitioning
