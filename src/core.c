@@ -32,9 +32,11 @@ int laik_myid(Laik_Group* g)
 void laik_finalize(Laik_Instance* i)
 {
     assert(i);
-    free(i->control);
     if (i->backend && i->backend->finalize)
         (*i->backend->finalize)(i);
+
+    laik_log(1, "finalized");
+    free(i->control);
 }
 
 // return a backend-dependant string for the location of the calling task

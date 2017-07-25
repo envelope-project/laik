@@ -649,9 +649,11 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
     laik_addGroupUser(p->group, p);
 
     if (laik_logshown(1)) {
-        laik_log(1, "new partitioning '%s': space '%s', group %d\n",
+        laik_log(1, "new partitioning '%s': space '%s', "
+                 "group %d (size %d, myid %d), partitioner '%s'\n",
                  p->name, s->name,
-                 p->group->gid);
+                 p->group->gid, p->group->size, p->group->myid,
+                 pr->name);
     }
 
     return p;

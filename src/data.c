@@ -126,9 +126,12 @@ static
 Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
                               Laik_Layout* l)
 {
-    int myid = laik_myid(d->group);
+    if (!ba) return 0; // without borders, no mappings
+
+    assert(ba->group == d->group);
+    int myid = laik_myid(ba->group);
     if (myid == -1) return 0; // this task is not part of the task group
-    assert(myid < d->group->size);
+    assert(myid < ba->group->size);
 
     // number of own slices = number of separate maps
     int n = ba->off[myid+1] - ba->off[myid];
@@ -376,16 +379,16 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
                   Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     if (t) {
+        Laik_Instance* inst = d->space->inst;
         // let backend do send/recv/reduce actions
-        if (d->group->inst->do_profiling)
-            d->group->inst->timer_backend = laik_wtime();
+        if (inst->do_profiling)
+            inst->timer_backend = laik_wtime();
 
         assert(d->space->inst->backend->execTransition);
         (d->space->inst->backend->execTransition)(d, t, fromList, toList);
 
-        if (d->group->inst->do_profiling)
-            d->group->inst->time_backend += laik_wtime() -
-                                            d->group->inst->timer_backend;
+        if (inst->do_profiling)
+            inst->time_backend += laik_wtime() - inst->timer_backend;
 
         // local copy action (may use old mappings)
         if (t->localCount > 0)
@@ -458,11 +461,11 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
 void laik_switchto(Laik_Data* d,
                    Laik_Partitioning* toP, Laik_DataFlow toFlow)
 {
-    if (d->group->inst->do_profiling)
-        d->group->inst->timer_total = laik_wtime();
+    if (d->space->inst->do_profiling)
+        d->space->inst->timer_total = laik_wtime();
 
     // calculate borders with configured partitioner if borders not set
-    if (!toP->bordersValid)
+    if (toP && (!toP->bordersValid))
         laik_calc_partitioning(toP);
 
     // calculate actions to be done for switching
@@ -517,9 +520,9 @@ void laik_switchto(Laik_Data* d,
     if (toP)
         laik_addPartitioningUser(toP, d);
 
-    if (d->group->inst->do_profiling)
-        d->group->inst->time_total += laik_wtime() -
-                                     d->group->inst->timer_total;
+    if (d->space->inst->do_profiling)
+        d->space->inst->time_total += laik_wtime() -
+                                     d->space->inst->timer_total;
 }
 
 // get slice number <n> in own partition
@@ -536,10 +539,29 @@ Laik_Partitioning* laik_switchto_new(Laik_Data* d,
     Laik_Partitioning* p;
     p = laik_new_partitioning(d->group, d->space, pr);
 
+    laik_log(1, "switchto_new (data '%s') => partitioning '%s'",
+             d->name, p->name);
+
     laik_switchto(d, p, flow);
     return p;
 }
 
+// migrate data container to use another group
+// (only possible if data does not have to be preserved)
+void laik_migrate_data(Laik_Data* d, Laik_Group* g)
+{
+    // we only support migration if data does not need to preserved
+    assert(!laik_do_copyout(d->activeFlow));
+
+    laik_log(1, "migrate data '%s' => group %d (size %d, myid %d)",
+             d->name, g->gid, g->size, g->myid);
+
+    // switch to invalid partitioning
+    laik_switchto(d, 0, LAIK_DF_None);
+
+    // FIXME: new user of group !
+    d->group = g;
+}
 
 void laik_fill_double(Laik_Data* d, double v)
 {
@@ -632,7 +654,7 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
     Laik_Mapping* m = laik_map(d, 0, l);
     int n = laik_my_slicecount(d->activePartitioning);
     if (n > 1)
-        laik_log(LAIK_LL_Panic, "Request for single continuous mapping, "
+        laik_log(LAIK_LL_Panic, "Request for one continuous mapping, "
                                 "but partition with %d slices!\n", n);
 
     if (base) *base = m ? m->base : 0;

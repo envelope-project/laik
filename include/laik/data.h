@@ -79,6 +79,10 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA);
 // switch from active to another partitioning
 void laik_switchto(Laik_Data*, Laik_Partitioning* toP, Laik_DataFlow toFlow);
 
+// migrate data container to use another group
+// (only possible if data does not have to be preserved)
+void laik_migrate_data(Laik_Data* d, Laik_Group* g);
+
 // get slice number <n> in own partition of data container <d>
 // returns 0 if partitioning is not set or slice number <n> is invalid
 Laik_Slice* laik_data_slice(Laik_Data* d, int n);

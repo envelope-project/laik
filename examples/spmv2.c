@@ -252,16 +252,19 @@ int main(int argc, char* argv[])
         t1 += wtime() - tt1;
 
         // compute global sum with LAIK, broadcast result to all
-        laik_switchto_new(sumD, laik_All,
-                          LAIK_DF_ReduceOut | LAIK_DF_Sum);
-        laik_map_def1(sumD, (void**) &sumPtr, 0);
-        *sumPtr = sum;
-        laik_switchto_new(sumD, laik_All, LAIK_DF_CopyIn);
-        laik_map_def1(sumD, (void**) &sumPtr, 0);
-        sum = *sumPtr;
+        // only done by tasks which still take part in SPMV
+        if (laik_myid(laik_get_dgroup(sumD)) >= 0) {
+            laik_switchto_new(sumD, laik_All,
+                              LAIK_DF_ReduceOut | LAIK_DF_Sum);
+            laik_map_def1(sumD, (void**) &sumPtr, 0);
+            *sumPtr = sum;
+            laik_switchto_new(sumD, laik_All, LAIK_DF_CopyIn);
+            laik_map_def1(sumD, (void**) &sumPtr, 0);
+            sum = *sumPtr;
 
-        if (laik_myid(world) == 0) {
-            printf("Sum at iter %2d: %f\n", iter, sum);
+            if (laik_myid(laik_get_dgroup(sumD)) == 0) {
+                printf("Sum at iter %2d: %f\n", iter, sum);
+            }
         }
 
         tt = wtime();
@@ -306,8 +309,13 @@ int main(int argc, char* argv[])
             laik_migrate_borders(ba, g);
             laik_set_borders(p, ba);
             laik_migrate_partitioning(p, g2);
+
+            laik_migrate_data(sumD, g2);
+
             // TODO: replace world with g2
             nextshrink += shrink;
+
+            if (laik_myid(g2) == -1) break;
         }
     }
     
