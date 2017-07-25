@@ -1,6 +1,14 @@
 {
     "version": "0.2.0",
     "configurations": [        
+        { 
+            "name": "(gdb) Attach",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "${workspaceRoot}/examples/vsum2",
+            "processId": "${command:pickProcess}",
+            "MIMode": "gdb"
+        },
         {
             "name": "Debug vsum",
             "type": "cppdbg",

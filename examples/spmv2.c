@@ -200,6 +200,12 @@ int main(int argc, char* argv[])
     // nothing to preserve between iterations (assume at least one iter)
     laik_switchto(resD, p, LAIK_DF_None);
 
+    // partitionings for all task taking part in calculation
+    Laik_Partitioning* allVec = laik_new_partitioning(world, s, laik_All);
+    Laik_Partitioning* allSum = laik_new_partitioning(world,
+                                                      laik_get_dspace(sumD),
+                                                      laik_All);
+
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i, fromRow, toRow;
 
@@ -223,7 +229,7 @@ int main(int argc, char* argv[])
             laik_switchto(resD, p, LAIK_DF_CopyOut);
 
         // access to complete input vector (local indexing = global indexing)
-        laik_switchto_new(inpD, laik_All, LAIK_DF_CopyIn);
+        laik_switchto(inpD, allVec, LAIK_DF_CopyIn);
         laik_map_def1(inpD, (void**) &inp, 0);
 
         // SpMV operation, for my range of rows
@@ -253,18 +259,17 @@ int main(int argc, char* argv[])
 
         // compute global sum with LAIK, broadcast result to all
         // only done by tasks which still take part in SPMV
-        if (laik_myid(laik_get_dgroup(sumD)) >= 0) {
-            laik_switchto_new(sumD, laik_All,
-                              LAIK_DF_ReduceOut | LAIK_DF_Sum);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
-            *sumPtr = sum;
-            laik_switchto_new(sumD, laik_All, LAIK_DF_CopyIn);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
-            sum = *sumPtr;
+        assert(laik_myid(laik_get_pgroup(allSum)) >= 0);
 
-            if (laik_myid(laik_get_dgroup(sumD)) == 0) {
-                printf("Sum at iter %2d: %f\n", iter, sum);
-            }
+        laik_switchto(sumD, allSum, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        laik_map_def1(sumD, (void**) &sumPtr, 0);
+        *sumPtr = sum;
+        laik_switchto(sumD, allSum, LAIK_DF_CopyIn);
+        laik_map_def1(sumD, (void**) &sumPtr, 0);
+        sum = *sumPtr;
+
+        if (laik_myid(laik_get_pgroup(allSum)) == 0) {
+            printf("Sum at iter %2d: %f\n", iter, sum);
         }
 
         tt = wtime();
@@ -276,8 +281,8 @@ int main(int argc, char* argv[])
         if (useReduction) {
             // varian 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
-            laik_switchto_new(inpD, laik_All,
-                              LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+            laik_switchto(inpD, allVec,
+                          LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
             laik_map_def1(inpD, (void**) &inp, 0);
 
             // loop over all local slices of result vector
@@ -299,18 +304,31 @@ int main(int argc, char* argv[])
             }
         }
 
-        // our own repartitioing: remove task 0 from world
+        // our own repartitioing: remove task 0 from all used partitionings
         Laik_Group* g = laik_get_pgroup(p);
         if ((iter == nextshrink) && (laik_size(g) > 1)) {
             int removeList[1] = {0};
             laik_log(2, "Shrink from size %d", laik_size(g));
             Laik_Group* g2 = laik_shrink_group(g, 1, removeList);
+
+            // update partitioning <p>
             Laik_BorderArray* ba = laik_run_partitioner(pr, g2, s, 0);
             laik_migrate_borders(ba, g);
             laik_set_borders(p, ba);
             laik_migrate_partitioning(p, g2);
 
-            laik_migrate_data(sumD, g2);
+            // update partitioning <allVec>
+            ba = laik_run_partitioner(laik_All, g2, s, 0);
+            laik_migrate_borders(ba, g);
+            laik_set_borders(allVec, ba);
+            laik_migrate_partitioning(allVec, g2);
+
+            // update partitioning <allVec>
+            ba = laik_run_partitioner(laik_All, g2,
+                                      laik_get_pspace(allSum), 0);
+            laik_migrate_borders(ba, g);
+            laik_set_borders(allSum, ba);
+            laik_migrate_partitioning(allSum, g2);
 
             // TODO: replace world with g2
             nextshrink += shrink;
