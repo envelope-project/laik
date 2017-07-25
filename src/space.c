@@ -774,7 +774,7 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
 {
     Laik_BorderArray* ba;
 
-    ba = allocBorders(g, space, 2 * g->size);
+    ba = allocBorders(g, space, 4 * g->size);
     if (oldBA) {
         assert(oldBA->group == g);
         assert(oldBA->space == space);

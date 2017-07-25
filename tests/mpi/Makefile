@@ -1,7 +1,7 @@
 # same tests as in tests/, but using 4 MPI tasks
 
 TESTS=test-vsum test-vsum2 test-spmv test-spmv2 test-spmv2r \
-      test-spmv2-shrink
+      test-spmv2-shrink test-spmv2-shrink-inc
 
 .PHONY: $(TESTS)
 
@@ -30,6 +30,10 @@ test-spmv2r:
 test-spmv2-shrink:
 	mpirun -np 4 ../../examples/spmv2 -s 2 | sort > test-spmv2s.out
 	cmp test-spmv2s.out test-spmv2.expected
+
+test-spmv2-shrink-inc:
+	mpirun -np 4 ../../examples/spmv2 -s 2 -i | sort > test-spmv2si.out
+	cmp test-spmv2si.out test-spmv2.expected
 
 clean:
 	rm -rf *.out

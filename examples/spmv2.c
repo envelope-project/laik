@@ -110,6 +110,7 @@ void help(char* err)
            " -h              show this help and exit\n"
            " -r              use all-reduction to aggregate result (def: block+copy)\n"
            " -s <iter>       iterations after which to shrink by removing task 0\n"
+           " -i              use incremental partitioner on shrinking\n"
            " -v              make LAIK verbose (same as LAIK_LOG=1)\n");
     exit(1);
 }
@@ -126,6 +127,7 @@ int main(int argc, char* argv[])
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
     int maxiter = 0, size = 0, nextshrink = -1, shrink = -1;
     bool useReduction = false;
+    bool useIncremental = false;
 
     // timing: t1 raw computation, t2: everything without init
     double t1 = 0.0, t2 = 0.0, tt1, tt2, tt;
@@ -138,6 +140,8 @@ int main(int argc, char* argv[])
         if (argv[arg][0] == '-') {
             if (argv[arg][1] == 'r')
                 useReduction = true;
+            else if (argv[arg][1] == 'i')
+                useIncremental = true;
             else if (argv[arg][1] == 'v')
                 laik_set_loglevel(1);
             else if (argv[arg][1] == 's') {
@@ -311,7 +315,11 @@ int main(int argc, char* argv[])
             laik_log(2, "Shrink from size %d", laik_size(g));
             Laik_Group* g2 = laik_new_shrinked_group(g, 1, removeList);
 
-            laik_migrate_and_repartition(p, g2, 0);
+            Laik_Partitioner* pr = 0;
+            if (useIncremental)
+                pr = laik_new_reassign_partitioner(g2);
+
+            laik_migrate_and_repartition(p, g2, pr);
             laik_migrate_and_repartition(allVec, g2, 0);
             laik_migrate_and_repartition(allSum, g2, 0);
 

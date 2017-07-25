@@ -298,3 +298,49 @@ void laik_set_cycle_count(Laik_Partitioner* pr, int cycles)
     if ((cycles < 0) || (cycles>10)) cycles = 1;
     data->cycles = cycles;
 }
+
+
+
+// Incremental partitioner: reassign
+// redistribute indexes from tasks to be removed
+
+void runReassignPartitioner(Laik_Partitioner* pr,
+                            Laik_BorderArray* ba, Laik_BorderArray* oldBA)
+{
+    Laik_Group* newg = (Laik_Group*) pr->data;
+    assert(oldBA);
+    // TODO: only works if parent of new group is used in oldBA
+    assert(newg->parent == oldBA->group);
+    // only 1d for now
+    assert(oldBA->space->dims == 1);
+
+    Laik_Slice slc;
+    for(int i = 0; i < oldBA->count; i++) {
+        int task = oldBA->tslice[i].task;
+        if (newg->fromParent[task] >= 0) {
+            // move over to new borders
+            laik_append_slice(ba, task, &(oldBA->tslice[i].s));
+        }
+        else {
+            // distribute
+            int from = oldBA->tslice[i].s.from.i[0];
+            int last = oldBA->tslice[i].s.to.i[0];
+            int each = (last - from) / newg->size +1;
+            for(int ntask = 0; ntask < newg->size; ntask++) {
+                int to = from + each;
+                if (to > last) to = last;
+                if (from >= to) break;
+                laik_set_index(&(slc.from), from, 0, 0);
+                laik_set_index(&(slc.to), to, 0, 0);
+                laik_append_slice(ba, newg->toParent[ntask], &slc);
+                from = to;
+            }
+        }
+    }
+}
+
+Laik_Partitioner* laik_new_reassign_partitioner(Laik_Group* newg)
+{
+    return laik_new_partitioner("reassign", runReassignPartitioner,
+                                (void*) newg);
+}

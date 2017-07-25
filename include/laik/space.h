@@ -232,6 +232,9 @@ void laik_set_task_weight(Laik_Partitioner* pr, Laik_GetTaskWeight_t f,
 // to distribute chunks to tasks. Default is 1.
 void laik_set_cycle_count(Laik_Partitioner* p, int cycles);
 
+// Reassign: incremental partitioner
+// redistribute indexes from tasks to be removed
+Laik_Partitioner* laik_new_reassign_partitioner(Laik_Group* newg);
 
 
 //
