@@ -9,6 +9,7 @@
 ../src/core.c
 ../src/data.c
 ../src/external.c
+../src/partitioner.c
 ../src/program.c
 ../src/space.c
 

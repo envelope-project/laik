@@ -61,6 +61,10 @@ struct _Laik_Partitioner {
 Laik_Partitioner* laik_new_partitioner(char* name,
                                        laik_run_partitioner_t f, void* d);
 
+// to be used by implementations of partitioners
+void laik_set_index(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3);
+void laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s);
+
 typedef struct _Laik_BlockPartitionerData Laik_BlockPartitionerData;
 struct _Laik_BlockPartitionerData {
      // dimension to partition, only supports 1d partitionings
@@ -101,8 +105,6 @@ struct _Laik_BorderArray {
 };
 
 Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity);
-// to be used by implementations of partitioners
-void appendSlice(Laik_BorderArray* a, int task, Laik_Slice* s);
 void clearBorderArray(Laik_BorderArray* a);
 void freeBorderArray(Laik_BorderArray* a);
 
