@@ -978,9 +978,24 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
         // something to send?
         if (laik_do_copyout(fromFlow)) {
-            for(int o1 = fromBA->off[myid]; o1 < fromBA->off[myid+1]; o1++) {
-                for(int task = 0; task < count; task++) {
-                    if (task == myid) continue;
+            for(int task = 0; task < count; task++) {
+                if (task == myid) continue;
+                for(int o1 = fromBA->off[myid]; o1 < fromBA->off[myid+1]; o1++) {
+
+                    // everything the receiver has local, no need to send
+                    // TODO: we only check for exact match to catch All
+                    // FIXME: should print out a Warning/Error as the App
+                    //        requests overwriting of values!
+                    slc = &(fromBA->tslice[o1].s);
+                    for(int o2 = fromBA->off[task]; o2 < fromBA->off[task+1]; o2++) {
+                        if (laik_slice_isEqual(dims, slc,
+                                               &(fromBA->tslice[o2].s))) {
+                            slc = 0;
+                            break;
+                        }
+                    }
+                    if (slc == 0) continue;
+
                     // we may send multiple messages to same task
                     for(int o2 = toBA->off[task]; o2 < toBA->off[task+1]; o2++) {
 
@@ -1004,18 +1019,33 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
         if (!laik_is_reduction(fromFlow) && laik_do_copyin(toFlow)) {
             for(int task = 0; task < count; task++) {
                 if (task == myid) continue;
-                for(int o1 = fromBA->off[task]; o1 < fromBA->off[task+1]; o1++) {
-                    for(int o2 = toBA->off[myid]; o2 < toBA->off[myid+1]; o2++) {
+                for(int o1 = toBA->off[myid]; o1 < toBA->off[myid+1]; o1++) {
+
+                    // everything we have local will not have been sent
+                    // TODO: we only check for exact match to catch All
+                    // FIXME: should print out a Warning/Error as the App
+                    //        was requesting for overwriting of values!
+                    slc = &(toBA->tslice[o1].s);
+                    for(int o2 = fromBA->off[myid]; o2 < fromBA->off[myid+1]; o2++) {
+                        if (laik_slice_isEqual(dims, slc,
+                                               &(fromBA->tslice[o2].s))) {
+                            slc = 0;
+                            break;
+                        }
+                    }
+                    if (slc == 0) continue;
+
+                    for(int o2 = fromBA->off[task]; o2 < fromBA->off[task+1]; o2++) {
 
                         slc = laik_slice_intersect(dims,
-                                                   &(fromBA->tslice[o1].s),
-                                                   &(toBA->tslice[o2].s));
+                                                   &(fromBA->tslice[o2].s),
+                                                   &(toBA->tslice[o1].s));
                         if (slc == 0) continue;
 
                         assert(recvCount < TRANSSLICES_MAX);
                         struct recvTOp* op = &(recv[recvCount]);
                         op->slc = *slc;
-                        op->sliceNo = o2 - toBA->off[myid];
+                        op->sliceNo = o1 - toBA->off[myid];
                         op->fromTask = task;
                         recvCount++;
                     }
