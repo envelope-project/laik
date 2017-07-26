@@ -197,9 +197,9 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             default: assert(0);
             }
 
-            MPI_Datatype mpiDateType;
-            if      (d->type == laik_Double) mpiDateType = MPI_DOUBLE;
-            else if (d->type == laik_Float) mpiDateType = MPI_FLOAT;
+            MPI_Datatype mpiDataType;
+            if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
+            else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
             else assert(0);
 
             if (laik_logshown(1)) {
@@ -215,18 +215,18 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (op->rootTask == -1) {
                 if (fromBase == toBase)
                     MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
-                                  mpiDateType, mpiRedOp, comm);
+                                  mpiDataType, mpiRedOp, comm);
                 else
                     MPI_Allreduce(fromBase, toBase, to - from,
-                                  mpiDateType, mpiRedOp, comm);
+                                  mpiDataType, mpiRedOp, comm);
             }
             else {
                 if (fromBase == toBase)
                     MPI_Reduce(MPI_IN_PLACE, toBase, to - from,
-                               mpiDateType, mpiRedOp, op->rootTask, comm);
+                               mpiDataType, mpiRedOp, op->rootTask, comm);
                 else
                     MPI_Reduce(fromBase, toBase, to - from,
-                               mpiDateType, mpiRedOp, op->rootTask, comm);
+                               mpiDataType, mpiRedOp, op->rootTask, comm);
             }
         }
     }
@@ -269,11 +269,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             uint64_t to   = op->slc.to.i[0] - toMap->baseIdx.i[0];
             assert(toBase != 0);
 
-            MPI_Datatype mpiDateType;
-            switch(d->elemsize) {
-            case 8: mpiDateType = MPI_DOUBLE; break;
-            default: assert(0);
-            }
+            MPI_Datatype mpiDataType;
+            if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
+            else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
+            else assert(0);
 
             laik_log(1, "MPI Recv from T%d: "
                         "local [%lu-%lu], elemsize %d, to base %p\n",
@@ -284,7 +283,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             // - tag 1 may conflict with application
             // - check status
             MPI_Recv(toBase + from * d->elemsize, to - from,
-                     mpiDateType, op->fromTask, 1, comm, &s);
+                     mpiDataType, op->fromTask, 1, comm, &s);
         }
 
         // send
@@ -306,11 +305,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             uint64_t to   = op->slc.to.i[0] - fromMap->baseIdx.i[0];
             assert(fromBase != 0);
 
-            MPI_Datatype mpiDateType;
-            switch(d->elemsize) {
-            case 8: mpiDateType = MPI_DOUBLE; break;
-            default: assert(0);
-            }
+            MPI_Datatype mpiDataType;
+            if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
+            else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
+            else assert(0);
 
             laik_log(1, "MPI Send to T%d: "
                         "local [%lu-%lu], elemsize %d, from base %p\n",
@@ -318,7 +316,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             // TODO: tag 1 may conflict with application
             MPI_Send(fromBase + from * d->elemsize, to - from,
-                     mpiDateType, op->toTask, 1, comm);
+                     mpiDataType, op->toTask, 1, comm);
         }
     
     }
