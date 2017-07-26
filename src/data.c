@@ -630,6 +630,13 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m)
 // make own partition available for direct access in local memory
 Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 {
+    if (d->group->myid == -1) {
+        laik_log(LAIK_LL_Error,
+                 "laik_map called for data '%s' defined on task group %d.\n"
+                 "This task is NOT part of the group. Fix your application!\n"
+                 "(may crash now if returned address is dereferenced)",
+                 d->name, d->group->gid);
+    }
     // we must be an active partitioning
     assert(d->activePartitioning);
 
