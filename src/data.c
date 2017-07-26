@@ -121,6 +121,12 @@ Laik_Group* laik_get_dgroup(Laik_Data* d)
     return d->group;
 }
 
+// get active partitioning of data container
+Laik_Partitioning* laik_get_active(Laik_Data* d)
+{
+    return d->activePartitioning;
+}
+
 
 static
 Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
@@ -524,6 +530,17 @@ void laik_switchto(Laik_Data* d,
         d->space->inst->time_total += laik_wtime() -
                                      d->space->inst->timer_total;
 }
+
+// switch to another data flow, keep partitioning
+void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow)
+{
+    if (!d->activePartitioning) {
+        // makes no sense without partitioning
+        laik_panic("laik_switch_flow without active partitioning!");
+    }
+    laik_switchto(d, d->activePartitioning, toFlow);
+}
+
 
 // get slice number <n> in own partition
 Laik_Slice* laik_data_slice(Laik_Data* d, int n)

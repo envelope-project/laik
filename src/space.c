@@ -1165,6 +1165,8 @@ bool laik_migrate_partitioning(Laik_Partitioning* p,
 void laik_migrate_and_repartition(Laik_Partitioning* p, Laik_Group* newg,
                                   Laik_Partitioner* pr)
 {
+    if (!p) return;
+
     Laik_BorderArray* ba;
     if (pr) {
         ba = laik_run_partitioner(pr, p->group, p->space,

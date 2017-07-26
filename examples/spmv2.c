@@ -196,6 +196,7 @@ int main(int argc, char* argv[])
     // for global normalization, to broadcast a vector sum to all
     Laik_Data* sumD = laik_alloc_1d(world, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
+    laik_switchto_new(sumD, laik_All, LAIK_DF_None);
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner(0, 1, getEW, 0, m);
@@ -206,9 +207,6 @@ int main(int argc, char* argv[])
 
     // partitionings for all task taking part in calculation
     Laik_Partitioning* allVec = laik_new_partitioning(world, s, laik_All);
-    Laik_Partitioning* allSum = laik_new_partitioning(world,
-                                                      laik_get_dspace(sumD),
-                                                      laik_All);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i, fromRow, toRow;
@@ -263,16 +261,16 @@ int main(int argc, char* argv[])
 
         // compute global sum with LAIK, broadcast result to all
         // only done by tasks which still take part in SPMV
-        assert(laik_myid(laik_get_pgroup(allSum)) >= 0);
+        assert(laik_myid(laik_get_dgroup(sumD)) >= 0);
 
-        laik_switchto(sumD, allSum, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
         laik_map_def1(sumD, (void**) &sumPtr, 0);
         *sumPtr = sum;
-        laik_switchto(sumD, allSum, LAIK_DF_CopyIn);
+        laik_switchto_flow(sumD, LAIK_DF_CopyIn);
         laik_map_def1(sumD, (void**) &sumPtr, 0);
         sum = *sumPtr;
 
-        if (laik_myid(laik_get_pgroup(allSum)) == 0) {
+        if (laik_myid(laik_get_dgroup(sumD)) == 0) {
             printf("Sum at iter %2d: %f\n", iter, sum);
         }
 
@@ -321,7 +319,7 @@ int main(int argc, char* argv[])
 
             laik_migrate_and_repartition(p, g2, pr);
             laik_migrate_and_repartition(allVec, g2, 0);
-            laik_migrate_and_repartition(allSum, g2, 0);
+            laik_migrate_and_repartition(laik_get_active(sumD), g2, 0);
 
             // TODO: replace world with g2
             nextshrink += shrink;

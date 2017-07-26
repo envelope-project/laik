@@ -378,3 +378,9 @@ void laik_log(Laik_LogLevel l, const char* msg, ...)
     // terminate program on panic
     if (l == LAIK_LL_Panic) exit(1);
 }
+
+// panic: terminate application
+void laik_panic(const char* msg)
+{
+    laik_log(LAIK_LL_Panic, msg);
+}

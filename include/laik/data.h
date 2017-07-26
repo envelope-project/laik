@@ -70,6 +70,9 @@ Laik_Space* laik_get_dspace(Laik_Data*);
 // get task group used for data
 Laik_Group* laik_get_dgroup(Laik_Data* d);
 
+// get active partitioning of data container
+Laik_Partitioning* laik_get_active(Laik_Data* d);
+
 // free resources for a data container
 void laik_free(Laik_Data*);
 
@@ -78,6 +81,9 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA);
 
 // switch from active to another partitioning
 void laik_switchto(Laik_Data*, Laik_Partitioning* toP, Laik_DataFlow toFlow);
+
+// switch to another data flow, keep partitioning
+void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow);
 
 // migrate data container to use another group
 // (only possible if data does not have to be preserved)
