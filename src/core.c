@@ -215,11 +215,11 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
     if (laik_logshown(1)) {
         char s[500];
         int o;
-        o = sprintf(s, "%d (size %d, myid %d) => %d (size %d, myid %d):\n",
+        o = sprintf(s, "%d (size %d, myid %d) => %d (size %d, myid %d):",
                     g->gid, g->size, g->myid, g2->gid, g2->size, g2->myid);
-        o += sprintf(s+o, "  fromParent (original):\n");
+        o += sprintf(s+o, "\n  fromParent (to shrinked)  : ");
         o += getIntListStr(s+o, g->size, g2->fromParent);
-        o += sprintf(s+o, "  toParent (from shrinked): ");
+        o += sprintf(s+o, "\n  toParent   (from shrinked): ");
         o += getIntListStr(s+o, g2->size, g2->toParent);
 
         laik_log(1, "shrink group: %s\n", s);
