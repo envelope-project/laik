@@ -24,15 +24,6 @@
 
 #include <stdbool.h>
 
-typedef struct _Laik_BlockPartitioner Laik_BlockPartitioner;
-
-// internal as depending on communication backend
-
-struct _Laik_Task {
-    int rank;
-};
-
-// internal to allow extension for non-regular index spaces
 
 struct _Laik_Space {
     char* name; // for debugging
@@ -65,26 +56,6 @@ Laik_Partitioner* laik_new_partitioner(char* name,
 void laik_set_index(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3);
 void laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s);
 
-typedef struct _Laik_BlockPartitionerData Laik_BlockPartitionerData;
-struct _Laik_BlockPartitionerData {
-     // dimension to partition, only supports 1d partitionings
-    int pdim;
-
-    // how many cycles (results in so many slics per task)
-    int cycles;
-
-    // weighted partitioning (Block) uses callbacks
-    Laik_GetIdxWeight_t getIdxW;
-    Laik_GetTaskWeight_t getTaskW;
-    void* userData;
-};
-
-typedef struct _Laik_CopyPartitionerData Laik_CopyPartitionerData;
-struct _Laik_CopyPartitionerData {
-    int fromDim, toDim; // only supports 1d partitionings
-    Laik_Partitioning* base;
-};
-
 
 // the output of a partitioner is a Laik_BorderArray
 
@@ -108,7 +79,10 @@ Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity);
 void clearBorderArray(Laik_BorderArray* a);
 void freeBorderArray(Laik_BorderArray* a);
 
-// internal to allow for more irregular partitionings
+
+//
+// Laik_Partitioning
+//
 
 struct _Laik_Partitioning {
     char* name; // for debugging
@@ -136,6 +110,10 @@ struct _Laik_Partitioning {
 void laik_addPartitioningUser(Laik_Partitioning* p, Laik_Data* d);
 void laik_removePartitioningUser(Laik_Partitioning* p, Laik_Data* d);
 
+
+//
+// Laik_Transition
+//
 
 // sub-structures of Laik_Transition
 
@@ -199,7 +177,7 @@ struct _Laik_Transition {
     struct redTOp *red;
 };
 
-// LAIK internal
+// for debug / logging
 int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1);
 int laik_getTransitionStr(char* s, Laik_Transition* t);
 int laik_getDataFlowStr(char* s, Laik_DataFlow flow);

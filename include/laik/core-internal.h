@@ -28,6 +28,12 @@
 #define MAX_DATAS         10
 #define MAX_MAPPINGS      10
 
+
+
+struct _Laik_Task {
+    int rank;
+};
+
 struct _Laik_Group {
     Laik_Instance* inst;
     int gid;

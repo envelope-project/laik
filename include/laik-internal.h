@@ -20,6 +20,9 @@
 
 #include "laik.h"
 
+// also include all internal LAIK headers
+// only used internally by LAIK sources, not part of LAIK API
+
 #include "laik/core-internal.h"
 #include "laik/space-internal.h"
 #include "laik/data-internal.h"

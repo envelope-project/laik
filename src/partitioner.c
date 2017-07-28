@@ -86,6 +86,12 @@ Laik_Partitioner* laik_new_master_partitioner()
 // Thus, parameters is not only the base partitioning, but also the
 // dimension of borders to copy from one to the other partitioning
 
+typedef struct _Laik_CopyPartitionerData Laik_CopyPartitionerData;
+struct _Laik_CopyPartitionerData {
+    int fromDim, toDim; // only supports 1d partitionings
+    Laik_Partitioning* base;
+};
+
 void runCopyPartitioner(Laik_Partitioner* pr,
                         Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
@@ -139,6 +145,20 @@ Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* base,
 //
 // when distributing indexes, a given number of rounds is done over tasks,
 // defaulting to 1 (see cycle parameter).
+
+typedef struct _Laik_BlockPartitionerData Laik_BlockPartitionerData;
+struct _Laik_BlockPartitionerData {
+     // dimension to partition, only supports 1d partitionings
+    int pdim;
+
+    // how many cycles (results in so many slics per task)
+    int cycles;
+
+    // weighted partitioning (Block) uses callbacks
+    Laik_GetIdxWeight_t getIdxW;
+    Laik_GetTaskWeight_t getTaskW;
+    void* userData;
+};
 
 void runBlockPartitioner(Laik_Partitioner* pr,
                          Laik_BorderArray* ba, Laik_BorderArray* oldBA)
