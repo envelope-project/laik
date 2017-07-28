@@ -348,7 +348,7 @@ void laik_log(Laik_LogLevel l, const char* msg, ...)
     static char buf2[3000];
     int off1 = 0, off2 = 0, off;
 
-    char* phase = laik_loginst->control->cur_phase_name;
+    const char* phase = laik_loginst->control->cur_phase_name;
     if (!phase) phase = "";
 
     // append prefix at beginning of each line of msg

@@ -25,7 +25,7 @@
 struct tag_laik_program_control
 {
     int cur_phase;
-    char* cur_phase_name;
+    const char* cur_phase_name;
     // user controlled structure
     void* pData;
     // current iteration number iterations

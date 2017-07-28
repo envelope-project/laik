@@ -35,9 +35,9 @@ void laik_set_iteration(Laik_Instance*, int);
 int laik_get_iteration(Laik_Instance*);
 
 // set current program phase control
-void laik_set_phase(Laik_Instance*, int, char*, void*);
+void laik_set_phase(Laik_Instance*, int, const char*, void*);
 // get current program phase control
-void laik_get_phase(Laik_Instance*, int*, char**, void**);
+void laik_get_phase(Laik_Instance*, int*, const char**, void**);
 
 // provide command line args to LAIK for re-launch
 void laik_set_args(Laik_Instance*, int, char**);

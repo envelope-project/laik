@@ -9,27 +9,22 @@
 #include <stdlib.h>
 #include <assert.h>
 
-//set current interation number
-void laik_set_iteration (
-    Laik_Instance* i, 
-    int iter
-){
+// set current interation number
+void laik_set_iteration(Laik_Instance* i, int iter)
+{
     i->control->cur_iteration = iter; 
 }
-//get current iternation number
-int laik_get_iteration (
-    Laik_Instance* i
-){
+
+// get current iternation number
+int laik_get_iteration(Laik_Instance* i)
+{
     return (i->control->cur_iteration);
 }
 
 // set current program phase control
-void laik_set_phase (
-    Laik_Instance* i, 
-    int n_phase,
-    char* name,         /* Must be persistant */
-    void* pData
-){
+void laik_set_phase(Laik_Instance* i,
+                    int n_phase, const char* name, void* pData)
+{
     i->control->cur_phase = n_phase;
     i->control->cur_phase_name = name;
     i->control->pData = pData;
@@ -38,12 +33,9 @@ void laik_set_phase (
 }
 
 // get current program phase control
-void laik_get_phase (
-    Laik_Instance* i,
-    int* phase,
-    char** name,
-    void** pData
-){
+void laik_get_phase(Laik_Instance* i,
+                    int* phase, const char** name, void** pData)
+{
     *phase = i->control->cur_phase;
     *name = i->control->cur_phase_name;
     *pData = i->control->pData;
