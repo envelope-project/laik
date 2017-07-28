@@ -234,7 +234,11 @@ void laik_set_cycle_count(Laik_Partitioner* p, int cycles);
 
 // Reassign: incremental partitioner
 // redistribute indexes from tasks to be removed
-Laik_Partitioner* laik_new_reassign_partitioner(Laik_Group* newg);
+// this partitioner can make use of application-specified index weights
+Laik_Partitioner*
+laik_new_reassign_partitioner(Laik_Group* newg,
+                              Laik_GetIdxWeight_t getIdxW,
+                              void* userData);
 
 
 //

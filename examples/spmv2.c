@@ -306,7 +306,7 @@ int main(int argc, char* argv[])
             }
         }
 
-        // our own repartitioing: remove task 0 from all used partitionings
+        // our own repartitioning: remove task 0 from all used partitionings
         Laik_Group* g = laik_get_pgroup(p);
         if ((iter == nextshrink) && (laik_size(g) > 1)) {
             int removeList[1] = {0};
@@ -315,7 +315,7 @@ int main(int argc, char* argv[])
 
             Laik_Partitioner* pr = 0;
             if (useIncremental)
-                pr = laik_new_reassign_partitioner(g2);
+                pr = laik_new_reassign_partitioner(g2, getEW, m);
 
             laik_migrate_and_repartition(p, g2, pr);
             laik_migrate_and_repartition(allVec, g2, 0);

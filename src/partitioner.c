@@ -324,43 +324,102 @@ void laik_set_cycle_count(Laik_Partitioner* pr, int cycles)
 // Incremental partitioner: reassign
 // redistribute indexes from tasks to be removed
 
+typedef struct {
+    Laik_Group* newg; // new group to re-distribute old partitioning
+
+    Laik_GetIdxWeight_t getIdxW; // application-specified weights
+    void* userData;
+} ReassignData;
+
+
+
 void runReassignPartitioner(Laik_Partitioner* pr,
                             Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
-    Laik_Group* newg = (Laik_Group*) pr->data;
+    ReassignData* data = (ReassignData*) pr->data;
+    Laik_Group* newg = data->newg;
+
+    // there must be old borders
     assert(oldBA);
     // TODO: only works if parent of new group is used in oldBA
     assert(newg->parent == oldBA->group);
     // only 1d for now
     assert(oldBA->space->dims == 1);
 
-    Laik_Slice slc;
+    // total weight sum of indexes to redistribute
+    Laik_Index idx;
+    laik_set_index(&idx, 0, 0, 0);
+    double totalWeight = 0;
     for(int i = 0; i < oldBA->count; i++) {
         int task = oldBA->tslice[i].task;
-        if (newg->fromParent[task] >= 0) {
-            // move over to new borders
-            laik_append_slice(ba, task, &(oldBA->tslice[i].s));
-        }
-        else {
-            // distribute
-            int from = oldBA->tslice[i].s.from.i[0];
-            int last = oldBA->tslice[i].s.to.i[0];
-            int each = (last - from) / newg->size +1;
-            for(int ntask = 0; ntask < newg->size; ntask++) {
-                int to = from + each;
-                if (to > last) to = last;
-                if (from >= to) break;
-                laik_set_index(&(slc.from), from, 0, 0);
-                laik_set_index(&(slc.to), to, 0, 0);
-                laik_append_slice(ba, newg->toParent[ntask], &slc);
-                from = to;
+        if (newg->fromParent[task] >= 0) continue;
+
+        int from = oldBA->tslice[i].s.from.i[0];
+        int to   = oldBA->tslice[i].s.to.i[0];
+
+        if (data->getIdxW) {
+            for(uint64_t i = from; i < to; i++) {
+                idx.i[0] = i;
+                totalWeight += (data->getIdxW)(&idx, data->userData);
             }
+        }
+        else
+            totalWeight += (double) (to - from);
+    }
+
+    // weight to re-distribute to each remaining task
+    double weightPerTask = totalWeight / newg->size;
+    double weight = 0;
+    int curTask = 0; // task in new group which gets the next indexes
+
+    Laik_Slice slc;
+    for(int i = 0; i < oldBA->count; i++) {
+        int origTask = oldBA->tslice[i].task;
+        if (newg->fromParent[origTask] >= 0) {
+            // move over to new borders
+            laik_append_slice(ba, origTask, &(oldBA->tslice[i].s));
+            continue;
+        }
+
+        // re-distribute
+        int from = oldBA->tslice[i].s.from.i[0];
+        int to = oldBA->tslice[i].s.to.i[0];
+
+        slc.from.i[0] = from;
+        for(uint64_t i = from; i < to; i++) {
+            idx.i[0] = i;
+            if (data->getIdxW)
+                weight += (data->getIdxW)(&idx, data->userData);
+            else
+                weight += (double) 1.0;
+            // add slice if weight too large, but only if not already last task
+            if ((weight >= weightPerTask) && (curTask < newg->size)) {
+                weight -= weightPerTask;
+                slc.to.i[0] = i + 1;
+                laik_append_slice(ba, newg->toParent[curTask], &slc);
+
+                // start new slice
+                slc.from.i[0] = i + 1;
+                curTask++;
+            }
+        }
+        if (slc.from.i[0] < to) {
+            slc.to.i[0] = to;
+            laik_append_slice(ba, newg->toParent[curTask], &slc);
         }
     }
 }
 
-Laik_Partitioner* laik_new_reassign_partitioner(Laik_Group* newg)
+Laik_Partitioner*
+laik_new_reassign_partitioner(Laik_Group* newg,
+                              Laik_GetIdxWeight_t getIdxW,
+                              void* userData)
 {
+    ReassignData* data = (ReassignData*) malloc(sizeof(ReassignData));
+    data->newg = newg;
+    data->getIdxW = getIdxW;
+    data->userData = userData;
+
     return laik_new_partitioner("reassign", runReassignPartitioner,
-                                (void*) newg);
+                                (void*) data);
 }
