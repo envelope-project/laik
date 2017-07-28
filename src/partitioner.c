@@ -349,13 +349,13 @@ void runReassignPartitioner(Laik_Partitioner* pr,
     // total weight sum of indexes to redistribute
     Laik_Index idx;
     laik_set_index(&idx, 0, 0, 0);
-    double totalWeight = 0;
-    for(int i = 0; i < oldBA->count; i++) {
-        int task = oldBA->tslice[i].task;
+    double totalWeight = 0.0;
+    for(int sliceNo = 0; sliceNo < oldBA->count; sliceNo++) {
+        int task = oldBA->tslice[sliceNo].task;
         if (newg->fromParent[task] >= 0) continue;
 
-        int from = oldBA->tslice[i].s.from.i[0];
-        int to   = oldBA->tslice[i].s.to.i[0];
+        int from = oldBA->tslice[sliceNo].s.from.i[0];
+        int to   = oldBA->tslice[sliceNo].s.to.i[0];
 
         if (data->getIdxW) {
             for(uint64_t i = from; i < to; i++) {
@@ -372,24 +372,34 @@ void runReassignPartitioner(Laik_Partitioner* pr,
     double weight = 0;
     int curTask = 0; // task in new group which gets the next indexes
 
+    laik_log(1, "reassign: re-distribute weight %.3f to %d tasks (%.3f per task)",
+             totalWeight, newg->size, weightPerTask);
+
     Laik_Slice slc;
-    for(int i = 0; i < oldBA->count; i++) {
-        int origTask = oldBA->tslice[i].task;
+    for(int sliceNo = 0; sliceNo < oldBA->count; sliceNo++) {
+        int origTask = oldBA->tslice[sliceNo].task;
         if (newg->fromParent[origTask] >= 0) {
             // move over to new borders
-            laik_append_slice(ba, origTask, &(oldBA->tslice[i].s));
+            laik_log(1, "reassign: take over slice %d of task %d "
+                     "(new task %d, indexes [%d - %d[)",
+                     sliceNo, origTask, newg->fromParent[origTask],
+                     oldBA->tslice[sliceNo].s.from.i[0],
+                     oldBA->tslice[sliceNo].s.to.i[0]);
+
+            laik_append_slice(ba, origTask, &(oldBA->tslice[sliceNo].s));
             continue;
         }
 
         // re-distribute
-        int from = oldBA->tslice[i].s.from.i[0];
-        int to = oldBA->tslice[i].s.to.i[0];
+        int from = oldBA->tslice[sliceNo].s.from.i[0];
+        int to = oldBA->tslice[sliceNo].s.to.i[0];
 
         slc.from.i[0] = from;
         for(uint64_t i = from; i < to; i++) {
-            idx.i[0] = i;
-            if (data->getIdxW)
+            if (data->getIdxW) {
+                idx.i[0] = i;
                 weight += (data->getIdxW)(&idx, data->userData);
+            }
             else
                 weight += (double) 1.0;
             // add slice if weight too large, but only if not already last task
@@ -398,14 +408,29 @@ void runReassignPartitioner(Laik_Partitioner* pr,
                 slc.to.i[0] = i + 1;
                 laik_append_slice(ba, newg->toParent[curTask], &slc);
 
+                laik_log(1, "reassign: re-distribute [%d - %d[ "
+                         "of slice %d to task %d (new task %d)",
+                         slc.from.i[0], slc.to.i[0], sliceNo,
+                         newg->toParent[curTask], curTask);
+
                 // start new slice
                 slc.from.i[0] = i + 1;
                 curTask++;
+                if (curTask == newg->size) {
+                    // left over indexes always go to last task ID
+                    // this can happen if weights are 0 for last indexes
+                    curTask--;
+                }
             }
         }
         if (slc.from.i[0] < to) {
             slc.to.i[0] = to;
             laik_append_slice(ba, newg->toParent[curTask], &slc);
+
+            laik_log(1, "reassign: re-distribute remaining [%d - %d[ "
+                     "of slice %d to task %d (new task %d)",
+                     slc.from.i[0], slc.to.i[0], sliceNo,
+                     newg->toParent[curTask], curTask);
         }
     }
 }
