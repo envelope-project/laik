@@ -110,6 +110,7 @@ void help(char* err)
            " -h              show this help and exit\n"
            " -r              use all-reduction to aggregate result (def: block+copy)\n"
            " -s <iter>       iterations after which to shrink by removing task 0\n"
+           " -t <task>       on shrinking, remove task with ID <task> (default 0)\n"
            " -i              use incremental partitioner on shrinking\n"
            " -v              make LAIK verbose (same as LAIK_LOG=1)\n");
     exit(1);
@@ -125,7 +126,7 @@ int main(int argc, char* argv[])
     Laik_Group* world = laik_world(inst);
 
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
-    int maxiter = 0, size = 0, nextshrink = -1, shrink = -1;
+    int maxiter = 0, size = 0, nextshrink = -1, shrink = -1, removeTask = 0;
     bool useReduction = false;
     bool useIncremental = false;
 
@@ -150,6 +151,13 @@ int main(int argc, char* argv[])
                     nextshrink = shrink = atoi(argv[arg]);
                 else
                     help("-s: no parameter");
+            }
+            else if (argv[arg][1] == 't') {
+                arg++;
+                if (arg < argc)
+                    removeTask = atoi(argv[arg]);
+                else
+                    help("-t: no parameter");
             }
             else if (argv[arg][1] == 'h')
                 help(0);
@@ -306,11 +314,14 @@ int main(int argc, char* argv[])
             }
         }
 
-        // our own repartitioning: remove task 0 from all used partitionings
+        // test task shrinking
+        // remove task <removeTask> from all used partitionings
         Laik_Group* g = laik_get_pgroup(p);
-        if ((iter == nextshrink) && (laik_size(g) > 1)) {
-            int removeList[1] = {0};
-            laik_log(2, "Shrink from size %d", laik_size(g));
+        if ((iter == nextshrink) &&
+            (laik_size(g) > 1) && (laik_size(g) >= removeTask)) {
+            int removeList[1] = {removeTask};
+            laik_log(2, "Shrinking: remove task %d (orig size %d)",
+                     removeTask, laik_size(g));
             Laik_Group* g2 = laik_new_shrinked_group(g, 1, removeList);
 
             Laik_Partitioner* pr = 0;
