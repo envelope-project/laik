@@ -437,15 +437,15 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
         char s1[1000];
         o = sprintf(s1, "transition (data '%s', partition '%s'):\n",
                     d->name, part ? part->name : "(none)");
-        o += sprintf(s1+o, " from ");
+        o += sprintf(s1+o, "  from ");
         o += laik_getDataFlowStr(s1+o, d->activeFlow);
         o += sprintf(s1+o, ", ");
         o += laik_getBorderArrayStr(s1+o, fromBA);
-        o += sprintf(s1+o, "\n to ");
+        o += sprintf(s1+o, "\n  to ");
         o += laik_getDataFlowStr(s1+o, toFlow);
         o += sprintf(s1+o, ", ");
         o += laik_getBorderArrayStr(s1+o, toBA);
-        o += sprintf(s1+o, "\n actions:");
+        o += sprintf(s1+o, "\n  actions:");
 
         char s2[1000];
         int len = laik_getTransitionStr(s2, t);
@@ -497,7 +497,8 @@ void laik_switchto(Laik_Data* d,
     if (laik_logshown(1)) {
         int o;
         char s1[1000];
-        o = sprintf(s1, "transition (data '%s'): part %s/",
+        o = sprintf(s1, "switch partitionings for data '%s':\n"
+                    "  %s/",
                     d->name, fromP ? fromP->name : "(none)");
         o += laik_getDataFlowStr(s1+o, d->activeFlow);
         o += sprintf(s1+o, " => %s/", toP ? toP->name : "(none)");
@@ -556,7 +557,7 @@ Laik_Partitioning* laik_switchto_new(Laik_Data* d,
     Laik_Partitioning* p;
     p = laik_new_partitioning(d->group, d->space, pr);
 
-    laik_log(1, "switchto_new (data '%s') => partitioning '%s'",
+    laik_log(1, "switch data '%s' to new partitioning '%s'",
              d->name, p->name);
 
     laik_switchto(d, p, flow);

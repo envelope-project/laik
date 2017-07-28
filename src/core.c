@@ -217,9 +217,9 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
         int o;
         o = sprintf(s, "%d (size %d, myid %d) => %d (size %d, myid %d):\n",
                     g->gid, g->size, g->myid, g2->gid, g2->size, g2->myid);
-        o += sprintf(s+o, "  fromParent (original): ");
+        o += sprintf(s+o, "  fromParent (original):\n");
         o += getIntListStr(s+o, g->size, g2->fromParent);
-        o += sprintf(s+o, ", toParent (from shrinked): ");
+        o += sprintf(s+o, "  toParent (from shrinked): ");
         o += getIntListStr(s+o, g2->size, g2->toParent);
 
         laik_log(1, "shrink group: %s\n", s);
@@ -350,6 +350,8 @@ void laik_log(Laik_LogLevel l, const char* msg, ...)
 
     const char* phase = laik_loginst->control->cur_phase_name;
     if (!phase) phase = "";
+    int spaces = 0, last_break = 0;
+    bool at_newline = true;
 
     // append prefix at beginning of each line of msg
     while(buf1[off1]) {
@@ -357,7 +359,7 @@ void laik_log(Laik_LogLevel l, const char* msg, ...)
         // prefix
         line_counter++;
         off2 += sprintf(buf2+off2,
-                        "== LAIK-%04d.%02d T%2d/%d %04d.%02d %-15s ",
+                        "== LAIK-%03d.%02d T%2d/%d %04d.%02d %-10s ",
                         laik_loginst->control->phase_counter,
                         laik_loginst->control->cur_iteration,
                         laik_loginst->myid, laik_loginst->size,
@@ -367,9 +369,38 @@ void laik_log(Laik_LogLevel l, const char* msg, ...)
                                 (line_counter == 1) ? lstr : "");
 
         // line of message
+
+        if (at_newline) {
+            // get indent
+            spaces = 0;
+            while(buf1[off1] == ' ') { off1++; spaces++; }
+        }
+
+        // indent: add 4 spaces if this is continuation line
+        off2 += sprintf(buf2+off2, "%*s",
+                        at_newline ? spaces : spaces + 4, "");
+
+        at_newline = false;
         off = off1;
-        while(buf1[off] && (buf1[off] != '\n')) off++;
-        if (buf1[off] == '\n') buf1[off++] = 0;
+
+        last_break = 0;
+        while(buf1[off]) {
+            if (buf1[off] == '\n') {
+                at_newline = true;
+                break;
+            }
+            if (buf1[off] == ' ') {
+                // break line if too long?
+                if (spaces + (off - off1) > 70) {
+                    if (last_break)
+                        off = last_break; // go back
+                    break;
+                }
+                last_break = off;
+            }
+            off++;
+        }
+        if (buf1[off]) buf1[off++] = 0;
         off2 += sprintf(buf2+off2, "%s\n", buf1 + off1);
         off1 = off;
     }

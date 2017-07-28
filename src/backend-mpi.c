@@ -148,8 +148,9 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 {
     int myid  = d->group->myid;
 
-    laik_log(1, "MPI backend exec: data '%s', group %d (size %d, myid %d), "
-             "counts: red %d, send %d, recv %d",
+    laik_log(1, "MPI backend execute transition:\n"
+             "  data '%s', group %d (size %d, myid %d)\n"
+             "  actions: %d reductions, %d sends, %d recvs",
              d->name, d->group->gid, d->group->size, myid,
              t->redCount, t->sendCount, t->recvCount);
 
@@ -206,7 +207,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 char rootstr[10];
                 sprintf(rootstr, "%d", op->rootTask);
                 laik_log(1, "MPI Reduce (root %s%s): from %lu, to %lu, "
-                            "elemsize %d, base from/to %p/%p\n",
+                            "elemsize %d, baseptr from/to %p/%p\n",
                          (op->rootTask == -1) ? "ALL" : rootstr,
                          (fromBase == toBase) ? ", IN_PLACE" : "",
                          from, to, d->elemsize, fromBase, toBase);
@@ -274,9 +275,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
             else assert(0);
 
-            laik_log(1, "MPI Recv from T%d: "
-                        "local [%lu-%lu], elemsize %d, to base %p\n",
-                     op->fromTask, from, to-1, d->elemsize, toBase);
+            laik_log(1, "MPI Recv from T%d: global [%lu;%lu[,\n"
+                        "  to local [%lu;%lu[ in slice %d, elemsize %d, baseptr %p\n",
+                     op->fromTask,
+                     op->slc.from.i[0], op->slc.to.i[0],
+                     from, to, op->sliceNo, d->elemsize, toBase);
 
             MPI_Status s;
             // TODO:
@@ -310,9 +313,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
             else assert(0);
 
-            laik_log(1, "MPI Send to T%d: "
-                        "local [%lu-%lu], elemsize %d, from base %p\n",
-                     op->toTask, from, to-1, d->elemsize, fromBase);
+            laik_log(1, "MPI Send to T%d: global [%lu;%lu[,\n"
+                     "  to local [%lu;%lu[ in slice %d, elemsize %d, baseptr %p\n",
+                     op->toTask,
+                     op->slc.from.i[0], op->slc.to.i[0],
+                     from, to, op->sliceNo, d->elemsize, fromBase);
 
             // TODO: tag 1 may conflict with application
             MPI_Send(fromBase + from * d->elemsize, to - from,

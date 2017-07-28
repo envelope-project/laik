@@ -235,7 +235,7 @@ int laik_getTransitionStr(char* s, Laik_Transition* t)
     int off = 0;
 
     if (t->localCount>0) {
-        off += sprintf(s+off, "  local: ");
+        off += sprintf(s+off, "   %2d local: ", t->localCount);
         for(int i=0; i<t->localCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getSliceStr(s+off, t->dims, &(t->local[i].slc));
@@ -244,7 +244,7 @@ int laik_getTransitionStr(char* s, Laik_Transition* t)
     }
 
     if (t->initCount>0) {
-        off += sprintf(s+off, "  init: ");
+        off += sprintf(s+off, "   %2d init : ", t->initCount);
         for(int i=0; i<t->initCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getReductionStr(s+off, t->init[i].redOp);
@@ -254,34 +254,33 @@ int laik_getTransitionStr(char* s, Laik_Transition* t)
     }
 
     if (t->sendCount>0) {
-        off += sprintf(s+off, "  send: ");
+        off += sprintf(s+off, "   %2d send : ", t->sendCount);
         for(int i=0; i<t->sendCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getSliceStr(s+off, t->dims, &(t->send[i].slc));
-            off += sprintf(s+off, " => T%d", t->send[i].toTask);
+            off += sprintf(s+off, "==>T%d", t->send[i].toTask);
         }
         off += sprintf(s+off, "\n");
     }
 
     if (t->recvCount>0) {
-        off += sprintf(s+off, "  recv: ");
+        off += sprintf(s+off, "   %2d recv : ", t->recvCount);
         for(int i=0; i<t->recvCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
-            off += sprintf(s+off, "T%d => ", t->recv[i].fromTask);
+            off += sprintf(s+off, "T%d==>", t->recv[i].fromTask);
             off += getSliceStr(s+off, t->dims, &(t->recv[i].slc));
         }
         off += sprintf(s+off, "\n");
     }
 
     if (t->redCount>0) {
-        off += sprintf(s+off, "  reduction: ");
+        off += sprintf(s+off, "   %2d reduc: ", t->redCount);
         for(int i=0; i<t->redCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getReductionStr(s+off, t->red[i].redOp);
             off += getSliceStr(s+off, t->dims, &(t->red[i].slc));
-            off += sprintf(s+off, " => %s (%d)",
-                           (t->red[i].rootTask == -1) ? "all":"master",
-                           t->red[i].rootTask);
+            off += sprintf(s+off, "=> %s",
+                           (t->red[i].rootTask == -1) ? "all":"master");
         }
         off += sprintf(s+off, "\n");
     }
@@ -595,10 +594,10 @@ int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
     if (!ba)
         return sprintf(s, "(no borders)");
 
-    o = sprintf(s, "borders (%d slices in %d tasks on ",
+    o = sprintf(s, "%d slices in %d tasks on ",
                 ba->count, ba->group->size);
     o += getSpaceStr(s+o, ba->space);
-    o += sprintf(s+o,"): ");
+    o += sprintf(s+o,":\n    ");
     for(int i = 0; i < ba->count; i++) {
         if (i>0)
             o += sprintf(s+o, ", ");
@@ -644,7 +643,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
     laik_addGroupUser(p->group, p);
 
     if (laik_logshown(1)) {
-        laik_log(1, "new partitioning '%s': space '%s', "
+        laik_log(1, "new partitioning '%s':\n  space '%s', "
                  "group %d (size %d, myid %d), partitioner '%s'\n",
                  p->name, s->name,
                  p->group->gid, p->group->size, p->group->myid,
@@ -783,11 +782,11 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     if (laik_logshown(1)) {
         char s[1000];
         int o;
-        o = sprintf(s, "run partitioner '%s' (group %d, myid %d, space '%s'):\n",
+        o = sprintf(s, "run partitioner '%s' (group %d, myid %d, space '%s'):",
                     pr->name, g->gid, g->myid, space->name);
-        o += sprintf(s+o, " old: ");
+        o += sprintf(s+o, "\n  old: ");
         o += laik_getBorderArrayStr(s+o, oldBA);
-        o += sprintf(s+o, "\n new: ");
+        o += sprintf(s+o, "\n  new: ");
         o += laik_getBorderArrayStr(s+o, ba);
         laik_log(1, "%s\n", s);
     }
@@ -805,7 +804,7 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
     if (laik_logshown(1)) {
         char s[1000];
         int o;
-        o = sprintf(s, "setting borders (part '%s', group %d, myid %d):\n ",
+        o = sprintf(s, "setting borders (part '%s', group %d, myid %d):\n  ",
                     p->name, ba->group->gid, ba->group->myid);
         o += laik_getBorderArrayStr(s+o, ba);
         laik_log(1, "%s\n", s);
