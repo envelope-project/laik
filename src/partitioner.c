@@ -381,7 +381,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
         if (newg->fromParent[origTask] >= 0) {
             // move over to new borders
             laik_log(1, "reassign: take over slice %d of task %d "
-                     "(new task %d, indexes [%d - %d[)",
+                     "(new task %d, indexes [%d;%d[)",
                      sliceNo, origTask, newg->fromParent[origTask],
                      oldBA->tslice[sliceNo].s.from.i[0],
                      oldBA->tslice[sliceNo].s.to.i[0]);
@@ -408,7 +408,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
                 slc.to.i[0] = i + 1;
                 laik_append_slice(ba, newg->toParent[curTask], &slc);
 
-                laik_log(1, "reassign: re-distribute [%d - %d[ "
+                laik_log(1, "reassign: re-distribute [%d;%d[ "
                          "of slice %d to task %d (new task %d)",
                          slc.from.i[0], slc.to.i[0], sliceNo,
                          newg->toParent[curTask], curTask);
@@ -427,7 +427,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
             slc.to.i[0] = to;
             laik_append_slice(ba, newg->toParent[curTask], &slc);
 
-            laik_log(1, "reassign: re-distribute remaining [%d - %d[ "
+            laik_log(1, "reassign: re-distribute remaining [%d;%d[ "
                      "of slice %d to task %d (new task %d)",
                      slc.from.i[0], slc.to.i[0], sliceNo,
                      newg->toParent[curTask], curTask);

@@ -183,7 +183,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
 
         if (laik_logshown(1)) {
             char s[100];
-            laik_getIndexStr(s, d->space->dims, &(m->baseIdx), false);
+            laik_getIndexStr(s, d->space->dims, &(m->baseIdx));
             laik_log(1, "prepare map for '%s'/%d: from %s, count %d, elemsize %d\n",
                      d->name, i, s, m->count, d->elemsize);
         }

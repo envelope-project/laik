@@ -30,33 +30,28 @@ int getSpaceStr(char* s, Laik_Space* spc)
 {
     switch(spc->dims) {
     case 1:
-        return sprintf(s, "[0-%llu]",
-                       (unsigned long long) spc->size[0]-1);
+        return sprintf(s, "[0;%llu[",
+                       (unsigned long long) spc->size[0]);
     case 2:
-        return sprintf(s, "[0-%llu/0-%llu]",
-                       (unsigned long long) spc->size[0]-1,
-                       (unsigned long long) spc->size[1]-1);
+        return sprintf(s, "[0;%llu[ x [0;%llu[",
+                       (unsigned long long) spc->size[0],
+                       (unsigned long long) spc->size[1]);
     case 3:
-        return sprintf(s, "[0-%llu/0-%llu/0-%llu]",
-                       (unsigned long long) spc->size[0]-1,
-                       (unsigned long long) spc->size[1]-1,
-                       (unsigned long long) spc->size[2]-1);
+        return sprintf(s, "[0;%llu[ x [0;%llu[ x [0;%llu[",
+                       (unsigned long long) spc->size[0],
+                       (unsigned long long) spc->size[1],
+                       (unsigned long long) spc->size[2]);
     default: assert(0);
     }
     return 0;
 }
 
 
-int laik_getIndexStr(char* s, int dims, Laik_Index* idx, bool minus1)
+int laik_getIndexStr(char* s, int dims, Laik_Index* idx)
 {
     uint64_t i1 = idx->i[0];
     uint64_t i2 = idx->i[1];
     uint64_t i3 = idx->i[2];
-    if (minus1) {
-        i1--;
-        i2--;
-        i3--;
-    }
 
     switch(dims) {
     case 1:
@@ -193,10 +188,10 @@ int getSliceStr(char* s, int dims, Laik_Slice* slc)
 
     int off;
     off  = sprintf(s, "[");
-    off += laik_getIndexStr(s+off, dims, &(slc->from), false);
-    off += sprintf(s+off, "-");
-    off += laik_getIndexStr(s+off, dims, &(slc->to), true);
-    off += sprintf(s+off, "]");
+    off += laik_getIndexStr(s+off, dims, &(slc->from));
+    off += sprintf(s+off, ";");
+    off += laik_getIndexStr(s+off, dims, &(slc->to));
+    off += sprintf(s+off, "[");
     return off;
 }
 
