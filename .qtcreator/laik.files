@@ -2,6 +2,8 @@
 ../.gitignore
 ../.travis.yml
 ../configure
+../README.md
+../TODO.md
 
 ../src/backend.c
 ../src/backend-mpi.c
@@ -42,5 +44,3 @@
 
 ../doc/TODO.md
 ../doc/Debugging.md
-
-../README.md
