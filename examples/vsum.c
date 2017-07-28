@@ -39,9 +39,9 @@
 
 
 // for element-wise weighted partitioning: same as index
-double getEW(Laik_Index* i, void* d) { return (double) i->i[0]; }
+double getEW(Laik_Index* i, const void* d) { return (double) i->i[0]; }
 // for task-wise weighted partitioning: skip task given as user data
-double getTW(int r, void* d) { return ((long int)d == r) ? 0.0 : 1.0; }
+double getTW(int r, const void* d) { return ((long int)d == r) ? 0.0 : 1.0; }
 
 int main(int argc, char* argv[])
 {

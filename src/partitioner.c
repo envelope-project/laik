@@ -157,7 +157,7 @@ struct _Laik_BlockPartitionerData {
     // weighted partitioning (Block) uses callbacks
     Laik_GetIdxWeight_t getIdxW;
     Laik_GetTaskWeight_t getTaskW;
-    void* userData;
+    const void* userData;
 };
 
 void runBlockPartitioner(Laik_Partitioner* pr,
@@ -258,7 +258,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
 Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
                                              Laik_GetIdxWeight_t ifunc,
                                              Laik_GetTaskWeight_t tfunc,
-                                             void* userData)
+                                             const void* userData)
 {
     Laik_BlockPartitionerData* data;
     int dsize = sizeof(Laik_BlockPartitionerData);
@@ -279,19 +279,19 @@ Laik_Partitioner* laik_new_block_partitioner1()
 }
 
 Laik_Partitioner* laik_new_block_partitioner_iw1(Laik_GetIdxWeight_t f,
-                                                      void* userData)
+                                                 const void* userData)
 {
     return laik_new_block_partitioner(0, 1, f, 0, userData);
 }
 
 Laik_Partitioner* laik_new_block_partitioner_tw1(Laik_GetTaskWeight_t f,
-                                                      void* userData)
+                                                 const void* userData)
 {
     return laik_new_block_partitioner(0, 1, 0, f, userData);
 }
 
 void laik_set_index_weight(Laik_Partitioner* pr, Laik_GetIdxWeight_t f,
-                           void* userData)
+                           const void* userData)
 {
     Laik_BlockPartitionerData* data;
     data = (Laik_BlockPartitionerData*) pr->data;
@@ -301,7 +301,7 @@ void laik_set_index_weight(Laik_Partitioner* pr, Laik_GetIdxWeight_t f,
 }
 
 void laik_set_task_weight(Laik_Partitioner* pr, Laik_GetTaskWeight_t f,
-                          void* userData)
+                          const void* userData)
 {
     Laik_BlockPartitionerData* data;
     data = (Laik_BlockPartitionerData*) pr->data;
@@ -328,7 +328,7 @@ typedef struct {
     Laik_Group* newg; // new group to re-distribute old partitioning
 
     Laik_GetIdxWeight_t getIdxW; // application-specified weights
-    void* userData;
+    const void* userData;
 } ReassignData;
 
 
@@ -413,7 +413,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
 Laik_Partitioner*
 laik_new_reassign_partitioner(Laik_Group* newg,
                               Laik_GetIdxWeight_t getIdxW,
-                              void* userData)
+                              const void* userData)
 {
     ReassignData* data = (ReassignData*) malloc(sizeof(ReassignData));
     data->newg = newg;

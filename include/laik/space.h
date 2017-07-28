@@ -200,33 +200,33 @@ Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* base,
 
 // Block partitioner
 
-typedef double (*Laik_GetIdxWeight_t)(Laik_Index*, void* userData);
-typedef double (*Laik_GetTaskWeight_t)(int rank, void* userData);
+typedef double (*Laik_GetIdxWeight_t)(Laik_Index*, const void* userData);
+typedef double (*Laik_GetTaskWeight_t)(int rank, const void* userData);
 Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
                                              Laik_GetIdxWeight_t ifunc,
                                              Laik_GetTaskWeight_t tfunc,
-                                             void* userData);
+                                             const void* userData);
 
 // block partitioner for 1d space without weighting
 Laik_Partitioner* laik_new_block_partitioner1();
 // block partitioner for 1d space with index-wise weighting
 Laik_Partitioner* laik_new_block_partitioner_iw1(Laik_GetIdxWeight_t f,
-                                                 void* userData);
+                                                 const void* userData);
 // block partitioner for 1d space with task-wise weighting
 Laik_Partitioner* laik_new_block_partitioner_tw1(Laik_GetTaskWeight_t f,
-                                                 void* userData);
+                                                 const void* userData);
 
 // set index-wise weight getter, used when calculating BLOCK partitioning.
 // as getter is called in every LAIK task, weights have to be known globally
 // (useful if workload per index is known)
 void laik_set_index_weight(Laik_Partitioner* p, Laik_GetIdxWeight_t f,
-                           void* userData);
+                           const void* userData);
 
 // set task-wise weight getter, used when calculating BLOCK partitioning.
 // as getter is called in every LAIK task, weights have to be known globally
 // (useful if relative performance per task is known)
 void laik_set_task_weight(Laik_Partitioner* pr, Laik_GetTaskWeight_t f,
-                          void* userData);
+                          const void* userData);
 
 // for block partitionings, we can specify how often we go around in cycles
 // to distribute chunks to tasks. Default is 1.
@@ -238,7 +238,7 @@ void laik_set_cycle_count(Laik_Partitioner* p, int cycles);
 Laik_Partitioner*
 laik_new_reassign_partitioner(Laik_Group* newg,
                               Laik_GetIdxWeight_t getIdxW,
-                              void* userData);
+                              const void* userData);
 
 
 //

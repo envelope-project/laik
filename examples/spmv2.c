@@ -86,7 +86,7 @@ SpM* newSpM(int size)
 // by returning a weight for each row that is the number of non-zero elements
 // in this row.
 // This callback is configured to be used in the block paritioning
-double getEW(Laik_Index* i, void* d)
+double getEW(Laik_Index* i, const void* d)
 {
     SpM* m = (SpM*) d;
     int ii = i->i[0];

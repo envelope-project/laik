@@ -42,7 +42,7 @@ struct _SpM {
 };
 
 // for element-wise weighted partitioning: number of elems in row
-double getEW(Laik_Index* i, void* d)
+double getEW(Laik_Index* i, const void* d)
 {
     SpM* m = (SpM*) d;
     int ii = i->i[0];
