@@ -6,17 +6,18 @@ EXAMPLES = vsum vsum2 spmv spmv2
 
 CFLAGS = -g -std=gnu99 -I../include
 CFLAGS += $(DEFS)
+LAIKLIB = $(abspath ../liblaik.so)
 
 all: $(EXAMPLES)
 
-vsum: vsum.o ../liblaik.a
+vsum: vsum.o $(LAIKLIB)
 
-vsum2: vsum2.o ../liblaik.a
+vsum2: vsum2.o $(LAIKLIB)
 
-spmv: spmv.o ../liblaik.a
+spmv: spmv.o $(LAIKLIB)
 
-spmv2: spmv2.c ../liblaik.a
-	$(CC) $(CFLAGS) $(OMP_FLAGS) spmv2.c ../liblaik.a -o spmv2
+spmv2: spmv2.c $(LAIKLIB)
+	$(CC) $(CFLAGS) $(OMP_FLAGS) spmv2.c $(LAIKLIB) -o spmv2
 
 clean:
 	rm -f *.o *~ $(EXAMPLES)

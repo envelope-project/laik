@@ -10,6 +10,7 @@ import distutils.spawn
 
 defs = ""
 cc = ""
+mpicc = ""
 subdirs = "examples"
 test_subdirs = ""
 ipath = "/usr/include"
@@ -72,9 +73,9 @@ if not mpi_found:
     print("  On Ubuntu, install 'libopenmpi-dev'.")
 else:
     print("MPI header found (in '" + mpi_ipath +
-          "'). MPI enabled, using 'mpicc'.")
+          "'). MPI enabled.")
     defs += " -DUSE_MPI"
-    cc = "mpicc"
+    mpicc = "mpicc"
     test_subdirs += " mpi"
 
 
@@ -99,6 +100,9 @@ cfile.write("SUBDIRS=" + subdirs + "\n")
 cfile.write("TEST_SUBDIRS=" + test_subdirs + "\n")
 if cc:
     cfile.write("CC=" + cc + "\n")
+if mpicc:
+    cfile.write("MPICC=" + mpicc + "\n")
+
 if omp_enabled:
     cfile.write("OMP_FLAGS=-fopenmp")
 if "PREFIX" in os.environ:
