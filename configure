@@ -60,20 +60,14 @@ else:
 #------------------------------------
 # LAIK-internal MPI support
 
-# header may be in different directory. If found, we expect mpicc
-# to do the right thing
-mpi_found = os.path.isfile(ipath + "/mpi.h")
-mpi_ipath = ipath
-if not mpi_found:
-    mpi_found = os.path.isfile(ipath + "/mpi/mpi.h")
-    mpi_ipath = ipath + "/mpi"
+#  check for mpicc, if found we enable MPI
+mpi_found = distutils.spawn.find_executable("mpicc")
 
 if not mpi_found:
-    print("MPI not found. LAIK MPI backend disabled.")
-    print("  On Ubuntu, install 'libopenmpi-dev'.")
+    print("'mpicc' not found. LAIK MPI backend disabled.")
+    print("  On Ubuntu, install e.g. 'libopenmpi-dev'.")
 else:
-    print("MPI header found (in '" + mpi_ipath +
-          "'). MPI enabled.")
+    print("'mpicc' found. MPI enabled.")
     defs += " -DUSE_MPI"
     mpicc = "mpicc"
     test_subdirs += " mpi"
