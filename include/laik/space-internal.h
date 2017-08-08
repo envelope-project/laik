@@ -35,12 +35,12 @@ struct _Laik_Space {
     Laik_Space* next; // for list of spaces used in instance
 
     // linked list of partitionings for this space
-    Laik_Partitioning* firstSpaceUser;
+    Laik_Partitioning* firstPartitioningForSpace;
 };
 
 // add/remove partitioning to/from space
-void laik_addSpaceUser(Laik_Space* s, Laik_Partitioning* p);
-void laik_removeSpaceUser(Laik_Space* s, Laik_Partitioning* p);
+void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p);
+void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p);
 
 
 struct _Laik_Partitioner {
@@ -98,17 +98,17 @@ struct _Laik_Partitioning {
     Laik_BorderArray* borders;
 
     // head of list of data containers with this paritioning active
-    Laik_Data* firstPartitioningUser;
+    Laik_Data* firstDataForPartitioning;
 
-     // for list of partitionings same space
-    Laik_Partitioning* nextSpaceUser;
-    // for list of partitionings same space
-    Laik_Partitioning* nextGroupUser;
+     // for list of partitionings using same space
+    Laik_Partitioning* nextPartitionForSpace;
+    // for list of partitionings using same group
+    Laik_Partitioning* nextPartitioningForGroup;
 };
 
 // add/remove data container as user to/from partitioning
-void laik_addPartitioningUser(Laik_Partitioning* p, Laik_Data* d);
-void laik_removePartitioningUser(Laik_Partitioning* p, Laik_Data* d);
+void laik_addDataForPartitioning(Laik_Partitioning* p, Laik_Data* d);
+void laik_removeDataFromPartitioning(Laik_Partitioning* p, Laik_Data* d);
 
 
 //

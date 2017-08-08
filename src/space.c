@@ -344,7 +344,7 @@ Laik_Space* laik_new_space(Laik_Instance* i)
 
     space->inst = i;
     space->dims = 0; // invalid
-    space->firstSpaceUser = 0;
+    space->firstPartitioningForSpace = 0;
 
     // append this space to list of spaces used by LAIK instance
     space->next = i->firstspace;
@@ -442,27 +442,27 @@ void laik_change_space_3d(Laik_Space* s,
 }
 
 
-void laik_addSpaceUser(Laik_Space* s, Laik_Partitioning* p)
+void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p)
 {
-    assert(p->nextSpaceUser == 0);
-    p->nextSpaceUser = s->firstSpaceUser;
-    s->firstSpaceUser = p;
+    assert(p->nextPartitionForSpace == 0);
+    p->nextPartitionForSpace = s->firstPartitioningForSpace;
+    s->firstPartitioningForSpace = p;
 }
 
-void laik_removeSpaceUser(Laik_Space* s, Laik_Partitioning* p)
+void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p)
 {
-    if (s->firstSpaceUser == p) {
-        s->firstSpaceUser = p->nextSpaceUser;
+    if (s->firstPartitioningForSpace == p) {
+        s->firstPartitioningForSpace = p->nextPartitionForSpace;
     }
     else {
         // search for previous item
-        Laik_Partitioning* pp = s->firstSpaceUser;
-        while(pp->nextSpaceUser != p)
-            pp = pp->nextSpaceUser;
+        Laik_Partitioning* pp = s->firstPartitioningForSpace;
+        while(pp->nextPartitionForSpace != p)
+            pp = pp->nextPartitionForSpace;
         assert(pp != 0); // not found, should not happen
-        pp->nextSpaceUser = p->nextSpaceUser;
+        pp->nextPartitionForSpace = p->nextPartitionForSpace;
     }
-    p->nextSpaceUser = 0;
+    p->nextPartitionForSpace = 0;
 }
 
 
@@ -635,12 +635,12 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
     p->bordersValid = false;
     p->borders = 0;
 
-    p->nextSpaceUser = 0;
-    p->nextGroupUser = 0;
-    p->firstPartitioningUser = 0;
+    p->nextPartitionForSpace = 0;
+    p->nextPartitioningForGroup = 0;
+    p->firstDataForPartitioning = 0;
 
-    laik_addSpaceUser(s, p);
-    laik_addGroupUser(p->group, p);
+    laik_addPartitioningForSpace(s, p);
+    laik_addPartitioningForGroup(p->group, p);
 
     if (laik_logshown(1)) {
         laik_log(1, "new partitioning '%s':\n  space '%s', "
@@ -653,21 +653,21 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
     return p;
 }
 
-void laik_addPartitioningUser(Laik_Partitioning* p, Laik_Data* d)
+void laik_addDataForPartitioning(Laik_Partitioning* p, Laik_Data* d)
 {
     assert(d->nextPartitioningUser == 0);
-    d->nextPartitioningUser = p->firstPartitioningUser;
-    p->firstPartitioningUser = d;
+    d->nextPartitioningUser = p->firstDataForPartitioning;
+    p->firstDataForPartitioning = d;
 }
 
-void laik_removePartitioningUser(Laik_Partitioning* p, Laik_Data* d)
+void laik_removeDataFromPartitioning(Laik_Partitioning* p, Laik_Data* d)
 {
-    if (p->firstPartitioningUser == d) {
-        p->firstPartitioningUser = d->nextPartitioningUser;
+    if (p->firstDataForPartitioning == d) {
+        p->firstDataForPartitioning = d->nextPartitioningUser;
     }
     else {
         // search for previous item
-        Laik_Data* dd = p->firstPartitioningUser;
+        Laik_Data* dd = p->firstDataForPartitioning;
         while(dd->nextPartitioningUser != d)
             dd = dd->nextPartitioningUser;
         assert(dd != 0); // not found, should not happen
@@ -704,9 +704,9 @@ void laik_free_partitioning(Laik_Partitioning* p)
 {
     // FIXME: needs some kind of reference counting
     return;
-    if (p->firstPartitioningUser == 0) {
-        laik_removeGroupUser(p->group, p);
-        laik_removeSpaceUser(p->space, p);
+    if (p->firstDataForPartitioning == 0) {
+        laik_removePartitioningFromGroup(p->group, p);
+        laik_removePartitioningFromSpace(p->space, p);
         free(p->name);
         free(p->borders);
     }
@@ -811,7 +811,7 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
     }
 
     // visit all users of this partitioning
-    Laik_Data* d = p->firstPartitioningUser;
+    Laik_Data* d = p->firstDataForPartitioning;
     while(d) {
         laik_switchto_borders(d, ba);
         d = d->nextPartitioningUser;
@@ -1166,12 +1166,12 @@ bool laik_migrate_partitioning(Laik_Partitioning* p,
         laik_migrate_borders(p->borders, newg);
     }
 
-    laik_removeGroupUser(oldg, p);
-    laik_addGroupUser(newg, p);
+    laik_removePartitioningFromGroup(oldg, p);
+    laik_addPartitioningForGroup(newg, p);
     p->group = newg;
 
     // make partitioning users (data containers) migrate to new group
-    Laik_Data* d = p->firstPartitioningUser;
+    Laik_Data* d = p->firstDataForPartitioning;
     while(d) {
         assert(d->group == oldg);
         d->group = newg;

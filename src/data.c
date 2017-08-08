@@ -516,7 +516,7 @@ void laik_switchto(Laik_Data* d,
     doTransition(d, t, d->activeMappings, toList);
 
     if (d->activePartitioning) {
-        laik_removePartitioningUser(d->activePartitioning, d);
+        laik_removeDataFromPartitioning(d->activePartitioning, d);
         laik_free_partitioning(d->activePartitioning);
     }
 
@@ -525,7 +525,7 @@ void laik_switchto(Laik_Data* d,
     d->activeFlow = toFlow;
     d->activeMappings = toList;
     if (toP)
-        laik_addPartitioningUser(toP, d);
+        laik_addDataForPartitioning(toP, d);
 
     if (d->space->inst->do_profiling)
         d->space->inst->time_total += laik_wtime() -
