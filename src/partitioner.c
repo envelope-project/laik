@@ -124,6 +124,41 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
 }
 
 
+// halo partitioner: extend borders of base partitioning
+
+void runHaloPartitioner(Laik_Partitioner* pr,
+                        Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+{
+    assert(otherBA->group == ba->group); // must use same task group
+    assert(otherBA->space == ba->space);
+
+    Laik_Slice slc;
+    Laik_Space* s = ba->space;
+    int d = *((int*) pr->data);
+
+    for(int i = 0; i < otherBA->count; i++) {
+        Laik_Index* from = &(otherBA->tslice[i].s.from);
+        slc.from.i[0] = (from->i[0] > d) ? (from->i[0] - d) : 0;
+        slc.from.i[1] = (from->i[1] > d) ? (from->i[1] - d) : 0;
+        slc.from.i[2] = (from->i[2] > d) ? (from->i[2] - d) : 0;
+        Laik_Index* to = &(otherBA->tslice[i].s.to);
+        slc.to.i[0] =  (to->i[0] < s->size[0] - d) ? to->i[0] + d : s->size[0];
+        slc.to.i[1] =  (to->i[1] < s->size[1] - d) ? to->i[1] + d : s->size[1];
+        slc.to.i[2] =  (to->i[2] < s->size[2] - d) ? to->i[2] + d : s->size[2];
+        laik_append_slice(ba, otherBA->tslice[i].task, &slc);
+    }
+}
+
+Laik_Partitioner* laik_new_halo_partitioner(int depth)
+{
+    int* data = (int*) malloc(sizeof(int));
+    *data = depth;
+
+    return laik_new_partitioner("halo", runHaloPartitioner, (void*) data);
+}
+
+
+
 // block partitioner: split one dimension of space into blocks
 //
 // this partitioner supports:
