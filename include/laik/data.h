@@ -156,7 +156,13 @@ Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count);
 // similar to laik_map, but force a default mapping with only 1 slice
 Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count);
 
+// global to local: local indexes take mapping layout into account
+// if global index <gidx> is locally mapped, return mapping and set offset.
+// otherwise, return 0
+Laik_Mapping* laik_global2local1(Laik_Data* d, uint64_t gidx, uint64_t* off);
 
+// local to global: return global index of offset in a single local mapping
+uint64_t laik_local2global1(Laik_Data* d, uint64_t off);
 
 //----------------------------------
 // Allocator interface

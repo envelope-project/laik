@@ -89,7 +89,7 @@ struct _Laik_Mapping {
     Laik_Index baseIdx; // global index at base address
 
     char* base; // start address of mapping
-    int count; // number of elements mapped
+    uint64_t count; // number of elements mapped
 };
 
 struct _Laik_MappingList {

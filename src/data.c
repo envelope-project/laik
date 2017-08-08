@@ -687,7 +687,34 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
     return m;
 }
 
+Laik_Mapping* laik_global2local1(Laik_Data* d, uint64_t gidx, uint64_t* off)
+{
+    assert(d->space->dims == 1);
+    if (!d->activeMappings) return 0;
+    for(int i = 0; i < d->activeMappings->count; i++) {
+        Laik_Mapping* m = &(d->activeMappings->map[i]);
 
+        // TODO: take layout into account
+        if (gidx < m->baseIdx.i[0]) continue;
+        if (gidx >= m->baseIdx.i[0] + m->count) continue;
+
+        if (off) *off = gidx - m->baseIdx.i[0];
+        return m;
+    }
+    return 0;
+}
+
+uint64_t laik_local2global1(Laik_Data* d, uint64_t off)
+{
+    assert(d->space->dims == 1);
+    assert(d->activeMappings && (d->activeMappings->count == 1));
+
+    Laik_Mapping* m = &(d->activeMappings->map[0]);
+    assert(off < m->count);
+
+    // TODO: take layout into account
+    return m->baseIdx.i[0] + off;
+}
 
 
 
