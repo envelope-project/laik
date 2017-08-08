@@ -245,21 +245,25 @@ laik_new_reassign_partitioner(Laik_Group* newg,
 // LAIK partitionings
 //
 
-// Create a new partitioning for a group on a space.
-// The provided partitioner will be used for
-// - calculating borders if not set when needed
-//   (when a data container is switched to use this partitioning)
+// Create a new partitioning object for a group on a space, using a
+// given partitioning algorithm and optionally a base partitioning
+// to couple the new partitioining to.
+//
+// The partitioner will be called to calculate borders
+// - if borders are needed but not set yet
+//   (on laik_my_slice or when a data container is switched to it)
 // - for repartitioning when partitioning is migrated to another group
 //   (done e.g. when group is shrinked/enlarged from external)
-Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
-                                         Laik_Partitioner* pr);
+// - whenever a given base partitioning changes
+Laik_Partitioning*
+laik_new_partitioning(Laik_Group* group, Laik_Space* space,
+                      Laik_Partitioner* pr, Laik_Partitioning* base);
 
 // return partitioner set for a partitioning
 Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p);
 
 // set the partitioner to use (can be custom, application-specific)
 void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr);
-
 
 // get space used in partitioning
 Laik_Space* laik_get_pspace(Laik_Partitioning* p);
@@ -287,7 +291,7 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
 // the partitioner may use old borders from <oldBA>
 Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
                                        Laik_Group* g, Laik_Space* space,
-                                       Laik_BorderArray* oldBA);
+                                       Laik_BorderArray* otherBA);
 
 // set new partitioning borders
 void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba);

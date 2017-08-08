@@ -92,6 +92,7 @@ struct _Laik_Partitioning {
     Laik_Space* space; // space to partition
 
     Laik_Partitioner* partitioner;
+    Laik_Partitioning* base;
 
     // partition borders (calculated lazy)
     bool bordersValid;
@@ -99,12 +100,23 @@ struct _Laik_Partitioning {
 
     // head of list of data containers with this paritioning active
     Laik_Data* firstDataForPartitioning;
+    // head of list of partitionings using this one as base
+    Laik_Partitioning* firstPartitioningForBase;
 
      // for list of partitionings using same space
-    Laik_Partitioning* nextPartitionForSpace;
+    Laik_Partitioning* nextPartitioningForSpace;
     // for list of partitionings using same group
     Laik_Partitioning* nextPartitioningForGroup;
+    // for list of partitionings using this one as base
+    Laik_Partitioning* nextPartitioningForBase;
 };
+
+// add/remove partitioning to/from list using a given partitioning as base
+void laik_addPartitioningForBase(Laik_Partitioning* base,
+                                 Laik_Partitioning* p);
+void laik_removePartitioningFromBase(Laik_Partitioning* base,
+                                     Laik_Partitioning* p);
+
 
 // add/remove data container as user to/from partitioning
 void laik_addDataForPartitioning(Laik_Partitioning* p, Laik_Data* d);

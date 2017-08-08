@@ -444,25 +444,25 @@ void laik_change_space_3d(Laik_Space* s,
 
 void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p)
 {
-    assert(p->nextPartitionForSpace == 0);
-    p->nextPartitionForSpace = s->firstPartitioningForSpace;
+    assert(p->nextPartitioningForSpace == 0);
+    p->nextPartitioningForSpace = s->firstPartitioningForSpace;
     s->firstPartitioningForSpace = p;
 }
 
 void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p)
 {
     if (s->firstPartitioningForSpace == p) {
-        s->firstPartitioningForSpace = p->nextPartitionForSpace;
+        s->firstPartitioningForSpace = p->nextPartitioningForSpace;
     }
     else {
         // search for previous item
         Laik_Partitioning* pp = s->firstPartitioningForSpace;
-        while(pp->nextPartitionForSpace != p)
-            pp = pp->nextPartitionForSpace;
+        while(pp->nextPartitioningForSpace != p)
+            pp = pp->nextPartitioningForSpace;
         assert(pp != 0); // not found, should not happen
-        pp->nextPartitionForSpace = p->nextPartitionForSpace;
+        pp->nextPartitioningForSpace = p->nextPartitioningForSpace;
     }
-    p->nextPartitionForSpace = 0;
+    p->nextPartitioningForSpace = 0;
 }
 
 
@@ -616,8 +616,9 @@ int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
 
 
 // create a new partitioning on a space
-Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
-                                         Laik_Partitioner* pr)
+Laik_Partitioning*
+laik_new_partitioning(Laik_Group* group, Laik_Space* space,
+                      Laik_Partitioner* pr, Laik_Partitioning *base)
 {
     Laik_Partitioning* p;
     p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
@@ -626,32 +627,66 @@ Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
     p->name = strdup("partng-0     ");
     sprintf(p->name, "partng-%d", p->id);
 
-    assert(g->inst == s->inst);
-    p->group = g;
-    p->space = s;
+    assert(group->inst == space->inst);
+    p->group = group;
+    p->space = space;
 
     p->partitioner = pr;
+    p->base = base;
 
     p->bordersValid = false;
     p->borders = 0;
 
-    p->nextPartitionForSpace = 0;
+    p->nextPartitioningForSpace = 0;
     p->nextPartitioningForGroup = 0;
+    p->nextPartitioningForBase  = 0;
     p->firstDataForPartitioning = 0;
+    p->firstPartitioningForBase = 0;
 
-    laik_addPartitioningForSpace(s, p);
+    laik_addPartitioningForSpace(space, p);
     laik_addPartitioningForGroup(p->group, p);
+
+    if (base) {
+        assert(base->group == group);
+        laik_addPartitioningForBase(base, p);
+    }
 
     if (laik_logshown(1)) {
         laik_log(1, "new partitioning '%s':\n  space '%s', "
-                 "group %d (size %d, myid %d), partitioner '%s'\n",
-                 p->name, s->name,
+                 "group %d (size %d, myid %d), partitioner '%s', base '%s'\n",
+                 p->name, space->name,
                  p->group->gid, p->group->size, p->group->myid,
-                 pr->name);
+                 pr->name, base ? base->name : "(none)");
     }
 
     return p;
 }
+
+void laik_addPartitioningForBase(Laik_Partitioning* base,
+                                 Laik_Partitioning* p)
+{
+    assert(p->nextPartitioningForBase == 0);
+    p->nextPartitioningForBase = base->firstPartitioningForBase;
+    base->firstPartitioningForBase = p;
+}
+
+void laik_removePartitioningFromBase(Laik_Partitioning* base,
+                                     Laik_Partitioning* p)
+{
+    if (base->firstPartitioningForBase == p) {
+        base->firstPartitioningForBase = p->nextPartitioningForBase;
+    }
+    else {
+        // search for previous item
+        Laik_Partitioning* pp = base->firstPartitioningForBase;
+        while(pp->nextPartitioningForBase != p)
+            pp = pp->nextPartitioningForBase;
+        assert(pp != 0); // not found, should not happen
+        pp->nextPartitioningForBase = p->nextPartitioningForBase;
+    }
+    p->nextPartitioningForBase = 0;
+}
+
 
 void laik_addDataForPartitioning(Laik_Partitioning* p, Laik_Data* d)
 {
@@ -707,6 +742,8 @@ void laik_free_partitioning(Laik_Partitioning* p)
     if (p->firstDataForPartitioning == 0) {
         laik_removePartitioningFromGroup(p->group, p);
         laik_removePartitioningFromSpace(p->space, p);
+        if (p->base)
+            laik_removePartitioningFromBase(p->base, p);
         free(p->name);
         free(p->borders);
     }
@@ -761,19 +798,19 @@ void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
 
 
 // run a partitioner, returning newly calculated borders
-// the partitioner may use old borders from <oldBA>
+// the partitioner may use other borders <otherBA> as reference
 Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
                                        Laik_Group* g, Laik_Space* space,
-                                       Laik_BorderArray* oldBA)
+                                       Laik_BorderArray* otherBA)
 {
     Laik_BorderArray* ba;
 
     ba = allocBorders(g, space, 4 * g->size);
-    if (oldBA) {
-        assert(oldBA->group == g);
-        assert(oldBA->space == space);
+    if (otherBA) {
+        assert(otherBA->group == g);
+        assert(otherBA->space == space);
     }
-    (pr->run)(pr, ba, oldBA);
+    (pr->run)(pr, ba, otherBA);
     updateBorderArrayOffsets(ba);
 
     if (!coversSpace(ba))
@@ -784,9 +821,9 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
         int o;
         o = sprintf(s, "run partitioner '%s' (group %d, myid %d, space '%s'):",
                     pr->name, g->gid, g->myid, space->name);
-        o += sprintf(s+o, "\n  old: ");
-        o += laik_getBorderArrayStr(s+o, oldBA);
-        o += sprintf(s+o, "\n  new: ");
+        o += sprintf(s+o, "\n  other: ");
+        o += laik_getBorderArrayStr(s+o, otherBA);
+        o += sprintf(s+o, "\n  new  : ");
         o += laik_getBorderArrayStr(s+o, ba);
         laik_log(1, "%s\n", s);
     }
@@ -810,7 +847,20 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
         laik_log(1, "%s\n", s);
     }
 
-    // visit all users of this partitioning
+    // visit all users of this partitioning:
+    // first, all partitionings coupled to this as base
+    Laik_Partitioning* pdep = p->firstPartitioningForBase;
+    while(pdep) {
+        assert(pdep->base == p);
+        assert(pdep->partitioner);
+        Laik_BorderArray* badep;
+        badep = laik_run_partitioner(pdep->partitioner,
+                                     pdep->group, pdep->space, ba);
+
+        laik_set_borders(pdep, badep);
+        pdep = pdep->nextPartitioningForBase;
+    }
+    // second, all data containers using this partitioning
     Laik_Data* d = p->firstDataForPartitioning;
     while(d) {
         laik_switchto_borders(d, ba);
@@ -838,9 +888,14 @@ void laik_calc_partitioning(Laik_Partitioning* p)
 {
     Laik_BorderArray* ba;
 
+    if (p->base) {
+        assert(p->base->bordersValid);
+    }
+
     assert(p->partitioner);
     ba = laik_run_partitioner(p->partitioner,
-                              p->group, p->space, 0);
+                              p->group, p->space,
+                              p->base ? p->base->borders : 0);
 
     laik_set_borders(p, ba);
 }

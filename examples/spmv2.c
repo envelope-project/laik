@@ -209,12 +209,12 @@ int main(int argc, char* argv[])
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner(0, 1, getEW, 0, m);
     laik_set_index_weight(pr, getEW, m);
-    Laik_Partitioning* p = laik_new_partitioning(world, s, pr);
+    Laik_Partitioning* p = laik_new_partitioning(world, s, pr, 0);
     // nothing to preserve between iterations (assume at least one iter)
     laik_switchto(resD, p, LAIK_DF_None);
 
     // partitionings for all task taking part in calculation
-    Laik_Partitioning* allVec = laik_new_partitioning(world, s, laik_All);
+    Laik_Partitioning* allVec = laik_new_partitioning(world, s, laik_All, 0);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i, fromRow, toRow;
