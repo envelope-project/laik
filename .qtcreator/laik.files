@@ -37,6 +37,7 @@
 ../examples/vsum2.c
 ../examples/spmv.c
 ../examples/spmv2.c
+../examples/jac1d.c
 
 ../tests/Makefile
 ../tests/.gitignore
