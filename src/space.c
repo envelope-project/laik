@@ -165,8 +165,7 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
 }
 
 
-static
-Laik_Slice* sliceFromSpace(Laik_Space* s)
+Laik_Slice* laik_sliceFromSpace(Laik_Space* s)
 {
     static Laik_Slice slc;
 
@@ -544,7 +543,7 @@ void freeBorderArray(Laik_BorderArray* ba)
 bool bordersIsAll(Laik_BorderArray* ba)
 {
     if (ba->count != ba->group->size) return false;
-    Laik_Slice* slc = sliceFromSpace(ba->space);
+    Laik_Slice* slc = laik_sliceFromSpace(ba->space);
     for(int i = 0; i < ba->count; i++) {
         if (ba->tslice[i].task != i) return false;
         if (!laik_slice_isEqual(ba->space->dims, &(ba->tslice[i].s), slc))
@@ -557,7 +556,7 @@ bool bordersIsAll(Laik_BorderArray* ba)
 // return -1 if no, else task ID
 int bordersIsSingle(Laik_BorderArray* ba)
 {
-    Laik_Slice* slc = sliceFromSpace(ba->space);
+    Laik_Slice* slc = laik_sliceFromSpace(ba->space);
     if (ba->count != 1) return -1;
     if (!laik_slice_isEqual(ba->space->dims, &(ba->tslice[0].s), slc))
         return -1;
@@ -1017,7 +1016,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                 assert(bordersIsAll(toBA) || (root == 0));
 
                 struct redTOp* op = &(red[redCount]);
-                op->slc = *sliceFromSpace(space); // complete space
+                op->slc = *laik_sliceFromSpace(space); // complete space
                 op->redOp = laik_get_reduction(fromFlow);
                 op->rootTask = (root >= 0) ? root : -1;
 

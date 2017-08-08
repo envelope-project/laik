@@ -80,56 +80,43 @@ Laik_Partitioner* laik_new_master_partitioner()
     return laik_new_partitioner("master", runMasterPartitioner, 0);
 }
 
-// copy-partitioner: copy the borders from another partitioning
+// copy-partitioner: copy the borders from base partitioning
 //
 // we assume 1d partitioning on spaces with multiple dimensions.
-// Thus, parameters is not only the base partitioning, but also the
-// dimension of borders to copy from one to the other partitioning
+// Parameters are the partitioned dimension to copy borders from
+// and the dimension to copy partitioning to
 
 typedef struct _Laik_CopyPartitionerData Laik_CopyPartitionerData;
 struct _Laik_CopyPartitionerData {
     int fromDim, toDim; // only supports 1d partitionings
-    Laik_Partitioning* base;
 };
 
 void runCopyPartitioner(Laik_Partitioner* pr,
-                        Laik_BorderArray* ba, Laik_BorderArray* oldBA)
+                        Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
-    Laik_Slice slc;
-    Laik_Space* s = ba->space;
     Laik_CopyPartitionerData* data = (Laik_CopyPartitionerData*) pr->data;
     assert(data);
-
-    Laik_Partitioning* base = data->base;
     int fromDim = data->fromDim;
     int toDim = data->toDim;
 
-    assert(base);
-    assert(base->bordersValid);
-    assert(base->group == ba->group); // base must use same task group
-    assert((fromDim >= 0) && (fromDim < base->space->dims));
-    assert((toDim >= 0) && (toDim < s->dims));
+    assert(otherBA->group == ba->group); // must use same task group
+    assert((fromDim >= 0) && (fromDim < otherBA->space->dims));
+    assert((toDim >= 0) && (toDim < ba->space->dims));
 
-    Laik_BorderArray* baseBorders = base->borders;
-    assert(baseBorders);
-
-    for(int i = 0; i < baseBorders->count; i++) {
-        laik_set_index(&(slc.from), 0, 0, 0);
-        laik_set_index(&(slc.to), s->size[0], s->size[1], s->size[2]);
-        slc.from.i[toDim] = baseBorders->tslice[i].s.from.i[fromDim];
-        slc.to.i[toDim] = baseBorders->tslice[i].s.to.i[fromDim];
-        laik_append_slice(ba, baseBorders->tslice[i].task, &slc);
+    for(int i = 0; i < otherBA->count; i++) {
+        Laik_Slice* slc = laik_sliceFromSpace(ba->space);
+        slc->from.i[toDim] = otherBA->tslice[i].s.from.i[fromDim];
+        slc->to.i[toDim] = otherBA->tslice[i].s.to.i[fromDim];
+        laik_append_slice(ba, otherBA->tslice[i].task, slc);
     }
 }
 
-Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* base,
-                                            int fromDim, int toDim)
+Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
 {
     Laik_CopyPartitionerData* data;
     int dsize = sizeof(Laik_CopyPartitionerData);
     data = (Laik_CopyPartitionerData*) malloc(dsize);
 
-    data->base = base;
     data->fromDim = fromDim;
     data->toDim = toDim;
 

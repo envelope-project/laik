@@ -42,6 +42,7 @@ struct _Laik_Space {
 void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p);
 void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p);
 
+Laik_Slice* laik_sliceFromSpace(Laik_Space* s);
 
 struct _Laik_Partitioner {
     char* name;

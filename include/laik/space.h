@@ -195,8 +195,7 @@ extern Laik_Partitioner *laik_All;
 // create a built-in partitioner
 Laik_Partitioner* laik_new_all_partitioner();
 Laik_Partitioner* laik_new_master_partitioner();
-Laik_Partitioner* laik_new_copy_partitioner(Laik_Partitioning* base,
-                                            int fromDim, int toDim);
+Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim);
 
 // Block partitioner
 
