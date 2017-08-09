@@ -5,6 +5,10 @@
 ../README.md
 ../TODO.md
 
+../doc/TODO.md
+../doc/Debugging.md
+../doc/design/Mapping.md
+
 ../src/backend.c
 ../src/backend-mpi.c
 ../src/backend-single.c
@@ -42,6 +46,3 @@
 ../tests/Makefile
 ../tests/.gitignore
 ../tests/mpi/Makefile
-
-../doc/TODO.md
-../doc/Debugging.md
