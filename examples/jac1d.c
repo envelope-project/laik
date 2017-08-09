@@ -45,13 +45,13 @@ int main(int argc, char* argv[])
     if (argc > 1) msize = atoi(argv[1]);
     if (argc > 2) maxiter = atoi(argv[2]);
 
-    if (msize == 0) msize = 50; // 50 mio entries
-    if (maxiter == 0) maxiter = 100;
+    if (msize == 0) msize = 10; // 10 mio entries
+    if (maxiter == 0) maxiter = 50;
 
     if (laik_myid(world) == 0) {
-        printf("%dm cells (mem %.1fMB), running %d iterations with %d tasks\n",
+        printf("%dm cells (mem %.1f MB), running %d iterations with %d tasks\n",
                msize,
-               16.0 * msize / 1.024 / 1.024,
+               16.0 * msize,
                maxiter, laik_size(world));
     }
 
@@ -102,6 +102,12 @@ int main(int argc, char* argv[])
         assert(off == countW - 1);
         baseW[off] = hiValue;
     }
+    laik_log(2, "Init done\n");
+
+    // for statistics (with LAIK_LOG=2)
+    double t, t1 = laik_wtime(), t2 = t1;
+    int last_iter = 0;
+    int res_iters = 0; // iterations done with residuum calculation
 
     int iter = 0;
     for(; iter < maxiter; iter++) {
@@ -142,16 +148,17 @@ int main(int argc, char* argv[])
         // do jacobi
 
         // check for residuum every 5 iterations
-        if ((iter % 5) == 0) {
-
+        if ((iter % 10) == 0) {
+            // using work load in all tasks
             double newValue, diff, res;
             res = 0.0;
             for(uint64_t i = from; i < to; i++) {
                 newValue = 0.5 * (baseR[i-1] + baseR[i+1]);
-                diff = baseW[i] - newValue;
+                diff = baseR[i] - newValue;
                 res += diff * diff;
                 baseW[i] = newValue;
             }
+            res_iters++;
 
             // calculate global residuum
             laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
@@ -161,9 +168,26 @@ int main(int argc, char* argv[])
             laik_map_def1(sumD, (void**) &sumPtr, 0);
             res = *sumPtr;
 
-            if (laik_myid(laik_get_dgroup(sumD)) == 0) {
-                printf("Residuum at iter %2d: %f\n", iter, res);
+            if (iter > 0) {
+                t = laik_wtime();
+                // current iteration already done
+                int diter = (iter + 1) - last_iter;
+                double dt = t - t2;
+                double gUpdates = 0.000000001 * size; // per iteration
+                laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
+                         diter, dt,
+                         // 2 Flops per update in reg iters, with res 5
+                         gUpdates * (5 + 2 * (diter-1)) / dt,
+                         // per update 16 bytes read + 8 byte written
+                         gUpdates * diter * 24 / dt);
+                last_iter = iter + 1;
+                t2 = t;
             }
+
+            if (laik_myid(laik_get_dgroup(sumD)) == 0) {
+                printf("Residuum after %2d iters: %f\n", iter+1, res);
+            }
+
             if (res < .001) break;
         }
         else {
@@ -187,9 +211,24 @@ int main(int argc, char* argv[])
     laik_map_def1(sumD, (void**) &sumPtr, 0);
     sum = *sumPtr;
 
+    // statistics for all iterations and reductions
+    // using work load in all tasks
+    if (laik_logshown(2)) {
+        t = laik_wtime();
+        int diter = iter;
+        double dt = t - t1;
+        double gUpdates = 0.000000001 * size; // per iteration
+        laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
+                 diter, dt,
+                 // 2 Flops per update in reg iters, with res 5
+                 gUpdates * (5 * res_iters + 2 * (diter - res_iters)) / dt,
+                 // per update 16 bytes read + 8 byte written
+                 gUpdates * diter * 24 / dt);
+    }
+
     if (laik_myid(laik_get_dgroup(sumD)) == 0) {
-        printf("Global value sum after iter %d: %f\n",
-               iter - 1, sum);
+        printf("Global value sum after %d iterations: %f\n",
+               iter, sum);
     }
 
     laik_finalize(inst);
