@@ -55,9 +55,9 @@ void laik_data_init()
 
 static int data_id = 0;
 
-Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
+Laik_Data* laik_alloc(Laik_Group* group, Laik_Space* space, Laik_Type* type)
 {
-    assert(g->inst == s->inst);
+    assert(group->inst == space->inst);
 
     Laik_Data* d = (Laik_Data*) malloc(sizeof(Laik_Data));
 
@@ -65,11 +65,11 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
     d->name = strdup("data-0     ");
     sprintf(d->name, "data-%d", d->id);
 
-    d->group = g;
-    d->space = s;
-    d->type = t;
-    assert(t && (t->size > 0));
-    d->elemsize = t->size; // TODO: other than POD types
+    d->group = group;
+    d->space = space;
+    d->type = type;
+    assert(type && (type->size > 0));
+    d->elemsize = type->size; // TODO: other than POD types
 
     d->backend_data = 0;
     d->activePartitioning = 0;
@@ -78,34 +78,32 @@ Laik_Data* laik_alloc(Laik_Group* g, Laik_Space* s, Laik_Type* t)
     d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free
 
+    laik_log(1, "new data '%s':\n"
+             " type '%s' (elemsize %d), space '%s' (%lu elems, %.3f MB)\n",
+             d->name, type->name, d->elemsize, space->name,
+             (unsigned long) laik_space_size(space),
+             0.000001 * laik_space_size(space) * d->elemsize);
+
     return d;
 }
 
 Laik_Data* laik_alloc_1d(Laik_Group* g, Laik_Type* t, uint64_t s1)
 {
     Laik_Space* space = laik_new_space_1d(g->inst, s1);
-    Laik_Data* d = laik_alloc(g, space, t);
-
-    laik_log(1, "new 1d data '%s': elemsize %d, space '%s'\n",
-             d->name, d->elemsize, space->name);
-
-    return d;
+    return laik_alloc(g, space, t);
 }
 
 Laik_Data* laik_alloc_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2)
 {
     Laik_Space* space = laik_new_space_2d(g->inst, s1, s2);
-    Laik_Data* d = laik_alloc(g, space, t);
-
-    laik_log(1, "new 2d data '%s': elemsize %d, space '%s'\n",
-             d->name, d->elemsize, space->name);
-
-    return d;
+    return laik_alloc(g, space, t);
 }
 
 // set a data name, for debug output
 void laik_data_set_name(Laik_Data* d, char* n)
 {
+    laik_log(1, "data '%s' renamed to '%s'", d->name, n);
+
     d->name = n;
 }
 
@@ -451,7 +449,7 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
         int len = laik_getTransitionStr(s2, t);
 
         if (len == 0)
-            laik_log(1, "%s (nothing)\n", s1);
+            laik_log(1, "%s (no actions)\n", s1);
         else
             laik_log(1, "%s\n%s", s1, s2);
     }
@@ -508,7 +506,7 @@ void laik_switchto(Laik_Data* d,
         int len = laik_getTransitionStr(s2, t);
 
         if (len == 0)
-            laik_log(1, "%s: (nothing)\n", s1);
+            laik_log(1, "%s: (no actions)\n", s1);
         else
             laik_log(1, "%s:\n%s", s1, s2);
     }

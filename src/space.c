@@ -411,6 +411,18 @@ void laik_free_space(Laik_Space* s)
     // TODO
 }
 
+uint64_t laik_space_size(Laik_Space* s)
+{
+    uint64_t size = s->size[0];
+    if (s->dims > 1) {
+        size *= s->size[1];
+        if (s->dims > 2)
+            size *= s->size[2];
+    }
+    return size;
+}
+
+
 // set a space a name, for debug output
 void laik_set_space_name(Laik_Space* s, char* n)
 {
@@ -651,11 +663,16 @@ laik_new_partitioning(Laik_Group* group, Laik_Space* space,
     }
 
     if (laik_logshown(1)) {
-        laik_log(1, "new partitioning '%s':\n  space '%s', "
-                 "group %d (size %d, myid %d), partitioner '%s', base '%s'\n",
-                 p->name, space->name,
-                 p->group->gid, p->group->size, p->group->myid,
-                 pr->name, base ? base->name : "(none)");
+        char s[1000];
+        int o;
+        o = sprintf(s, "new partitioning '%s':\n  space '%s', "
+                    "group %d (size %d, myid %d), partitioner '%s'",
+                    p->name, space->name,
+                    p->group->gid, p->group->size, p->group->myid,
+                    pr->name);
+        if (base)
+            o =+ sprintf(s+o, ", base '%s'", base->name);
+        laik_log(1, s);
     }
 
     return p;

@@ -141,6 +141,8 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i,
 // free a space with all resources depending on it (e.g. paritionings)
 void laik_free_space(Laik_Space* s);
 
+uint64_t laik_space_size(Laik_Space* s);
+
 // set a space a name, for debug output
 void laik_set_space_name(Laik_Space* s, char* n);
 
