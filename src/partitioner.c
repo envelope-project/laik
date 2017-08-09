@@ -132,20 +132,34 @@ void runHaloPartitioner(Laik_Partitioner* pr,
     assert(otherBA->group == ba->group); // must use same task group
     assert(otherBA->space == ba->space);
 
-    Laik_Slice slc;
     Laik_Space* s = ba->space;
     int d = *((int*) pr->data);
 
+    // take all slices and extend them if possible
     for(int i = 0; i < otherBA->count; i++) {
+        Laik_Slice* slc = laik_sliceFromSpace(ba->space);
         Laik_Index* from = &(otherBA->tslice[i].s.from);
-        slc.from.i[0] = (from->i[0] > d) ? (from->i[0] - d) : 0;
-        slc.from.i[1] = (from->i[1] > d) ? (from->i[1] - d) : 0;
-        slc.from.i[2] = (from->i[2] > d) ? (from->i[2] - d) : 0;
         Laik_Index* to = &(otherBA->tslice[i].s.to);
-        slc.to.i[0] =  (to->i[0] < s->size[0] - d) ? to->i[0] + d : s->size[0];
-        slc.to.i[1] =  (to->i[1] < s->size[1] - d) ? to->i[1] + d : s->size[1];
-        slc.to.i[2] =  (to->i[2] < s->size[2] - d) ? to->i[2] + d : s->size[2];
-        laik_append_slice(ba, otherBA->tslice[i].task, &slc);
+
+        if (from->i[0] > d)
+            slc->from.i[0] = from->i[0] - d;
+        if (to->i[0]   < s->size[0] -d)
+            slc->to.i[0]   = to->i[0]   + d;
+
+        if (s->dims > 1) {
+            if (from->i[1] > d)
+                slc->from.i[1] = from->i[1] - d;
+            if (to->i[1]   < s->size[1] -d)
+                slc->to.i[1]   = to->i[1]   + d;
+
+            if (s->dims > 2) {
+                if (from->i[2] > d)
+                    slc->from.i[2] = from->i[2] - d;
+                if (to->i[2]   < s->size[2] -d)
+                    slc->to.i[2]   = to->i[2]   + d;
+            }
+        }
+        laik_append_slice(ba, otherBA->tslice[i].task, slc);
     }
 }
 
