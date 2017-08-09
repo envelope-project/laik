@@ -45,7 +45,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b, int size, int myid,
                                  char* location, void* data);
 
 // shut down communication and free resources of this instance
-void laik_finalize(Laik_Instance*);
+void laik_finalize(Laik_Instance*inst);
 
 // return a backend-dependant string for the location of the calling task
 char* laik_mylocation(Laik_Instance*);

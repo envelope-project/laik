@@ -29,14 +29,27 @@ int laik_myid(Laik_Group* g)
     return g->myid;
 }
 
-void laik_finalize(Laik_Instance* i)
+void laik_finalize(Laik_Instance* inst)
 {
-    assert(i);
-    if (i->backend && i->backend->finalize)
-        (*i->backend->finalize)(i);
+    assert(inst);
+    laik_log(1, "finalizing...");
+    if (inst->backend && inst->backend->finalize)
+        (*inst->backend->finalize)(inst);
 
-    laik_log(1, "finalized");
-    free(i->control);
+    if (laik_logshown(2)) {
+        char s[5000];
+        int o;
+
+        o = sprintf(s, "switch statistics (this task):\n");
+        for(int i=0; i<inst->data_count; i++) {
+            Laik_Data* d = inst->data[i];
+            o += sprintf(s+o, "  data '%s': ", d->name);
+            o += laik_getSwitchStat(s+o, d->stat);
+        }
+        laik_log(2, s);
+    }
+
+    free(inst->control);
 }
 
 // return a backend-dependant string for the location of the calling task
@@ -94,6 +107,14 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
 
     return instance;
 }
+
+void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d)
+{
+    assert(inst->data_count < MAX_DATAS);
+    inst->data[inst->data_count] = d;
+    inst->data_count++;
+}
+
 
 // create a group to be used in this LAIK instance
 Laik_Group* laik_create_group(Laik_Instance* i)

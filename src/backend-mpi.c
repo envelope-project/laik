@@ -147,6 +147,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                              Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     int myid  = d->group->myid;
+    Laik_SwitchStat* ss = d->stat;
 
     laik_log(1, "MPI backend execute transition:\n"
              "  data '%s', group %d (size %d, myid %d)\n"
@@ -213,6 +214,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                          from, to, d->elemsize, fromBase, toBase);
             }
 
+            if (ss) {
+                ss->reduceCount++;
+                ss->reducedBytes += (to - from) * d->elemsize;
+            }
+
             if (op->rootTask == -1) {
                 if (fromBase == toBase)
                     MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
@@ -262,7 +268,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             assert(op->sliceNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[op->sliceNo]);
-            if (toMap) laik_allocateMap(toMap);
+            if (toMap) laik_allocateMap(toMap, ss);
             char* toBase = toMap ? toMap->base : 0;
 
             // from global to receiver-local indexes
@@ -280,6 +286,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                      op->fromTask,
                      op->slc.from.i[0], op->slc.to.i[0],
                      from, to, op->sliceNo, d->elemsize, toBase);
+
+            if (ss) {
+                ss->recvCount++;
+                ss->receivedBytes += (to - from) * d->elemsize;
+            }
 
             MPI_Status s;
             // TODO:
@@ -318,6 +329,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                      op->toTask,
                      op->slc.from.i[0], op->slc.to.i[0],
                      from, to, op->sliceNo, d->elemsize, fromBase);
+
+            if (ss) {
+                ss->sendCount++;
+                ss->sentBytes += (to - from) * d->elemsize;
+            }
 
             // TODO: tag 1 may conflict with application
             MPI_Send(fromBase + from * d->elemsize, to - from,

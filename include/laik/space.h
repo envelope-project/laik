@@ -141,6 +141,7 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i,
 // free a space with all resources depending on it (e.g. paritionings)
 void laik_free_space(Laik_Space* s);
 
+// number of indexes in the space
 uint64_t laik_space_size(Laik_Space* s);
 
 // set a space a name, for debug output
@@ -167,6 +168,9 @@ bool laik_slice_isWithin(Laik_Slice* slc, Laik_Space* sp);
 
 // are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
+
+// number of indexes in the slice
+uint64_t laik_slice_size(int dims, Laik_Slice* s);
 
 
 //

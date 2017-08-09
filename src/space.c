@@ -179,6 +179,19 @@ Laik_Slice* laik_sliceFromSpace(Laik_Space* s)
     return &slc;
 }
 
+// number of indexes in the slice
+uint64_t laik_slice_size(int dims, Laik_Slice* s)
+{
+    uint64_t size = s->to.i[0] - s->from.i[0];
+    if (dims > 1) {
+        size *= s->to.i[1] - s->from.i[1];
+        if (dims > 2)
+            size *= s->to.i[2] - s->from.i[2];
+    }
+    return size;
+}
+
+
 static
 int getSliceStr(char* s, int dims, Laik_Slice* slc)
 {
@@ -1136,6 +1149,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
     Laik_Transition* t = (Laik_Transition*) malloc(tsize);
     t->dims = dims;
+    t->actionCount = localCount + initCount + sendCount + recvCount + redCount;
     t->local = (struct localTOp*) (((char*)t) + localOff);
     t->init  = (struct initTOp*)  (((char*)t) + initOff);
     t->send  = (struct sendTOp*)  (((char*)t) + sendOff);

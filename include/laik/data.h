@@ -22,8 +22,8 @@
 #error "include laik.h instead"
 #endif
 
-#include <stdint.h>
-#include <stdlib.h>
+#include <stdint.h>  // uint64_t
+#include <stdlib.h>  // size_t
 
 
 /*********************************************************************/

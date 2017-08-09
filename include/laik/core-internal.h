@@ -75,6 +75,9 @@ struct _Laik_Instance {
     double time_total, time_backend;
 };
 
+void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d);
+
+
 struct _Laik_Error {
   int type;
   char* desc;

@@ -166,6 +166,7 @@ struct redTOp {
 
 struct _Laik_Transition {
     int dims;
+    int actionCount;
 
     // local slices staying local;
     // may need copy when different from/to mappings are used

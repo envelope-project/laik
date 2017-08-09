@@ -51,7 +51,21 @@ struct _Laik_Type {
     bool (*convert)(Laik_Data*,Laik_Slice*, void*);
 };
 
+// statistics for switching
+typedef struct _Laik_SwitchStat Laik_SwitchStat;
+struct _Laik_SwitchStat
+{
+    int switches, switches_noactions;
+    int mallocCount, freeCount, sendCount, recvCount, reduceCount;
+    uint64_t mallocedBytes, freedBytes, initedBytes, copiedBytes;
+    uint64_t sentBytes, receivedBytes, reducedBytes;
+};
 
+Laik_SwitchStat* laik_newSwitchStat();
+void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src);
+int laik_getSwitchStat(char* s, Laik_SwitchStat* ss);
+
+// a data container
 struct _Laik_Data {
     char* name;
     int id;
@@ -74,6 +88,9 @@ struct _Laik_Data {
 
     // can be set by backend
     void* backend_data;
+
+    // statistics
+    Laik_SwitchStat* stat;
 };
 
 struct _Laik_Layout {
@@ -101,6 +118,6 @@ struct _Laik_MappingList {
 void laik_data_init();
 
 // ensure that the mapping is backed by memory (called by backends)
-void laik_allocateMap(Laik_Mapping* m);
+void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat *ss);
 
 #endif // _LAIK_DATA_INTERNAL_H_

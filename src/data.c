@@ -51,6 +51,93 @@ void laik_data_init()
     laik_Double = laik_new_type("double", LAIK_TK_POD, 8);
 }
 
+Laik_SwitchStat* laik_newSwitchStat()
+{
+    Laik_SwitchStat* ss;
+    ss = (Laik_SwitchStat*) malloc(sizeof(Laik_SwitchStat));
+
+    ss->switches           = 0;
+    ss->switches_noactions = 0;
+    ss->mallocCount        = 0;
+    ss->freeCount          = 0;
+    ss->sendCount          = 0;
+    ss->recvCount          = 0;
+    ss->reduceCount        = 0;
+    ss->mallocedBytes      = 0;
+    ss->freedBytes         = 0;
+    ss->initedBytes        = 0;
+    ss->copiedBytes        = 0;
+    ss->sentBytes          = 0;
+    ss->receivedBytes      = 0;
+    ss->reducedBytes       = 0;
+
+    return ss;
+}
+
+void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src)
+{
+    target->switches           += src->switches           ;
+    target->switches_noactions += src->switches_noactions ;
+    target->mallocCount        += src->mallocCount        ;
+    target->freeCount          += src->freeCount          ;
+    target->sendCount          += src->sendCount          ;
+    target->recvCount          += src->recvCount          ;
+    target->reduceCount        += src->reduceCount        ;
+    target->mallocedBytes      += src->mallocedBytes      ;
+    target->freedBytes         += src->freedBytes         ;
+    target->initedBytes        += src->initedBytes        ;
+    target->copiedBytes        += src->copiedBytes        ;
+    target->sentBytes          += src->sentBytes          ;
+    target->receivedBytes      += src->receivedBytes      ;
+    target->reducedBytes       += src->reducedBytes       ;
+}
+
+static
+int getPretty(char* s, uint64_t v)
+{
+    double vv = (double) v;
+    if (vv > 1000000000.0)
+        return sprintf(s, "%.1f G", vv / 1000000000.0);
+    if (vv > 1000000.0)
+        return sprintf(s, "%.1f M", vv / 1000000.0);
+    if (vv > 1000.0)
+        return sprintf(s, "%.1f K", vv / 1000.0);
+    return sprintf(s, "%.0f ", vv);
+}
+
+int laik_getSwitchStat(char* s, Laik_SwitchStat* ss)
+{
+    int o;
+
+    o = sprintf(s, "%d switches (%d without actions)\n",
+                ss->switches, ss->switches_noactions);
+    if (ss->switches == ss->switches_noactions) return o;
+
+    if (ss->mallocCount > 0) {
+        o += sprintf(s+o, "    malloc: %dx, ", ss->mallocCount);
+        o += getPretty(s+o, ss->mallocedBytes);
+        o += sprintf(s+o, "B, freed: %dx, ", ss->freeCount);
+        o += getPretty(s+o, ss->freedBytes);
+        o += sprintf(s+o, "B, copied ");
+        o += getPretty(s+o, ss->copiedBytes);
+        o += sprintf(s+o, "B\n");
+    }
+    if ((ss->sendCount > 0) || (ss->recvCount > 0)) {
+        o += sprintf(s+o, "    sent: %dx, ", ss->sendCount);
+        o += getPretty(s+o, ss->sentBytes);
+        o += sprintf(s+o, "B, recv: %dx, ", ss->recvCount);
+        o += getPretty(s+o, ss->receivedBytes);
+        o += sprintf(s+o, "B\n");
+    }
+    if (ss->reduceCount) {
+        o += sprintf(s+o, "    reduce: %dx, ", ss->reduceCount);
+        o += getPretty(s+o, ss->reducedBytes);
+        o += sprintf(s+o, "B, initialized ");
+        o += getPretty(s+o, ss->initedBytes);
+        o += sprintf(s+o, "B\n");
+    }
+    return o;
+}
 
 
 static int data_id = 0;
@@ -77,12 +164,15 @@ Laik_Data* laik_alloc(Laik_Group* group, Laik_Space* space, Laik_Type* type)
     d->nextPartitioningUser = 0;
     d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free
+    d->stat = laik_newSwitchStat();
 
     laik_log(1, "new data '%s':\n"
              " type '%s' (elemsize %d), space '%s' (%lu elems, %.3f MB)\n",
              d->name, type->name, d->elemsize, space->name,
              (unsigned long) laik_space_size(space),
              0.000001 * laik_space_size(space) * d->elemsize);
+
+    laik_addDataForInstance(space->inst, d);
 
     return d;
 }
@@ -191,7 +281,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
 }
 
 static
-void freeMaps(Laik_MappingList* ml)
+void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
 {
     if (ml == 0) return;
 
@@ -205,6 +295,11 @@ void freeMaps(Laik_MappingList* ml)
             laik_log(1, "free map for '%s'/%d (count %d, base %p)\n",
                      d->name, m->sliceNo, m->count, m->base);
 
+            if (ss) {
+                ss->freeCount++;
+                ss->freedBytes += m->count * d->elemsize;
+            }
+
             // TODO: different policies
             if ((!d->allocator) || (!d->allocator->free))
                 free(m->base);
@@ -214,18 +309,23 @@ void freeMaps(Laik_MappingList* ml)
             m->base = 0;
         }
         else
-            laik_log(1, "free map for '%s'/%d (count %d): not needed\n",
+            laik_log(1, "free map for '%s'/%d (count %d): nothing to do\n",
                      d->name, m->sliceNo, m->count);
     }
 
     free(ml);
 }
 
-void laik_allocateMap(Laik_Mapping* m)
+void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
 {
     if (m->base) return;
     if (m->count == 0) return;
     Laik_Data* d = m->data;
+
+    if (ss) {
+        ss->mallocCount++;
+        ss->mallocedBytes += m->count * d->elemsize;
+    }
 
     // TODO: different policies
     if ((!d->allocator) || (!d->allocator->malloc))
@@ -239,7 +339,8 @@ void laik_allocateMap(Laik_Mapping* m)
 
 static
 void copyMaps(Laik_Transition* t,
-              Laik_MappingList* toList, Laik_MappingList* fromList)
+              Laik_MappingList* toList, Laik_MappingList* fromList,
+              Laik_SwitchStat* ss)
 {
     assert(t->localCount > 0);
     for(int i = 0; i < t->localCount; i++) {
@@ -286,7 +387,7 @@ void copyMaps(Laik_Transition* t,
 
         if (toMap->base == 0) {
             // need to allocate memory
-            laik_allocateMap(toMap);
+            laik_allocateMap(toMap, ss);
         }
         char*    fromPtr   = fromMap->base + fromStart * d->elemsize;
         char*    toPtr     = toMap->base   + toStart * d->elemsize;
@@ -297,13 +398,17 @@ void copyMaps(Laik_Transition* t,
                  fromMap->base, fromStart, op->fromSliceNo,
                  toMap->base, toStart, op->toSliceNo);
 
+        if (ss)
+            ss->copiedBytes += count * d->elemsize;
+
         memcpy(toPtr, fromPtr, count * d->elemsize);
     }
 }
 
 static
 void initMaps(Laik_Transition* t,
-              Laik_MappingList* toList, Laik_MappingList* fromList)
+              Laik_MappingList* toList, Laik_MappingList* fromList,
+              Laik_SwitchStat* ss)
 {
     assert(t->initCount > 0);
     for(int i = 0; i < t->initCount; i++) {
@@ -338,7 +443,7 @@ void initMaps(Laik_Transition* t,
             }
             if (toMap->base == 0) {
                 // nothing found, allocate memory
-                laik_allocateMap(toMap);
+                laik_allocateMap(toMap, ss);
             }
         }
 
@@ -346,6 +451,9 @@ void initMaps(Laik_Transition* t,
         Laik_Data* d = toMap->data;
         Laik_Slice* s = &(op->slc);
         int count = s->to.i[0] - s->from.i[0];
+
+        if (ss)
+            ss->initedBytes += count * d->elemsize;
 
         if (d->type == laik_Double) {
             double v;
@@ -382,29 +490,36 @@ static
 void doTransition(Laik_Data* d, Laik_Transition* t,
                   Laik_MappingList* fromList, Laik_MappingList* toList)
 {
+    if (d->stat) {
+        d->stat->switches++;
+        if (!t || (t->actionCount == 0))
+            d->stat->switches_noactions++;
+    }
+
     if (t) {
         Laik_Instance* inst = d->space->inst;
         // let backend do send/recv/reduce actions
         if (inst->do_profiling)
             inst->timer_backend = laik_wtime();
 
-        assert(d->space->inst->backend->execTransition);
-        (d->space->inst->backend->execTransition)(d, t, fromList, toList);
+        assert(inst->backend->execTransition);
+        (inst->backend->execTransition)(d, t, fromList, toList);
 
         if (inst->do_profiling)
             inst->time_backend += laik_wtime() - inst->timer_backend;
 
         // local copy action (may use old mappings)
         if (t->localCount > 0)
-            copyMaps(t, toList, fromList);
+            copyMaps(t, toList, fromList, d->stat);
 
         // local init action (may use old mappings)
         if (t->initCount > 0)
-            initMaps(t, toList, fromList);
+            initMaps(t, toList, fromList, d->stat);
     }
+
     // free old mapping/partitioning
     if (fromList)
-        freeMaps(fromList);
+        freeMaps(fromList, d->stat);
 }
 
 // switch to new borders (new flow is derived from previous flow)
@@ -653,7 +768,7 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 
     Laik_Mapping* m = &(d->activeMappings->map[n]);
     // ensure the mapping is backed by real memory
-    laik_allocateMap(m);
+    laik_allocateMap(m, d->stat);
 
     return m;
 }
