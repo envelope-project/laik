@@ -1,4 +1,7 @@
-TESTS=test-vsum test-vsum-log test-vsum2 test-spmv test-spmv2 test-spmv2r
+TESTS= \
+    test-vsum test-vsum-log test-vsum2 \
+    test-spmv test-spmv2 test-spmv2r \
+    test-jac1d
 
 -include ../Makefile.config
 
@@ -32,6 +35,10 @@ test-spmv2:
 test-spmv2r:
 	../examples/spmv2 -r > test-spmv2r.out
 	cmp test-spmv2r.out test-spmv2.expected
+
+test-jac1d:
+	../examples/jac1d 100 > test-jac1d-100.out
+	cmp test-jac1d-100.out test-jac1d-100.expected
 
 clean:
 	rm -rf *.out

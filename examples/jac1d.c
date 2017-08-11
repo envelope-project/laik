@@ -40,22 +40,20 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
-    int msize = 0;
+    int ksize = 0;
     int maxiter = 0;
-    if (argc > 1) msize = atoi(argv[1]);
+    if (argc > 1) ksize = atoi(argv[1]);
     if (argc > 2) maxiter = atoi(argv[2]);
 
-    if (msize == 0) msize = 10; // 10 mio entries
+    if (ksize == 0) ksize = 10000; // 10 mio entries
     if (maxiter == 0) maxiter = 50;
 
     if (laik_myid(world) == 0) {
-        printf("%dm cells (mem %.1f MB), running %d iterations with %d tasks\n",
-               msize,
-               16.0 * msize,
-               maxiter, laik_size(world));
+        printf("%d k cells (mem %.1f MB), running %d iterations with %d tasks\n",
+               ksize, .016 * ksize, maxiter, laik_size(world));
     }
+    uint64_t size = (uint64_t) ksize * 1000;
 
-    uint64_t size = (uint64_t) msize * 1000000;
 
     double *baseR, *baseW, *sumPtr;
     uint64_t countR, countW, off, from, to;
@@ -90,7 +88,10 @@ int main(int argc, char* argv[])
     // distributed initialization
     laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
     laik_map_def1(dWrite, (void**) &baseW, &countW);
-    for(uint64_t i = 0; i < countW; i++) baseW[i] = (double) 0.0;
+    // arbitrary non-zero values based on global indexes to detect bugs
+    uint64_t glbase = laik_local2global1(dWrite, 0);
+    for(uint64_t i = 0; i < countW; i++)
+        baseW[i] = (double) ((i + glbase) & 6);
     // set fixed boundary values
     if (laik_global2local1(dWrite, 0, &off)) {
         // if global index 0 is local, it must be at local index 0
@@ -147,7 +148,7 @@ int main(int argc, char* argv[])
 
         // do jacobi
 
-        // check for residuum every 5 iterations
+        // check for residuum every 10 iterations (3 Flops more per update)
         if ((iter % 10) == 0) {
             // using work load in all tasks
             double newValue, diff, res;
@@ -176,7 +177,7 @@ int main(int argc, char* argv[])
                 double gUpdates = 0.000000001 * size; // per iteration
                 laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
                          diter, dt,
-                         // 2 Flops per update in reg iters, with res 5
+                         // 2 Flops per update in reg iters, with res 5 (once)
                          gUpdates * (5 + 2 * (diter-1)) / dt,
                          // per update 16 bytes read + 8 byte written
                          gUpdates * diter * 24 / dt);
@@ -191,8 +192,17 @@ int main(int argc, char* argv[])
             if (res < .001) break;
         }
         else {
-            for(uint64_t i = from; i < to; i++)
+            for(uint64_t i = from; i < to; i++) {
                 baseW[i] = 0.5 * (baseR[i-1] + baseR[i+1]);
+#if 0
+                printf( "I%d at G%02d / L%02d T%d: %10.6f "
+                        "<== %10.6f (G%02d %2d) + %10.6f (G%02d %2d)\n",
+                        iter, (int) laik_local2global1(dWrite, i),
+                        (int) i, laik_myid(world), baseW[i],
+                        baseR[i-1], (int) laik_local2global1(dWrite, i)-1, (int) (i - 1),
+                        baseR[i+1], (int) laik_local2global1(dWrite, i)+1, (int) (i + 1) );
+#endif
+            }
         }
 
         // TODO: allow repartitioning
