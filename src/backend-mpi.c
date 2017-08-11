@@ -49,6 +49,9 @@ struct _MPIGroupData {
     MPI_Comm comm;
 };
 
+// intentially make MPI backend buggy by setting LAIK_MPI_BUG=1
+// useful to ensure that a test is sentitive to backend bugs
+static int mpi_bug = 0;
 
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
@@ -89,6 +92,10 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     g->backend_data = gd;
 
     laik_log(1, "MPI backend initialized (location '%s')\n", inst->mylocation);
+
+    // for intentionally buggy MPI backend behavior
+    char* str = getenv("LAIK_MPI_BUG");
+    if (str) mpi_bug = atoi(str);
 
     mpi_instance = inst;
     return inst;
@@ -296,6 +303,17 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             // TODO:
             // - tag 1 may conflict with application
             // - check status
+
+            if (mpi_bug > 0) {
+                // intentional bug: ignore small amounts of data received
+                if (to-from < 1000) {
+                    char dummy[8000];
+                    MPI_Recv(dummy, to - from,
+                             mpiDataType, op->fromTask, 1, comm, &s);
+                    continue;
+                }
+            }
+
             MPI_Recv(toBase + from * d->elemsize, to - from,
                      mpiDataType, op->fromTask, 1, comm, &s);
         }
@@ -325,7 +343,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             else assert(0);
 
             laik_log(1, "MPI Send to T%d: global [%lu;%lu[,\n"
-                     "  to local [%lu;%lu[ in slice %d, elemsize %d, baseptr %p\n",
+                     "  from local [%lu;%lu[ in slice %d, elemsize %d, baseptr %p\n",
                      op->toTask,
                      op->slc.from.i[0], op->slc.to.i[0],
                      from, to, op->sliceNo, d->elemsize, fromBase);
