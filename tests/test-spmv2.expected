@@ -1,13 +1,13 @@
-Running 10 iterations, SpM side 10000 (~600.0 MB), 1 tasks
-Sum at iter  0: 166666665000.000000
-Sum at iter  1: 14997499.900000
-Sum at iter  2: 11901190.412720
-Sum at iter  3: 9718009.271032
-Sum at iter  4: 8177181.918688
-Sum at iter  5: 7046346.350061
-Sum at iter  6: 6185317.756379
-Sum at iter  7: 5509375.398576
-Sum at iter  8: 4965292.900575
-Sum at iter  9: 4518230.767287
-Result sum: 4518230.767287 (should be same as last iter sum)
+Running 10 iterations, SpM side 3000 (~54.0 MB), 1 tasks
+Sum at iter  0: 4499999500.000000
+Sum at iter  1: 1349249.900000
+Sum at iter  2: 1070357.079436
+Sum at iter  3: 873736.122987
+Sum at iter  4: 734972.827951
+Sum at iter  5: 633134.811854
+Sum at iter  6: 555595.534507
+Sum at iter  7: 494724.663742
+Sum at iter  8: 445728.573675
+Sum at iter  9: 405469.656899
+Result sum: 405469.656899 (should be same as last iter sum)
 Input sum: 1.000000 (should be 1.0)

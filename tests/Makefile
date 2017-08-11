@@ -25,15 +25,15 @@ test-vsum2:
 	cmp test-vsum2.out test-vsum.expected
 
 test-spmv:
-	../examples/spmv > test-spmv.out
+	../examples/spmv 4000 > test-spmv.out
 	cmp test-spmv.out test-spmv.expected
 
 test-spmv2:
-	../examples/spmv2 > test-spmv2.out
+	../examples/spmv2 10 3000 > test-spmv2.out
 	cmp test-spmv2.out test-spmv2.expected
 
 test-spmv2r:
-	../examples/spmv2 -r > test-spmv2r.out
+	../examples/spmv2 -r 10 3000 > test-spmv2r.out
 	cmp test-spmv2r.out test-spmv2.expected
 
 test-jac1d:

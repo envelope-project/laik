@@ -30,13 +30,14 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#define SIZE 10000
+// maximal size
+#define MAXSIZE 10000
 
 typedef struct _SpM SpM;
 struct _SpM {
     int rows, cols;
     int elems;
-    int row[SIZE+1];
+    int row[MAXSIZE+1];
     int* col;
     double* val;
 };
@@ -59,21 +60,25 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
+    int size = 0;
+    if (argc > 1) size = atoi(argv[1]);
+    if ((size == 0) || (size > MAXSIZE)) size = MAXSIZE;
+
     laik_set_phase(inst, 0, "init", NULL);
 
     // generate diagonal matrix in CSR format
     SpM* m = (SpM*) malloc(sizeof(SpM));
-    m->rows  = SIZE;
-    m->cols  = SIZE;
+    m->rows  = size;
+    m->cols  = size;
     m->elems = (m->rows-1) * m->cols / 2;
     m->col   = (int*) malloc(m->elems * sizeof(int));
     m->val   = (double*) malloc(m->elems * sizeof(double));
     int r, off = 0;
-    for(r = 0; r < SIZE; r++) {
+    for(r = 0; r < size; r++) {
         m->row[r] = off;
         for(int c = 0; c < r; c++) {
             m->col[off] = c;
-            m->val[off] = (double) (SIZE - r);
+            m->val[off] = (double) (size - r);
             off++;
         }
     }
@@ -81,12 +86,12 @@ int main(int argc, char* argv[])
     assert(m->elems == off);
 
     // global vector
-    double* v = (double*) malloc(SIZE * sizeof(double));
-    for(int i = 0; i < SIZE; i++)
+    double* v = (double*) malloc(size * sizeof(double));
+    for(int i = 0; i < size; i++)
         v[i] = (double) (i + 1);
 
     // 1d space for matrix rows and vector <res>
-    Laik_Space* s = laik_new_space_1d(inst, SIZE);
+    Laik_Space* s = laik_new_space_1d(inst, size);
     // result vector
     Laik_Data* resD = laik_alloc(world, s, laik_Double);
 
