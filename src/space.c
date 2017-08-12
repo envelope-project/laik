@@ -494,7 +494,7 @@ void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p)
 //-----------------------
 // Laik_BorderArray
 
-Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
+Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
 {
     Laik_BorderArray* a;
 
@@ -510,6 +510,7 @@ Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
     return a;
 }
 
+// called by partitioners
 void laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s)
 {
     assert(a->count < a->capacity);
@@ -521,15 +522,21 @@ void laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s)
     a->count++;
 }
 
+// sort function, called after partitioner run
 static
 int ts_cmp(const void *p1, const void *p2)
 {
     const Laik_TaskSlice* ts1 = (const Laik_TaskSlice*) p1;
     const Laik_TaskSlice* ts2 = (const Laik_TaskSlice*) p2;
+    if (ts1->task == ts2->task) {
+        // sort slices for same task by start index
+        return ts1->s.from.i[0] - ts2->s.from.i[0];
+    }
     return ts1->task - ts2->task;
 }
 
 // update offset array from slices
+static
 void updateBorderArrayOffsets(Laik_BorderArray* ba)
 {
     // make sure slices are sorted according by task IDs
@@ -549,14 +556,13 @@ void updateBorderArrayOffsets(Laik_BorderArray* ba)
     assert(o == ba->count);
 }
 
-
-void clearBorderArray(Laik_BorderArray* ba)
+void laik_clearBorderArray(Laik_BorderArray* ba)
 {
     // to remove all entries, it's enough to set count to 0
     ba->count = 0;
 }
 
-void freeBorderArray(Laik_BorderArray* ba)
+void laik_freeBorderArray(Laik_BorderArray* ba)
 {
     free(ba->off);
     free(ba->tslice);
@@ -565,6 +571,7 @@ void freeBorderArray(Laik_BorderArray* ba)
 
 // do borders cover complete space in all tasks?
 // assumption: task slices sorted according to task ID
+static
 bool bordersIsAll(Laik_BorderArray* ba)
 {
     if (ba->count != ba->group->size) return false;
@@ -579,6 +586,7 @@ bool bordersIsAll(Laik_BorderArray* ba)
 
 // do borders cover complete space exactly in one task?
 // return -1 if no, else task ID
+static
 int bordersIsSingle(Laik_BorderArray* ba)
 {
     Laik_Slice* slc = laik_sliceFromSpace(ba->space);
@@ -630,6 +638,31 @@ int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
     }
 
     return o;
+}
+
+
+// are borders equal?
+static
+bool laik_border_isEqual(Laik_BorderArray* b1, Laik_BorderArray* b2)
+{
+    assert(b1);
+    assert(b2);
+    if (b1->group != b2->group) return false;
+    if (b1->space != b2->space) return false;
+    if (b1->count != b2->count) return false;
+
+    for(int i = 0; i < b1->group->size; i++)
+        if (b1->off[i] != b2->off[i]) return false;
+
+    for(int i = 0; i < b1->count; i++) {
+        // tasks must match, as offset array matched
+        assert(b1->tslice[i].task == b2->tslice[i].task);
+
+        if (!laik_slice_isEqual(b1->space->dims,
+                                &(b1->tslice[i].s),
+                                &(b2->tslice[i].s))) return false;
+    }
+    return true;
 }
 
 
@@ -834,7 +867,7 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
 {
     Laik_BorderArray* ba;
 
-    ba = allocBorders(g, space, 4 * g->size);
+    ba = laik_allocBorders(g, space, 4 * g->size);
     if (otherBA) {
         assert(otherBA->group == g);
         assert(otherBA->space == space);
@@ -876,6 +909,11 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
         laik_log(1, "%s\n", s);
     }
 
+    if (p->bordersValid && laik_border_isEqual(p->borders, ba)) {
+        laik_log(1, "borders equal to original, nothing to do");
+        return;
+    }
+
     // visit all users of this partitioning:
     // first, all partitionings coupled to this as base
     Laik_Partitioning* pdep = p->firstPartitioningForBase;
@@ -897,7 +935,7 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
     }
 
     if (p->borders)
-        freeBorderArray(p->borders);
+        laik_freeBorderArray(p->borders);
     p->borders = ba;
     p->bordersValid = true;
 }

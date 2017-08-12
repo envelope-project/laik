@@ -76,9 +76,9 @@ struct _Laik_BorderArray {
     Laik_TaskSlice* tslice; // slice borders, may be multiple per task
 };
 
-Laik_BorderArray* allocBorders(Laik_Group* g, Laik_Space* s, int capacity);
-void clearBorderArray(Laik_BorderArray* a);
-void freeBorderArray(Laik_BorderArray* a);
+Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, int capacity);
+void laik_clearBorderArray(Laik_BorderArray* a);
+void laik_freeBorderArray(Laik_BorderArray* a);
 
 
 //

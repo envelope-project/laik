@@ -177,9 +177,10 @@ uint64_t laik_slice_size(int dims, Laik_Slice* s);
 // LAIK partitioners
 //
 
+
 // Signature for a partitioner:
 // we are given a new border object without any slices yet (2st par),
-// which has to be populated with slices (calling laik_add_slice).
+// which has to be populated with slices (calling laik_append_slice).
 // The border object specifies the group and space to run the partitioner on.
 // If 3rd par is not null, it provides old borders to allow incremental
 // partitioner algorithms

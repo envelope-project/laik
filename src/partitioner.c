@@ -329,6 +329,8 @@ Laik_Partitioner* laik_new_block_partitioner_tw1(Laik_GetTaskWeight_t f,
 void laik_set_index_weight(Laik_Partitioner* pr, Laik_GetIdxWeight_t f,
                            const void* userData)
 {
+    assert(pr->run == runBlockPartitioner);
+
     Laik_BlockPartitionerData* data;
     data = (Laik_BlockPartitionerData*) pr->data;
 
@@ -339,6 +341,8 @@ void laik_set_index_weight(Laik_Partitioner* pr, Laik_GetIdxWeight_t f,
 void laik_set_task_weight(Laik_Partitioner* pr, Laik_GetTaskWeight_t f,
                           const void* userData)
 {
+    assert(pr->run == runBlockPartitioner);
+
     Laik_BlockPartitionerData* data;
     data = (Laik_BlockPartitionerData*) pr->data;
 
@@ -348,6 +352,8 @@ void laik_set_task_weight(Laik_Partitioner* pr, Laik_GetTaskWeight_t f,
 
 void laik_set_cycle_count(Laik_Partitioner* pr, int cycles)
 {
+    assert(pr->run == runBlockPartitioner);
+
     Laik_BlockPartitionerData* data;
     data = (Laik_BlockPartitionerData*) pr->data;
 
