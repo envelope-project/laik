@@ -335,7 +335,6 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             // from global to sender-local indexes
             uint64_t from = op->slc.from.i[0] - fromMap->baseIdx.i[0];
             uint64_t to   = op->slc.to.i[0] - fromMap->baseIdx.i[0];
-            assert(fromBase != 0);
 
             MPI_Datatype mpiDataType;
             if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
@@ -352,6 +351,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 ss->sendCount++;
                 ss->sentBytes += (to - from) * d->elemsize;
             }
+
+            assert(fromBase != 0);
 
             // TODO: tag 1 may conflict with application
             MPI_Send(fromBase + from * d->elemsize, to - from,

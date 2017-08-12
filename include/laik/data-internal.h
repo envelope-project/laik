@@ -99,14 +99,25 @@ struct _Laik_Layout {
     int dims, order[3]; // at most 3 dimensions
 };
 
+// a mapping of data elements for an index range from global index
+// <baseIdx> with <count> elements, at address <base>.
+// This may be embedded in a larger mapping from <startIdx> at <start>
+// with <fullcount> elements.
+// Values of just the larger mapping are not valid, but space is kept for
+// future reuse.
 struct _Laik_Mapping {
     Laik_Data* data;
     int sliceNo; // slice number of own partition this mapping is for
     Laik_Layout* layout; // ordering layout used
+    Laik_Index startIdx; // global index at start address
+    uint64_t fullcount; // number of elements in full mapping
     Laik_Index baseIdx; // global index at base address
-
-    char* base; // start address of mapping
     uint64_t count; // number of elements mapped
+
+    char* start; // start address of mapping
+    char* base; // address matching baseIdx (usually same as start)
+    uint64_t capacity; // number of bytes allocated
+    int reusedFor; // -1: not reused, otherwise slice number used for
 };
 
 struct _Laik_MappingList {

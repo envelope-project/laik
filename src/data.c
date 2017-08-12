@@ -241,11 +241,17 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
         int o = ba->off[myid] + i;
         Laik_Slice* slc = &(ba->tslice[o].s);
 
-        m->count = laik_slice_size(d->space->dims, slc);
         m->data = d;
         m->sliceNo = i;
+        m->reusedFor = -1;
+        // requirements
         m->baseIdx = slc->from;
-        m->base = 0; // allocation happens lazy in copyMaps()
+        m->count = laik_slice_size(d->space->dims, slc);
+
+        // not backed by memory yet, allocation happens lazy
+        m->capacity = 0;
+        m->start = 0;
+        m->base = 0;
 
         if (l) {
             // TODO: actually use the requested order, eventually convert
@@ -278,26 +284,28 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
 
         Laik_Data* d = m->data;
 
-        if (m->base) {
-            laik_log(1, "free map for '%s'/%d (count %d, base %p)\n",
-                     d->name, m->sliceNo, m->count, m->base);
+        if (m->reusedFor == -1) {
+            laik_log(1, "free map for '%s'/%d (capacity %llu, base %p, start %p)\n",
+                     d->name, m->sliceNo,
+                     (unsigned long long) m->capacity, m->base, m->start);
 
             if (ss) {
                 ss->freeCount++;
-                ss->freedBytes += m->count * d->elemsize;
+                ss->freedBytes += m->capacity;
             }
 
             // TODO: different policies
             if ((!d->allocator) || (!d->allocator->free))
-                free(m->base);
+                free(m->start);
             else
-                (d->allocator->free)(d, m->base);
+                (d->allocator->free)(d, m->start);
 
             m->base = 0;
+            m->start = 0;
         }
         else
-            laik_log(1, "free map for '%s'/%d (count %d): nothing to do\n",
-                     d->name, m->sliceNo, m->count);
+            laik_log(1, "free map for '%s'/%d: nothing to do (reused for %d)\n",
+                     d->name, m->sliceNo, m->reusedFor);
     }
 
     free(ml);
@@ -309,19 +317,27 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     if (m->count == 0) return;
     Laik_Data* d = m->data;
 
+    m->capacity = m->count * d->elemsize;
+
     if (ss) {
         ss->mallocCount++;
-        ss->mallocedBytes += m->count * d->elemsize;
+        ss->mallocedBytes += m->capacity;
     }
 
     // TODO: different policies
     if ((!d->allocator) || (!d->allocator->malloc))
-        m->base = malloc(m->count * d->elemsize);
+        m->base = malloc(m->capacity);
     else
-        m->base = (d->allocator->malloc)(d, m->count * d->elemsize);
+        m->base = (d->allocator->malloc)(d, m->capacity);
 
-    laik_log(1, "allocated memory for '%s'/%d: %d x %d at %p\n",
-             d->name, m->sliceNo, m->count, d->elemsize, m->base);
+    // no space around valid indexes
+    m->start = m->base;
+    m->startIdx = m->baseIdx;
+    m->fullcount = m->count;
+
+    laik_log(1, "allocated memory for '%s'/%d: %d x %d (%llu B) at %p\n",
+             d->name, m->sliceNo, m->count, d->elemsize,
+             (unsigned long long) m->capacity, m->base);
 }
 
 static
@@ -344,7 +360,6 @@ void copyMaps(Laik_Transition* t,
         }
         if (fromMap->base == 0) {
             // nothing to copy from
-            assert(fromMap->count == 0);
             continue;
         }
 
@@ -357,13 +372,11 @@ void copyMaps(Laik_Transition* t,
         uint64_t fromStart = s->from.i[0] - fromMap->baseIdx.i[0];
         uint64_t toStart   = s->from.i[0] - toMap->baseIdx.i[0];
 
-        // we can use old mapping if we would copy complete old to new mapping
-        if ((fromStart == 0) && (fromMap->count == count) &&
-            (toStart == 0) && (toMap->count == count)) {
-            // should not be allocated yet
-            assert(toMap->base == 0);
-            toMap->base = fromMap->base;
-            fromMap->base = 0; // nothing to free
+        // no copy needed if mapping reused
+        if (fromMap->reusedFor >= 0) {
+            assert(fromMap->reusedFor == op->toSliceNo);
+            assert(fromMap->base + fromStart * d->elemsize ==
+                   toMap->base   + toStart * d->elemsize);
 
             laik_log(1, "copy map for '%s': %d x %d "
                         "from global [%lu local [%lu/%d ==> [%lu/%d, using old map\n",
@@ -392,6 +405,54 @@ void copyMaps(Laik_Transition* t,
     }
 }
 
+// try to reuse already allocated memory from old mapping
+// we reuse mapping if it has same or slightly larger size
+// and if old mapping covered all indexed needed in new mapping.
+// TODO: use a policy setting
+static
+void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
+{
+    // reuse only possible if old mappings exist
+    if (!fromList) return;
+    if ((toList == 0) || (toList->count ==0)) return;
+    Laik_Data* d = toList->map[0].data;
+    if (d->space->dims != 1) return;
+
+    for(int i = 0; i < toList->count; i++) {
+        Laik_Mapping* toMap = &(toList->map[i]);
+        for(int sNo = 0; sNo < fromList->count; sNo++) {
+            Laik_Mapping* fromMap = &(fromList->map[sNo]);
+            if (fromMap->base == 0) continue;
+            if (fromMap->reusedFor >= 0) continue; // only reuse once
+
+            // does index range fit into old?
+            uint64_t toMapStart = toMap->baseIdx.i[0];
+            uint64_t toMapEnd   = toMap->baseIdx.i[0] + toMap->count;
+            uint64_t fromMapStart = fromMap->startIdx.i[0];
+            uint64_t fromMapEnd   = fromMap->startIdx.i[0] + fromMap->fullcount;
+            assert(toMapStart < toMapEnd);
+            assert(fromMapStart < fromMapEnd);
+
+            if (toMapStart < fromMapStart) continue;
+            if (toMapEnd > fromMapEnd) continue;
+            // max surrounding space of 1000 entries acceptable
+            if (toMap->count + 1000 < fromMap->fullcount) continue;
+
+            toMap->start = fromMap->start;
+            toMap->startIdx = fromMap->startIdx;
+            toMap->fullcount = fromMap->fullcount;
+            toMap->capacity = fromMap->capacity;
+
+            toMap->base = toMap->start + (toMapStart - fromMapStart) * d->elemsize;
+            fromMap->reusedFor = i; // mark as reused by slie <i>
+
+            laik_log(1, "map reuse for '%s'/%d (req %llu B): old %d (%llu B at %p)\n",
+                     toMap->data->name, i, (unsigned long long) toMap->capacity,
+                     sNo, (unsigned long long) fromMap->capacity, toMap->base);
+        }
+    }
+}
+
 static
 void initMaps(Laik_Transition* t,
               Laik_MappingList* toList, Laik_MappingList* fromList,
@@ -408,32 +469,12 @@ void initMaps(Laik_Transition* t,
             continue;
         }
 
-        int dims = toMap->data->space->dims;
         if (toMap->base == 0) {
-            // if we find a fitting mapping in fromList, use that
-            if (fromList) {
-                for(int sNo = 0; sNo < fromList->count; sNo++) {
-                    Laik_Mapping* fromMap = &(fromList->map[sNo]);
-                    if (fromMap->base == 0) continue;
-                    if (!laik_index_isEqual(dims,
-                                            &(toMap->baseIdx),
-                                            &(fromMap->baseIdx))) continue;
-                    if (toMap->count != fromMap->count) continue;
-
-                    toMap->base = fromMap->base;
-                    fromMap->base = 0; // taken over
-
-                    laik_log(1, "during init for '%s'/%d: used old %d at %p\n",
-                             toMap->data->name, op->sliceNo, sNo, toMap->base);
-                    break;
-                }
-            }
-            if (toMap->base == 0) {
-                // nothing found, allocate memory
-                laik_allocateMap(toMap, ss);
-            }
+            // allocate memory
+            laik_allocateMap(toMap, ss);
         }
 
+        int dims = toMap->data->space->dims;
         assert(dims == 1); // only for 1d now
         Laik_Data* d = toMap->data;
         Laik_Slice* s = &(op->slc);
@@ -484,6 +525,15 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
     }
 
     if (t) {
+        // be careful when reusing mappings:
+        // the backend wants to send/receive data in arbitrary order
+        // (to avoid deadlocks), but it never should overwrite data
+        // before it gets sent by data already received.
+        // thus it is bad to reuse a mapping for different index ranges.
+        // but reusing mappings such that same indexes go to same address
+        // is fine.
+        checkMapReuse(toList, fromList);
+
         if (t->sendCount + t->recvCount + t->redCount > 0) {
             // let backend do send/recv/reduce actions
 
@@ -498,11 +548,11 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
                 inst->time_backend += laik_wtime() - inst->timer_backend;
         }
 
-        // local copy action (may use old mappings)
+        // local copy actions
         if (t->localCount > 0)
             copyMaps(t, toList, fromList, d->stat);
 
-        // local init action (may use old mappings)
+        // local init action
         if (t->initCount > 0)
             initMaps(t, toList, fromList, d->stat);
     }
