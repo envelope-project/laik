@@ -239,25 +239,12 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
     for(int i = 0; i < n; i++) {
         Laik_Mapping* m = &(ml->map[i]);
         int o = ba->off[myid] + i;
-        Laik_Slice* s = &(ba->tslice[o].s);
+        Laik_Slice* slc = &(ba->tslice[o].s);
 
-        uint64_t count = 1;
-        switch(d->space->dims) {
-        case 3:
-            count *= s->to.i[2] - s->from.i[2];
-            // fall-through
-        case 2:
-            count *= s->to.i[1] - s->from.i[1];
-            // fall-through
-        case 1:
-            count *= s->to.i[0] - s->from.i[0];
-            break;
-        }
-
+        m->count = laik_slice_size(d->space->dims, slc);
         m->data = d;
         m->sliceNo = i;
-        m->count = count;
-        m->baseIdx = s->from;
+        m->baseIdx = slc->from;
         m->base = 0; // allocation happens lazy in copyMaps()
 
         if (l) {
