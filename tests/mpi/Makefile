@@ -4,7 +4,7 @@ TESTS= \
     test-vsum test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
     test-spmv2-shrink test-spmv2-shrink-inc \
-    test-jac1d
+    test-jac1d test-jac1d-repart
 
 .PHONY: $(TESTS)
 
@@ -41,6 +41,10 @@ test-spmv2-shrink-inc:
 test-jac1d:
 	mpirun -np 4 ../../examples/jac1d 100 | sort > test-jac1d-100.out
 	cmp test-jac1d-100.out test-jac1d-100.expected
+
+test-jac1d-repart:
+	mpirun -np 4 ../../examples/jac1d 1000 50 10 | sort > test-jac1d-1000-repart.out
+	cmp test-jac1d-1000-repart.out test-jac1d-1000-repart.expected
 
 clean:
 	rm -rf *.out

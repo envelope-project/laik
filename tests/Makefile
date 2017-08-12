@@ -1,7 +1,7 @@
 TESTS= \
     test-vsum test-vsum-log test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
-    test-jac1d
+    test-jac1d test-jac1d-repart
 
 -include ../Makefile.config
 
@@ -39,6 +39,11 @@ test-spmv2r:
 test-jac1d:
 	../examples/jac1d 100 > test-jac1d-100.out
 	cmp test-jac1d-100.out test-jac1d-100.expected
+
+test-jac1d-repart:
+	../examples/jac1d 1000 50 10 > test-jac1d-1000-repart.out
+	cmp test-jac1d-1000-repart.out test-jac1d-1000-repart.expected
+
 
 clean:
 	rm -rf *.out

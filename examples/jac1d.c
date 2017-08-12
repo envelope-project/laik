@@ -31,6 +31,14 @@
 // fixed boundary values
 double loValue = -5.0, hiValue = 10.0;
 
+// to deliberately change block partitioning (if arg 3 provided)
+double getTW(int rank, const void* userData)
+{
+    int v = * ((int*) userData);
+    // switch non-equal weigthing on and off
+    return 1.0 + (rank * (v & 1));
+}
+
 int main(int argc, char* argv[])
 {
 #ifdef USE_MPI
@@ -42,8 +50,11 @@ int main(int argc, char* argv[])
 
     int ksize = 0;
     int maxiter = 0;
+    int repart = 0; // enforce repartitioning after <repart> iterations
+
     if (argc > 1) ksize = atoi(argv[1]);
     if (argc > 2) maxiter = atoi(argv[2]);
+    if (argc > 3) repart = atoi(argv[3]);
 
     if (ksize == 0) ksize = 10000; // 10 mio entries
     if (maxiter == 0) maxiter = 50;
@@ -51,6 +62,8 @@ int main(int argc, char* argv[])
     if (laik_myid(world) == 0) {
         printf("%d k cells (mem %.1f MB), running %d iterations with %d tasks\n",
                ksize, .016 * ksize, maxiter, laik_size(world));
+        if (repart > 0)
+            printf("  with repartitioning every %d iterations\n", repart);
     }
     uint64_t size = (uint64_t) ksize * 1000;
 
@@ -112,7 +125,7 @@ int main(int argc, char* argv[])
 
     int iter = 0;
     for(; iter < maxiter; iter++) {
-        laik_set_iteration(inst, iter);
+        laik_set_iteration(inst, iter + 1);
 
         // switch roles: data written before now is read
         if (dRead == data1) { dRead = data2; dWrite = data1; }
@@ -203,6 +216,15 @@ int main(int argc, char* argv[])
                         baseR[i+1], (int) laik_local2global1(dWrite, i)+1, (int) (i + 1) );
 #endif
             }
+        }
+
+        // optionally, change partitioning slightly as test
+        if ((repart > 0) && (iter > 0) && ((iter % repart) == 0)) {
+            static int userData;
+            userData = iter / repart;
+            Laik_Partitioner* pr = laik_get_partitioner(pWrite);
+            laik_set_task_weight(pr, getTW, (void*) &userData);
+            laik_calc_partitioning(pWrite);
         }
 
         // TODO: allow repartitioning
