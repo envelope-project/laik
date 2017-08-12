@@ -903,7 +903,7 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
     if (laik_logshown(1)) {
         char s[1000];
         int o;
-        o = sprintf(s, "setting borders (part '%s', group %d, myid %d):\n  ",
+        o = sprintf(s, "setting borders for part '%s' (group %d, myid %d):\n  ",
                     p->name, ba->group->gid, ba->group->myid);
         o += laik_getBorderArrayStr(s+o, ba);
         laik_log(1, "%s\n", s);

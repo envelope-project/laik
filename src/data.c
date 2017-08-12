@@ -497,16 +497,19 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
     }
 
     if (t) {
-        Laik_Instance* inst = d->space->inst;
-        // let backend do send/recv/reduce actions
-        if (inst->do_profiling)
-            inst->timer_backend = laik_wtime();
+        if (t->sendCount + t->recvCount + t->redCount > 0) {
+            // let backend do send/recv/reduce actions
 
-        assert(inst->backend->execTransition);
-        (inst->backend->execTransition)(d, t, fromList, toList);
+            Laik_Instance* inst = d->space->inst;
+            if (inst->do_profiling)
+                inst->timer_backend = laik_wtime();
 
-        if (inst->do_profiling)
-            inst->time_backend += laik_wtime() - inst->timer_backend;
+            assert(inst->backend->execTransition);
+            (inst->backend->execTransition)(d, t, fromList, toList);
+
+            if (inst->do_profiling)
+                inst->time_backend += laik_wtime() - inst->timer_backend;
+        }
 
         // local copy action (may use old mappings)
         if (t->localCount > 0)
