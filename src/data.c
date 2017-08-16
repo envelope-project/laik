@@ -373,14 +373,13 @@ void copyMaps(Laik_Transition* t,
         uint64_t toStart   = s->from.i[0] - toMap->baseIdx.i[0];
 
         // no copy needed if mapping reused
-        if (fromMap->reusedFor >= 0) {
-            assert(fromMap->reusedFor == op->toSliceNo);
+        if (fromMap->reusedFor == op->toSliceNo) {
             assert(fromMap->base + fromStart * d->elemsize ==
                    toMap->base   + toStart * d->elemsize);
 
-            laik_log(1, "copy map for '%s': %d x %d "
+            laik_log(1, "copy map for '%s'/%d: %d x %d "
                         "from global [%lu local [%lu/%d ==> [%lu/%d, using old map\n",
-                     d->name, count, d->elemsize, s->from.i[0],
+                     d->name, op->toSliceNo, count, d->elemsize, s->from.i[0],
                      fromStart, op->fromSliceNo, toStart, op->toSliceNo);
             continue;
         }
@@ -392,9 +391,9 @@ void copyMaps(Laik_Transition* t,
         char*    fromPtr   = fromMap->base + fromStart * d->elemsize;
         char*    toPtr     = toMap->base   + toStart * d->elemsize;
 
-        laik_log(1, "copy map for '%s': %d x %d "
+        laik_log(1, "copy map for '%s'/%d: %d x %d "
                     "from global [%lu local %p + [%lu/%d ==> %p + [%lu/%d\n",
-                 d->name, count, d->elemsize, s->from.i[0],
+                 d->name, op->toSliceNo, count, d->elemsize, s->from.i[0],
                  fromMap->base, fromStart, op->fromSliceNo,
                  toMap->base, toStart, op->toSliceNo);
 
@@ -406,7 +405,7 @@ void copyMaps(Laik_Transition* t,
 }
 
 // try to reuse already allocated memory from old mapping
-// we reuse mapping if it has same or slightly larger size
+// we reuse mapping if it has same or larger size
 // and if old mapping covered all indexed needed in new mapping.
 // TODO: use a policy setting
 static
@@ -435,8 +434,7 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
 
             if (toMapStart < fromMapStart) continue;
             if (toMapEnd > fromMapEnd) continue;
-            // max surrounding space of 1000 entries acceptable
-            if (toMap->count + 1000 < fromMap->fullcount) continue;
+            // always reuse larger mapping
 
             toMap->start = fromMap->start;
             toMap->startIdx = fromMap->startIdx;
@@ -444,11 +442,13 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
             toMap->capacity = fromMap->capacity;
 
             toMap->base = toMap->start + (toMapStart - fromMapStart) * d->elemsize;
-            fromMap->reusedFor = i; // mark as reused by slie <i>
+            fromMap->reusedFor = i; // mark as reused by slice <i>
 
-            laik_log(1, "map reuse for '%s'/%d (req %llu B): old %d (%llu B at %p)\n",
-                     toMap->data->name, i, (unsigned long long) toMap->capacity,
-                     sNo, (unsigned long long) fromMap->capacity, toMap->base);
+            laik_log(1, "map reuse for '%s'/%d [%llu;%llu[: old %d ([%llu;%llu[, %llu B at %p)\n",
+                     toMap->data->name, i,
+                     (unsigned long long) toMapStart, toMapEnd,
+                     sNo, fromMapStart, fromMapEnd,
+                     (unsigned long long) fromMap->capacity, toMap->base);
         }
     }
 }
