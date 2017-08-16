@@ -30,7 +30,8 @@ struct _Laik_Space {
     int id;     // for debugging
 
     int dims;
-    uint64_t size[3]; // at most 3 dimensions
+    Laik_Slice s; // defines the valid indexes in this space
+
     Laik_Instance* inst;
     Laik_Space* nextSpaceForInstance; // for list of spaces used in instance
 
@@ -41,8 +42,6 @@ struct _Laik_Space {
 // add/remove partitioning to/from space
 void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p);
 void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p);
-
-Laik_Slice* laik_sliceFromSpace(Laik_Space* s);
 
 struct _Laik_Partitioner {
     char* name;

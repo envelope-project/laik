@@ -45,14 +45,11 @@ Laik_Partitioner* laik_new_partitioner(char* name,
 void runAllPartitioner(Laik_Partitioner* pr,
                        Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
-    Laik_Slice slc;
-    Laik_Space* s = ba->space;
+    Laik_Space* space = ba->space;
     Laik_Group* g = ba->group;
 
     for(int task = 0; task < g->size; task++) {
-        laik_set_index(&(slc.from), 0, 0, 0);
-        laik_set_index(&(slc.to), s->size[0], s->size[1], s->size[2]);
-        laik_append_slice(ba, task, &slc);
+        laik_append_slice(ba, task, &(space->s));
     }
 }
 
@@ -66,13 +63,8 @@ Laik_Partitioner* laik_new_all_partitioner()
 void runMasterPartitioner(Laik_Partitioner* pr,
                           Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
-    Laik_Slice slc;
-    Laik_Space* s = ba->space;
-
     // only full slice for master
-    laik_set_index(&(slc.from), 0, 0, 0);
-    laik_set_index(&(slc.to), s->size[0], s->size[1], s->size[2]);
-    laik_append_slice(ba, 0, &slc);
+    laik_append_slice(ba, 0, &(ba->space->s));
 }
 
 Laik_Partitioner* laik_new_master_partitioner()
@@ -104,10 +96,10 @@ void runCopyPartitioner(Laik_Partitioner* pr,
     assert((toDim >= 0) && (toDim < ba->space->dims));
 
     for(int i = 0; i < otherBA->count; i++) {
-        Laik_Slice* slc = laik_sliceFromSpace(ba->space);
-        slc->from.i[toDim] = otherBA->tslice[i].s.from.i[fromDim];
-        slc->to.i[toDim] = otherBA->tslice[i].s.to.i[fromDim];
-        laik_append_slice(ba, otherBA->tslice[i].task, slc);
+        Laik_Slice slc = ba->space->s;
+        slc.from.i[toDim] = otherBA->tslice[i].s.from.i[fromDim];
+        slc.to.i[toDim] = otherBA->tslice[i].s.to.i[fromDim];
+        laik_append_slice(ba, otherBA->tslice[i].task, &slc);
     }
 }
 
@@ -132,34 +124,34 @@ void runHaloPartitioner(Laik_Partitioner* pr,
     assert(otherBA->group == ba->group); // must use same task group
     assert(otherBA->space == ba->space);
 
-    Laik_Space* s = ba->space;
+    int dims = ba->space->dims;
     int d = *((int*) pr->data);
 
     // take all slices and extend them if possible
     for(int i = 0; i < otherBA->count; i++) {
-        Laik_Slice* slc = laik_sliceFromSpace(ba->space);
+        Laik_Slice slc = ba->space->s;
         Laik_Index* from = &(otherBA->tslice[i].s.from);
         Laik_Index* to = &(otherBA->tslice[i].s.to);
 
-        if (from->i[0] > d)
-            slc->from.i[0] = from->i[0] - d;
-        if (to->i[0]   < s->size[0] -d)
-            slc->to.i[0]   = to->i[0]   + d;
+        if (from->i[0] > slc.from.i[0] + d)
+            slc.from.i[0] = from->i[0] - d;
+        if (to->i[0] < slc.to.i[0] - d)
+            slc.to.i[0] = to->i[0] + d;
 
-        if (s->dims > 1) {
-            if (from->i[1] > d)
-                slc->from.i[1] = from->i[1] - d;
-            if (to->i[1]   < s->size[1] -d)
-                slc->to.i[1]   = to->i[1]   + d;
+        if (dims > 1) {
+            if (from->i[1] > slc.from.i[1] + d)
+                slc.from.i[1] = from->i[1] - d;
+            if (to->i[1] < slc.to.i[1] - d)
+                slc.to.i[1] = to->i[1] + d;
 
-            if (s->dims > 2) {
-                if (from->i[2] > d)
-                    slc->from.i[2] = from->i[2] - d;
-                if (to->i[2]   < s->size[2] -d)
-                    slc->to.i[2]   = to->i[2]   + d;
+            if (dims > 2) {
+                if (from->i[2] > slc.from.i[2] + d)
+                    slc.from.i[2] = from->i[2] - d;
+                if (to->i[2] < slc.to.i[2] - d)
+                    slc.to.i[2] = to->i[2] + d;
             }
         }
-        laik_append_slice(ba, otherBA->tslice[i].task, slc);
+        laik_append_slice(ba, otherBA->tslice[i].task, &slc);
     }
 }
 
@@ -203,13 +195,11 @@ void runBlockPartitioner(Laik_Partitioner* pr,
     data = (Laik_BlockPartitionerData*) pr->data;
 
     Laik_Space* s = ba->space;
-    Laik_Slice slc;
-    laik_set_index(&(slc.from), 0, 0, 0);
-    laik_set_index(&(slc.to), s->size[0], s->size[1], s->size[2]);
+    Laik_Slice slc = s->s;
 
     int count = ba->group->size;
     int pdim = data->pdim;
-    uint64_t size = s->size[pdim];
+    uint64_t size = s->s.to.i[pdim] - s->s.from.i[pdim];
 
     Laik_Index idx;
     double totalW;
@@ -218,7 +208,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
         totalW = 0.0;
         laik_set_index(&idx, 0, 0, 0);
         for(uint64_t i = 0; i < size; i++) {
-            idx.i[pdim] = i;
+            idx.i[pdim] = i + s->s.from.i[pdim];
             totalW += (data->getIdxW)(&idx, data->userData);
         }
     }
@@ -253,10 +243,10 @@ void runBlockPartitioner(Laik_Partitioner* pr,
     else
         taskW = 1.0;
 
-    slc.from.i[pdim] = 0;
+    slc.from.i[pdim] = s->s.from.i[pdim];
     for(uint64_t i = 0; i < size; i++) {
         if (data && data->getIdxW) {
-            idx.i[pdim] = i;
+            idx.i[pdim] = i + s->s.from.i[pdim];
             w += (data->getIdxW)(&idx, data->userData);
         }
         else
@@ -265,7 +255,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
         while (w >= perPart * taskW) {
             w = w - (perPart * taskW);
             if ((task+1 == count) && (cycle+1 == cycles)) break;
-            slc.to.i[pdim] = i;
+            slc.to.i[pdim] = i + s->s.from.i[pdim];
             if (slc.from.i[pdim] < slc.to.i[pdim])
                 laik_append_slice(ba, task, &slc);
             task++;
@@ -281,12 +271,12 @@ void runBlockPartitioner(Laik_Partitioner* pr,
                 taskW = 1.0;
 
             // start new slice
-            slc.from.i[pdim] = i;
+            slc.from.i[pdim] = i + s->s.from.i[pdim];
         }
         if ((task+1 == count) && (cycle+1 == cycles)) break;
     }
     assert((task+1 == count) && (cycle+1 == cycles));
-    slc.to.i[pdim] = size;
+    slc.to.i[pdim] = s->s.to.i[pdim];
     laik_append_slice(ba, task, &slc);
 }
 

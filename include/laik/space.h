@@ -148,11 +148,7 @@ uint64_t laik_space_size(Laik_Space* s);
 void laik_set_space_name(Laik_Space* s, char* n);
 
 // change the size of an index space, eventually triggering a repartitiong
-void laik_change_space_1d(Laik_Space* s, uint64_t s1);
-void laik_change_space_2d(Laik_Space* s,
-                          uint64_t s1, uint64_t s2);
-void laik_change_space_3d(Laik_Space* s,
-                          uint64_t s1, uint64_t s2, uint64_t s3);
+void laik_change_space_1d(Laik_Space* s, uint64_t from1, uint64_t to1);
 
 // are the indexes equal?
 bool laik_index_isEqual(int dims, Laik_Index* i1, Laik_Index* i2);
@@ -163,8 +159,11 @@ bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
 // get the intersection of 2 slices; return 0 if intersection is empty
 Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
+// is slice <slc1> contained in <slc2>?
+bool laik_slice_within_slice(int dims, Laik_Slice* slc1, Laik_Slice* slc2);
+
 // is slice within space borders?
-bool laik_slice_isWithin(Laik_Slice* slc, Laik_Space* sp);
+bool laik_slice_within_space(Laik_Slice* slc, Laik_Space* sp);
 
 // are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);

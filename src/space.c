@@ -30,17 +30,23 @@ int getSpaceStr(char* s, Laik_Space* spc)
 {
     switch(spc->dims) {
     case 1:
-        return sprintf(s, "[0;%llu[",
-                       (unsigned long long) spc->size[0]);
+        return sprintf(s, "[%llu;%llu[",
+                       (unsigned long long) spc->s.from.i[0],
+                       (unsigned long long) spc->s.to.i[0] );
     case 2:
-        return sprintf(s, "[0;%llu[ x [0;%llu[",
-                       (unsigned long long) spc->size[0],
-                       (unsigned long long) spc->size[1]);
+        return sprintf(s, "[%llu;%llu[ x [%llu;%llu[",
+                       (unsigned long long) spc->s.from.i[0],
+                       (unsigned long long) spc->s.to.i[0],
+                       (unsigned long long) spc->s.from.i[1],
+                       (unsigned long long) spc->s.to.i[1] );
     case 3:
-        return sprintf(s, "[0;%llu[ x [0;%llu[ x [0;%llu[",
-                       (unsigned long long) spc->size[0],
-                       (unsigned long long) spc->size[1],
-                       (unsigned long long) spc->size[2]);
+        return sprintf(s, "[%llu;%llu[ x [%llu;%llu[ x [%llu;%llu[",
+                       (unsigned long long) spc->s.from.i[0],
+                       (unsigned long long) spc->s.to.i[0],
+                       (unsigned long long) spc->s.from.i[1],
+                       (unsigned long long) spc->s.to.i[1],
+                       (unsigned long long) spc->s.from.i[2],
+                       (unsigned long long) spc->s.to.i[2] );
     default: assert(0);
     }
     return 0;
@@ -134,26 +140,35 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2)
     return &s;
 }
 
-// is slice within space borders?
-bool laik_slice_isWithin(Laik_Slice* slc, Laik_Space* sp)
+// is slice <slc1> contained in <slc2>?
+bool laik_slice_within_slice(int dims, Laik_Slice* slc1, Laik_Slice* slc2)
 {
-    if (slc->from.i[0] < slc->to.i[0]) {
+    if (slc1->from.i[0] < slc1->to.i[0]) {
         // not empty
-        if (slc->to.i[0] > sp->size[0]) return false;
+        if (slc1->from.i[0] < slc2->from.i[0]) return false;
+        if (slc1->to.i[0] > slc2->to.i[0]) return false;
     }
-    if (sp->dims == 1) return true;
+    if (dims == 1) return true;
 
-    if (slc->from.i[1] < slc->to.i[1]) {
+    if (slc1->from.i[1] < slc1->to.i[1]) {
         // not empty
-        if (slc->to.i[1] > sp->size[1]) return false;
+        if (slc1->from.i[1] < slc2->from.i[1]) return false;
+        if (slc1->to.i[1] > slc2->to.i[1]) return false;
     }
-    if (sp->dims == 2) return true;
+    if (dims == 2) return true;
 
-    if (slc->from.i[2] < slc->to.i[2]) {
+    if (slc1->from.i[2] < slc1->to.i[2]) {
         // not empty
-        if (slc->to.i[2] > sp->size[2]) return false;
+        if (slc1->from.i[2] < slc2->from.i[2]) return false;
+        if (slc1->to.i[2] > slc2->to.i[2]) return false;
     }
     return true;
+}
+
+// is slice within space borders?
+bool laik_slice_within_space(Laik_Slice* slc, Laik_Space* sp)
+{
+    return laik_slice_within_slice(sp->dims, slc, &(sp->s));
 }
 
 // are the slices equal?
@@ -164,20 +179,6 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
     return true;
 }
 
-
-Laik_Slice* laik_sliceFromSpace(Laik_Space* s)
-{
-    static Laik_Slice slc;
-
-    slc.from.i[0] = 0;
-    slc.from.i[1] = 0;
-    slc.from.i[2] = 0;
-    slc.to.i[0] = s->size[0];
-    slc.to.i[1] = s->size[1];
-    slc.to.i[2] = s->size[2];
-
-    return &slc;
-}
 
 // number of indexes in the slice
 uint64_t laik_slice_size(int dims, Laik_Slice* s)
@@ -370,7 +371,8 @@ Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 1;
-    space->size[0] = s1;
+    space->s.from.i[0] = 0;
+    space->s.to.i[0] = s1;
 
     if (laik_logshown(1)) {
         char s[100];
@@ -386,8 +388,10 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i,
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 2;
-    space->size[0] = s1;
-    space->size[1] = s2;
+    space->s.from.i[0] = 0;
+    space->s.to.i[0] = s1;
+    space->s.from.i[1] = 0;
+    space->s.to.i[1] = s2;
 
     if (laik_logshown(1)) {
         char s[100];
@@ -403,9 +407,12 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i,
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 3;
-    space->size[0] = s1;
-    space->size[1] = s2;
-    space->size[2] = s3;
+    space->s.from.i[0] = 0;
+    space->s.to.i[0] = s1;
+    space->s.from.i[1] = 0;
+    space->s.to.i[1] = s2;
+    space->s.from.i[2] = 0;
+    space->s.to.i[2] = s3;
 
     if (laik_logshown(1)) {
         char s[100];
@@ -426,13 +433,7 @@ void laik_free_space(Laik_Space* s)
 
 uint64_t laik_space_size(Laik_Space* s)
 {
-    uint64_t size = s->size[0];
-    if (s->dims > 1) {
-        size *= s->size[1];
-        if (s->dims > 2)
-            size *= s->size[2];
-    }
-    return size;
+    return laik_slice_size(s->dims, &(s->s));
 }
 
 
@@ -443,27 +444,18 @@ void laik_set_space_name(Laik_Space* s, char* n)
 }
 
 // change the size of an index space, eventually triggering a repartitiong
-void laik_change_space_1d(Laik_Space* s, uint64_t s1)
+void laik_change_space_1d(Laik_Space* s, uint64_t from1, uint64_t to1)
 {
     assert(s->dims == 1);
-    if (s->size[0] == s1) return;
+    if ((s->s.from.i[0] == from1) && (s->s.to.i[0] == to1))
+        return;
 
-    s->size[0] = s1;
+    s->s.from.i[0] = from1;
+    s->s.to.i[0] = to1;
 
     // TODO: notify partitionings about space change
 }
 
-void laik_change_space_2d(Laik_Space* s,
-                          uint64_t s1, uint64_t s2)
-{
-    assert(0); // TODO
-}
-
-void laik_change_space_3d(Laik_Space* s,
-                          uint64_t s1, uint64_t s2, uint64_t s3)
-{
-    assert(0); // TODO
-}
 
 
 void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p)
@@ -515,7 +507,7 @@ void laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s)
 {
     assert(a->count < a->capacity);
     assert((task >= 0) && (task < a->group->size));
-    assert(laik_slice_isWithin(s, a->space));
+    assert(laik_slice_within_space(s, a->space));
 
     a->tslice[a->count].task = task;
     a->tslice[a->count].s = *s;
@@ -575,10 +567,10 @@ static
 bool bordersIsAll(Laik_BorderArray* ba)
 {
     if (ba->count != ba->group->size) return false;
-    Laik_Slice* slc = laik_sliceFromSpace(ba->space);
     for(int i = 0; i < ba->count; i++) {
         if (ba->tslice[i].task != i) return false;
-        if (!laik_slice_isEqual(ba->space->dims, &(ba->tslice[i].s), slc))
+        if (!laik_slice_isEqual(ba->space->dims,
+                                &(ba->tslice[i].s), &(ba->space->s)))
             return false;
     }
     return true;
@@ -589,9 +581,9 @@ bool bordersIsAll(Laik_BorderArray* ba)
 static
 int bordersIsSingle(Laik_BorderArray* ba)
 {
-    Laik_Slice* slc = laik_sliceFromSpace(ba->space);
     if (ba->count != 1) return -1;
-    if (!laik_slice_isEqual(ba->space->dims, &(ba->tslice[0].s), slc))
+    if (!laik_slice_isEqual(ba->space->dims,
+                            &(ba->tslice[0].s), &(ba->space->s)))
         return -1;
 
     return ba->tslice[0].task;
@@ -614,7 +606,7 @@ bool coversSpace(Laik_BorderArray* ba)
             max = ba->tslice[b].s.to.i[0];
     }
 
-    if ((min == 0) && (max == ba->space->size[0]))
+    if ((min == ba->space->s.from.i[0]) && (max == ba->space->s.to.i[0]))
         return true;
     return false;
 }
@@ -1084,7 +1076,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                 assert(bordersIsAll(toBA) || (root == 0));
 
                 struct redTOp* op = &(red[redCount]);
-                op->slc = *laik_sliceFromSpace(space); // complete space
+                op->slc = space->s; // complete space
                 op->redOp = laik_get_reduction(fromFlow);
                 op->rootTask = (root >= 0) ? root : -1;
 
