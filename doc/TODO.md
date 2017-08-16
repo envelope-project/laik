@@ -2,7 +2,11 @@
 
 ## API Design
 
-* we should separate partitioning from access behavior because
+* terms
+  - "index space" = Laik_Space: correct term?
+  - perhaps better index range/index domain?
+
+* we should separate partitioning from access behavior because [DONE]
   - if partitioning is directly used without data, access behavior makes no sense
   - if two data structures want to use the same partitioning, it is strange to "copy" from an struct specifying another access behavior
 
@@ -10,10 +14,23 @@
   - the application may want to specify access behaviour before and after for all used LAIK data, to not uselessly need data transfers
   - API: if data is not needed / not written to yet, we should mark that
   - enforcing a consistency-point could specify all kind of transitions of access behaviour, and include an allowed repartitioning. To restrictive?
+  - DONE: we derive fitting data flow from existing, and allowRepartition switches to new phase
 
 * allowRepartitioning may need to change all partitionings (to free compute nodes) or partitioning-specific (load balancing just influencing one partitioning)
 
 * How to specify different access behavior for different parts of a LAIK partitioning?
+  - cannot be done. No use case (yet).
+
+* a data container does not need to relate to a task group
+  - if no partitioning is active, no data can exist => no group necessary
+  - relationship between data and group exist whenever a partitioning (using a
+    group) is active
+
+* can the creation of space/partitioning/data always be a collective operation?
+  - all tasks need to know about them, even if they are not currently part
+    of a task group involved in using the space/partitioning/data
+  - how identified? Currently by "collective" creation in same order
+  - what about new coming processes?
 
 
 ## LAIK-internal design
