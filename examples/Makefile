@@ -1,4 +1,4 @@
-EXAMPLES = vsum vsum2 spmv spmv2 jac1d
+EXAMPLES = vsum vsum2 spmv spmv2 jac1d jac2d
 
 OPT = -g
 
@@ -23,6 +23,9 @@ spmv2: spmv2.c $(LAIKLIB)
 
 jac1d: jac1d.c $(LAIKLIB)
 	$(CC) $(CFLAGS) $(OMP_FLAGS) jac1d.c $(LAIKLIB) -o jac1d
+
+jac2d: jac2d.c $(LAIKLIB)
+	$(CC) $(CFLAGS) $(OMP_FLAGS) jac2d.c $(LAIKLIB) -o jac2d
 
 clean:
 	rm -f *.o *~ $(EXAMPLES)

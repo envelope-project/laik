@@ -3,4 +3,5 @@ vsum2
 spmv
 spmv2
 jac1d
+jac2d
 *.out
