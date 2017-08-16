@@ -72,7 +72,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     instance->myid = myid;
     instance->mylocation = strdup(location);
 
-    instance->firstspace = 0;
+    instance->firstSpaceForInstance = 0;
 
     instance->group_count = 0;
     instance->data_count = 0;
@@ -106,6 +106,30 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     }
 
     return instance;
+}
+
+// add/remove space to/from instance
+void laik_addSpaceForInstance(Laik_Instance* inst, Laik_Space* s)
+{
+    assert(s->nextSpaceForInstance == 0);
+    s->nextSpaceForInstance = inst->firstSpaceForInstance;
+    inst->firstSpaceForInstance = s;
+}
+
+void laik_removeSpaceFromInstance(Laik_Instance* inst, Laik_Space* s)
+{
+    if (inst->firstSpaceForInstance == s) {
+        inst->firstSpaceForInstance = s->nextSpaceForInstance;
+    }
+    else {
+        // search for previous item
+        Laik_Space* ss = inst->firstSpaceForInstance;
+        while(ss->nextSpaceForInstance != s)
+            ss = ss->nextSpaceForInstance;
+        assert(ss != 0); // not found, should not happen
+        ss->nextSpaceForInstance = s->nextSpaceForInstance;
+    }
+    s->nextSpaceForInstance = 0;
 }
 
 void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d)

@@ -129,7 +129,7 @@ bool laik_do_init(Laik_DataFlow flow);
 //
 
 // create a new index space object (initially invalid)
-Laik_Space* laik_new_space(Laik_Instance* i);
+Laik_Space* laik_new_space(Laik_Instance* inst);
 
 // create a new index space object with an initial size
 Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1);

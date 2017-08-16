@@ -60,7 +60,7 @@ struct _Laik_Instance {
     Laik_Backend* backend;
     void* backend_data;
 
-    Laik_Space* firstspace;
+    Laik_Space* firstSpaceForInstance;
 
     int group_count, data_count, mapping_count;
     Laik_Group* group[MAX_GROUPS];
@@ -74,6 +74,10 @@ struct _Laik_Instance {
     double timer_total, timer_backend;
     double time_total, time_backend;
 };
+
+// add/remove space to/from instance
+void laik_addSpaceForInstance(Laik_Instance* inst, Laik_Space* s);
+void laik_removeSpaceFromInstance(Laik_Instance* inst, Laik_Space* s);
 
 void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d);
 

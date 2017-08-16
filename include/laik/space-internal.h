@@ -32,7 +32,7 @@ struct _Laik_Space {
     int dims;
     uint64_t size[3]; // at most 3 dimensions
     Laik_Instance* inst;
-    Laik_Space* next; // for list of spaces used in instance
+    Laik_Space* nextSpaceForInstance; // for list of spaces used in instance
 
     // linked list of partitionings for this space
     Laik_Partitioning* firstPartitioningForSpace;

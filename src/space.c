@@ -346,7 +346,7 @@ bool laik_do_init(Laik_DataFlow flow)
 // Laik_Space
 
 // create a new index space object (initially invalid)
-Laik_Space* laik_new_space(Laik_Instance* i)
+Laik_Space* laik_new_space(Laik_Instance* inst)
 {
     Laik_Space* space = (Laik_Space*) malloc(sizeof(Laik_Space));
 
@@ -354,13 +354,13 @@ Laik_Space* laik_new_space(Laik_Instance* i)
     space->name = strdup("space-0     ");
     sprintf(space->name, "space-%d", space->id);
 
-    space->inst = i;
+    space->inst = inst;
     space->dims = 0; // invalid
     space->firstPartitioningForSpace = 0;
+    space->nextSpaceForInstance = 0;
 
     // append this space to list of spaces used by LAIK instance
-    space->next = i->firstspace;
-    i->firstspace = space;
+    laik_addSpaceForInstance(inst, space);
 
     return space;
 }
@@ -420,7 +420,7 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i,
 void laik_free_space(Laik_Space* s)
 {
     free(s->name);
-
+    laik_removeSpaceFromInstance(s->inst, s);
     // TODO
 }
 
