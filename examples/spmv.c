@@ -113,7 +113,7 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < count; i++)
         res[i] = 0.0;
     // SPMV on my part of matrix rows
-    laik_my_slice1(p, 0, &fromRow, &toRow);
+    laik_my_slice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
             res[r - fromRow] += m->val[o] * v[m->col[o]];
@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
     laik_switchto_new(resD, laik_All,
                       LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_map_def1(resD, (void**) &res, &count);
-    laik_my_slice1(p, 0, &fromRow, &toRow);
+    laik_my_slice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
             res[r] += m->val[o] * v[m->col[o]];

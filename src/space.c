@@ -831,7 +831,7 @@ Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n)
     return &(p->borders->tslice[o].s);
 }
 
-Laik_Slice* laik_my_slice1(Laik_Partitioning* p, int n,
+Laik_Slice* laik_my_slice_1d(Laik_Partitioning* p, int n,
                            uint64_t* from, uint64_t* to)
 {
     assert(p->space->dims == 1);

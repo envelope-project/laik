@@ -156,13 +156,39 @@ Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count);
 // similar to laik_map, but force a default mapping with only 1 slice
 Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count);
 
-// global to local: local indexes take mapping layout into account
-// if global index <gidx> is locally mapped, return mapping and set offset.
-// otherwise, return 0
-Laik_Mapping* laik_global2local1(Laik_Data* d, uint64_t gidx, uint64_t* off);
+// request default 2d mapping for 1 slice (= rectangle).
+// returns the mapping, and values describing mapping in output parameters
+//  - valid ranges: y in [0;ysize], x in [0;xsize[
+//  - value of base[y][x] is at address (base + y * ystride + x)
+//    (note: ystride may be larger than xsize)
+Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
+                               void** base, uint64_t* ysize,
+                               uint64_t* ystride, uint64_t* xsize);
+
+// 1d global to 1d local
+// if global index <gidx> is locally mapped, return mapping and set local
+//  index <lidx>. Otherwise, return 0
+// Note: the local index matches the offset into the local mapping only
+//       if the default layout is used
+Laik_Mapping* laik_global2local(Laik_Data* d, uint64_t gidx, uint64_t* lidx);
 
 // local to global: return global index of offset in a single local mapping
 uint64_t laik_local2global1(Laik_Data* d, uint64_t off);
+
+// 2d global to 2d local
+// if global coordinate (gx/gy) is in local mapping, set output parameters
+//  (lx/ly) and return mapping, otherwise return false
+// to be able to access the mapping, the local offset has to be calculated
+// from local coordinates (lx/ly), using memory layout information
+Laik_Mapping laik_global2local_2d(Laik_Data* d, uint64_t gx, uint64_t gy,
+                                  uint64_t* lx, uint64_t* ly);
+
+
+// 2d local to 2d global in a single local mapping (thus ...global1).
+// if local coordinate (lx/ly) is in local mapping, set output parameters
+//  (gx/gy) and return true, otherwise return false
+bool laik_local2global1_2d(Laik_Data* d, uint64_t lx, uint64_t ly,
+                           uint64_t* gx, uint64_t* gy);
 
 //----------------------------------
 // Allocator interface

@@ -250,7 +250,7 @@ int main(int argc, char* argv[])
 
         // loop over all local slices
         for(int sNo = 0; ; sNo++) {
-            if (!laik_my_slice1(p, sNo, &fromRow, &toRow)) break;
+            if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
 
             // my partition slice of result vector (local indexing, from 0)
             laik_map_def(resD, sNo, (void**) &res, &rcount);
@@ -297,7 +297,7 @@ int main(int argc, char* argv[])
 
             // loop over all local slices of result vector
             for(int sNo = 0; ; sNo++) {
-                if (!laik_my_slice1(p, sNo, &fromRow, &toRow)) break;
+                if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
 
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
                 for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;

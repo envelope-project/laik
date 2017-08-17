@@ -106,12 +106,12 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < countW; i++)
         baseW[i] = (double) ((i + glbase) & 6);
     // set fixed boundary values
-    if (laik_global2local1(dWrite, 0, &off)) {
+    if (laik_global2local(dWrite, 0, &off)) {
         // if global index 0 is local, it must be at local index 0
         assert(off == 0);
         baseW[off] = loValue;
     }
-    if (laik_global2local1(dWrite, size-1, &off)) {
+    if (laik_global2local(dWrite, size-1, &off)) {
         // if last global index is local, it must be at countW-1
         assert(off == countW - 1);
         baseW[off] = hiValue;
@@ -139,7 +139,7 @@ int main(int argc, char* argv[])
         // local range for which to do 1d stencil, adjust at borders
         from = 0;
         to = countW;
-        if (laik_global2local1(dWrite, 0, &off)) {
+        if (laik_global2local(dWrite, 0, &off)) {
             // global index 0 is local
             assert(off == 0);
             baseW[off] = loValue;
@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
                    laik_local2global1(dRead, 0) + 1);
             baseR++;
         }
-        if (laik_global2local1(dWrite, size-1, &off)) {
+        if (laik_global2local(dWrite, size-1, &off)) {
             // last global index is local
             assert(off == countW - 1);
             baseW[off] = hiValue;

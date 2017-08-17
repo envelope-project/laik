@@ -288,8 +288,15 @@ int laik_my_slicecount(Laik_Partitioning* p);
 Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n);
 
 // get from/to values for 1d slice with number <n> assigned to this task
-Laik_Slice* laik_my_slice1(Laik_Partitioning* p, int n,
-                           uint64_t* from, uint64_t* to);
+Laik_Slice* laik_my_slice_1d(Laik_Partitioning* p, int n,
+                             uint64_t* from, uint64_t* to);
+
+// get boundaries [x1;x2[ x [y1;y2[ for 2d slice with number <n>
+//  assigned to this task, returning the slice or 0 if no slice exists
+Laik_Slice* laik_my_slice_2d(Laik_Partitioning* p, int n,
+                             uint64_t* x1, uint64_t* x2,
+                             uint64_t* y1, uint64_t* y2);
+
 
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n);
