@@ -56,6 +56,7 @@ struct _Laik_Instance {
     int size;
     int myid;
     char* mylocation;
+    char guid[64];
 
     Laik_Backend* backend;
     void* backend_data;

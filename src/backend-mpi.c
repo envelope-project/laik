@@ -79,6 +79,8 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     inst = laik_new_instance(&laik_backend_mpi, size, rank,
                              processor_name, d);
 
+    sprintf(inst->guid, "%d", rank);
+
     // group world
 
     MPIGroupData* gd = (MPIGroupData*) malloc(sizeof(MPIGroupData));

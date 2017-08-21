@@ -95,6 +95,12 @@ bool laik_is_master(Laik_Group* g);
 // a process may become unmanaged by shrinking the world group.
 bool laik_is_managed(Laik_Instance* i);
 
+// Utilities
+
+// These are used for generate a mapping between e.g. MPI Tasks LAIK 
+// instances
+char* laik_get_guid(Laik_Instance* i);
+
 // profiling
 
 // start profiling for given instance

@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 // default log level
 static Laik_LogLevel laik_loglevel = LAIK_LL_Error;
@@ -273,7 +275,11 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
     return g2;
 }
 
+// Utilities
 
+char* laik_get_guid(Laik_Instance* i){
+    return i->guid;
+}
 
 // Profiling
 
