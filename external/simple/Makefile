@@ -15,7 +15,7 @@ DEBUGFLAGS= -O0 -D DEBUG
 RELEASEFLAGS= -O3 -D NDEBUG -combine -fwhole-program 
 
 
-TARGET  = liblaik_staticagent.so
+TARGET  = libsimpleagent.so
 SOURCES = $(wildcard *.c)
 HEADERS = $(wildcard *.h)
 OBJECTS = $(SOURCES:.c=.o)
@@ -31,7 +31,7 @@ $(TARGET): $(OBJECTS)
 clean:
 	rm -f *.o
 	rm -f *.d
-	rm -f liblaik_staticagent.so
+	rm -f libsimpleagent.so
 
 .PHONY: all clean
 

@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "laik.h"
 
@@ -91,8 +92,7 @@ laik_agent* laik_ext_loadagent (
             agent->type = LAIK_AGENT_DYNAMIC;
 
             agent->detach = (laik_agent_detach) probfunc(handle, "agent_detach");
-            agent->reset = (laik_agent_reset) probfunc(handle, "agent_reset");
-            agent->getfail = (laik_agent_get_failed) probfunc (handle, "agent_get_fail");
+            agent->getfail = (laik_agent_get_failed) probfunc (handle, "agent_get_failed");
             agent->peekfail = (laik_agent_peek_failed) probfunc(handle, "agent_peek_failed");
             agent->clearalarm = (laik_agent_clear) probfunc(handle, "agent_clear_alarm");
 
@@ -104,6 +104,10 @@ laik_agent* laik_ext_loadagent (
             if(agent->capabilities & LAIK_AGENT_SIMULATOR){
                 agent->setiter = (laik_agent_set_iter) probfunc(handle, "agent_set_iter");
                 agent->setphase = (laik_agent_set_phase) probfunc(handle, "agent_set_phase");
+            }
+
+            if(agent->capabilities & LAIK_AGENT_RESET_NODE){
+                agent->reset = (laik_agent_reset) probfunc(handle, "agent_reset");
             }
             break;
             
@@ -121,7 +125,7 @@ laik_agent* laik_ext_loadagent (
                 (laik_ext_num_loaded+1)*sizeof(void*) );
     }
     laik_ext_so_loaded[laik_ext_num_loaded] = handle;
-    
+
     return agent;
 }
 
@@ -140,6 +144,7 @@ void laik_ext_cleanup(
     assert(agent);
     agent->detach(agent);
 }
+
 int laik_allow_repartition (
     Laik_Instance* instance, 
     Laik_RepartitionControl* ctrl,
@@ -153,32 +158,43 @@ int laik_allow_repartition (
     assert(ctrl->num_agents);
     assert(ctrl->agents);
     
-    char ** failed = 0;
-    int n_failed = 0;
-    char ** spare = 0;
-    int n_spare = 0;
-    int i,j;
+    char buffer[256];
+    int num_failed = 0;
+    int total_failed = 0;
+    int* failed_tasks;
+    int i;
+    char* token;
     
+    
+
+    //TODO: Match up Task number with some unique identifier
     for(i=0; i<ctrl->num_agents; i++){
-        char** temp; 
-        int n_temp;
+        // If no node is failed, no need to continue
+        if(ctrl->agents[i]->peekfail(ctrl->agents[i]) == 0) continue;
 
-        // TODO: GetSpare
-
-        (void) n_spare;
-        (void) spare;
-
-        ctrl->agents[i]->getfail((ctrl->agents[i]), &n_temp, &temp);
-        if(n_temp > 0){
-            if(n_failed == 0){
-                failed = (char**) malloc (n_temp*sizeof(char*));
+        // Get list of failed node
+        ctrl->agents[i]->getfail((ctrl->agents[i]), &num_failed, buffer);
+        if(num_failed > 0){
+            total_failed += num_failed;
+            if(failed_tasks == 0){
+                failed_tasks = (int*) malloc (total_failed*sizeof(int));                
             }else{
-                failed = (char**) realloc (failed, (n_temp + n_failed)*(sizeof(char*)));
+                failed_tasks = (int*) realloc (failed_tasks, total_failed*sizeof(int));
             }
-            for (j=0; j<n_temp; j++){
-                failed[j] = (char*) malloc (strlen(temp[i]) + 1);
-                strcpy(failed[j], temp[i]);
+
+            //tokenized buffer
+            token = strtok(buffer, " ");            
+            //fill the lisk with failed tasks;
+            failed_tasks[total_failed-1] = atoi(token);
+
+            //if there are more than 1 failed task, continue tokenizing.
+            while(num_failed > 1){
+                token = strtok(NULL, " ");
+                failed_tasks[total_failed-num_failed] = atoi(token);
             }
+
+            //reset and go to next agent
+            num_failed = 0;
         }else {continue; }
     }
     

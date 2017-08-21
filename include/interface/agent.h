@@ -49,9 +49,9 @@ typedef void (*laik_agent_detach) (laik_agent*);
 typedef void (*laik_agent_reset) (laik_agent*);
 typedef laik_agent_cap (*laik_agent_getcap) ();
 
-typedef void (*laik_agent_get_failed) (laik_agent*, int*, char***);
+typedef void (*laik_agent_get_failed) (laik_agent*, int*, char*);
 typedef int (*laik_agent_peek_failed) (laik_agent*);
-typedef void (*laik_agent_get_spare) (laik_agent*, int*, char***);
+typedef void (*laik_agent_get_spare) (laik_agent*, int*, char*);
 typedef int (*laik_agent_peek_spare) (laik_agent*);
 typedef int (*laik_agent_clear) (laik_agent*);
 

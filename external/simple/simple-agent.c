@@ -22,24 +22,29 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
+#include <limits.h>
 
 static int aIter;
 static int fail_iter;
 static int fail_task;
 static int isInited = 0;
 
-static char* failed_nodes[1];
-static char* st_fail_node = "1";
-static const int n_fail_node = 1;
-
-static
-void static_agent_detach (
+void agent_detach (
     laik_agent* this
 ){
-    return;
+    (void) this;
 }
-static 
-void static_agent_setiter(
+
+int agent_clear_alarm (
+    laik_agent* agent
+){
+    (void) agent;
+    fail_iter = INT_MAX;
+    return 0;
+}
+
+void agent_set_iter(
     laik_agent* this,
     const int iter
 ){
@@ -47,8 +52,8 @@ void static_agent_setiter(
     (void)this;
     aIter = iter;
 }
-static
-void static_agent_setphase(
+
+void agent_set_phase(
     laik_agent* this, 
     const int num_phase,
     const char* name_phase, 
@@ -61,30 +66,22 @@ void static_agent_setphase(
     (void) pData;
 }
 
-/* this message need to be freed by the user!!!! */
-static
-void static_agent_getfailed(
+void agent_get_failed(
     laik_agent* this, 
     int* n_failed,
-    char*** l_failed
+    char* l_failed
 ){
     assert(isInited);
     (void)this;
-    
-    failed_nodes[0] = st_fail_node;
-    
     if(aIter<fail_iter){
         return;
     }
+    sprintf(l_failed, "%d", fail_task);
+    *n_failed = 1;
 
-
-    //FIXME: Mem Leak. 
-    *l_failed = failed_nodes;
-    *n_failed = n_fail_node;
 }
 
-static
-int static_agent_peek(
+int agent_peek_failed(
     laik_agent* this
 ){
     assert(isInited);
@@ -92,19 +89,21 @@ int static_agent_peek(
     if(aIter<fail_iter){
         return 0;
     }
-    return n_fail_node;
+    return 1;
 }
 
 
-laik_ext_errno static_agent_init(
+laik_ext_errno agent_init(
     int argc, 
     char** argv
 ){
     assert(argc == 2);
     assert(argv);
     assert(argv[0]);
+    assert(argv[1]);
 
     fail_iter = atoi(argv[0]);
+    fail_task = atoi(argv[1]);
 
     isInited = 1;
     return LAIK_AGENT_ERRNO_SUCCESS;

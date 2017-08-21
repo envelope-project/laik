@@ -125,6 +125,10 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
+#ifdef USE_EXT_INTF
+    Laik_RepartitionControl* repartctrl;
+    laik_agent* agent;
+#endif
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
     int maxiter = 0, size = 0, nextshrink = -1, shrink = -1, removeTask = 0;
     bool useReduction = false;
@@ -176,6 +180,19 @@ int main(int argc, char* argv[])
         }
         arg++;
     }
+
+#ifdef USE_EXT_INTF
+    if(shrink){
+        char soargs[2][2];
+        sprintf(soargs[0], "%d", shrink);
+        sprintf(soargs[1], "%d", removeTask);
+        agent = laik_ext_loadagent(
+            "Simple Agent", LAIK_AGENT_DYNAMIC, 
+            "../external/simple/libsimpleagent.so", 2, 
+            soargs);
+    }
+#endif
+
     if (maxiter == 0) maxiter = 10;
     if (size == 0) size = 10000;
 
