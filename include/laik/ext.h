@@ -40,8 +40,8 @@ struct _Laik_RepartitionControl {
     int num_agents;
 };
 
-laik_agent* laik_ext_loadagent_static(laik_agent_init_static, int, char**);
-laik_agent* laik_ext_loadagent (char* path, int argc, char** argv);
+laik_agent* laik_ext_loadagent_static(laik_agent_init, int, char**);
+laik_agent* laik_ext_loadagent (char* name, laik_agent_t type, char* path, int argc, char** argv);
 void laik_ext_cleanup(laik_agent* agent);
 
 int laik_allow_repartition(Laik_Instance* instance, Laik_RepartitionControl* ctrl, int num_groups, Laik_Group** groups);

@@ -18,10 +18,15 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+enum tag_laik_agent_errno{
+    LAIK_AGENT_ERRNO_SUCCESS = 0,
+    LAIK_AGENT_ERRNO_INIT_FAIL = -100,
+    LAIK_AGENT_ERRNO_UNKNOWN_FAIL = -110
+};
+
 enum tag_laik_ext_agent_t{
     LAIK_AGENT_STATIC = 0,
     LAIK_AGENT_DYNAMIC = 1,
-    LAIK_AGENT_SIMULATOR = 2,
 
     LAIK_AGENT_NONE = 255
 };
@@ -30,16 +35,19 @@ enum tag_laik_ext_agent_cap{
     LAIK_AGENT_GET_FAIL = 1,
     LAIK_AGENT_GET_SPARE = 2,
     LAIK_AGENT_RESET_NODE = 4,
+    LAIK_AGENT_SIMULATOR = 8
+    
 };
 
+typedef enum tag_laik_agent_errno laik_ext_errno;
 typedef struct tag_laik_ext_agent laik_agent;
 typedef enum tag_laik_ext_agent_t laik_agent_t;
 typedef enum tag_laik_ext_agent_cap laik_agent_cap;
 
-typedef laik_agent* (*laik_agent_init_static) (int, char**);
+typedef laik_ext_errno (*laik_agent_init) (int, char**);
 typedef void (*laik_agent_detach) (laik_agent*);
 typedef void (*laik_agent_reset) (laik_agent*);
-typedef laik_agent_cap (*laik_agent_getcap) (laik_agent*);
+typedef laik_agent_cap (*laik_agent_getcap) ();
 
 typedef void (*laik_agent_get_failed) (laik_agent*, int*, char***);
 typedef int (*laik_agent_peek_failed) (laik_agent*);

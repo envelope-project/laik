@@ -22,4 +22,4 @@
 #include "interface/agent.h"
 
 
-laik_agent* static_agent_init(int argc, char** argv);
+laik_ext_errno static_agent_init(int argc, char** argv);

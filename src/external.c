@@ -25,23 +25,113 @@
 
 #include "laik.h"
 
+static int laik_ext_num_loaded = 0;
+static void** laik_ext_so_loaded = 0;
+static int laik_ext_cur_id = 0;
+
+static void* probfunc(
+    void* handle,
+    char* name
+){
+    void* func;
+    assert(handle);
+    assert(name);
+
+    func = dlsym(handle, name);
+    if(!handle){
+        dlclose(handle);
+        laik_log(LAIK_LL_Error, dlerror());
+        exit(1);
+    }
+
+    return func;
+}
+
 laik_agent* laik_ext_loadagent (
+    char* name,
+    laik_agent_t type,
     char* path, 
     int argc, 
     char** argv
 ){
-    //not yet implemented;
-    assert(0);
-    return 0;
+    void *handle;
+    laik_agent* agent;
+    laik_agent_init init;
+    laik_ext_errno errno;
+    laik_agent_getcap getcap;
+
+    assert(name);
+    assert(path);
+    if(argc>0)  assert(argv);
+
+    switch (type){
+        case LAIK_AGENT_STATIC:
+            laik_log(LAIK_LL_Error, 
+                "This is for dynamic loaded libs, call laik_ext_loadagent_static() instead \n");
+            exit(1);
+
+        case LAIK_AGENT_DYNAMIC:
+            handle = dlopen(path, RTLD_LAZY);
+            if(!handle){
+                laik_log(LAIK_LL_Error, dlerror());
+                exit(1);
+            }
+            init = (laik_agent_init) probfunc(handle, "agent_init");
+            errno = init(argc, argv);
+            if(errno != LAIK_AGENT_ERRNO_SUCCESS){
+                laik_log(LAIK_LL_Error, "Cannot initialize agent");
+                exit(1);
+            }
+            agent = (laik_agent*) malloc (sizeof(laik_agent));            
+
+            agent->id = laik_ext_cur_id;
+            agent->name = name;
+            getcap = (laik_agent_getcap) probfunc(handle, "agent_get_cap");
+            agent->capabilities = getcap();
+            agent->type = LAIK_AGENT_DYNAMIC;
+
+            agent->detach = (laik_agent_detach) probfunc(handle, "agent_detach");
+            agent->reset = (laik_agent_reset) probfunc(handle, "agent_reset");
+            agent->getfail = (laik_agent_get_failed) probfunc (handle, "agent_get_fail");
+            agent->peekfail = (laik_agent_peek_failed) probfunc(handle, "agent_peek_failed");
+            agent->clearalarm = (laik_agent_clear) probfunc(handle, "agent_clear_alarm");
+
+            if(agent->capabilities & LAIK_AGENT_GET_SPARE){
+                agent->getspare = (laik_agent_get_spare) probfunc(handle, "agent_get_spare");
+                agent->peekspare = (laik_agent_peek_spare) probfunc(handle, "agent_peek_spare");
+            }
+
+            if(agent->capabilities & LAIK_AGENT_SIMULATOR){
+                agent->setiter = (laik_agent_set_iter) probfunc(handle, "agent_set_iter");
+                agent->setphase = (laik_agent_set_phase) probfunc(handle, "agent_set_phase");
+            }
+            break;
+            
+        default:
+            laik_log(LAIK_LL_Error, 
+                "Unsupported Agent Type. \n");
+            exit(1);
+    }
+
+    laik_ext_num_loaded++;
+    if(laik_ext_so_loaded == 0){
+        laik_ext_so_loaded = (void**) malloc(sizeof(void*));
+    }else{
+        laik_ext_so_loaded = realloc(laik_ext_so_loaded, 
+                (laik_ext_num_loaded+1)*sizeof(void*) );
+    }
+    laik_ext_so_loaded[laik_ext_num_loaded] = handle;
+    
+    return agent;
 }
 
 laik_agent* laik_ext_loadagent_static(
-    laik_agent_init_static init,
+    laik_agent_init init,
     int argc, 
     char** argv
 ){
-    assert(init);
-    return (init(argc, argv));
+    assert(0);
+    return 0;
 }
 
 void laik_ext_cleanup(

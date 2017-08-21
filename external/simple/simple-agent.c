@@ -18,13 +18,14 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "static-agent.h"
+#include "simple-agent.h"
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 
 static int aIter;
 static int fail_iter;
+static int fail_task;
 static int isInited = 0;
 
 static char* failed_nodes[1];
@@ -35,8 +36,7 @@ static
 void static_agent_detach (
     laik_agent* this
 ){
-    assert(isInited);
-    free(this);
+    return;
 }
 static 
 void static_agent_setiter(
@@ -69,13 +69,7 @@ void static_agent_getfailed(
     char*** l_failed
 ){
     assert(isInited);
-    assert(this);
-    assert(n_failed);
-    assert(l_failed);
-
     (void)this;
-
-
     
     failed_nodes[0] = st_fail_node;
     
@@ -102,32 +96,16 @@ int static_agent_peek(
 }
 
 
-laik_agent* static_agent_init(
+laik_ext_errno static_agent_init(
     int argc, 
     char** argv
 ){
-    assert(argc == 1);
+    assert(argc == 2);
     assert(argv);
     assert(argv[0]);
 
     fail_iter = atoi(argv[0]);
-    
-    laik_agent* this = (laik_agent*)
-        malloc(sizeof(laik_agent));
-    assert(this);
-
-    memset(this, 0x0, sizeof(laik_agent));
-   
-
-    this->capabilities = LAIK_AGENT_GET_FAIL;
-    this->type = LAIK_AGENT_SIMULATOR;
-    this->detach = static_agent_detach;
-    
-    this->setiter = static_agent_setiter;
-    this->setphase = static_agent_setphase;
-    this->getfail = static_agent_getfailed;
-    this->peekfail = static_agent_peek;
 
     isInited = 1;
-    return this;
+    return LAIK_AGENT_ERRNO_SUCCESS;
 }
