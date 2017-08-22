@@ -92,6 +92,12 @@ int agent_peek_failed(
     return 1;
 }
 
+int agent_close(
+    laik_agent* this
+){
+    this->isAlive = 0;
+    return  0;
+}
 
 laik_ext_errno agent_init(
     int argc, 

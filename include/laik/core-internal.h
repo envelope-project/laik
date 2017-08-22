@@ -27,6 +27,7 @@
 #define MAX_PARTITIONINGS 10
 #define MAX_DATAS         10
 #define MAX_MAPPINGS      10
+#define MAX_AGENTS        10
 
 
 
@@ -74,6 +75,11 @@ struct _Laik_Instance {
     bool do_profiling;
     double timer_total, timer_backend;
     double time_total, time_backend;
+
+    // Fault Tolerance
+    laik_agent** agents;
+    int agent_count;
+    
 };
 
 // add/remove space to/from instance

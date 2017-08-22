@@ -63,6 +63,8 @@ struct tag_laik_ext_agent{
     int id;
     char* name; 
 
+    int isAlive;
+
     laik_agent_cap capabilities;
     laik_agent_t type;
 
