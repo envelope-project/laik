@@ -137,6 +137,9 @@ Laik_LayoutType laik_layout_type(Laik_Layout* l);
 // return the layout type used in a mapping
 Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
 
+// for a local index (1d/2d/3d), return offset into memory mapping
+uint64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
+
 // make own partition available for direct access in local memory.
 //
 // own partition my consist of multiple slices, so <n> is the slice number
@@ -170,10 +173,10 @@ Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
 //  index <lidx>. Otherwise, return 0
 // Note: the local index matches the offset into the local mapping only
 //       if the default layout is used
-Laik_Mapping* laik_global2local(Laik_Data* d, uint64_t gidx, uint64_t* lidx);
+Laik_Mapping* laik_global2local_1d(Laik_Data* d, uint64_t gidx, uint64_t* lidx);
 
 // local to global: return global index of offset in a single local mapping
-uint64_t laik_local2global1(Laik_Data* d, uint64_t off);
+uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off);
 
 // 2d global to 2d local
 // if global coordinate (gx/gy) is in local mapping, set output parameters

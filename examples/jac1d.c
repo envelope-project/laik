@@ -102,16 +102,16 @@ int main(int argc, char* argv[])
     laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
     laik_map_def1(dWrite, (void**) &baseW, &countW);
     // arbitrary non-zero values based on global indexes to detect bugs
-    uint64_t glbase = laik_local2global1(dWrite, 0);
+    uint64_t glbase = laik_local2global_1d(dWrite, 0);
     for(uint64_t i = 0; i < countW; i++)
         baseW[i] = (double) ((i + glbase) & 6);
     // set fixed boundary values
-    if (laik_global2local(dWrite, 0, &off)) {
+    if (laik_global2local_1d(dWrite, 0, &off)) {
         // if global index 0 is local, it must be at local index 0
         assert(off == 0);
         baseW[off] = loValue;
     }
-    if (laik_global2local(dWrite, size-1, &off)) {
+    if (laik_global2local_1d(dWrite, size-1, &off)) {
         // if last global index is local, it must be at countW-1
         assert(off == countW - 1);
         baseW[off] = hiValue;
@@ -139,7 +139,7 @@ int main(int argc, char* argv[])
         // local range for which to do 1d stencil, adjust at borders
         from = 0;
         to = countW;
-        if (laik_global2local(dWrite, 0, &off)) {
+        if (laik_global2local_1d(dWrite, 0, &off)) {
             // global index 0 is local
             assert(off == 0);
             baseW[off] = loValue;
@@ -148,11 +148,11 @@ int main(int argc, char* argv[])
         else {
             // start at inner border: adjust baseR such that
             //  baseR[i] and baseW[i] correspond to same global index
-            assert(laik_local2global1(dWrite, 0) ==
-                   laik_local2global1(dRead, 0) + 1);
+            assert(laik_local2global_1d(dWrite, 0) ==
+                   laik_local2global_1d(dRead, 0) + 1);
             baseR++;
         }
-        if (laik_global2local(dWrite, size-1, &off)) {
+        if (laik_global2local_1d(dWrite, size-1, &off)) {
             // last global index is local
             assert(off == countW - 1);
             baseW[off] = hiValue;

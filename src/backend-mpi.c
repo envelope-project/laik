@@ -281,8 +281,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             char* toBase = toMap ? toMap->base : 0;
 
             // from global to receiver-local indexes
-            uint64_t from = op->slc.from.i[0] - toMap->baseIdx.i[0];
-            uint64_t to   = op->slc.to.i[0] - toMap->baseIdx.i[0];
+            uint64_t from = op->slc.from.i[0] - toMap->validSlice.from.i[0];
+            uint64_t to   = op->slc.to.i[0] - toMap->validSlice.from.i[0];
             assert(toBase != 0);
 
             MPI_Datatype mpiDataType;
@@ -335,8 +335,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             char* fromBase = fromMap ? fromMap->base : 0;
 
             // from global to sender-local indexes
-            uint64_t from = op->slc.from.i[0] - fromMap->baseIdx.i[0];
-            uint64_t to   = op->slc.to.i[0] - fromMap->baseIdx.i[0];
+            uint64_t from = op->slc.from.i[0] - fromMap->validSlice.from.i[0];
+            uint64_t to   = op->slc.to.i[0] - fromMap->validSlice.from.i[0];
 
             MPI_Datatype mpiDataType;
             if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;

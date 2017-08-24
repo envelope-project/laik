@@ -207,8 +207,7 @@ uint64_t laik_slice_size(int dims, Laik_Slice* s)
 }
 
 
-static
-int getSliceStr(char* s, int dims, Laik_Slice* slc)
+int laik_getSliceStr(char* s, int dims, Laik_Slice* slc)
 {
     if (laik_slice_isEmpty(dims, slc))
         return sprintf(s, "(empty)");
@@ -265,7 +264,7 @@ int laik_getTransitionStr(char* s, Laik_Transition* t)
         off += sprintf(s+off, "   %2d local: ", t->localCount);
         for(int i=0; i<t->localCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
-            off += getSliceStr(s+off, t->dims, &(t->local[i].slc));
+            off += laik_getSliceStr(s+off, t->dims, &(t->local[i].slc));
         }
         off += sprintf(s+off, "\n");
     }
@@ -275,7 +274,7 @@ int laik_getTransitionStr(char* s, Laik_Transition* t)
         for(int i=0; i<t->initCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getReductionStr(s+off, t->init[i].redOp);
-            off += getSliceStr(s+off, t->dims, &(t->init[i].slc));
+            off += laik_getSliceStr(s+off, t->dims, &(t->init[i].slc));
         }
         off += sprintf(s+off, "\n");
     }
@@ -284,7 +283,7 @@ int laik_getTransitionStr(char* s, Laik_Transition* t)
         off += sprintf(s+off, "   %2d send : ", t->sendCount);
         for(int i=0; i<t->sendCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
-            off += getSliceStr(s+off, t->dims, &(t->send[i].slc));
+            off += laik_getSliceStr(s+off, t->dims, &(t->send[i].slc));
             off += sprintf(s+off, "==>T%d", t->send[i].toTask);
         }
         off += sprintf(s+off, "\n");
@@ -295,7 +294,7 @@ int laik_getTransitionStr(char* s, Laik_Transition* t)
         for(int i=0; i<t->recvCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += sprintf(s+off, "T%d==>", t->recv[i].fromTask);
-            off += getSliceStr(s+off, t->dims, &(t->recv[i].slc));
+            off += laik_getSliceStr(s+off, t->dims, &(t->recv[i].slc));
         }
         off += sprintf(s+off, "\n");
     }
@@ -305,7 +304,7 @@ int laik_getTransitionStr(char* s, Laik_Transition* t)
         for(int i=0; i<t->redCount; i++) {
             if (i>0) off += sprintf(s+off, ", ");
             off += getReductionStr(s+off, t->red[i].redOp);
-            off += getSliceStr(s+off, t->dims, &(t->red[i].slc));
+            off += laik_getSliceStr(s+off, t->dims, &(t->red[i].slc));
             off += sprintf(s+off, "=> %s",
                            (t->red[i].rootTask == -1) ? "all":"master");
         }
@@ -638,12 +637,12 @@ static char* getNotcoveredStr(int dims, Laik_Slice* toRemove)
     o = sprintf(s, "not covered: (");
     for(int j = 0; j < notcovered_count; j++) {
         if (j>0) o += sprintf(s+o, ", ");
-        o += getSliceStr(s+o, dims, &(notcovered[j]));
+        o += laik_getSliceStr(s+o, dims, &(notcovered[j]));
     }
     o += sprintf(s+o, ")");
     if (toRemove) {
         o += sprintf(s+o, "\n  removing ");
-        o += getSliceStr(s+o, dims, toRemove);
+        o += laik_getSliceStr(s+o, dims, toRemove);
     }
     return s;
 }
@@ -732,7 +731,7 @@ int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
         if (i>0)
             o += sprintf(s+o, ", ");
         o += sprintf(s+o, "%d:", ba->tslice[i].task);
-        o += getSliceStr(s+o, ba->space->dims, &(ba->tslice[i].s));
+        o += laik_getSliceStr(s+o, ba->space->dims, &(ba->tslice[i].s));
     }
 
     return o;
