@@ -203,6 +203,7 @@ Laik_Partitioner* laik_new_all_partitioner();
 Laik_Partitioner* laik_new_master_partitioner();
 Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim);
 Laik_Partitioner* laik_new_halo_partitioner(int depth);
+Laik_Partitioner* laik_new_bisection_partitioner();
 
 
 // Block partitioner
@@ -288,14 +289,22 @@ int laik_my_slicecount(Laik_Partitioning* p);
 Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n);
 
 // get from/to values for 1d slice with number <n> assigned to this task
+// if there is no slice, return 0 and set range to [0;0[ (ie. empty)
 Laik_Slice* laik_my_slice_1d(Laik_Partitioning* p, int n,
                              uint64_t* from, uint64_t* to);
 
-// get boundaries [x1;x2[ x [y1;y2[ for 2d slice with number <n>
-//  assigned to this task, returning the slice or 0 if no slice exists
+// get boundaries [x1;x2[ x [y1;y2[ for 2d slice <n> of this task
+// if there is no slice, return 0 and set ranges to [0;0[ (ie. empty)
 Laik_Slice* laik_my_slice_2d(Laik_Partitioning* p, int n,
                              uint64_t* x1, uint64_t* x2,
                              uint64_t* y1, uint64_t* y2);
+
+// get boundaries [x1;x2[ x [y1;y2[ x [z1;z2[ for 3d slice <n> of this task
+// if there is no slice, return 0 and set ranges to [0;0[ (ie. empty)
+Laik_Slice* laik_my_slice_3d(Laik_Partitioning* p, int n,
+                             uint64_t* x1, uint64_t* x2,
+                             uint64_t* y1, uint64_t* y2,
+                             uint64_t* z1, uint64_t* z2);
 
 
 // give a partitioning a name, for debug output

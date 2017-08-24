@@ -116,7 +116,7 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
 }
 
 
-// halo partitioner: extend borders of base partitioning
+// halo partitioner: extend borders of a base partitioning (otherBA)
 
 void runHaloPartitioner(Laik_Partitioner* pr,
                         Laik_BorderArray* ba, Laik_BorderArray* otherBA)
@@ -163,6 +163,63 @@ Laik_Partitioner* laik_new_halo_partitioner(int depth)
     return laik_new_partitioner("halo", runHaloPartitioner, (void*) data);
 }
 
+
+// bisection partitioner
+
+// recursive helper: distribute slice <s> to tasks in range [fromTask;toTask[
+static void doBisection(Laik_BorderArray* ba,
+                        Laik_Slice* s, int fromTask, int toTask)
+{
+    assert(toTask > fromTask);
+    if (toTask - fromTask == 1) {
+        laik_append_slice(ba, 0 /*fromTask*/, s);
+        return;
+    }
+
+    // determine dimension with largest width
+    int splitDim = 0;
+    uint64_t width, w;
+    width = s->to.i[0] - s->from.i[0];
+    if (ba->space->dims > 1) {
+        w = s->to.i[1] - s->from.i[1];
+        if (w > width) {
+            width = w;
+            splitDim = 1;
+        }
+        if (ba->space->dims > 2) {
+            w = s->to.i[2] - s->from.i[2];
+            if (w > width) {
+                width = w;
+                splitDim = 2;
+            }
+        }
+    }
+    assert(width > 0);
+    if (width == 1) {
+        laik_append_slice(ba, fromTask, s);
+        return;
+    }
+
+    // split set of tasks and width into two parts, do recursion
+    int midTask = (fromTask + toTask)/2;
+    w = width * (midTask-fromTask) / (toTask - fromTask);
+    Laik_Slice s1 = *s, s2 = *s;
+    s1.to.i[splitDim] = s->from.i[splitDim] + w;
+    s2.from.i[splitDim] = s->from.i[splitDim] + w;
+    doBisection(ba, &s1, fromTask, midTask);
+    doBisection(ba, &s2, midTask, toTask);
+}
+
+void runBisectionPartitioner(Laik_Partitioner* pr,
+                             Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+{
+    doBisection(ba, &(ba->space->s), 0, ba->group->size);
+}
+
+Laik_Partitioner* laik_new_bisection_partitioner()
+{
+    return laik_new_partitioner("bisection", runBisectionPartitioner, 0);
+}
 
 
 // block partitioner: split one dimension of space into blocks
