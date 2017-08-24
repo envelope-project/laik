@@ -589,26 +589,118 @@ int bordersIsSingle(Laik_BorderArray* ba)
     return ba->tslice[0].task;
 }
 
-// check if borders cover full space
+// Check if slices in border array cover full space;
+// works for 1d/2d/3d spaces
+//
+// we maintain a list of slices not yet covered,
+// starting with the one slice equal to full space, and then
+// subtract the slices from the border array step-by-step
+// from each of the not-yet-covered slices, creating a
+// new list of not-yet-covered slices.
+//
+// Note: subtraction of a slice from another one may result in
+// multiple smaller slices which are appended to the not-yet-covered
+// list (eg. in 3d, 6 smaller slices may be created).
+
+// print verbose debug output?
+#define DEBUG_COVERSPACE 1
+
+// TODO: use dynamic list
+#define COVERLIST_MAX 100
+static Laik_Slice notcovered[COVERLIST_MAX];
+static int notcovered_count;
+
+static void appendToNotcovered(Laik_Slice* s)
+{
+    assert(notcovered_count < COVERLIST_MAX);
+    notcovered[notcovered_count] = *s;
+    notcovered_count++;
+}
+
+static char* getNotcoveredStr(int dims, Laik_Slice* toRemove)
+{
+    static char s[1000];
+    int o;
+    o = sprintf(s, "not covered: (");
+    for(int j = 0; j < notcovered_count; j++) {
+        if (j>0) o += sprintf(s+o, ", ");
+        o += getSliceStr(s+o, dims, &(notcovered[j]));
+    }
+    o += sprintf(s+o, ")");
+    if (toRemove) {
+        o += sprintf(s+o, "\n  removing ");
+        o += getSliceStr(s+o, dims, toRemove);
+    }
+    return s;
+}
+
 static
 bool coversSpace(Laik_BorderArray* ba)
 {
-    // TODO: only 1 dim for now
-    assert(ba->space->dims == 1);
+    int dims = ba->space->dims;
+    notcovered_count = 0;
 
-    assert(ba->count > 0);
-    uint64_t min = ba->tslice[0].s.from.i[0];
-    uint64_t max = ba->tslice[0].s.to.i[0];
-    for(int b = 1; b < ba->count; b++) {
-        if (min > ba->tslice[b].s.from.i[0])
-            min = ba->tslice[b].s.from.i[0];
-        if (max < ba->tslice[b].s.to.i[0])
-            max = ba->tslice[b].s.to.i[0];
+    // start with full space not-yet-covered
+    appendToNotcovered(&(ba->space->s));
+
+    // remove each slice in border array
+    for(int i = 0; i < ba->count; i++) {
+        Laik_Slice* toRemove = &(ba->tslice[i].s);
+
+#ifdef DEBUG_COVERSPACE
+        laik_log(1, "coversSpace - %s", getNotcoveredStr(dims, toRemove));
+#endif
+
+        int count = notcovered_count; // number of slices to visit
+        for(int j = 0; j < count; j++) {
+            Laik_Slice* orig = &(notcovered[j]);
+
+            if (laik_slice_intersect(dims, orig, toRemove) == 0) {
+                // slice to remove does not overlap with orig: keep original
+                appendToNotcovered(orig);
+                continue;
+            }
+
+            // subtract toRemove from orig
+
+            // check for space not covered in orig, loop through valid dims
+            for(int d = 0; d < dims; d++) {
+                // space in dim <d> before <toRemove> ?
+                if (orig->from.i[d] < toRemove->from.i[d]) {
+                    // yes, add to not-covered
+                    Laik_Slice s = *orig;
+                    s.to.i[d] = toRemove->from.i[d];
+                    appendToNotcovered(&s);
+                    // remove appended part from <orig>
+                    orig->from.i[d] = toRemove->from.i[d];
+                }
+                // space in dim <d> after <toRemove> ?
+                if (orig->to.i[d] > toRemove->to.i[d]) {
+                    Laik_Slice s = *orig;
+                    s.from.i[d] = toRemove->to.i[d];
+                    appendToNotcovered(&s);
+                    // remove appended part from <orig>
+                    orig->to.i[d] = toRemove->to.i[d];
+                }
+            }
+        }
+        if (notcovered_count == count) {
+            // nothing appended, ie. nothing left?
+            notcovered_count = 0;
+            break;
+        }
+        // move appended slices to start
+        for(int j = 0; j < notcovered_count - count; j++)
+            notcovered[j] = notcovered[count + j];
+        notcovered_count = notcovered_count - count;
     }
 
-    if ((min == ba->space->s.from.i[0]) && (max == ba->space->s.to.i[0]))
-        return true;
-    return false;
+#ifdef DEBUG_COVERSPACE
+    laik_log(1, "coversSpace - remaining %s", getNotcoveredStr(dims, 0));
+#endif
+
+    // only if no slices are left, we did cover full space
+    return (notcovered_count == 0);
 }
 
 int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
