@@ -97,6 +97,7 @@ struct _Laik_Layout {
     Laik_LayoutType type;
     bool isFixed; // still variable, or fixed to a given layout
     int dims, order[3]; // at most 3 dimensions
+    uint64_t stride[3];
 };
 
 // a mapping of data elements for an index range from global index
@@ -113,6 +114,7 @@ struct _Laik_Mapping {
     uint64_t fullcount; // number of elements in full mapping
     Laik_Index baseIdx; // global index at base address
     uint64_t count; // number of elements mapped
+    uint64_t size[3]; // valid entries in each dimension
 
     char* start; // start address of mapping
     char* base; // address matching baseIdx (usually same as start)

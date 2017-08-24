@@ -934,6 +934,37 @@ Laik_Slice* laik_my_slice_1d(Laik_Partitioning* p, int n,
     return s;
 }
 
+Laik_Slice* laik_my_slice_2d(Laik_Partitioning* p, int n,
+                             uint64_t* x1, uint64_t* x2,
+                             uint64_t* y1, uint64_t* y2)
+{
+    assert(p->space->dims == 2);
+    Laik_Slice* s = laik_my_slice(p, n);
+    if (x1) *x1 = s ? s->from.i[0] : 0;
+    if (x2) *x2 = s ? s->to.i[0] : 0;
+    if (y1) *y1 = s ? s->from.i[1] : 0;
+    if (y2) *y2 = s ? s->to.i[1] : 0;
+
+    return s;
+}
+
+Laik_Slice* laik_my_slice_3d(Laik_Partitioning* p, int n,
+                             uint64_t* x1, uint64_t* x2,
+                             uint64_t* y1, uint64_t* y2,
+                             uint64_t* z1, uint64_t* z2)
+{
+    assert(p->space->dims == 3);
+    Laik_Slice* s = laik_my_slice(p, n);
+    if (x1) *x1 = s ? s->from.i[0] : 0;
+    if (x2) *x2 = s ? s->to.i[0] : 0;
+    if (y1) *y1 = s ? s->from.i[1] : 0;
+    if (y2) *y2 = s ? s->to.i[1] : 0;
+    if (z1) *z1 = s ? s->from.i[2] : 0;
+    if (z2) *z2 = s ? s->to.i[2] : 0;
+
+    return s;
+}
+
 
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n)

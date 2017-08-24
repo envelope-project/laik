@@ -247,6 +247,13 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
         // requirements
         m->baseIdx = slc->from;
         m->count = laik_slice_size(d->space->dims, slc);
+        m->size[0] = slc->to.i[0] - slc->from.i[0];
+        m->size[1] = 0;
+        if (d->space->dims > 1)
+            m->size[1] = slc->to.i[1] - slc->from.i[1];
+        m->size[2] = 0;
+        if (d->space->dims > 2)
+            m->size[2] = slc->to.i[2] - slc->from.i[2];
 
         // not backed by memory yet, allocation happens lazy
         m->capacity = 0;
@@ -334,6 +341,15 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     m->start = m->base;
     m->startIdx = m->baseIdx;
     m->fullcount = m->count;
+
+    // set layout. TODO: check layout request
+    assert((m->layout != 0) && (m->layout->dims == 0));
+    int dims = d->space->dims;
+    m->layout->dims = dims;
+    m->layout->stride[0] = 1;
+    m->layout->stride[1] = m->size[0];
+    m->layout->stride[1] = m->size[0] * m->size[1];
+    m->layout->isFixed = true;
 
     laik_log(1, "allocated memory for '%s'/%d: %d x %d (%llu B) at %p\n",
              d->name, m->sliceNo, m->count, d->elemsize,
@@ -839,6 +855,35 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
     if (count) *count = m ? m->count : 0;
     return m;
 }
+
+Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
+                               void** base, uint64_t* ysize,
+                               uint64_t* ystride, uint64_t* xsize)
+{
+    Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
+    Laik_Mapping* m = laik_map(d, 0, l);
+    if (!m) {
+        laik_log(LAIK_LL_Error, "laik_map: could not map slice 0 of data '%s'",
+                 d->name);
+        free(l);
+        l = 0;
+    }
+
+    int n = laik_my_slicecount(d->activePartitioning);
+    if (n > 1)
+        laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
+                                "but partition with %d slices!", n);
+    if (l && (l->dims != 2))
+        laik_log(LAIK_LL_Error, "Request for 2d mapping of %dd space!",
+                 l->dims);
+
+    if (base)    *base    = m ? m->base : 0;
+    if (xsize)   *xsize   = m ? m->size[0] : 0;
+    if (ysize)   *ysize   = m ? m->size[1] : 0;
+    if (ystride) *ystride = l ? l->stride[1] : 0;
+    return m;
+}
+
 
 Laik_Mapping* laik_global2local(Laik_Data* d, uint64_t gidx, uint64_t* lidx)
 {
