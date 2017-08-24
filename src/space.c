@@ -25,6 +25,20 @@ void laik_set_index(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3)
     i->i[2] = i3;
 }
 
+void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2)
+{
+    res->i[0] = src1->i[0] + src2->i[0];
+    res->i[1] = src1->i[1] + src2->i[1];
+    res->i[2] = src1->i[2] + src2->i[2];
+}
+
+void laik_sub_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2)
+{
+    res->i[0] = src1->i[0] - src2->i[0];
+    res->i[1] = src1->i[1] - src2->i[1];
+    res->i[2] = src1->i[2] - src2->i[2];
+}
+
 static
 int getSpaceStr(char* s, Laik_Space* spc)
 {

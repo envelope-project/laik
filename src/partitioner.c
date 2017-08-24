@@ -172,7 +172,7 @@ static void doBisection(Laik_BorderArray* ba,
 {
     assert(toTask > fromTask);
     if (toTask - fromTask == 1) {
-        laik_append_slice(ba, 0 /*fromTask*/, s);
+        laik_append_slice(ba, fromTask, s);
         return;
     }
 

@@ -24,6 +24,10 @@
 
 #include <stdbool.h>
 
+void laik_set_index(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3);
+void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
+void laik_sub_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
+
 
 struct _Laik_Space {
     char* name; // for debugging
@@ -53,7 +57,6 @@ Laik_Partitioner* laik_new_partitioner(char* name,
                                        laik_run_partitioner_t f, void* d);
 
 // to be used by implementations of partitioners
-void laik_set_index(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3);
 void laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s);
 
 
