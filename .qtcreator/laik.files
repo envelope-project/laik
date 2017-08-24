@@ -43,6 +43,7 @@
 ../examples/spmv2.c
 ../examples/jac1d.c
 ../examples/jac2d.c
+../examples/jac2d-ser.c
 
 ../tests/Makefile
 ../tests/.gitignore

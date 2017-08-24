@@ -28,8 +28,9 @@
 #include <stdlib.h>
 #include <assert.h>
 
-// fixed boundary values
-double loValue = -5.0, hiValue = 10.0;
+// boundary values
+double loRowValue = -5.0, hiRowValue = 10.0;
+double loColValue = -10.0, hiColValue = 5.0;
 
 // to deliberately change block partitioning (if arg 3 provided)
 double getTW(int rank, const void* userData)
@@ -113,22 +114,22 @@ int main(int argc, char* argv[])
     if (gy1 == 0) {
         // top row
         for(uint64_t x = 0; x < xsizeW; x++)
-            baseW[x] = loValue;
+            baseW[x] = loRowValue;
     }
     if (gy2 == size) {
         // bottom row
         for(uint64_t x = 0; x < xsizeW; x++)
-            baseW[(ysizeW - 1) * ystrideW + x] = hiValue;
+            baseW[(ysizeW - 1) * ystrideW + x] = hiRowValue;
     }
     if (gx1 == 0) {
         // left column, may overwrite global (0,0) and (0,size-1)
         for(uint64_t y = 0; y < ysizeW; y++)
-            baseW[y * ystrideW] = loValue;
+            baseW[y * ystrideW] = loColValue;
     }
     if (gx2 == size) {
         // right column, may overwrite global (size-1,0) and (size-1,size-1)
         for(uint64_t y = 0; y < ysizeW; y++)
-            baseW[y * ystrideW + xsizeW - 1] = hiValue;
+            baseW[y * ystrideW + xsizeW - 1] = hiColValue;
     }
     laik_log(2, "Init done\n");
 
@@ -152,33 +153,33 @@ int main(int argc, char* argv[])
 
         // local range for which to do 2d stencil, without global edges
         laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
-        x1 = 0;
-        if (gx1 == 0) {
-            // left column, may overwrite global (0,0) and (0,size-1)
-            for(uint64_t y = 0; y < ysizeW; y++)
-                baseW[y * ystrideW] = loValue;
-            x1 = 1;
-        }
-        x2 = xsizeW;
-        if (gx2 == size) {
-            // right column, may overwrite global (size-1,0) and (size-1,size-1)
-            for(uint64_t y = 0; y < ysizeW; y++)
-                baseW[y * ystrideW + xsizeW - 1] = hiValue;
-            x2 = xsizeW - 1;
-        }
         y1 = 0;
         if (gy1 == 0) {
             // top row
             for(uint64_t x = 0; x < xsizeW; x++)
-                baseW[x] = loValue;
+                baseW[x] = loRowValue;
             y1 = 1;
         }
         y2 = ysizeW;
         if (gy2 == size) {
             // bottom row
             for(uint64_t x = 0; x < xsizeW; x++)
-                baseW[(ysizeW - 1) * ystrideW + x] = hiValue;
+                baseW[(ysizeW - 1) * ystrideW + x] = hiRowValue;
             y2 = ysizeW - 1;
+        }
+        x1 = 0;
+        if (gx1 == 0) {
+            // left column, may overwrite global (0,0) and (0,size-1)
+            for(uint64_t y = 0; y < ysizeW; y++)
+                baseW[y * ystrideW] = loColValue;
+            x1 = 1;
+        }
+        x2 = xsizeW;
+        if (gx2 == size) {
+            // right column, may overwrite global (size-1,0) and (size-1,size-1)
+            for(uint64_t y = 0; y < ysizeW; y++)
+                baseW[y * ystrideW + xsizeW - 1] = hiColValue;
+            x2 = xsizeW - 1;
         }
         // relocate baseR to be able to use same indexing as with baseW
         if (gx1 > 0) {
