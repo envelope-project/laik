@@ -5,5 +5,4 @@
 *~
 Makefile.config
 *.DS_Store
-.qtcreator
 .vscode
