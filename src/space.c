@@ -814,7 +814,7 @@ laik_new_partitioning(Laik_Group* group, Laik_Space* space,
                     p->group->gid, p->group->size, p->group->myid,
                     pr->name);
         if (base)
-            o =+ sprintf(s+o, ", base '%s'", base->name);
+            sprintf(s+o, ", base '%s'", base->name);
         laik_log(1, s);
     }
 
