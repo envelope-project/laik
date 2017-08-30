@@ -91,6 +91,5 @@ script:
   - CC=$COMPILERC CXX=$COMPILERCXX make
   - CC=$COMPILERC CXX=$COMPILERCXX make test
   - if [ -n "$RUNCLANGTIDY" ]; then make clean; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then CC=$COMPILERC CXX=$COMPILERCXX bear make; fi
   - if [ -n "$RUNCLANGTIDY" ]; then CC=$COMPILERC CXX=$COMPILERCXX bear make test; fi
   - if [ -n "$RUNCLANGTIDY" ]; then git ls-files '*.c' | xargs -P 1 -I{} clang-tidy -p build/ -header-filter="^((?\!build).)*$" {}; fi
