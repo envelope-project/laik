@@ -78,8 +78,18 @@ before_install:
   - export PATH=$HOME/clang+llvm/bin:$PATH
   - if [ -n "$CLANGV" ]; then wget http://llvm.org/releases/$CLANGV/clang+llvm-$CLANGV-x86_64-linux-gnu-debian8.tar.xz -O $HOME/clang+llvm.tar.xz; fi
   - if [ -n "$CLANGV" ]; then tar xf $HOME/clang+llvm.tar.xz -C $HOME/clang+llvm --strip-components 1; fi
+  # install Bear to create compile database based on the makefile
+  - if [ -n "$RUNCLANGTIDY" ]; then git clone https://github.com/rizsotto/Bear.git; fi
+  - if [ -n "$RUNCLANGTIDY" ]; then cd Bear; fi
+  - if [ -n "$RUNCLANGTIDY" ]; then cmake .; fi
+  - if [ -n "$RUNCLANGTIDY" ]; then make all; fi
+  - if [ -n "$RUNCLANGTIDY" ]; then sudo make install; fi
+  - if [ -n "$RUNCLANGTIDY" ]; then cd ..; fi
 
 script:
   - ./configure
-  - CC=$COMPILERC OMPI_CC=$COMPILERC make
+  - CC=$COMPILERC CXX=$COMPILERCXX OMPI_CC=$COMPILERC OMPI_CXX=$COMPILERCXX make
   - make test
+  - if [ -n "$RUNCLANGTIDY" ]; then make clean; fi
+  - if [ -n "$RUNCLANGTIDY" ]; then CC=$COMPILERC CXX=$COMPILERCXX OMPI_CC=$COMPILERC OMPI_CXX=$COMPILERCXX bear make test; fi
+  - if [ -n "$RUNCLANGTIDY" ]; then git ls-files '*.c' | xargs -P 1 -I{} clang-tidy -p build/ -header-filter="^((?\!build).)*$" {}; fi
