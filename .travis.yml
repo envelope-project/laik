@@ -88,8 +88,8 @@ before_install:
 
 script:
   - ./configure
-  - CC=$COMPILERC CXX=$COMPILERCXX make
-  - CC=$COMPILERC CXX=$COMPILERCXX make test
+  - CC=$COMPILERC CXX=$COMPILERCXX OMPI_CC=$COMPILERC OMPI_CXX=$COMPILERCXX make
+  - make test
   - if [ -n "$RUNCLANGTIDY" ]; then make clean; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then CC=$COMPILERC CXX=$COMPILERCXX bear make test; fi
+  - if [ -n "$RUNCLANGTIDY" ]; then CC=$COMPILERC CXX=$COMPILERCXX OMPI_CC=$COMPILERC OMPI_CXX=$COMPILERCXX bear make test; fi
   - if [ -n "$RUNCLANGTIDY" ]; then git ls-files '*.c' | xargs -P 1 -I{} clang-tidy -p build/ -header-filter="^((?\!build).)*$" {}; fi
