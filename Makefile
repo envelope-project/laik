@@ -47,6 +47,15 @@ examples: $(LAIKLIB)
 test: examples
 	make -C tests
 
+# tidy
+tidy:
+	make clean
+	bear make test
+	git ls-files '*.c' | xargs -P 1 -I{} clang-tidy {};
+
+tidy-clean: clean
+	rm -f compile_commands.json
+
 # clean targets
 SUBDIRS_CLEAN=$(addprefix clean_, $(SUBDIRS))
 .PHONY: $(SUBDIRS_CLEAN)
