@@ -68,7 +68,7 @@ funtionality via repartitioning is enough. This example also shows the use of a 
         // write partial sum
         laik_fill_double(sum, mysum);
         // master-only partitioning: add partial values to be read at master
-        laik_set_partitioning(sum, laik_Master, LAIK_DF_CopyIn);
+        laik_switchto_new(sum, laik_Master, LAIK_DF_CopyIn);
 
         if (laik_myid(world) == 0) {
             laik_map_def1(sum, (void**) &base, &count);
