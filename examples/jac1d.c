@@ -73,8 +73,8 @@ int main(int argc, char* argv[])
 
     // two 1d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_1d(inst, size);
-    Laik_Data* data1 = laik_alloc(world, space, laik_Double);
-    Laik_Data* data2 = laik_alloc(world, space, laik_Double);
+    Laik_Data* data1 = laik_new_data(world, space, laik_Double);
+    Laik_Data* data2 = laik_new_data(world, space, laik_Double);
 
     // two partitionings:
     // - pWrite: distributes the cells to update
@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
                                   laik_new_halo_partitioner(1), pWrite);
 
     // for global sum, used for residuum and value sum at end
-    Laik_Data* sumD = laik_alloc_1d(world, laik_Double, 1);
+    Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
     laik_switchto_new(sumD, laik_All, LAIK_DF_None);
 

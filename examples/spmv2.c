@@ -213,13 +213,13 @@ int main(int argc, char* argv[])
     // 1d space to partition matrix rows and result vector
     Laik_Space* s = laik_new_space_1d(inst, size);
     // LAIK container for result vector
-    Laik_Data* resD = laik_alloc(world, s, laik_Double);
+    Laik_Data* resD = laik_new_data(world, s, laik_Double);
     laik_data_set_name(resD, "result");
     // LAIK container for input vector
-    Laik_Data* inpD = laik_alloc(world, s, laik_Double);
+    Laik_Data* inpD = laik_new_data(world, s, laik_Double);
     laik_data_set_name(inpD, "input");
     // for global normalization, to broadcast a vector sum to all
-    Laik_Data* sumD = laik_alloc_1d(world, laik_Double, 1);
+    Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
     laik_switchto_new(sumD, laik_All, LAIK_DF_None);
 

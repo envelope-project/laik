@@ -57,9 +57,9 @@ typedef struct _Laik_Data Laik_Data;
  * If no partitioning is set (via laik_setPartition) before
  * use, default to equal-sized owner BLOCK partitioning.
  */
-Laik_Data* laik_alloc(Laik_Group* group, Laik_Space* space, Laik_Type* type);
-Laik_Data* laik_alloc_1d(Laik_Group* g, Laik_Type* t, uint64_t s1);
-Laik_Data* laik_alloc_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2);
+Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type);
+Laik_Data* laik_new_data_1d(Laik_Group* g, Laik_Type* t, uint64_t s1);
+Laik_Data* laik_new_data_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2);
 
 // set a data name, for debug output
 void laik_data_set_name(Laik_Data* d, char* n);

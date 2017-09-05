@@ -48,8 +48,8 @@ funtionality via repartitioning is enough. This example also shows the use of a 
         Laik_Instance* inst = laik_init_mpi(&argc, &argv);
         Laik_Group* world = laik_world(inst);
 
-        // allocate global 1d double array: 1 mio entries, equal sized blocks
-        Laik_Data* a = laik_alloc_1d(world, laik_Double, 1000000);
+        // global 1d double array: 1 mio entries, equal sized blocks
+        Laik_Data* a = laik_new_data_1d(world, laik_Double, 1000000);
         // parallel initialization: write 1.0 to own partition
         laik_fill_double(a, 1.0);
 
@@ -61,9 +61,9 @@ funtionality via repartitioning is enough. This example also shows the use of a 
         laik_map_def1(a, (void**) &base, &count);
         for (i = 0; i < count; i++) mysum += base[i];
 
-        // for collecting partial sums at master, use LAIK's data flow
+        // for collecting partial sums at master, we can use LAIK's data
         // aggregation functionality when switching to new partitioning
-        Laik_Data* sum = laik_alloc_1d(world, laik_Double, 1);
+        Laik_Data* sum = laik_new_data_1d(world, laik_Double, 1);
         laik_set_partitioning(sum, LAIK_PT_All, LAIK_DF_SumReduceOut);
         // write partial sum
         laik_fill_double(sum, mysum);

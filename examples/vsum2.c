@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
     double mysum[4] = { 0.0, 0.0, 0.0, 0.0 };
 
     // allocate global 1d double array: 1 mio entries
-    Laik_Data* a = laik_alloc_1d(world, laik_Double, 1000000);
+    Laik_Data* a = laik_new_data_1d(world, laik_Double, 1000000);
 
     laik_set_phase(inst, 1, "master-only", NULL);
 
@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
 
     // for collecting partial sums at master, use LAIK's automatic
     // aggregation functionality when switching to new partitioning
-    Laik_Data* sum = laik_alloc_1d(world, laik_Double, 4);
+    Laik_Data* sum = laik_new_data_1d(world, laik_Double, 4);
     laik_switchto_new(sum, laik_All,
                       LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_map_def1(sum, (void**) &base, &count);
