@@ -64,13 +64,13 @@ funtionality via repartitioning is enough. This example also shows the use of a 
         // for collecting partial sums at master, we can use LAIK's data
         // aggregation functionality when switching to new partitioning
         Laik_Data* sum = laik_new_data_1d(world, laik_Double, 1);
-        laik_set_partitioning(sum, LAIK_PT_All, LAIK_DF_SumReduceOut);
+        laik_switchto_new(sum, laik_All, LAIK_DF_ReduceOut | LAIK_DF_Sum);
         // write partial sum
         laik_fill_double(sum, mysum);
         // master-only partitioning: add partial values to be read at master
-        laik_set_partitioning(sum, LAIK_PT_Master, LAIK_DF_CopyIn);
+        laik_set_partitioning(sum, laik_Master, LAIK_DF_CopyIn);
 
-        if (laik_myid(inst) == 0) {
+        if (laik_myid(world) == 0) {
             laik_map_def1(sum, (void**) &base, &count);
             printf("Result: %f\n", base[0]);
         }
