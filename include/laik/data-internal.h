@@ -99,17 +99,18 @@ struct _Laik_Layout {
     int dims, order[3]; // at most 3 dimensions
     uint64_t stride[3];
 
-    // pack data of slice in given mapping with this layout into <buf>.
-    // called iteratively by backends, using <i> to remember position
-    // accross multiple calls. <i> must be set to first index at beginning.
-    // returns the number of bytes written (or 0 if finished)
-    int (*pack)(Laik_Mapping* m, Laik_Slice* s, Laik_Index* i,
+    // pack data of slice in given mapping with this layout into <buf>,
+    // using at most <size> bytes, starting at index <idx>.
+    // called iteratively by backends, using <idx> to remember position
+    // accross multiple calls. <idx> must be set first to index at beginning.
+    // returns the number of elements written (or 0 if finished)
+    int (*pack)(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
                 char* buf, int size);
 
-    // unpack data from <buf> into given slice of memory space provided
-    // by mapping, incrementing index accordingly.
-    // returns number of bytes unpacked.
-    int (*unpack)(Laik_Mapping* m, Laik_Slice* s, Laik_Index* i,
+    // unpack data from <buf> with <size> bytes length into given slice of
+    // memory space provided by mapping, incrementing index accordingly.
+    // returns number of elements unpacked.
+    int (*unpack)(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
                 char* buf, int size);
 };
 

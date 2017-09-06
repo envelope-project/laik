@@ -25,6 +25,9 @@ void laik_mpi_finalize() {}
 
 #include <mpi.h>
 
+
+// forward decls, types/structs , global variables
+
 void laik_mpi_finalize();
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t,
                              Laik_MappingList* fromList,
@@ -52,6 +55,14 @@ struct _MPIGroupData {
 // intentially make MPI backend buggy by setting LAIK_MPI_BUG=1
 // useful to ensure that a test is sentitive to backend bugs
 static int mpi_bug = 0;
+
+// buffer space for messages if packing/unpacking from/to not-1d layout
+// is necessary
+// TODO: if we go to asynchronous messages, this needs to be dynamic per data
+#define PACKBUFSIZE (10*1024*1024)
+static char packbuf[PACKBUFSIZE];
+
+
 
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
@@ -151,11 +162,23 @@ void laik_mpi_updateGroup(Laik_Group* g)
                    g->parent->myid, &(gd->comm));
 }
 
+static
+MPI_Datatype getMPIDataType(Laik_Data* d)
+{
+    MPI_Datatype mpiDataType;
+    if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
+    else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
+    else assert(0);
+
+    return mpiDataType;
+}
+
 
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                              Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     int myid  = d->group->myid;
+    int dims = d->space->dims;
     Laik_SwitchStat* ss = d->stat;
 
     laik_log(1, "MPI backend execute transition:\n"
@@ -175,7 +198,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
     MPI_Comm comm = gd->comm;
 
     if (t->redCount > 0) {
-        assert(d->space->dims == 1);
+        assert(dims == 1);
         for(int i=0; i < t->redCount; i++) {
             struct redTOp* op = &(t->red[i]);
             uint64_t from = op->slc.from.i[0];
@@ -208,10 +231,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             default: assert(0);
             }
 
-            MPI_Datatype mpiDataType;
-            if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
-            else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
-            else assert(0);
+            MPI_Datatype mpiDataType = getMPIDataType(d);
 
             if (laik_logshown(1)) {
                 char rootstr[10];
@@ -273,51 +293,82 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (recvFromHigher && (myid > task)) continue;
 
             assert(myid != op->fromTask);
-            assert(d->space->dims == 1);
 
             assert(op->sliceNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[op->sliceNo]);
-            if (toMap) laik_allocateMap(toMap, ss);
-            char* toBase = toMap ? toMap->base : 0;
-
-            // from global to receiver-local indexes
-            uint64_t from = op->slc.from.i[0] - toMap->validSlice.from.i[0];
-            uint64_t to   = op->slc.to.i[0] - toMap->validSlice.from.i[0];
-            assert(toBase != 0);
-
-            MPI_Datatype mpiDataType;
-            if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
-            else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
-            else assert(0);
-
-            laik_log(1, "MPI Recv from T%d: global [%lu;%lu[,\n"
-                        "  to local [%lu;%lu[ in slice %d, elemsize %d, baseptr %p\n",
-                     op->fromTask,
-                     op->slc.from.i[0], op->slc.to.i[0],
-                     from, to, op->sliceNo, d->elemsize, toBase);
-
-            if (ss) {
-                ss->recvCount++;
-                ss->receivedBytes += (to - from) * d->elemsize;
+            assert(toMap != 0);
+            if (toMap->base == 0) {
+                // space not yet allocated
+                laik_allocateMap(toMap, ss);
+                assert(toMap->base != 0);
             }
 
             MPI_Status s;
+            uint64_t count;
+
+            MPI_Datatype mpiDataType = getMPIDataType(d);
+
             // TODO:
             // - tag 1 may conflict with application
             // - check status
 
-            if (mpi_bug > 0) {
-                // intentional bug: ignore small amounts of data received
-                if (to-from < 1000) {
-                    char dummy[8000];
-                    MPI_Recv(dummy, to - from,
-                             mpiDataType, op->fromTask, 1, comm, &s);
-                    continue;
+            if (dims == 1) {
+                // we directly support 1d data layouts
+
+                // from global to receiver-local indexes
+                uint64_t from = op->slc.from.i[0] - toMap->validSlice.from.i[0];
+                uint64_t to   = op->slc.to.i[0] - toMap->validSlice.from.i[0];
+                count = to - from;
+
+                laik_log(1, "MPI Recv from T%d: global [%lu;%lu[,\n"
+                            "  to local [%lu;%lu[ in slice %d, elemsize %d, baseptr %p\n",
+                         op->fromTask,
+                         op->slc.from.i[0], op->slc.to.i[0],
+                         from, to, op->sliceNo, d->elemsize, toMap->base);
+
+                if (mpi_bug > 0) {
+                    // intentional bug: ignore small amounts of data received
+                    if (count < 1000) {
+                        char dummy[8000];
+                        MPI_Recv(dummy, count,
+                                 mpiDataType, op->fromTask, 1, comm, &s);
+                        continue;
+                    }
                 }
+
+                MPI_Recv(toMap->base + from * d->elemsize, count,
+                         mpiDataType, op->fromTask, 1, comm, &s);
+            }
+            else {
+                // use temporary receive buffer and layout-specific unpack
+
+                // the used layout must support unpacking
+                assert(toMap->layout->unpack);
+
+                Laik_Index idx = op->slc.from;
+                count = 0;
+                int recvCount, unpacked;
+                while(1) {
+                    MPI_Recv(packbuf, PACKBUFSIZE / d->elemsize,
+                             mpiDataType, op->fromTask, 1, comm, &s);
+                    MPI_Get_count(&s, mpiDataType, &recvCount);
+                    unpacked = (toMap->layout->unpack)(toMap, &(op->slc), &idx,
+                                                       packbuf,
+                                                       recvCount * d->elemsize);
+                    assert(recvCount == unpacked);
+                    count += unpacked;
+                    if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
+                }
+                assert(count == laik_slice_size(dims, &(op->slc)));
             }
 
-            MPI_Recv(toBase + from * d->elemsize, to - from,
-                     mpiDataType, op->fromTask, 1, comm, &s);
+
+            if (ss) {
+                ss->recvCount++;
+                ss->receivedBytes += count * d->elemsize;
+            }
+
+
         }
 
         // send
@@ -328,37 +379,58 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (sendToHigher && (myid > task)) continue;
 
             assert(myid != op->toTask);
-            assert(d->space->dims == 1);
 
             assert(op->sliceNo < fromList->count);
             Laik_Mapping* fromMap = &(fromList->map[op->sliceNo]);
-            char* fromBase = fromMap ? fromMap->base : 0;
+            // data to send must exist in local memory
+            assert(fromMap && fromMap->base);
 
-            // from global to sender-local indexes
-            uint64_t from = op->slc.from.i[0] - fromMap->validSlice.from.i[0];
-            uint64_t to   = op->slc.to.i[0] - fromMap->validSlice.from.i[0];
+            uint64_t count;
+            MPI_Datatype mpiDataType = getMPIDataType(d);
 
-            MPI_Datatype mpiDataType;
-            if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
-            else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
-            else assert(0);
+            if (dims == 1) {
+                // we directly support 1d data layouts
 
-            laik_log(1, "MPI Send to T%d: global [%lu;%lu[,\n"
-                     "  from local [%lu;%lu[ in slice %d, elemsize %d, baseptr %p\n",
-                     op->toTask,
-                     op->slc.from.i[0], op->slc.to.i[0],
-                     from, to, op->sliceNo, d->elemsize, fromBase);
+                // from global to sender-local indexes
+                uint64_t from = op->slc.from.i[0] - fromMap->validSlice.from.i[0];
+                uint64_t to   = op->slc.to.i[0] - fromMap->validSlice.from.i[0];
+                count = to - from;
+
+                laik_log(1, "MPI Send to T%d: global [%lu;%lu[,\n"
+                            "  from local [%lu;%lu[ in slice %d, "
+                            "elemsize %d, baseptr %p\n",
+                         op->toTask,
+                         op->slc.from.i[0], op->slc.to.i[0],
+                         from, to, op->sliceNo, d->elemsize, fromMap->base);
+
+                // TODO: tag 1 may conflict with application
+                MPI_Send(fromMap->base + from * d->elemsize, count,
+                         mpiDataType, op->toTask, 1, comm);
+            }
+            else {
+                // use temporary receive buffer and layout-specific unpack
+
+                // the used layout must support packing
+                assert(fromMap->layout->pack);
+
+                Laik_Index idx = op->slc.from;
+                count = 0;
+                int packed;
+                while(1) {
+                    packed = (fromMap->layout->pack)(fromMap, &(op->slc), &idx,
+                                                     packbuf, PACKBUFSIZE);
+                    MPI_Send(packbuf, packed,
+                             mpiDataType, op->toTask, 1, comm);
+                    count += packed;
+                    if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
+                }
+                assert(count == laik_slice_size(dims, &(op->slc)));
+            }
 
             if (ss) {
                 ss->sendCount++;
-                ss->sentBytes += (to - from) * d->elemsize;
+                ss->sentBytes += count * d->elemsize;
             }
-
-            assert(fromBase != 0);
-
-            // TODO: tag 1 may conflict with application
-            MPI_Send(fromBase + from * d->elemsize, to - from,
-                     mpiDataType, op->toTask, 1, comm);
         }
     
     }

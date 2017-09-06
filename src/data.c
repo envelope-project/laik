@@ -817,6 +817,8 @@ Laik_Layout* laik_new_layout(Laik_LayoutType t)
     l->type = t;
     l->isFixed = false;
     l->dims = 0; // invalid
+    l->unpack = 0;
+    l->pack = 0;
 
     return l;
 }
