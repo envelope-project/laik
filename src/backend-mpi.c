@@ -59,8 +59,8 @@ static int mpi_bug = 0;
 // buffer space for messages if packing/unpacking from/to not-1d layout
 // is necessary
 // TODO: if we go to asynchronous messages, this needs to be dynamic per data
-//#define PACKBUFSIZE (10*1024*1024)
-#define PACKBUFSIZE (10*800)
+#define PACKBUFSIZE (10*1024*1024)
+//#define PACKBUFSIZE (10*800)
 static char packbuf[PACKBUFSIZE];
 
 
