@@ -10,6 +10,13 @@
 #include <string.h>
 #include <stdio.h>
 
+// forward decl
+int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
+                char* buf, int size);
+int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
+                  char* buf, int size);
+
+
 Laik_Type *laik_Char;
 Laik_Type *laik_Int32;
 Laik_Type *laik_Int64;
@@ -338,11 +345,15 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
          m->layout = laik_new_layout(LAIK_LT_Default);
     Laik_Layout* l = m->layout;
     l->dims = d->space->dims;
+    // TODO: assume that default layout was requested:
+    // default is: elements on dim0 consecutive, then dim1, then dim2
     l->stride[0] = 1;
     l->stride[1] = m->validSlice.to.i[0] - m->validSlice.from.i[0];
     l->stride[2] = m->validSlice.to.i[1] - m->validSlice.from.i[1];
     l->stride[2] *= l->stride[1];
     l->isFixed = true;
+    l->pack = laik_pack_def;
+    l->unpack = laik_unpack_def;
 
     laik_log(1, "allocated memory for '%s'/%d: %d x %d (%llu B) at %p"
              "\n  layout: %dd, strides (%lu/%lu/%lu)",
@@ -845,11 +856,19 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m)
 }
 
 // for a local index (1d/2d/3d), return offset into memory mapping
+// e.g. for (0) / (0,0) / (0,0,0) it returns offset 0
 uint64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
 {
-    // TODO: only canonical layout with order 1/2/3
     assert(l);
+
+    // TODO: only default layout with order 1/2/3
     assert(l->stride[0] == 1);
+    if (l->dims > 1) {
+        assert(l->stride[0] <= l->stride[1]);
+        if (l->dims > 2)
+            assert(l->stride[1] <= l->stride[2]);
+    }
+
     uint64_t off = idx->i[0];
     if (l->dims > 1) {
         off += idx->i[1] * l->stride[1];
@@ -860,6 +879,135 @@ uint64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
     return off;
 }
 
+// pack/unpack routines for default layout
+int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
+                  char* buf, int size)
+{
+    int elemsize = m->data->elemsize;
+    int dims = m->layout->dims;
+
+    if (laik_index_isEqual(dims, idx, &(s->to))) {
+        // nothing left to pack
+        return 0;
+    }
+
+    // TODO: only default layout with order 1/2/3
+    assert(m->layout->stride[0] == 1);
+    if (dims > 1) {
+        assert(m->layout->stride[0] <= m->layout->stride[1]);
+        if (dims > 2)
+            assert(m->layout->stride[1] <= m->layout->stride[2]);
+    }
+
+    // slice to pack must within local valid slice of mapping
+    assert(laik_slice_within_slice(dims, s, &(m->validSlice)));
+
+    // calculate address of starting index
+    Laik_Index localIdx;
+    laik_sub_index(&localIdx, idx, &(m->validSlice.from));
+    uint64_t idxOff = laik_offset(&localIdx, m->layout);
+    char* idxPtr = m->base + idxOff * elemsize;
+
+    uint64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
+    from0 = s->from.i[0];
+    from1 = s->from.i[1];
+    to0 = s->to.i[0];
+    to1 = s->to.i[1];
+    to2 = s->to.i[2];
+    i0 = idx->i[0];
+    i1 = idx->i[1];
+    i2 = idx->i[2];
+    if (dims < 3) {
+        to2 = 1; i2 = 0;
+        if (dims < 2) {
+            from1 = 0; to1 = 1; i1 = 0;
+        }
+    }
+    count = 0;
+
+    // elements to skip after to0 reached
+    uint64_t skip0 = m->layout->stride[1] - (to0 - from0);
+    // elements to skip after to1 reached
+    uint64_t skip1 = m->layout->stride[2] - m->layout->stride[1] * (to1 - from1);
+
+    if (laik_logshown(1)) {
+        char s1[100], s2[100], s3[100], s4[100];
+        Laik_Index slcsize, localFrom;
+        laik_sub_index(&localFrom, &(s->from), &(m->validSlice.from));
+        laik_sub_index(&slcsize, &(s->to), &(s->from));
+        laik_getIndexStr(s1, dims, &slcsize);
+        laik_getIndexStr(s2, dims, &(s->from));
+        laik_getIndexStr(s3, dims, &localFrom);
+        laik_getIndexStr(s4, dims, idx);
+
+        laik_log(1, "packing for '%s', size (%s) x %d "
+                    "from global (%s) / local (%s)/%d, "
+                    "start (%s) off %lu, buf size %d",
+                 m->data->name, s1, elemsize,
+                 s2, s3, m->sliceNo,
+                 s4, idxOff, size);
+    }
+
+    bool stop = false;
+    for(; i2 < to2; i2++) {
+        for(; i1 < to1; i1++) {
+            for(; i0 < to0; i0++) {
+                if (size < elemsize) {
+                    stop = true;
+                    break;
+                }
+
+#if DEBUG_PACK
+                laik_log(1, "packing (%lu/%lu/%lu) off %lu: %.3f, left %d",
+                         i0, i1, i2,
+                         (idxPtr - m->base)/elemsize, *(double*)idxPtr,
+                         size - elemsize);
+#endif
+
+                memcpy(buf, idxPtr, elemsize);
+                idxPtr += elemsize; // stride[0] is 1
+                size -= elemsize;
+                buf += elemsize;
+                count++;
+
+            }
+            if (stop) break;
+            idxPtr += skip0 * elemsize;
+            i0 = from0;
+        }
+        if (stop) break;
+        idxPtr += skip1 * elemsize;
+        i1 = from1;
+    }
+    if (!stop) {
+        // we reached end, set i0/i1 to last positions
+        i0 = to0;
+        i1 = to1;
+    }
+
+    if (laik_logshown(1)) {
+        char s1[100];
+        Laik_Index idx2;
+        laik_set_index(&idx2, i0, i1, i2);
+        laik_getIndexStr(s1, dims, &idx2);
+
+        laik_log(1, "packed for '%s': end (%s), %lu elems = %lu bytes, %d left",
+                 m->data->name, s1, count, count * elemsize, size);
+    }
+
+    // save position we reached
+    idx->i[0] = i0;
+    idx->i[1] = i1;
+    idx->i[2] = i2;
+    return count;
+}
+
+int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
+                    char* buf, int size)
+{
+    // fake, TODO
+    return size / m->data->elemsize;
+}
 
 // make own partition available for direct access in local memory
 Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)

@@ -59,7 +59,8 @@ static int mpi_bug = 0;
 // buffer space for messages if packing/unpacking from/to not-1d layout
 // is necessary
 // TODO: if we go to asynchronous messages, this needs to be dynamic per data
-#define PACKBUFSIZE (10*1024*1024)
+//#define PACKBUFSIZE (10*1024*1024)
+#define PACKBUFSIZE (10*800)
 static char packbuf[PACKBUFSIZE];
 
 
@@ -414,17 +415,20 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 assert(fromMap->layout->pack);
 
                 Laik_Index idx = op->slc.from;
-                count = 0;
+                uint64_t size = laik_slice_size(dims, &(op->slc));
+                assert(size > 0);
                 int packed;
+                count = 0;
                 while(1) {
                     packed = (fromMap->layout->pack)(fromMap, &(op->slc), &idx,
                                                      packbuf, PACKBUFSIZE);
+                    assert(packed > 0);
                     MPI_Send(packbuf, packed,
                              mpiDataType, op->toTask, 1, comm);
                     count += packed;
                     if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
                 }
-                assert(count == laik_slice_size(dims, &(op->slc)));
+                assert(count == size);
             }
 
             if (ss) {
