@@ -96,7 +96,7 @@ bool laik_index_isEqual(int dims, Laik_Index* i1, Laik_Index* i2)
     if (dims == 1) return true;
 
     if (i1->i[1] != i2->i[1]) return false;
-    if (dims == 1) return true;
+    if (dims == 2) return true;
 
     if (i1->i[2] != i2->i[2]) return false;
     return true;
