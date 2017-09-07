@@ -254,32 +254,8 @@ int main(int argc, char* argv[])
             }
         }
 
-        // optionally, change partitioning slightly as test
-        if ((repart > 0) && (iter > 0) && ((iter % repart) == 0)) {
-            static int userData;
-            userData = iter / repart;
-            Laik_Partitioner* pr = laik_get_partitioner(pWrite);
-            laik_set_task_weight(pr, getTW, (void*) &userData);
-            laik_calc_partitioning(pWrite);
-        }
-
         // TODO: allow repartitioning
     }
-
-    // for check at end: sum up all just written values
-    double sum = 0.0;
-    laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
-    for(uint64_t y = 0; y < ysizeW; y++)
-        for(uint64_t x = 0; x < xsizeW; x++)
-            sum += baseW[ y * ystrideW + x];
-
-    // global reduction of local sum values
-    laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
-    laik_map_def1(sumD, (void**) &sumPtr, 0);
-    *sumPtr = sum;
-    laik_switchto_flow(sumD, LAIK_DF_CopyIn);
-    laik_map_def1(sumD, (void**) &sumPtr, 0);
-    sum = *sumPtr;
 
     // statistics for all iterations and reductions
     // using work load in all tasks
@@ -296,7 +272,15 @@ int main(int argc, char* argv[])
                  gUpdates * diter * 40 / dt);
     }
 
-    if (laik_myid(laik_get_dgroup(sumD)) == 0) {
+    // for check at end: sum up all just written values
+    laik_switchto_new(dWrite,  laik_Master,  LAIK_DF_CopyIn);
+
+    if (laik_myid(laik_get_dgroup(dWrite)) == 0) {
+        double sum = 0.0;
+        laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+        for(uint64_t y = 0; y < ysizeW; y++)
+            for(uint64_t x = 0; x < xsizeW; x++)
+                sum += baseW[ y * ystrideW + x];
         printf("Global value sum after %d iterations: %f\n",
                iter, sum);
     }
