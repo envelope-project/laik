@@ -270,7 +270,7 @@ int main(int argc, char* argv[])
                 // current iteration already done
                 int diter = (iter + 1) - last_iter;
                 double dt = t - t2;
-                double gUpdates = 0.000000001 * size * size; // per iteration
+                double gUpdates = 0.000000001 * size * size * size; // per iteration
                 laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
                          diter, dt,
                          // 6 Flops per update in reg iters, with res 9 (once)
@@ -315,7 +315,7 @@ int main(int argc, char* argv[])
         t = laik_wtime();
         int diter = iter;
         double dt = t - t1;
-        double gUpdates = 0.000000001 * size * size; // per iteration
+        double gUpdates = 0.000000001 * size * size * size; // per iteration
         laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
                  diter, dt,
                  // 6 Flops per update in reg iters, with res 4
