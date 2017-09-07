@@ -9,6 +9,7 @@
 ../doc/Debugging.md
 ../doc/design/Mapping.md
 
+../examples/TODO.md
 ../src/backend.c
 ../src/backend-mpi.c
 ../src/backend-single.c
