@@ -293,6 +293,12 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (recvFromLower  && (myid < task)) continue;
             if (recvFromHigher && (myid > task)) continue;
 
+            if (laik_logshown(1)) {
+                char s1[100];
+                laik_getSliceStr(s1, dims, &(op->slc));
+                laik_log(1, "MPI Recv %s from T%d", s1, op->fromTask);
+            }
+
             assert(myid != op->fromTask);
 
             assert(op->sliceNo < toList->count);
@@ -321,10 +327,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 uint64_t to   = op->slc.to.i[0] - toMap->validSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "MPI Recv from T%d: global [%lu;%lu[,\n"
-                            "  to local [%lu;%lu[ in slice %d, elemsize %d, baseptr %p\n",
-                         op->fromTask,
-                         op->slc.from.i[0], op->slc.to.i[0],
+                laik_log(1, "  direct recv to local [%lu;%lu[, slice %d, "
+                         "elemsize %d, baseptr %p\n",
                          from, to, op->sliceNo, d->elemsize, toMap->base);
 
                 if (mpi_bug > 0) {
@@ -379,6 +383,12 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (sendToLower  && (myid < task)) continue;
             if (sendToHigher && (myid > task)) continue;
 
+            if (laik_logshown(1)) {
+                char s1[100];
+                laik_getSliceStr(s1, dims, &(op->slc));
+                laik_log(1, "MPI Send %s to T%d", s1, op->toTask);
+            }
+
             assert(myid != op->toTask);
 
             assert(op->sliceNo < fromList->count);
@@ -397,11 +407,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 uint64_t to   = op->slc.to.i[0] - fromMap->validSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "MPI Send to T%d: global [%lu;%lu[,\n"
-                            "  from local [%lu;%lu[ in slice %d, "
+                laik_log(1, "  direct send: from local [%lu;%lu[, slice %d, "
                             "elemsize %d, baseptr %p\n",
-                         op->toTask,
-                         op->slc.from.i[0], op->slc.to.i[0],
                          from, to, op->sliceNo, d->elemsize, fromMap->base);
 
                 // TODO: tag 1 may conflict with application
