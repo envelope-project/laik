@@ -44,6 +44,7 @@
 ../examples/jac1d.c
 ../examples/jac2d.c
 ../examples/jac2d-ser.c
+../examples/jac3d.c
 
 ../tests/Makefile
 ../tests/.gitignore

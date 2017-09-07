@@ -7,4 +7,4 @@ Makefile.config
 *.DS_Store
 .vscode
 compile_commands.json
-
+log

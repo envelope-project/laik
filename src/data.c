@@ -1214,6 +1214,38 @@ Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
     return m;
 }
 
+Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
+                               uint64_t* zsize, uint64_t* zstride,
+                               uint64_t* ysize, uint64_t* ystride,
+                               uint64_t* xsize)
+{
+    Laik_Mapping* m = laik_map(d, 0, 0);
+    if (!m) {
+        laik_log(LAIK_LL_Error, "laik_map: could not map slice 0 of data '%s'",
+                 d->name);
+        return 0;
+    }
+
+    int n = laik_my_slicecount(d->activePartitioning);
+    if (n > 1)
+        laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
+                                "but partition with %d slices!", n);
+
+    Laik_Layout* l = m->layout;
+    assert(l);
+    if (l->dims != 3)
+        laik_log(LAIK_LL_Error, "Request for 3d mapping of %dd space!",
+                 l->dims);
+
+    if (base)    *base    = m->base;
+    if (xsize)   *xsize   = m->size[0];
+    if (ysize)   *ysize   = m->size[1];
+    if (ystride) *ystride = l->stride[1];
+    if (zsize)   *zsize   = m->size[2];
+    if (zstride) *zstride = l->stride[2];
+    return m;
+}
+
 
 Laik_Mapping* laik_global2local_1d(Laik_Data* d, uint64_t gidx, uint64_t* lidx)
 {

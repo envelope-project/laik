@@ -5,4 +5,5 @@ spmv2
 jac1d
 jac2d
 jac2d-ser
+jac3d
 *.out

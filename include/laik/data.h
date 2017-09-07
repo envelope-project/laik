@@ -161,12 +161,21 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count);
 
 // request default 2d mapping for 1 slice (= rectangle).
 // returns the mapping, and values describing mapping in output parameters
-//  - valid ranges: y in [0;ysize], x in [0;xsize[
-//  - value of base[y][x] is at address (base + y * ystride + x)
+//  - valid ranges: y in [0;ysize[, x in [0;xsize[
+//  - base[y][x] is at address (base + y * ystride + x)
 //    (note: ystride may be larger than xsize)
-Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
-                               void** base, uint64_t* ysize,
-                               uint64_t* ystride, uint64_t* xsize);
+Laik_Mapping* laik_map_def1_2d(Laik_Data* d, void** base,
+                               uint64_t* ysize, uint64_t* ystride,
+                               uint64_t* xsize);
+
+// request default 3d mapping for 1 slice (= cuboid).
+// returns the mapping, and values describing mapping in output parameters
+//  - valid ranges: z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
+//  - base[z][y][x] is at address (base + z * zstride + y * ystride + x)
+Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
+                               uint64_t* zsize, uint64_t* zstride,
+                               uint64_t* ysize, uint64_t* ystride,
+                               uint64_t* xsize);
 
 // 1d global to 1d local
 // if global index <gidx> is locally mapped, return mapping and set local
