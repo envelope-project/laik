@@ -60,11 +60,11 @@ int main(int argc, char* argv[])
 
     double *baseR, *baseW;
     // memory layout is always the same for reading and writing
-    uint64_t ysizeR = size, ystrideR = size, xsizeR = size;
     uint64_t ysizeW = size, ystrideW = size, xsizeW = size;
+    uint64_t ystrideR = size;
 
-    double* data1 = (double*) malloc(size * size * sizeof(double));
-    double* data2 = (double*) malloc(size * size * sizeof(double));
+    double* data1 = malloc(sizeof(double) * size * size);
+    double* data2 = malloc(sizeof(double) * size * size);
 
     // start with writing (= initialization) data1
     baseW = data1;
@@ -125,9 +125,9 @@ int main(int argc, char* argv[])
             for(uint64_t y = 1; y < ysizeW - 1; y++) {
                 for(uint64_t x = 1; x < xsizeW - 1; x++) {
                     newValue = 0.25 * ( baseR[ (y-1) * ystrideR + x    ] +
-                            baseR[  y    * ystrideR + x - 1] +
-                            baseR[  y    * ystrideR + x + 1] +
-                            baseR[ (y+1) * ystrideR + x    ] );
+                                        baseR[  y    * ystrideR + x - 1] +
+                                        baseR[  y    * ystrideR + x + 1] +
+                                        baseR[ (y+1) * ystrideR + x    ] );
                     diff = baseR[y * ystrideR + x] - newValue;
                     res += diff * diff;
                     baseW[y * ystrideW + x] = newValue;
@@ -170,12 +170,6 @@ int main(int argc, char* argv[])
 
     }
 
-    // for check at end: sum up all just written values
-    double sum = 0.0;
-    for(uint64_t y = 0; y < ysizeW; y++)
-        for(uint64_t x = 0; x < xsizeW; x++)
-            sum += baseW[ y * ystrideW + x];
-
     // statistics for all iterations and reductions
     // using work load in all tasks
     if (stats) {
@@ -191,7 +185,16 @@ int main(int argc, char* argv[])
                 gUpdates * diter * 40 / dt);
     }
 
+    // for check at end: sum up all just written values
+    double sum = 0.0;
+    for(uint64_t y = 0; y < ysizeW; y++)
+        for(uint64_t x = 0; x < xsizeW; x++)
+            sum += baseW[ y * ystrideW + x];
+
     printf("Global value sum after %d iterations: %f\n",
            iter, sum);
+
+    free(data1);
+    free(data2);
     return 0;
 }
