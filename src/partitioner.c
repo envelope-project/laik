@@ -49,7 +49,7 @@ void runAllPartitioner(Laik_Partitioner* pr,
     Laik_Group* g = ba->group;
 
     for(int task = 0; task < g->size; task++) {
-        laik_append_slice(ba, task, &(space->s));
+        laik_append_slice(ba, task, 0, &(space->s));
     }
 }
 
@@ -64,7 +64,7 @@ void runMasterPartitioner(Laik_Partitioner* pr,
                           Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
     // only full slice for master
-    laik_append_slice(ba, 0, &(ba->space->s));
+    laik_append_slice(ba, 0, 0, &(ba->space->s));
 }
 
 Laik_Partitioner* laik_new_master_partitioner()
@@ -99,7 +99,7 @@ void runCopyPartitioner(Laik_Partitioner* pr,
         Laik_Slice slc = ba->space->s;
         slc.from.i[toDim] = otherBA->tslice[i].s.from.i[fromDim];
         slc.to.i[toDim] = otherBA->tslice[i].s.to.i[fromDim];
-        laik_append_slice(ba, otherBA->tslice[i].task, &slc);
+        laik_append_slice(ba, otherBA->tslice[i].task, 0, &slc);
     }
 }
 
@@ -116,10 +116,10 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
 }
 
 
-// halo partitioner: extend borders of a base partitioning (otherBA)
-
-void runHaloPartitioner(Laik_Partitioner* pr,
-                        Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+// corner-halo partitioner: extend borders of other partitioning
+//  including corners - e.g. for 9-point 2d stencil
+void runCornerHaloPartitioner(Laik_Partitioner* pr,
+                              Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
     assert(otherBA->group == ba->group); // must use same task group
     assert(otherBA->space == ba->space);
@@ -151,7 +151,85 @@ void runHaloPartitioner(Laik_Partitioner* pr,
                     slc.to.i[2] = to->i[2] + d;
             }
         }
-        laik_append_slice(ba, otherBA->tslice[i].task, &slc);
+        laik_append_slice(ba, otherBA->tslice[i].task, 0, &slc);
+    }
+}
+
+Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth)
+{
+    int* data = (int*) malloc(sizeof(int));
+    *data = depth;
+
+    return laik_new_partitioner("cornerhalo",
+                                runCornerHaloPartitioner, (void*) data);
+}
+
+
+// halo partitioner: extend borders of other partitioning
+// excluding corners, e.g. for 5-point 2d stencil.
+// this creates multiple slices for each original slice, and uses tags
+// to mark the halos of a slice to go into same mapping
+void runHaloPartitioner(Laik_Partitioner* pr,
+                        Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+{
+    assert(otherBA->group == ba->group); // must use same task group
+    assert(otherBA->space == ba->space);
+
+    int dims = ba->space->dims;
+    int d = *((int*) pr->data);
+
+    int nextTag = 1;
+
+    // take all slices and extend them if possible
+    for(int i = 0; i < otherBA->count; i++) {
+        Laik_Slice slc;
+        Laik_Slice sp = ba->space->s;
+
+        slc = otherBA->tslice[i].s;
+        laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+        if (slc.from.i[0] > sp.from.i[0] + d) {
+            slc.to.i[0] = slc.from.i[0];
+            slc.from.i[0] -= d;
+            laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+        }
+        slc = otherBA->tslice[i].s;
+        if (slc.to.i[0] < sp.to.i[0] - d) {
+            slc.from.i[0] = slc.to.i[0];
+            slc.to.i[0] += d;
+            laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+        }
+
+        if (dims > 1) {
+            slc = otherBA->tslice[i].s;
+            if (slc.from.i[1] > sp.from.i[1] + d) {
+                slc.to.i[1] = slc.from.i[1];
+                slc.from.i[1] -= d;
+                laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+            }
+            slc = otherBA->tslice[i].s;
+            if (slc.to.i[1] < sp.to.i[1] - d) {
+                slc.from.i[1] = slc.to.i[1];
+                slc.to.i[1] += d;
+                laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+            }
+
+            if (dims > 2) {
+                slc = otherBA->tslice[i].s;
+                if (slc.from.i[2] > sp.from.i[2] + d) {
+                    slc.to.i[2] = slc.from.i[2];
+                    slc.from.i[2] -= d;
+                    laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+                }
+                slc = otherBA->tslice[i].s;
+                if (slc.to.i[2] < sp.to.i[2] - d) {
+                    slc.from.i[2] = slc.to.i[2];
+                    slc.to.i[2] += d;
+                    laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+                }
+            }
+        }
+
+        nextTag++; // could reset to 1 when going to next task
     }
 }
 
@@ -172,7 +250,7 @@ static void doBisection(Laik_BorderArray* ba,
 {
     assert(toTask > fromTask);
     if (toTask - fromTask == 1) {
-        laik_append_slice(ba, fromTask, s);
+        laik_append_slice(ba, fromTask, 0, s);
         return;
     }
 
@@ -196,7 +274,7 @@ static void doBisection(Laik_BorderArray* ba,
     }
     assert(width > 0);
     if (width == 1) {
-        laik_append_slice(ba, fromTask, s);
+        laik_append_slice(ba, fromTask, 0, s);
         return;
     }
 
@@ -314,7 +392,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
             if ((task+1 == count) && (cycle+1 == cycles)) break;
             slc.to.i[pdim] = i + s->s.from.i[pdim];
             if (slc.from.i[pdim] < slc.to.i[pdim])
-                laik_append_slice(ba, task, &slc);
+                laik_append_slice(ba, task, 0, &slc);
             task++;
             if (task == count) {
                 task = 0;
@@ -334,7 +412,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
     }
     assert((task+1 == count) && (cycle+1 == cycles));
     slc.to.i[pdim] = s->s.to.i[pdim];
-    laik_append_slice(ba, task, &slc);
+    laik_append_slice(ba, task, 0, &slc);
 }
 
 
@@ -475,7 +553,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
                      oldBA->tslice[sliceNo].s.from.i[0],
                      oldBA->tslice[sliceNo].s.to.i[0]);
 
-            laik_append_slice(ba, origTask, &(oldBA->tslice[sliceNo].s));
+            laik_append_slice(ba, origTask, 0, &(oldBA->tslice[sliceNo].s));
             continue;
         }
 
@@ -495,7 +573,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
             if ((weight >= weightPerTask) && (curTask < newg->size)) {
                 weight -= weightPerTask;
                 slc.to.i[0] = i + 1;
-                laik_append_slice(ba, newg->toParent[curTask], &slc);
+                laik_append_slice(ba, newg->toParent[curTask], 0, &slc);
 
                 laik_log(1, "reassign: re-distribute [%d;%d[ "
                          "of slice %d to task %d (new task %d)",
@@ -514,7 +592,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
         }
         if (slc.from.i[0] < to) {
             slc.to.i[0] = to;
-            laik_append_slice(ba, newg->toParent[curTask], &slc);
+            laik_append_slice(ba, newg->toParent[curTask], 0, &slc);
 
             laik_log(1, "reassign: re-distribute remaining [%d;%d[ "
                      "of slice %d to task %d (new task %d)",

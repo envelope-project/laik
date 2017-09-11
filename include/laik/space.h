@@ -202,6 +202,7 @@ extern Laik_Partitioner *laik_All;
 Laik_Partitioner* laik_new_all_partitioner();
 Laik_Partitioner* laik_new_master_partitioner();
 Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim);
+Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth);
 Laik_Partitioner* laik_new_halo_partitioner(int depth);
 Laik_Partitioner* laik_new_bisection_partitioner();
 

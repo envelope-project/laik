@@ -516,13 +516,14 @@ Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
 }
 
 // called by partitioners
-void laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s)
+void laik_append_slice(Laik_BorderArray* a, int task, int tag, Laik_Slice* s)
 {
     assert(a->count < a->capacity);
     assert((task >= 0) && (task < a->group->size));
     assert(laik_slice_within_space(s, a->space));
 
     a->tslice[a->count].task = task;
+    a->tslice[a->count].tag = tag;
     a->tslice[a->count].s = *s;
     a->count++;
 }
@@ -534,7 +535,7 @@ int ts_cmp(const void *p1, const void *p2)
     const Laik_TaskSlice* ts1 = (const Laik_TaskSlice*) p1;
     const Laik_TaskSlice* ts2 = (const Laik_TaskSlice*) p2;
     if (ts1->task == ts2->task) {
-        // sort slices for same task by start index
+        // sort slices for same task by start index (not really needed)
         return ts1->s.from.i[0] - ts2->s.from.i[0];
     }
     return ts1->task - ts2->task;

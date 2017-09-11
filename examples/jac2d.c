@@ -88,7 +88,7 @@ int main(int argc, char* argv[])
     // this extends pWrite partitions at borders by 1 index on inner borders
     // (the coupling is dynamic: any change in pWrite changes pRead)
     pRead = laik_new_partitioning(world, space,
-                                  laik_new_halo_partitioner(1), pWrite);
+                                  laik_new_cornerhalo_partitioner(1), pWrite);
 
     // for global sum, used for residuum and value sum at end
     Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);

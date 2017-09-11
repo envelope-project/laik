@@ -57,15 +57,20 @@ Laik_Partitioner* laik_new_partitioner(char* name,
                                        laik_run_partitioner_t f, void* d);
 
 // to be used by implementations of partitioners
-void laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s);
+// the tag is a hint for the data layer: if >0, slices with same tag go
+//  into same mapping
+void laik_append_slice(Laik_BorderArray* a, int task, int tag, Laik_Slice* s);
 
 
 // the output of a partitioner is a Laik_BorderArray
 
-// used in BorderArray to map a slice to a task
+// used in BorderArray to map a slice to a task.
+// the tag is a hint for the data layer: if >0, slices with same tag
+// go into same mapping
 typedef struct _Laik_TaskSlice Laik_TaskSlice;
 struct _Laik_TaskSlice {
     int task;
+    int tag;
     Laik_Slice s;
 };
 
