@@ -28,7 +28,7 @@ Laik_Partitioner* laik_new_partitioner(char* name,
                                        laik_run_partitioner_t f, void* d)
 {
     Laik_Partitioner* pr;
-    pr = (Laik_Partitioner*) malloc(sizeof(Laik_Partitioner));
+    pr = malloc(sizeof(Laik_Partitioner));
 
     pr->name = name;
     pr->run = f;
@@ -107,7 +107,7 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
 {
     Laik_CopyPartitionerData* data;
     int dsize = sizeof(Laik_CopyPartitionerData);
-    data = (Laik_CopyPartitionerData*) malloc(dsize);
+    data = malloc(dsize);
 
     data->fromDim = fromDim;
     data->toDim = toDim;
@@ -157,7 +157,7 @@ void runCornerHaloPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth)
 {
-    int* data = (int*) malloc(sizeof(int));
+    int* data = malloc(sizeof(int));
     *data = depth;
 
     return laik_new_partitioner("cornerhalo",
@@ -235,7 +235,7 @@ void runHaloPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_halo_partitioner(int depth)
 {
-    int* data = (int*) malloc(sizeof(int));
+    int* data = malloc(sizeof(int));
     *data = depth;
 
     return laik_new_partitioner("halo", runHaloPartitioner, (void*) data);
@@ -423,7 +423,7 @@ Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
 {
     Laik_BlockPartitionerData* data;
     int dsize = sizeof(Laik_BlockPartitionerData);
-    data = (Laik_BlockPartitionerData*) malloc(dsize);
+    data = malloc(dsize);
 
     data->pdim = pdim;
     data->cycles = cycles;
@@ -607,7 +607,7 @@ laik_new_reassign_partitioner(Laik_Group* newg,
                               Laik_GetIdxWeight_t getIdxW,
                               const void* userData)
 {
-    ReassignData* data = (ReassignData*) malloc(sizeof(ReassignData));
+    ReassignData* data = malloc(sizeof(ReassignData));
     data->newg = newg;
     data->getIdxW = getIdxW;
     data->userData = userData;

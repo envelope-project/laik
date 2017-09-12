@@ -73,7 +73,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
                                  char* location, void* data)
 {
     Laik_Instance* instance;
-    instance = (Laik_Instance*) malloc(sizeof(Laik_Instance));
+    instance = malloc(sizeof(Laik_Instance));
 
     instance->backend = b;
     instance->backend_data = data;
@@ -93,7 +93,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
 
     instance->do_profiling = false;
 
-    instance->agents = (laik_agent**)malloc(MAX_AGENTS*sizeof(laik_agent*));
+    instance->agents = malloc(MAX_AGENTS*sizeof(laik_agent*));
     instance->agent_count = 0;
 
     // logging (TODO: multiple instances)
@@ -159,7 +159,7 @@ Laik_Group* laik_create_group(Laik_Instance* i)
 
     Laik_Group* g;
 
-    g = (Laik_Group*) malloc(sizeof(Laik_Group) + 2 * (i->size) * sizeof(int));
+    g = malloc(sizeof(Laik_Group) + 2 * (i->size) * sizeof(int));
     i->group[i->group_count] = g;
 
     g->inst = i;

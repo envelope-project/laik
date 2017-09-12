@@ -54,12 +54,12 @@ struct _SpM {
 // generate an (somehow arbitrary) triangular matrix in CSR format
 SpM* newSpM(int size)
 {
-    SpM* m = (SpM*) malloc(sizeof(SpM) + size * sizeof(int));
+    SpM* m = malloc(sizeof(SpM) + size * sizeof(int));
     m->rows  = size;
     m->cols  = size;
     m->elems = (m->rows - 1) * m->cols / 2;
-    m->col   = (int*) malloc(m->elems * sizeof(int));
-    m->val   = (double*) malloc(m->elems * sizeof(double));
+    m->col   = malloc(sizeof(int) * m->elems);
+    m->val   = malloc(sizeof(double) * m->elems);
 
     int r, off = 0;
     for(r = 0; r < size; r++) {

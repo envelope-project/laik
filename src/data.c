@@ -27,7 +27,7 @@ static int type_id = 0;
 
 Laik_Type* laik_new_type(char* name, Laik_TypeKind kind, int size)
 {
-    Laik_Type* t = (Laik_Type*) malloc(sizeof(Laik_Type));
+    Laik_Type* t = malloc(sizeof(Laik_Type));
 
     t->id = type_id++;
     if (name)
@@ -61,7 +61,7 @@ void laik_data_init()
 Laik_SwitchStat* laik_newSwitchStat()
 {
     Laik_SwitchStat* ss;
-    ss = (Laik_SwitchStat*) malloc(sizeof(Laik_SwitchStat));
+    ss = malloc(sizeof(Laik_SwitchStat));
 
     ss->switches           = 0;
     ss->switches_noactions = 0;
@@ -153,7 +153,7 @@ Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type)
 {
     assert(group->inst == space->inst);
 
-    Laik_Data* d = (Laik_Data*) malloc(sizeof(Laik_Data));
+    Laik_Data* d = malloc(sizeof(Laik_Data));
 
     d->id = data_id++;
     d->name = strdup("data-0     ");
@@ -241,8 +241,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
     if (n == 0) return 0;
 
     Laik_MappingList* ml;
-    ml = (Laik_MappingList*) malloc(sizeof(Laik_MappingList) +
-                                    (n-1) * sizeof(Laik_Mapping));
+    ml = malloc(sizeof(Laik_MappingList) + (n-1) * sizeof(Laik_Mapping));
     ml->count = n;
 
     for(int i = 0; i < n; i++) {
@@ -823,7 +822,7 @@ void laik_fill_double(Laik_Data* d, double v)
 // allocate new layout object with a layout hint, to use in laik_map
 Laik_Layout* laik_new_layout(Laik_LayoutType t)
 {
-    Laik_Layout* l = (Laik_Layout*) malloc(sizeof(Laik_Layout));
+    Laik_Layout* l = malloc(sizeof(Laik_Layout));
 
     l->type = t;
     l->isFixed = false;
@@ -1291,7 +1290,7 @@ void laik_free(Laik_Data* d)
 // returns an allocator with default policy LAIK_MP_NewAllocOnRepartition
 Laik_Allocator* laik_new_allocator()
 {
-    Laik_Allocator* a = (Laik_Allocator*) malloc(sizeof(Laik_Allocator));
+    Laik_Allocator* a = malloc(sizeof(Laik_Allocator));
 
     a->policy = LAIK_MP_NewAllocOnRepartition;
     a->malloc = 0;  // use malloc

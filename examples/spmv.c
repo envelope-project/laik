@@ -67,12 +67,12 @@ int main(int argc, char* argv[])
     laik_set_phase(inst, 0, "init", NULL);
 
     // generate diagonal matrix in CSR format
-    SpM* m = (SpM*) malloc(sizeof(SpM));
+    SpM* m = malloc(sizeof(SpM));
     m->rows  = size;
     m->cols  = size;
     m->elems = (m->rows-1) * m->cols / 2;
-    m->col   = (int*) malloc(m->elems * sizeof(int));
-    m->val   = (double*) malloc(m->elems * sizeof(double));
+    m->col   = malloc(sizeof(int) * m->elems);
+    m->val   = malloc(sizeof(double) * m->elems);
     int r, off = 0;
     for(r = 0; r < size; r++) {
         m->row[r] = off;
@@ -86,7 +86,7 @@ int main(int argc, char* argv[])
     assert(m->elems == off);
 
     // global vector
-    double* v = (double*) malloc(size * sizeof(double));
+    double* v = malloc(sizeof(double) * size);
     for(int i = 0; i < size; i++)
         v[i] = (double) (i + 1);
 

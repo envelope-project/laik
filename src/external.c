@@ -83,7 +83,7 @@ laik_agent* laik_ext_loadagent (
                 laik_log(LAIK_LL_Error, "Cannot initialize agent");
                 exit(1);
             }
-            agent = (laik_agent*) malloc (sizeof(laik_agent));            
+            agent = malloc (sizeof(laik_agent));
 
             agent->id = laik_ext_cur_id;
             agent->name = name;
@@ -119,7 +119,7 @@ laik_agent* laik_ext_loadagent (
 
     laik_ext_num_loaded++;
     if(laik_ext_so_loaded == 0){
-        laik_ext_so_loaded = (void**) malloc(sizeof(void*));
+        laik_ext_so_loaded = malloc(sizeof(void*));
     }else{
         laik_ext_so_loaded = realloc(laik_ext_so_loaded, 
                 (laik_ext_num_loaded+1)*sizeof(void*) );
@@ -177,7 +177,7 @@ int laik_allow_repartition (
         if(num_failed > 0){
             total_failed += num_failed;
             if(failed_tasks == 0){
-                failed_tasks = (int*) malloc (total_failed*sizeof(int));                
+                failed_tasks = malloc (total_failed*sizeof(int));
             }else{
                 failed_tasks = (int*) realloc (failed_tasks, total_failed*sizeof(int));
             }

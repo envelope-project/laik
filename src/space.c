@@ -362,7 +362,7 @@ bool laik_do_init(Laik_DataFlow flow)
 // create a new index space object (initially invalid)
 Laik_Space* laik_new_space(Laik_Instance* inst)
 {
-    Laik_Space* space = (Laik_Space*) malloc(sizeof(Laik_Space));
+    Laik_Space* space = malloc(sizeof(Laik_Space));
 
     space->id = space_id++;
     space->name = strdup("space-0     ");
@@ -503,10 +503,10 @@ Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
 {
     Laik_BorderArray* a;
 
-    a = (Laik_BorderArray*) malloc(sizeof(Laik_BorderArray));
-    a->off = (int*) malloc((g->size + 1) * sizeof(int));
-    a->tslice = (Laik_TaskSlice*) malloc(capacity *
-                                         sizeof(Laik_TaskSlice));
+    a = malloc(sizeof(Laik_BorderArray));
+    a->off = malloc(sizeof(int) * (g->size + 1));
+    a->tslice = malloc(sizeof(Laik_TaskSlice) * capacity);
+
     a->group = g;
     a->space = s;
     a->capacity = capacity;
@@ -776,7 +776,7 @@ laik_new_partitioning(Laik_Group* group, Laik_Space* space,
                       Laik_Partitioner* pr, Laik_Partitioning *base)
 {
     Laik_Partitioning* p;
-    p = (Laik_Partitioning*) malloc(sizeof(Laik_Partitioning));
+    p = malloc(sizeof(Laik_Partitioning));
 
     p->id = part_id++;
     p->name = strdup("partng-0     ");
@@ -1314,7 +1314,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     int redOff   = recvOff  + recvSize;
     assert(redOff + redSize == tsize);
 
-    Laik_Transition* t = (Laik_Transition*) malloc(tsize);
+    Laik_Transition* t = malloc(tsize);
     t->dims = dims;
     t->actionCount = localCount + initCount + sendCount + recvCount + redCount;
     t->local = (struct localTOp*) (((char*)t) + localOff);
@@ -1399,7 +1399,7 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg)
     // resize offset array if needed
     if (newg->size > oldg->size) {
         free(ba->off);
-        ba->off = (int*) malloc((newg->size +1) * sizeof(int));
+        ba->off = malloc((newg->size +1) * sizeof(int));
     }
     ba->group = newg;
     updateBorderArrayOffsets(ba);

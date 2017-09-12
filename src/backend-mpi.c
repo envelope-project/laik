@@ -69,7 +69,7 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
     if (mpi_instance) return mpi_instance;
 
-    MPIData* d = (MPIData*) malloc(sizeof(MPIData));
+    MPIData* d = malloc(sizeof(MPIData));
     d->didInit = false;
     d->comm = MPI_COMM_WORLD;
 
@@ -95,7 +95,7 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
     // group world
 
-    MPIGroupData* gd = (MPIGroupData*) malloc(sizeof(MPIGroupData));
+    MPIGroupData* gd = malloc(sizeof(MPIGroupData));
     gd->comm = MPI_COMM_WORLD;
 
     Laik_Group* g = laik_create_group(inst);
@@ -152,7 +152,7 @@ void laik_mpi_updateGroup(Laik_Group* g)
 
     MPIGroupData* gd = (MPIGroupData*) g->backend_data;
     assert(gd == 0); // must not be updated yet
-    gd = (MPIGroupData*) malloc(sizeof(MPIGroupData));
+    gd = malloc(sizeof(MPIGroupData));
     g->backend_data = gd;
 
     laik_log(1, "MPI Comm_split: old myid %d => new myid %d",
