@@ -236,28 +236,45 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
     assert(myid < ba->group->size);
     int dims = d->space->dims;
 
-    // number of own slices = number of separate maps
-    int n = ba->off[myid+1] - ba->off[myid];
+    // calculate number of separate maps
+    // take tags of slices into account; slices must be sorted by tags
+    int n = 0, tag = -1;
+    for(int o = ba->off[myid]; o < ba->off[myid+1]; o++) {
+        if ((ba->tslice[o].tag > 0) && (ba->tslice[o].tag == tag))
+            continue;
+        tag = ba->tslice[o].tag;
+        n++;
+    }
     if (n == 0) return 0;
 
     Laik_MappingList* ml;
     ml = malloc(sizeof(Laik_MappingList) + (n-1) * sizeof(Laik_Mapping));
     ml->count = n;
 
-    for(int i = 0; i < n; i++) {
-        Laik_Mapping* m = &(ml->map[i]);
-        int o = ba->off[myid] + i;
-        Laik_Slice* slc = &(ba->tslice[o].s);
+    int mapNo = 0;
+    for(int o = ba->off[myid]; o < ba->off[myid+1]; o++, mapNo++) {
 
+        Laik_Mapping* m = &(ml->map[mapNo]);
         m->data = d;
-        m->sliceNo = i;
+        m->mapNo = mapNo;
         m->reusedFor = -1;
+
         // required space
-        m->requiredSlice = *slc;
-        m->count = laik_slice_size(dims, slc);
-        m->size[0] = slc->to.i[0] - slc->from.i[0];
-        m->size[1] = (dims > 1) ? (slc->to.i[1] - slc->from.i[1]) : 0;
-        m->size[2] = (dims > 2) ? (slc->to.i[2] - slc->from.i[2]) : 0;
+        Laik_Slice slc = ba->tslice[o].s;
+        tag = ba->tslice[o].tag;
+        m->firstOff = o;
+        if (tag > 0) {
+            while((o+1 < ba->off[myid+1]) && (ba->tslice[o+1].tag == tag)) {
+                o++;
+                laik_slice_expand(dims, &slc, &(ba->tslice[o].s));
+            }
+        }
+        m->lastOff = o;
+        m->requiredSlice = slc;
+        m->count = laik_slice_size(dims, &slc);
+        m->size[0] = slc.to.i[0] - slc.from.i[0];
+        m->size[1] = (dims > 1) ? (slc.to.i[1] - slc.from.i[1]) : 0;
+        m->size[2] = (dims > 2) ? (slc.to.i[2] - slc.from.i[2]) : 0;
 
         // not backed by memory yet, allocation happens lazy
         m->capacity = 0;
@@ -268,11 +285,14 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
 
         if (laik_logshown(1)) {
             char s[100];
-            laik_getSliceStr(s, d->space->dims, slc);
-            laik_log(1, "prepare map for '%s'/%d: slice %s (count %d, elemsize %d)\n",
-                     d->name, i, s, m->count, d->elemsize);
+            laik_getSliceStr(s, dims, &slc);
+            laik_log(1, "prepare map for '%s'/%d: req.slice %s "
+                     "(off %d - %d, count %d, elemsize %d)\n",
+                     d->name, mapNo, s,
+                     m->firstOff, m->lastOff, m->count, d->elemsize);
         }
     }
+    assert(mapNo == n);
 
     return ml;
 }
@@ -290,7 +310,7 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
 
         if (m->reusedFor == -1) {
             laik_log(1, "free map for '%s'/%d (capacity %llu, base %p, start %p)\n",
-                     d->name, m->sliceNo,
+                     d->name, m->mapNo,
                      (unsigned long long) m->capacity, m->base, m->start);
 
             if (ss) {
@@ -309,7 +329,7 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
         }
         else
             laik_log(1, "free map for '%s'/%d: nothing to do (reused for %d)\n",
-                     d->name, m->sliceNo, m->reusedFor);
+                     d->name, m->mapNo, m->reusedFor);
     }
 
     free(ml);
@@ -356,7 +376,7 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
 
     laik_log(1, "allocated memory for '%s'/%d: %d x %d (%llu B) at %p"
              "\n  layout: %dd, strides (%lu/%lu/%lu)",
-             d->name, m->sliceNo, m->count, d->elemsize,
+             d->name, m->mapNo, m->count, d->elemsize,
              (unsigned long long) m->capacity, m->base,
              l->dims, l->stride[0], l->stride[1], l->stride[2]);
 }
@@ -367,6 +387,8 @@ void copyMaps(Laik_Transition* t,
               Laik_SwitchStat* ss)
 {
     assert(t->localCount > 0);
+    assert(fromList != 0);
+    assert(toList != 0);
     for(int i = 0; i < t->localCount; i++) {
         struct localTOp* op = &(t->local[i]);
         assert(op->fromSliceNo < fromList->count);
@@ -943,7 +965,7 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
                     "from global (%s) / local (%s)/%d, "
                     "start (%s) off %lu, buf size %d",
                  m->data->name, s1, elemsize,
-                 s2, s3, m->sliceNo,
+                 s2, s3, m->mapNo,
                  s4, idxOff, size);
     }
 
@@ -1066,7 +1088,7 @@ int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
                     "from global (%s) / local (%s)/%d, "
                     "start (%s) off %lu, buf size %d",
                  m->data->name, s1, elemsize,
-                 s2, s3, m->sliceNo,
+                 s2, s3, m->mapNo,
                  s4, idxOff, size);
     }
 

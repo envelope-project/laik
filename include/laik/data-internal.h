@@ -121,7 +121,8 @@ struct _Laik_Layout {
 // Memory of the larger mapping space is kept for future reuse.
 struct _Laik_Mapping {
     Laik_Data* data;
-    int sliceNo; // slice number of own partition this mapping is for
+    int mapNo; // index of this map in local mapping list
+    int firstOff, lastOff; // offsets in border array covered by this mapping
     Laik_Layout* layout; // memory layout used
     Laik_Slice allocatedSlice; // slice (global) covered by this mapping
     Laik_Slice requiredSlice; // sub-slice (global) containing used slices

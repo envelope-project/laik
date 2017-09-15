@@ -154,6 +154,21 @@ Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2)
     return &s;
 }
 
+// expand slice <dst> such that it contains <src>
+void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src)
+{
+    if (src->from.i[0] < dst->from.i[0]) dst->from.i[0] = src->from.i[0];
+    if (src->to.i[0] > dst->to.i[0]) dst->to.i[0] = src->to.i[0];
+    if (dims == 1) return;
+
+    if (src->from.i[1] < dst->from.i[1]) dst->from.i[1] = src->from.i[1];
+    if (src->to.i[1] > dst->to.i[1]) dst->to.i[1] = src->to.i[1];
+    if (dims == 2) return;
+
+    if (src->from.i[2] < dst->from.i[2]) dst->from.i[2] = src->from.i[2];
+    if (src->to.i[2] > dst->to.i[2]) dst->to.i[2] = src->to.i[2];
+}
+
 // is slice <slc1> contained in <slc2>?
 bool laik_slice_within_slice(int dims, Laik_Slice* slc1, Laik_Slice* slc2)
 {
@@ -535,8 +550,12 @@ int ts_cmp(const void *p1, const void *p2)
     const Laik_TaskSlice* ts1 = (const Laik_TaskSlice*) p1;
     const Laik_TaskSlice* ts2 = (const Laik_TaskSlice*) p2;
     if (ts1->task == ts2->task) {
-        // sort slices for same task by start index (not really needed)
-        return ts1->s.from.i[0] - ts2->s.from.i[0];
+        // we want same tags in a row for processing in prepareMaps
+        if (ts1->tag == ts2->tag) {
+            // sort slices for same task by start index (not really needed)
+            return ts1->s.from.i[0] - ts2->s.from.i[0];
+        }
+        return ts1->tag - ts2->tag;
     }
     return ts1->task - ts2->task;
 }

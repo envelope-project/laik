@@ -159,6 +159,9 @@ bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
 // get the intersection of 2 slices; return 0 if intersection is empty
 Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
+// expand slice <dst> such that it contains <src>
+void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src);
+
 // is slice <slc1> contained in <slc2>?
 bool laik_slice_within_slice(int dims, Laik_Slice* slc1, Laik_Slice* slc2);
 
