@@ -253,7 +253,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
         m->sliceNo = i;
         m->reusedFor = -1;
         // required space
-        m->validSlice = *slc;
+        m->requiredSlice = *slc;
         m->count = laik_slice_size(dims, slc);
         m->size[0] = slc->to.i[0] - slc->from.i[0];
         m->size[1] = (dims > 1) ? (slc->to.i[1] - slc->from.i[1]) : 0;
@@ -336,8 +336,8 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
 
     // no space around valid indexes
     m->start = m->base;
-    m->fullSlice = m->validSlice;
-    m->fullcount = m->count;
+    m->allocatedSlice = m->requiredSlice;
+    m->allocCount = m->count;
 
     // set layout
     if (!m->layout)
@@ -347,8 +347,8 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     // TODO: assume that default layout was requested:
     // default is: elements on dim0 consecutive, then dim1, then dim2
     l->stride[0] = 1;
-    l->stride[1] = m->validSlice.to.i[0] - m->validSlice.from.i[0];
-    l->stride[2] = m->validSlice.to.i[1] - m->validSlice.from.i[1];
+    l->stride[1] = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
+    l->stride[2] = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
     l->stride[2] *= l->stride[1];
     l->isFixed = true;
     l->pack = laik_pack_def;
@@ -391,8 +391,8 @@ void copyMaps(Laik_Transition* t,
         Laik_Slice* s = &(op->slc);
         Laik_Index count, fromStart, toStart;
         laik_sub_index(&count, &(s->to), &(s->from));
-        laik_sub_index(&fromStart, &(s->from), &(fromMap->validSlice.from));
-        laik_sub_index(&toStart, &(s->from), &(toMap->validSlice.from));
+        laik_sub_index(&fromStart, &(s->from), &(fromMap->requiredSlice.from));
+        laik_sub_index(&toStart, &(s->from), &(toMap->requiredSlice.from));
         if (dims < 3) {
             count.i[2] = 1;
             if (dims < 2) {
@@ -488,24 +488,24 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
             if (fromMap->reusedFor >= 0) continue; // only reuse once
 
             // does index range fit into old?
-            if (!laik_slice_within_slice(dims, &(toMap->validSlice),
-                                         &(fromMap->fullSlice))) {
+            if (!laik_slice_within_slice(dims, &(toMap->requiredSlice),
+                                         &(fromMap->allocatedSlice))) {
                 // no, cannot reuse
                 continue;
             }
             // always reuse larger mapping
 
             toMap->start     = fromMap->start;
-            toMap->fullSlice = fromMap->fullSlice;
-            toMap->fullcount = fromMap->fullcount;
+            toMap->allocatedSlice = fromMap->allocatedSlice;
+            toMap->allocCount = fromMap->allocCount;
             toMap->capacity  = fromMap->capacity;
             toMap->layout    = fromMap->layout;
 
             // offset of validSlice.from in mapping of fullSlice
             Laik_Index idx;
             laik_sub_index(&idx,
-                           &(toMap->validSlice.from),
-                           &(toMap->fullSlice.from));
+                           &(toMap->requiredSlice.from),
+                           &(toMap->allocatedSlice.from));
             uint64_t off = laik_offset(&idx, toMap->layout);
 
             toMap->base = toMap->start + off * d->elemsize;
@@ -513,9 +513,9 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
 
             if (laik_logshown(1)) {
                 char s[500];
-                int o = laik_getSliceStr(s, dims, &(toMap->validSlice));
+                int o = laik_getSliceStr(s, dims, &(toMap->requiredSlice));
                 o += sprintf(s+o, " (in ");
-                o += laik_getSliceStr(s+o, dims, &(toMap->fullSlice));
+                o += laik_getSliceStr(s+o, dims, &(toMap->allocatedSlice));
                 o += sprintf(s+o, " with off %lu)", off);
                 laik_log(1, "map reuse for '%s'/%d %s, %llu B at %p)\n",
                          toMap->data->name, i, s,
@@ -899,11 +899,11 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     }
 
     // slice to pack must within local valid slice of mapping
-    assert(laik_slice_within_slice(dims, s, &(m->validSlice)));
+    assert(laik_slice_within_slice(dims, s, &(m->requiredSlice)));
 
     // calculate address of starting index
     Laik_Index localIdx;
-    laik_sub_index(&localIdx, idx, &(m->validSlice.from));
+    laik_sub_index(&localIdx, idx, &(m->requiredSlice.from));
     uint64_t idxOff = laik_offset(&localIdx, m->layout);
     char* idxPtr = m->base + idxOff * elemsize;
 
@@ -932,7 +932,7 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     if (laik_logshown(1)) {
         char s1[100], s2[100], s3[100], s4[100];
         Laik_Index slcsize, localFrom;
-        laik_sub_index(&localFrom, &(s->from), &(m->validSlice.from));
+        laik_sub_index(&localFrom, &(s->from), &(m->requiredSlice.from));
         laik_sub_index(&slcsize, &(s->to), &(s->from));
         laik_getIndexStr(s1, dims, &slcsize);
         laik_getIndexStr(s2, dims, &(s->from));
@@ -1022,11 +1022,11 @@ int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     }
 
     // slice to unpack into must be within local valid slice of mapping
-    assert(laik_slice_within_slice(dims, s, &(m->validSlice)));
+    assert(laik_slice_within_slice(dims, s, &(m->requiredSlice)));
 
     // calculate address of starting index
     Laik_Index localIdx;
-    laik_sub_index(&localIdx, idx, &(m->validSlice.from));
+    laik_sub_index(&localIdx, idx, &(m->requiredSlice.from));
     uint64_t idxOff = laik_offset(&localIdx, m->layout);
     char* idxPtr = m->base + idxOff * elemsize;
 
@@ -1055,7 +1055,7 @@ int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     if (laik_logshown(1)) {
         char s1[100], s2[100], s3[100], s4[100];
         Laik_Index slcsize, localFrom;
-        laik_sub_index(&localFrom, &(s->from), &(m->validSlice.from));
+        laik_sub_index(&localFrom, &(s->from), &(m->requiredSlice.from));
         laik_sub_index(&slcsize, &(s->to), &(s->from));
         laik_getIndexStr(s1, dims, &slcsize);
         laik_getIndexStr(s2, dims, &(s->from));
@@ -1253,10 +1253,10 @@ Laik_Mapping* laik_global2local_1d(Laik_Data* d, uint64_t gidx, uint64_t* lidx)
     for(int i = 0; i < d->activeMappings->count; i++) {
         Laik_Mapping* m = &(d->activeMappings->map[i]);
 
-        if (gidx < m->validSlice.from.i[0]) continue;
-        if (gidx >= m->validSlice.to.i[0]) continue;
+        if (gidx < m->requiredSlice.from.i[0]) continue;
+        if (gidx >= m->requiredSlice.to.i[0]) continue;
 
-        if (lidx) *lidx = gidx - m->validSlice.from.i[0];
+        if (lidx) *lidx = gidx - m->requiredSlice.from.i[0];
         return m;
     }
     return 0;
@@ -1271,7 +1271,7 @@ uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
     assert(off < m->count);
 
     // TODO: take layout into account
-    return m->validSlice.from.i[0] + off;
+    return m->requiredSlice.from.i[0] + off;
 }
 
 

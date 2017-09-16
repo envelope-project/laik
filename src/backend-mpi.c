@@ -323,8 +323,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 // we directly support 1d data layouts
 
                 // from global to receiver-local indexes
-                uint64_t from = op->slc.from.i[0] - toMap->validSlice.from.i[0];
-                uint64_t to   = op->slc.to.i[0] - toMap->validSlice.from.i[0];
+                uint64_t from = op->slc.from.i[0] - toMap->requiredSlice.from.i[0];
+                uint64_t to   = op->slc.to.i[0] - toMap->requiredSlice.from.i[0];
                 count = to - from;
 
                 laik_log(1, "  direct recv to local [%lu;%lu[, slice %d, "
@@ -403,8 +403,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 // we directly support 1d data layouts
 
                 // from global to sender-local indexes
-                uint64_t from = op->slc.from.i[0] - fromMap->validSlice.from.i[0];
-                uint64_t to   = op->slc.to.i[0] - fromMap->validSlice.from.i[0];
+                uint64_t from = op->slc.from.i[0] - fromMap->requiredSlice.from.i[0];
+                uint64_t to   = op->slc.to.i[0] - fromMap->requiredSlice.from.i[0];
                 count = to - from;
 
                 laik_log(1, "  direct send: from local [%lu;%lu[, slice %d, "
