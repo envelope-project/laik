@@ -25,6 +25,7 @@
 #endif
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <assert.h>
 
@@ -52,19 +53,33 @@ int main(int argc, char* argv[])
     int size = 0;
     int maxiter = 0;
     int repart = 0; // enforce repartitioning after <repart> iterations
+    bool use_cornerhalo = true; // use halo partitioner including corners?
 
-    if (argc > 1) size = atoi(argv[1]);
-    if (argc > 2) maxiter = atoi(argv[2]);
-    if (argc > 3) repart = atoi(argv[3]);
+    int arg = 1;
+    while ((argc > arg) && (argv[arg][0] == '-')) {
+        if (argv[arg][1] == 'n')
+            use_cornerhalo = false;
+        if (argv[arg][1] == 'h') {
+            printf("Usage: %s [-n] <side width> <maxiter> <repart>\n", argv[0]);
+            exit(1);
+        }
+        arg++;
+    }
+    if (argc > arg) size = atoi(argv[arg]);
+    if (argc > arg + 1) maxiter = atoi(argv[arg + 1]);
+    if (argc > arg + 2) repart = atoi(argv[arg + 2]);
 
     if (size == 0) size = 2500; // 6.25 mio entries
     if (maxiter == 0) maxiter = 50;
 
     if (laik_myid(world) == 0) {
-        printf("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks\n",
+        printf("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks",
                size, size, .000016 * size * size, maxiter, laik_size(world));
+        if (!use_cornerhalo)
+            printf(" (halo without corners)");
         if (repart > 0)
-            printf("  with repartitioning every %d iterations\n", repart);
+            printf("\n  with repartitioning every %d iterations\n", repart);
+        printf("\n");
     }
 
     double *baseR, *baseW, *sumPtr;
@@ -87,8 +102,9 @@ int main(int argc, char* argv[])
                                   laik_new_bisection_partitioner(), 0);
     // this extends pWrite partitions at borders by 1 index on inner borders
     // (the coupling is dynamic: any change in pWrite changes pRead)
-    pRead = laik_new_partitioning(world, space,
-                                  laik_new_cornerhalo_partitioner(1), pWrite);
+    Laik_Partitioner* pr = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
+                                            laik_new_halo_partitioner(1);
+    pRead = laik_new_partitioning(world, space, pr, pWrite);
 
     // for global sum, used for residuum and value sum at end
     Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
