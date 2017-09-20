@@ -27,5 +27,6 @@
 #include "laik/space-internal.h"
 #include "laik/data-internal.h"
 #include "laik/program-internal.h"
+#include "laik/ext.h"
 
 #endif // _LAIK_INTERNAL_H_

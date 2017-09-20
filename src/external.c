@@ -24,12 +24,16 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "laik.h"
+#include "laik-internal.h"
 
-static int laik_ext_num_loaded = 0;
-static void** laik_ext_so_loaded = 0;
-static int laik_ext_cur_id = 0;
-
+/** 
+ * @brief  Test if a given function exists in dynamic library
+ * @note   
+ * @param  handle: Handle to the library.
+ * @param  name: Name of the function
+ * @retval NULL, if the function is not found;
+           f_ptr, if the function is found.
+ */
 static void* probfunc(
     void* handle,
     char* name
@@ -44,166 +48,199 @@ static void* probfunc(
         laik_log(LAIK_LL_Error, dlerror());
         exit(1);
     }
-
     return func;
 }
 
-laik_agent* laik_ext_loadagent (
-    char* name,
-    laik_agent_t type,
-    char* path, 
-    int argc, 
-    char** argv
+/** 
+ * @brief  Map a given node uid to LAIK Task number
+ * @note   FIXEME>>>> NEED TO BE IMPLEMENTED
+ * @param  inst: the LAIK Instance
+ * @param  uid: A given node uid. 
+ * @retval the LAIK Task number
+ */
+static int laik_map_id(
+    Laik_Instance* inst,
+    node_uid_t* uid
+){
+    assert(inst);
+    assert(uid);
+
+    
+    //FIXME: Do something plausible
+    (void) inst;
+
+    return atoi(uid->uid);
+}
+
+/** 
+ * @brief  Load an external agent.
+ * @note   
+ * @param  inst: The LAIK instance
+ * @param  name: Path or the Pointer of the agent
+ * @param  isDynamic: type of the agent
+ * @param  argc: arguments to pass to the agent
+ * @param  argv: arguments to pass to the agent
+ * @retval None
+ */
+void laik_ext_loadagent (
+    Laik_Instance* instance,
+    void* name,
+    bool isDynamic,
+    int carg, 
+    char** vargs
 ){
     void *handle;
-    laik_agent* agent;
+    Laik_Agent* agent;
     laik_agent_init init;
-    laik_ext_errno errno;
-    laik_agent_getcap getcap;
-
-    assert(name);
-    assert(path);
-    if(argc>0)  assert(argv);
-
-    switch (type){
-        case LAIK_AGENT_STATIC:
-            laik_log(LAIK_LL_Error, 
-                "This is for dynamic loaded libs, call laik_ext_loadagent_static() instead \n");
-            exit(1);
-
-        case LAIK_AGENT_DYNAMIC:
-            handle = dlopen(path, RTLD_LAZY);
-            if(!handle){
-                laik_log(LAIK_LL_Error, dlerror());
-                exit(1);
-            }
-            init = (laik_agent_init) probfunc(handle, "agent_init");
-            errno = init(argc, argv);
-            if(errno != LAIK_AGENT_ERRNO_SUCCESS){
-                laik_log(LAIK_LL_Error, "Cannot initialize agent");
-                exit(1);
-            }
-            agent = malloc (sizeof(laik_agent));
-
-            agent->id = laik_ext_cur_id;
-            agent->name = name;
-            getcap = (laik_agent_getcap) probfunc(handle, "agent_get_cap");
-            agent->capabilities = getcap();
-            agent->type = LAIK_AGENT_DYNAMIC;
-
-            agent->detach = (laik_agent_detach) probfunc(handle, "agent_detach");
-            agent->getfail = (laik_agent_get_failed) probfunc (handle, "agent_get_failed");
-            agent->peekfail = (laik_agent_peek_failed) probfunc(handle, "agent_peek_failed");
-            agent->clearalarm = (laik_agent_clear) probfunc(handle, "agent_clear_alarm");
-
-            if(agent->capabilities & LAIK_AGENT_GET_SPARE){
-                agent->getspare = (laik_agent_get_spare) probfunc(handle, "agent_get_spare");
-                agent->peekspare = (laik_agent_peek_spare) probfunc(handle, "agent_peek_spare");
-            }
-
-            if(agent->capabilities & LAIK_AGENT_SIMULATOR){
-                agent->setiter = (laik_agent_set_iter) probfunc(handle, "agent_set_iter");
-                agent->setphase = (laik_agent_set_phase) probfunc(handle, "agent_set_phase");
-            }
-
-            if(agent->capabilities & LAIK_AGENT_RESET_NODE){
-                agent->reset = (laik_agent_reset) probfunc(handle, "agent_reset");
-            }
-            break;
-            
-        default:
-            laik_log(LAIK_LL_Error, 
-                "Unsupported Agent Type. \n");
-            exit(1);
-    }
-
-    laik_ext_num_loaded++;
-    if(laik_ext_so_loaded == 0){
-        laik_ext_so_loaded = malloc(sizeof(void*));
-    }else{
-        laik_ext_so_loaded = realloc(laik_ext_so_loaded, 
-                (laik_ext_num_loaded+1)*sizeof(void*) );
-    }
-    laik_ext_so_loaded[laik_ext_num_loaded] = handle;
-
-    return agent;
-}
-
-laik_agent* laik_ext_loadagent_static(
-    laik_agent_init init,
-    int argc, 
-    char** argv
-){
-    assert(0);
-    return 0;
-}
-
-void laik_ext_cleanup(
-    laik_agent* agent
-){
-    assert(agent);
-    agent->detach(agent);
-}
-
-int laik_allow_repartition (
-    Laik_Instance* instance, 
-    Laik_RepartitionControl* ctrl,
-    int num_groups, 
-    Laik_Group** groups
-){
-
+    char* path;
+    Laik_RepartitionControl* ctrl;
+    
     assert(instance);
-    assert(ctrl);
-    assert(groups);
-    assert(ctrl->num_agents);
-    assert(ctrl->agents);
-    
-    char buffer[256];
-    int num_failed = 0;
-    int total_failed = 0;
-    int* failed_tasks;
-    int i;
-    char* token;
-    
-    
+    assert(name);
+    if(carg>0)  assert(vargs);
 
-    //TODO: Match up Task number with some unique identifier
-    for(i=0; i<ctrl->num_agents; i++){
-        // If no node is failed, no need to continue
-        if(ctrl->agents[i]->peekfail(ctrl->agents[i]) == 0) continue;
-
-        // Get list of failed node
-        ctrl->agents[i]->getfail((ctrl->agents[i]), &num_failed, buffer);
-        if(num_failed > 0){
-            total_failed += num_failed;
-            if(failed_tasks == 0){
-                failed_tasks = malloc (total_failed*sizeof(int));
-            }else{
-                failed_tasks = (int*) realloc (failed_tasks, total_failed*sizeof(int));
-            }
-
-            //tokenized buffer
-            token = strtok(buffer, " ");            
-            //fill the lisk with failed tasks;
-            failed_tasks[total_failed-1] = atoi(token);
-
-            //if there are more than 1 failed task, continue tokenizing.
-            while(num_failed > 1){
-                token = strtok(NULL, " ");
-                failed_tasks[total_failed-num_failed] = atoi(token);
-            }
-
-            //reset and go to next agent
-            num_failed = 0;
-        }else {continue; }
+    if(instance->repart_ctrl == NULL){
+        laik_ext_init(instance);
     }
-    
-    /*
-    * TODO:
-    * (1) Schrink Group
-    * (2) Repartition of all data within a group
-    */
-    assert(0);
 
-    return 0;
+    ctrl = instance->repart_ctrl;
+
+    //ensure less than MAX_AGENT
+    assert(ctrl->num_agents <= MAX_AGENTS);
+
+    if(!isDynamic){
+        init = (laik_agent_init) name;
+    }else{
+        path = (char*) name;
+        handle = dlopen(path, RTLD_LAZY);
+        if(!handle){
+            laik_log(LAIK_LL_Error, dlerror());
+            exit(1);
+        }
+        init = (laik_agent_init) probfunc(handle, "agent_init");
+        assert(init);
+    }
+
+    agent = init(carg, vargs);
+
+    assert(agent);
+
+    ctrl->agents[ctrl->num_agents] = agent;
+    ctrl->num_agents++;
+    if(isDynamic){         
+        ctrl->handles[ctrl->num_agents] = handle;
+    }else{
+        ctrl->handles[ctrl->num_agents] = NULL;
+    }
+
+}
+
+/** 
+ * @brief  Clean up the agent system and close all agent. 
+ * @note   
+ * @param  instance: The LAIK instance
+ * @retval None
+ */
+void laik_ext_cleanup(
+    Laik_Instance* instance
+){
+    Laik_RepartitionControl* ctrl;
+    assert(instance);
+    ctrl = instance->repart_ctrl;
+    assert(ctrl);
+
+    for(int i=0; i<ctrl->num_agents; i++){
+        Laik_Agent* agent = ctrl->agents[i];
+        agent->detach();
+        if(ctrl->handles[i]){
+            dlclose(ctrl->handles[i]);
+        }
+    }
+    ctrl->num_agents = 0;
+
+    free(ctrl);
+    instance->repart_ctrl = NULL;
+}
+
+
+/** 
+ * @brief  Create a list of failed nodes
+ * @note   
+ * @param  instance: The LAIK Instance
+ * @param  num_failed: Number of failed ranks
+ * @param  failed_ranks: A field, large enough to hold the number
+            of failed ranks.
+ * @param  max_failed: The size of this field
+ * @retval None
+ */
+void laik_get_failed (
+    Laik_Instance* instance, 
+    int* num_failed,
+    int** failed_ranks,
+    int max_failed
+){
+
+    Laik_RepartitionControl* ctrl;
+    int i, j, m, n, count;
+    assert(instance);    
+    ctrl = instance->repart_ctrl;
+    assert(ctrl);
+    
+    count = 0;
+    for(i=0; i<ctrl->num_agents; i++){
+        Laik_Agent* agent = ctrl->agents[i];
+
+        // Only Require these Fault Tolerance Agents
+        if(agent->type == LAIK_AGENT_FT){
+            Laik_Ft_Agent* fta = (Laik_Ft_Agent*) agent;
+            
+            // Check if there is something to do
+            n = fta->peekfail();
+            if(n==0){
+                continue;
+            }
+
+            // Yes: (1) Get uids; (2) Map; (3) Create List
+
+            // (1) Get a list of node_uids
+            node_uid_t* buffer = (node_uid_t*) 
+                    calloc (n, sizeof(node_uid_t));
+            fta->getfail(&m, &buffer);
+            assert(m==n);
+            
+            for(j=0;j<n;j++){
+                
+                // Prevent Segmentation Fault
+                assert(count < max_failed);
+
+                // Map node uid to laik id
+                int id = laik_map_id(instance, &buffer[i]);
+                
+                // fill the whole list
+                *failed_ranks[count] = id;
+                count++;
+            }
+        }
+    }
+
+    *num_failed = count;
+}
+
+/** 
+ * @brief  Initialize the LAIK Repartition Control Interface
+ * @note   
+ * @param  inst: The LAIK Instance
+ * @retval None
+ */
+void laik_ext_init (
+    Laik_Instance* inst
+){
+    assert(inst);
+
+    Laik_RepartitionControl* ctrl;
+    ctrl = (Laik_RepartitionControl*) 
+        calloc (1, sizeof(Laik_RepartitionControl));
+
+    ctrl->num_agents = 0;
+    inst->repart_ctrl = ctrl;
 }

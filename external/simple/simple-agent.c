@@ -18,6 +18,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+
 #include "simple-agent.h"
 #include <stdlib.h>
 #include <assert.h>
@@ -30,76 +31,64 @@ static int fail_iter;
 static int fail_task;
 static int isInited = 0;
 
-void agent_detach (
-    laik_agent* this
+void sa_reset(
+    void
 ){
-    (void) this;
+    
 }
 
-int agent_clear_alarm (
-    laik_agent* agent
+void sa_detach (
+    void
 ){
-    (void) agent;
+
+}
+
+int sa_clear (
+    void
+){
     fail_iter = INT_MAX;
     return 0;
 }
 
-void agent_set_iter(
-    laik_agent* this,
+void sa_set_iter(
     const int iter
 ){
-    assert(isInited);
-    (void)this;
+#ifdef __DEBUG__
+    printf("Simple Agent: set_iter, iter = %d \n", iter);    
+#endif
     aIter = iter;
 }
 
-void agent_set_phase(
-    laik_agent* this, 
-    const int num_phase,
-    const char* name_phase, 
-    const void* pData
-){
-    assert(isInited);
-    (void) this;
-    (void) num_phase;
-    (void) name_phase;
-    (void) pData;
-}
-
-void agent_get_failed(
-    laik_agent* this, 
+void sa_getfailed(
     int* n_failed,
-    char* l_failed
+    node_uid_t** l_failed
 ){
-    assert(isInited);
-    (void)this;
+    char* buf = (*l_failed[0]).uid;
+#ifdef __DEBUG__
+    printf("Simple Agent: Get Failed, fail_iter = %d, aIter = %d\n", fail_iter, aIter);    
+#endif
     if(aIter<fail_iter){
+        *n_failed = 0;
         return;
     }
-    sprintf(l_failed, "%d", fail_task);
-    *n_failed = 1;
+#ifdef __DEBUG__
+    printf("Simple Agent: True Failed, task: %d, iter = %d\n", fail_task, fail_iter);
+#endif
 
+    sprintf(buf, "%d", fail_task);
+    *n_failed = 1;
 }
 
-int agent_peek_failed(
-    laik_agent* this
+int sa_peekfailed(
+    void
 ){
-    assert(isInited);
-    (void) this;
     if(aIter<fail_iter){
         return 0;
     }
     return 1;
 }
 
-int agent_close(
-    laik_agent* this
-){
-    this->isAlive = 0;
-    return  0;
-}
-
-laik_ext_errno agent_init(
+Laik_Agent* agent_init(
     int argc, 
     char** argv
 ){
@@ -111,6 +100,26 @@ laik_ext_errno agent_init(
     fail_iter = atoi(argv[0]);
     fail_task = atoi(argv[1]);
 
+    Laik_Ft_Agent* me = (Laik_Ft_Agent*)
+            calloc (1, sizeof(Laik_Ft_Agent));
+    assert(me);
+    Laik_Agent* myBase = &(me->base);
+
+    myBase->name = "Simple Agent";
+    myBase->id = 0x01;
+    myBase->isAlive = 1;
+    myBase->isInitialized = 1;
+    myBase->type = LAIK_AGENT_FT;
+
+    myBase->detach = sa_detach;
+    myBase->reset = sa_reset;
+
+    me->getfail = sa_getfailed;
+    me->peekfail = sa_peekfailed;
+    me->setiter = sa_set_iter;
+#ifdef __DEBUG__
+    printf("Simple Agent: Init done, fail_iter = %d, fail_task = %d\n", fail_iter, fail_task);
+#endif
     isInited = 1;
-    return LAIK_AGENT_ERRNO_SUCCESS;
+    return (Laik_Agent*) me;
 }

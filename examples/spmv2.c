@@ -125,10 +125,8 @@ int main(int argc, char* argv[])
 #endif
     Laik_Group* world = laik_world(inst);
 
-#ifdef USE_EXT_INTF
-    Laik_RepartitionControl* repartctrl;
-    laik_agent* agent;
-#endif
+   
+
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
     int maxiter = 0, size = 0, nextshrink = -1, shrink = -1, removeTask = 0;
     bool useReduction = false;
@@ -181,17 +179,18 @@ int main(int argc, char* argv[])
         arg++;
     }
 
-#ifdef USE_EXT_INTF
+    // Load simple repartitioning agent. 
     if(shrink){
-        char soargs[2][2];
-        sprintf(soargs[0], "%d", shrink);
-        sprintf(soargs[1], "%d", removeTask);
-        agent = laik_ext_loadagent(
-            "Simple Agent", LAIK_AGENT_DYNAMIC, 
-            "../external/simple/libsimpleagent.so", 2, 
-            soargs);
+        char* aa[2];
+        char bb[8];
+        char cc[8];
+        sprintf(bb, "%d", nextshrink);
+        sprintf(cc, "%d", 1);
+        aa[0] = bb;
+        aa[1] = cc;
+        laik_ext_loadagent(inst, "../external/simple/libsimpleagent.so", true, 2, aa);
+        laik_log(2, "Loaded simple Agent with parameter %s, %s \n", bb, cc);
     }
-#endif
 
     if (maxiter == 0) maxiter = 10;
     if (size == 0) size = 10000;
@@ -250,6 +249,7 @@ int main(int argc, char* argv[])
 
         // better debug output
         laik_set_iteration(inst, iter);
+        
 
         // flow for result: only at last iteration, copy out
         if (iter + 1 == maxiter)
@@ -334,12 +334,17 @@ int main(int argc, char* argv[])
         // test task shrinking
         // remove task <removeTask> from all used partitionings
         Laik_Group* g = laik_get_pgroup(p);
-        if ((iter == nextshrink) &&
-            (laik_size(g) > 1) && (laik_size(g) >= removeTask)) {
-            int removeList[1] = {removeTask};
-            laik_log(2, "Shrinking: remove task %d (orig size %d)",
-                     removeTask, laik_size(g));
-            Laik_Group* g2 = laik_new_shrinked_group(g, 1, removeList);
+        int *removeList = (int*) calloc (10, sizeof(int));
+        int numFailed;
+        laik_get_failed(inst, &numFailed, &removeList, 1);
+
+        if (shrink && numFailed > 0 &&
+            (laik_size(g) > 1) && (laik_size(g) >= removeTask)){
+            
+            laik_log(2,"None Zero failed nodes: %d", numFailed);                
+            laik_log(2, "Failed Task: %d", removeList[0]);
+
+            Laik_Group* g2 = laik_new_shrinked_group(g, numFailed, removeList);
 
             Laik_Partitioner* pr = 0;
             if (useIncremental)
@@ -353,6 +358,8 @@ int main(int argc, char* argv[])
             nextshrink += shrink;
 
             if (laik_myid(g2) == -1) break;
+
+            numFailed = 0;
         }
     }
     

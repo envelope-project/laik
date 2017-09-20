@@ -32,6 +32,9 @@ all: $(LAIKLIB) $(SUBDIRS)
 external/MQTT: $(LAIKLIB)
 	cd external/MQTT && $(MAKE) CC=$(CC)
 
+external/simple: $(LAIKLIB)
+	cd external/simple && $(MAKE) CC=gcc
+
 src/backend-mpi.o: src/backend-mpi.c
 	$(MPICC) $(CFLAGS) -c -o src/backend-mpi.o src/backend-mpi.c
 

@@ -13,6 +13,20 @@
 void laik_set_iteration(Laik_Instance* i, int iter)
 {
     i->control->cur_iteration = iter; 
+
+    if (i->repart_ctrl){
+        int c;
+        for(c=0; c<i->repart_ctrl->num_agents; c++){
+            if(i->repart_ctrl->agents[c]->type == LAIK_AGENT_FT){
+                Laik_Ft_Agent* agent = 
+                    (Laik_Ft_Agent*) i->repart_ctrl->agents[c];
+                if(agent->setiter)
+                {
+                    agent->setiter(iter);
+                }
+            }
+        }
+    }
 }
 
 // get current iternation number

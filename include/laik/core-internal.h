@@ -76,9 +76,8 @@ struct _Laik_Instance {
     double timer_total, timer_backend;
     double time_total, time_backend;
 
-    // Fault Tolerance
-    laik_agent** agents;
-    int agent_count;
+    // External Control Related
+    Laik_RepartitionControl* repart_ctrl;
     
 };
 

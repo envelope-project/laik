@@ -18,33 +18,31 @@
 #ifndef _LAIK_EXT_H_
 #define _LAIK_EXT_H_
 
-#include "laik.h"
 #include "interface/agent.h"
 
 // LAIK application-external interfaces
 //
 // currently only repartitioning requests are supported
 
+#define MAX_AGENTS 10
 
 // external control for repartitioning
 typedef struct _Laik_RepartitionControl Laik_RepartitionControl;
 struct _Laik_RepartitionControl {
-    // Finalize function to release compute resource
-    void (* ext_shut_node)(void* uuid);
 
     // Finalize function for application
     void (*finalize)(Laik_Instance*);
     
     //List of agents to be queried    
-    laik_agent** agents;
+    void* handles[MAX_AGENTS];
+    Laik_Agent* agents[MAX_AGENTS];
     int num_agents;
 };
 
-laik_agent* laik_ext_loadagent_static(laik_agent_init, int, char**);
-laik_agent* laik_ext_loadagent (char* name, laik_agent_t type, char* path, int argc, char** argv);
-void laik_ext_cleanup(laik_agent* agent);
-
-int laik_allow_repartition(Laik_Instance* instance, Laik_RepartitionControl* ctrl, int num_groups, Laik_Group** groups);
+void laik_ext_loadagent (Laik_Instance*, void* , bool, int, char**);
+void laik_ext_cleanup(Laik_Instance*);
+void laik_ext_init(Laik_Instance*);
+void laik_get_failed(Laik_Instance*, int*, int**, int);
 
 
 

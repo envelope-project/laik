@@ -18,68 +18,148 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+
+#define MAX_UID_LENGTH 64
+
+/* -------------- NUMBERS and CODES -------------- */
+
+// LAIK Agent Error Numbers
 enum tag_laik_agent_errno{
     LAIK_AGENT_ERRNO_SUCCESS = 0,
     LAIK_AGENT_ERRNO_INIT_FAIL = -100,
     LAIK_AGENT_ERRNO_UNKNOWN_FAIL = -110
 };
 
+// LAIK Agent Type
 enum tag_laik_ext_agent_t{
-    LAIK_AGENT_STATIC = 0,
-    LAIK_AGENT_DYNAMIC = 1,
+    LAIK_AGENT_DEFAULT = 0,
+    LAIK_AGENT_FT = 1,
+    LAIK_AGENT_PROFILING = 2,
 
-    LAIK_AGENT_NONE = 255
+    LAIK_AGENT_UNKNOWN = 255
 };
 
-enum tag_laik_ext_agent_cap{
-    LAIK_AGENT_GET_FAIL = 1,
-    LAIK_AGENT_GET_SPARE = 2,
-    LAIK_AGENT_RESET_NODE = 4,
-    LAIK_AGENT_SIMULATOR = 8
-    
-};
+/* -------------- TYPES -------------- */
+typedef struct { char uid[MAX_UID_LENGTH]; } node_uid_t;
+typedef enum tag_laik_agent_errno Laik_Ext_Errno;
+typedef struct tag_laik_ext_agent Laik_Agent;
+typedef struct tag_laik_ext_ft_agent Laik_Ft_Agent;
+typedef struct tag_laik_ext_profile_agent Laik_Profiling_Agent;
+typedef enum tag_laik_ext_agent_t Laik_Agent_Type;
 
-typedef enum tag_laik_agent_errno laik_ext_errno;
-typedef struct tag_laik_ext_agent laik_agent;
-typedef enum tag_laik_ext_agent_t laik_agent_t;
-typedef enum tag_laik_ext_agent_cap laik_agent_cap;
+/* -------------- FUNCTION PROTOTYPES -------------- */
 
-typedef laik_ext_errno (*laik_agent_init) (int, char**);
-typedef void (*laik_agent_detach) (laik_agent*);
-typedef void (*laik_agent_reset) (laik_agent*);
-typedef laik_agent_cap (*laik_agent_getcap) ();
+// Initialization of an agent
+typedef Laik_Agent* (*laik_agent_init) (int, char**);
 
-typedef void (*laik_agent_get_failed) (laik_agent*, int*, char*);
-typedef int (*laik_agent_peek_failed) (laik_agent*);
-typedef void (*laik_agent_get_spare) (laik_agent*, int*, char*);
-typedef int (*laik_agent_peek_spare) (laik_agent*);
-typedef int (*laik_agent_clear) (laik_agent*);
+// Close and finalize an agent
+typedef void (*laik_agent_detach) (void);
 
-typedef void (*laik_agent_set_iter) (laik_agent*, const int);
-typedef void (*laik_agent_set_phase) (laik_agent*, const int, const char*, const void*);
+// reset an agent
+typedef void (*laik_agent_reset) (void);
 
+/** 
+ * @brief  Prototype for get failed nodes.
+ * @note   Assuming LAIK will prepare the buffer for uids. 
+            This name must be unique and consequently used
+            across entire application. 
+ * @retval 
+ */
+typedef void (*laik_agent_get_failed) (int*, node_uid_t**);
+
+/** 
+ * @brief  Get Number of failed nodes.
+ * @note   
+ * @retval 
+ */
+typedef int (*laik_agent_peek_failed) (void);
+
+/** 
+ * @brief  Prototpye for getting spare nodes. 
+ * @note   
+ * @retval 
+ */
+typedef void (*laik_agent_get_spare) (int*, node_uid_t*);
+
+/** 
+ * @brief  Prototype for peek spare node
+ * @note   
+ * @retval 
+ */
+typedef int (*laik_agent_peek_spare) (void);
+
+/** 
+ * @brief  Prototype for informing the agent that the failure
+            Information is consumed. 
+ * @note   
+ * @retval 
+ */
+typedef int (*laik_agent_clear) (void);
+
+
+/** 
+ * @brief Set current program iteration.
+ * @note  Simulator only 
+ * @retval 
+ */
+typedef void (*laik_agent_set_iter) (const int);
+
+/** 
+ * @brief  set current program phase
+ * @note   Simulator only
+ * @retval 
+ */
+typedef void (*laik_agent_set_phase) (const int, const char*, const void*);
+
+/** 
+ * @brief  Shut down a given node. 
+ * @note   
+ * @retval 
+ */
+typedef void (*laik_agent_shut_node) (int uuid);
+
+/* -------------- DATASTRUCTURES -------------- */
 
 struct tag_laik_ext_agent{
     int id;
     char* name; 
 
     int isAlive;
+    int isInitialized;
 
-    laik_agent_cap capabilities;
-    laik_agent_t type;
+    Laik_Agent_Type type;
 
     /* standard agent functionalities */
     laik_agent_detach detach;
     laik_agent_reset reset;
+};
+
+
+struct tag_laik_ext_ft_agent{
+    Laik_Agent base;
+
+    /* fault tolerant agent */
     laik_agent_get_failed getfail;
     laik_agent_peek_failed peekfail;
+
+
+    // Optional, not yet used.
     laik_agent_clear clearalarm;
 
     /* extended agent functionalities */
     laik_agent_get_spare getspare;
     laik_agent_peek_spare peekspare;
-    
-    /* simulator agent functionalities */
+
+
+    // Node Control Feedbacks
+    laik_agent_shut_node freenode;
+
+    // testing only
     laik_agent_set_iter setiter;
-    laik_agent_set_phase setphase;
+};
+
+struct tag_laik_ext_profile_agent{
+    Laik_Agent base;
+
+    // Some Profiling Interface
 };

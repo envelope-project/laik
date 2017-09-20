@@ -34,15 +34,12 @@ int laik_myid(Laik_Group* g)
 void laik_finalize(Laik_Instance* inst)
 {
     assert(inst);
-    int i;
     laik_log(1, "finalizing...");
     if (inst->backend && inst->backend->finalize)
         (*inst->backend->finalize)(inst);
 
-    for(i=0; i<inst->agent_count; i++){
-        if (inst->agents[i]->isAlive){
-            laik_ext_cleanup(inst->agents[i]);
-        }
+    if (inst->repart_ctrl){
+        laik_ext_cleanup(inst);
     }
 
     if (laik_logshown(2)) {
@@ -93,8 +90,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
 
     instance->do_profiling = false;
 
-    instance->agents = malloc(MAX_AGENTS*sizeof(laik_agent*));
-    instance->agent_count = 0;
+    instance->repart_ctrl = 0;
 
     // logging (TODO: multiple instances)
     laik_loginst = instance;

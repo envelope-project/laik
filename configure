@@ -58,6 +58,12 @@ else:
 
 
 #------------------------------------
+#Simple Agent
+print("using Simple Agent")
+defs += ""
+subdirs += " external/simple"
+
+#------------------------------------
 # LAIK-internal MPI support
 
 #  check for mpicc, if found we enable MPI

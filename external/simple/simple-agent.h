@@ -19,7 +19,30 @@
  */
 
 
-#include "interface/agent.h"
+#include "laik.h"
 
+Laik_Agent* agent_init(
+    int argc, 
+    char** argv
+);
 
-laik_ext_errno static_agent_init(int argc, char** argv);
+void sa_getfailed(
+    int* n_failed,
+    node_uid_t** l_failed
+);
+
+void sa_set_iter(
+    const int iter
+);
+
+int sa_clear (
+    void
+);
+
+void sa_detach (
+    void
+);
+
+void sa_reset(
+    void
+);
