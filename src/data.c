@@ -236,16 +236,13 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
     assert(myid < ba->group->size);
     int dims = d->space->dims;
 
-    // calculate number of separate maps
-    // take tags of slices into account; slices must be sorted by tags
-    int n = 0, tag = -1;
-    for(int o = ba->off[myid]; o < ba->off[myid+1]; o++) {
-        if ((ba->tslice[o].tag > 0) && (ba->tslice[o].tag == tag))
-            continue;
-        tag = ba->tslice[o].tag;
-        n++;
-    }
-    if (n == 0) return 0;
+    // number of local slices
+    int sn = ba->off[myid+1] - ba->off[myid];
+    if (sn == 0) return 0;
+
+    // number of maps
+    int n = ba->tslice[ba->off[myid+1] - 1].mapNo + 1;
+    assert(n > 0);
 
     Laik_MappingList* ml;
     ml = malloc(sizeof(Laik_MappingList) + (n-1) * sizeof(Laik_Mapping));
@@ -253,7 +250,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
 
     int mapNo = 0;
     for(int o = ba->off[myid]; o < ba->off[myid+1]; o++, mapNo++) {
-
+        assert(mapNo == ba->tslice[o].mapNo);
         Laik_Mapping* m = &(ml->map[mapNo]);
         m->data = d;
         m->mapNo = mapNo;
@@ -261,13 +258,10 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
 
         // required space
         Laik_Slice slc = ba->tslice[o].s;
-        tag = ba->tslice[o].tag;
         m->firstOff = o;
-        if (tag > 0) {
-            while((o+1 < ba->off[myid+1]) && (ba->tslice[o+1].tag == tag)) {
-                o++;
-                laik_slice_expand(dims, &slc, &(ba->tslice[o].s));
-            }
+        while((o+1 < ba->off[myid+1]) && (ba->tslice[o+1].mapNo == mapNo)) {
+            o++;
+            laik_slice_expand(dims, &slc, &(ba->tslice[o].s));
         }
         m->lastOff = o;
         m->requiredSlice = slc;
@@ -292,7 +286,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
                      m->firstOff, m->lastOff, m->count, d->elemsize);
         }
     }
-    assert(mapNo == n);
+    assert(n == mapNo);
 
     return ml;
 }

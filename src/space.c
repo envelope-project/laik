@@ -542,9 +542,10 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
     a->count++;
 
     ts->task = task;
+    ts->s = *s;
     ts->tag = tag;
     ts->data = data;
-    ts->s = *s;
+    ts->mapNo = 0;
 
     return ts;
 }
@@ -566,7 +567,7 @@ int ts_cmp(const void *p1, const void *p2)
     return ts1->task - ts2->task;
 }
 
-// update offset array from slices
+// (1) update offset array from slices, (2) calculate map numbers from tags
 static
 void updateBorderArrayOffsets(Laik_BorderArray* ba)
 {
@@ -574,17 +575,26 @@ void updateBorderArrayOffsets(Laik_BorderArray* ba)
     qsort( &(ba->tslice[0]), ba->count,
             sizeof(Laik_TaskSlice), ts_cmp);
 
-    int task, o = 0;
+    int task, mapNo, lastTag, off;
+    off = 0;
     for(task = 0; task < ba->group->size; task++) {
-        ba->off[task] = o;
-        while(o < ba->count) {
-            if (ba->tslice[o].task > task) break;
-            assert(ba->tslice[o].task == task);
-            o++;
+        ba->off[task] = off;
+        mapNo = -1; // for numbering of mappings according to tags
+        lastTag = -1;
+        while(off < ba->count) {
+            Laik_TaskSlice* ts = &(ba->tslice[off]);
+            if (ts->task > task) break;
+            assert(ts->task == task);
+            if ((ts->tag == 0) || (ts->tag != lastTag)) {
+                mapNo++;
+                lastTag = ts->tag;
+            }
+            ts->mapNo = mapNo;
+            off++;
         }
     }
-    ba->off[task] = o;
-    assert(o == ba->count);
+    ba->off[task] = off;
+    assert(off == ba->count);
 }
 
 void laik_clearBorderArray(Laik_BorderArray* ba)
@@ -752,12 +762,13 @@ int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
     o = sprintf(s, "%d slices in %d tasks on ",
                 ba->count, ba->group->size);
     o += getSpaceStr(s+o, ba->space);
-    o += sprintf(s+o,":\n    ");
+    o += sprintf(s+o,": (task:slice:tag/mapNo)\n    ");
     for(int i = 0; i < ba->count; i++) {
         if (i>0)
             o += sprintf(s+o, ", ");
         o += sprintf(s+o, "%d:", ba->tslice[i].task);
         o += laik_getSliceStr(s+o, ba->space->dims, &(ba->tslice[i].s));
+        o += sprintf(s+o, ":%d/%d", ba->tslice[i].tag, ba->tslice[i].mapNo);
     }
 
     return o;

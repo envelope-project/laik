@@ -65,14 +65,18 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
 
 // the output of a partitioner is a Laik_BorderArray
 
-// used in BorderArray to map a slice to a task.
+// A TaskSlice is used in BorderArray to map a slice to a task.
 // the tag is a hint for the data layer: if >0, slices with same tag
 // go into same mapping
 struct _Laik_TaskSlice {
     int task;
+    Laik_Slice s;
+
     int tag;
     void* data;
-    Laik_Slice s;
+
+    // calculated from <tag> after partitioner run
+    int mapNo;
 };
 
 struct _Laik_BorderArray {
