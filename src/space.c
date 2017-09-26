@@ -534,7 +534,10 @@ Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
 Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
                                   int tag, void* data)
 {
-    assert(a->count < a->capacity);
+    if (a->count == a->capacity) {
+        a->capacity *= 2;
+        a->tslice = realloc(a->tslice, sizeof(Laik_TaskSlice) * a->capacity);
+    }
     assert((task >= 0) && (task < a->group->size));
     assert(laik_slice_within_space(s, a->space));
 
