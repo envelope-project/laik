@@ -146,26 +146,27 @@ void laik_removeDataFromPartitioning(Laik_Partitioning* p, Laik_Data* d);
 struct localTOp {
     Laik_Slice slc;
     int fromSliceNo, toSliceNo;
+    int fromMapNo, toMapNo;
 };
 
 // slice to be initialized
 struct initTOp {
     Laik_Slice slc;
-    int sliceNo;
+    int sliceNo, mapNo;
     Laik_ReductionOperation redOp;
 };
 
 // slice to send to a remote task
 struct sendTOp {
     Laik_Slice slc;
-    int sliceNo;
+    int sliceNo, mapNo;
     int toTask;
 };
 
 // slice to receive from a remote task
 struct recvTOp {
     Laik_Slice slc;
-    int sliceNo;
+    int sliceNo, mapNo;
     int fromTask;
 };
 

@@ -385,10 +385,10 @@ void copyMaps(Laik_Transition* t,
     assert(toList != 0);
     for(int i = 0; i < t->localCount; i++) {
         struct localTOp* op = &(t->local[i]);
-        assert(op->fromSliceNo < fromList->count);
-        Laik_Mapping* fromMap = &(fromList->map[op->fromSliceNo]);
-        assert(op->toSliceNo < toList->count);
-        Laik_Mapping* toMap = &(toList->map[op->toSliceNo]);
+        assert(op->fromMapNo < fromList->count);
+        Laik_Mapping* fromMap = &(fromList->map[op->fromMapNo]);
+        assert(op->toMapNo < toList->count);
+        Laik_Mapping* toMap = &(toList->map[op->toMapNo]);
 
         assert(toMap->data == fromMap->data);
         int dims = fromMap->data->space->dims;
@@ -419,7 +419,7 @@ void copyMaps(Laik_Transition* t,
         assert(ccount > 0);
 
         // no copy needed if mapping reused
-        if (fromMap->reusedFor == op->toSliceNo) {
+        if (fromMap->reusedFor == op->toMapNo) {
             uint64_t fromOff = laik_offset(&fromStart, fromMap->layout);
             uint64_t toOff = laik_offset(&toStart, toMap->layout);
 
@@ -432,12 +432,13 @@ void copyMaps(Laik_Transition* t,
                 laik_getIndexStr(s2, dims, &fromStart);
                 laik_getIndexStr(s3, dims, &toStart);
 
-                laik_log(1, "copy map for '%s'/%d: (%lu x %lu x %lu) x %d "
-                            "from global (%s): local (%s)/%d "
-                            "==> (%s)/%d, using old map\n",
-                         d->name, op->toSliceNo,
+                laik_log(1, "copy map for '%s': (%lu x %lu x %lu) x %d "
+                            "from global (%s): local (%s) slc/map %d/%d "
+                            "==> (%s) slc/map %d/%d, using old map\n",
+                         d->name,
                          count.i[0], count.i[1], count.i[2], d->elemsize,
-                         s1, s2,  op->fromSliceNo, s3, op->toSliceNo);
+                         s1, s2, op->fromSliceNo, op->fromMapNo,
+                         s3, op->toSliceNo, op->toMapNo);
             }
             continue;
         }
@@ -457,13 +458,13 @@ void copyMaps(Laik_Transition* t,
             laik_getIndexStr(s2, dims, &fromStart);
             laik_getIndexStr(s3, dims, &toStart);
 
-            laik_log(1, "copy map for '%s'/%d: (%lu/%lu/%lu) x %d "
-                        "from global (%s): local (%s)/%d off %lu/%p"
-                        " ==> (%s)/%d off %lu/%p",
-                     d->name, op->toSliceNo,
+            laik_log(1, "copy map for '%s': (%lu/%lu/%lu) x %d "
+                        "from global (%s): local (%s) slc/map %d/%d off %lu/%p"
+                        " ==> (%s) slc/map %d/%d off %lu/%p",
+                     d->name,
                      count.i[0], count.i[1], count.i[2], d->elemsize,
-                    s1, s2,  op->fromSliceNo, fromOff, fromPtr,
-                    s3, op->toSliceNo, toOff, toPtr);
+                    s1, s2,  op->fromSliceNo, op->fromMapNo, fromOff, fromPtr,
+                    s3, op->toSliceNo, op->toMapNo, toOff, toPtr);
         }
 
         if (ss)
@@ -549,8 +550,8 @@ void initMaps(Laik_Transition* t,
     assert(t->initCount > 0);
     for(int i = 0; i < t->initCount; i++) {
         struct initTOp* op = &(t->init[i]);
-        assert(op->sliceNo < toList->count);
-        Laik_Mapping* toMap = &(toList->map[op->sliceNo]);
+        assert(op->mapNo < toList->count);
+        Laik_Mapping* toMap = &(toList->map[op->mapNo]);
 
         if (toMap->count == 0) {
             // no elements to initialize
@@ -597,8 +598,8 @@ void initMaps(Laik_Transition* t,
         }
         else assert(0);
 
-        laik_log(1, "init map for '%s'/%d: %d x at [%lu\n",
-                 d->name, op->sliceNo, count, s->from.i[0]);
+        laik_log(1, "init map for '%s' slc/map %d/%d: %d x at [%lu\n",
+                 d->name, op->sliceNo, op->mapNo, count, s->from.i[0]);
     }
 }
 
@@ -1190,7 +1191,7 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
 {
     Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
     Laik_Mapping* m = laik_map(d, 0, l);
-    int n = laik_my_slicecount(d->activePartitioning);
+    int n = laik_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Panic, "Request for one continuous mapping, "
                                 "but partition with %d slices!\n", n);
@@ -1211,7 +1212,7 @@ Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
         return 0;
     }
 
-    int n = laik_my_slicecount(d->activePartitioning);
+    int n = laik_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
                                 "but partition with %d slices!", n);
@@ -1241,7 +1242,7 @@ Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
         return 0;
     }
 
-    int n = laik_my_slicecount(d->activePartitioning);
+    int n = laik_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
                                 "but partition with %d slices!", n);

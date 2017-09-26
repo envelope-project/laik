@@ -292,6 +292,9 @@ void laik_free_partitioning(Laik_Partitioning* p);
 // get number of slices of this task
 int laik_my_slicecount(Laik_Partitioning* p);
 
+// get number of mappings of this task
+int laik_my_mapcount(Laik_Partitioning* p);
+
 // get slice number <n> from the slices of this task
 Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n);
 

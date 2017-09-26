@@ -301,8 +301,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             assert(myid != op->fromTask);
 
-            assert(op->sliceNo < toList->count);
-            Laik_Mapping* toMap = &(toList->map[op->sliceNo]);
+            assert(op->mapNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[op->mapNo]);
             assert(toMap != 0);
             if (toMap->base == 0) {
                 // space not yet allocated
@@ -327,9 +327,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 uint64_t to   = op->slc.to.i[0] - toMap->requiredSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "  direct recv to local [%lu;%lu[, slice %d, "
+                laik_log(1, "  direct recv to local [%lu;%lu[, slice/map %d, "
                          "elemsize %d, baseptr %p\n",
-                         from, to, op->sliceNo, d->elemsize, toMap->base);
+                         from, to, op->sliceNo, op->mapNo,
+                         d->elemsize, toMap->base);
 
                 if (mpi_bug > 0) {
                     // intentional bug: ignore small amounts of data received
@@ -391,8 +392,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             assert(myid != op->toTask);
 
-            assert(op->sliceNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[op->sliceNo]);
+            assert(op->mapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[op->mapNo]);
             // data to send must exist in local memory
             assert(fromMap && fromMap->base);
 
@@ -407,9 +408,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 uint64_t to   = op->slc.to.i[0] - fromMap->requiredSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "  direct send: from local [%lu;%lu[, slice %d, "
+                laik_log(1, "  direct send: from local [%lu;%lu[, slice/map %d, "
                             "elemsize %d, baseptr %p\n",
-                         from, to, op->sliceNo, d->elemsize, fromMap->base);
+                         from, to, op->sliceNo, op->mapNo,
+                         d->elemsize, fromMap->base);
 
                 // TODO: tag 1 may conflict with application
                 MPI_Send(fromMap->base + from * d->elemsize, count,

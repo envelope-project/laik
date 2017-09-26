@@ -957,6 +957,23 @@ int laik_my_slicecount(Laik_Partitioning* p)
     return p->borders->off[myid+1] - p->borders->off[myid];
 }
 
+// get number of mappings of this task
+int laik_my_mapcount(Laik_Partitioning* p)
+{
+    if (!p->bordersValid)
+        laik_calc_partitioning(p);
+
+    int myid = p->group->myid;
+    if (myid < 0) return 0; // this task is not part of task group
+    assert(myid < p->group->size);
+    int sCount = p->borders->off[myid+1] - p->borders->off[myid];
+    if (sCount == 0) return 0;
+
+    // map number of my last slice, incremented by one to get count
+    return p->borders->tslice[p->borders->off[myid+1] - 1].mapNo + 1;
+}
+
+
 // get slice number <n> from the slices of this task
 Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
 {
@@ -1221,6 +1238,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
             struct initTOp* op = &(init[initCount]);
             op->slc = toBA->tslice[o].s;
             op->sliceNo = o - toBA->off[myid];
+            op->mapNo = toBA->tslice[o].mapNo;
             op->redOp = laik_get_reduction(toFlow);
             assert(op->redOp != LAIK_RO_None);
             initCount++;
@@ -1244,7 +1262,9 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                     struct localTOp* op = &(local[localCount]);
                     op->slc = *slc;
                     op->fromSliceNo = o1 - fromBA->off[myid];
+                    op->fromMapNo = fromBA->tslice[o1].mapNo;
                     op->toSliceNo = o2 - toBA->off[myid];
+                    op->toMapNo = toBA->tslice[o2].mapNo;
 
                     localCount++;
                 }
@@ -1302,6 +1322,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                         struct sendTOp* op = &(send[sendCount]);
                         op->slc = *slc;
                         op->sliceNo = o1 - fromBA->off[myid];
+                        op->mapNo = fromBA->tslice[o1].mapNo;
                         op->toTask = task;
                         sendCount++;
                     }
@@ -1340,6 +1361,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                         struct recvTOp* op = &(recv[recvCount]);
                         op->slc = *slc;
                         op->sliceNo = o1 - toBA->off[myid];
+                        op->mapNo = toBA->tslice[o1].mapNo;
                         op->fromTask = task;
                         recvCount++;
                     }
