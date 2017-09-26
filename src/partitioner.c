@@ -49,7 +49,7 @@ void runAllPartitioner(Laik_Partitioner* pr,
     Laik_Group* g = ba->group;
 
     for(int task = 0; task < g->size; task++) {
-        laik_append_slice(ba, task, 0, &(space->s));
+        laik_append_slice(ba, task, &(space->s), 0, 0);
     }
 }
 
@@ -64,7 +64,7 @@ void runMasterPartitioner(Laik_Partitioner* pr,
                           Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
     // only full slice for master
-    laik_append_slice(ba, 0, 0, &(ba->space->s));
+    laik_append_slice(ba, 0, &(ba->space->s), 0, 0);
 }
 
 Laik_Partitioner* laik_new_master_partitioner()
@@ -99,7 +99,7 @@ void runCopyPartitioner(Laik_Partitioner* pr,
         Laik_Slice slc = ba->space->s;
         slc.from.i[toDim] = otherBA->tslice[i].s.from.i[fromDim];
         slc.to.i[toDim] = otherBA->tslice[i].s.to.i[fromDim];
-        laik_append_slice(ba, otherBA->tslice[i].task, 0, &slc);
+        laik_append_slice(ba, otherBA->tslice[i].task, &slc, 0, 0);
     }
 }
 
@@ -151,7 +151,7 @@ void runCornerHaloPartitioner(Laik_Partitioner* pr,
                     slc.to.i[2] = to->i[2] + d;
             }
         }
-        laik_append_slice(ba, otherBA->tslice[i].task, 0, &slc);
+        laik_append_slice(ba, otherBA->tslice[i].task, &slc, 0, 0);
     }
 }
 
@@ -186,17 +186,17 @@ void runHaloPartitioner(Laik_Partitioner* pr,
         Laik_Slice sp = ba->space->s;
 
         slc = otherBA->tslice[i].s;
-        laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+        laik_append_slice(ba, otherBA->tslice[i].task, &slc, nextTag, 0);
         if (slc.from.i[0] > sp.from.i[0] + d) {
             slc.to.i[0] = slc.from.i[0];
             slc.from.i[0] -= d;
-            laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+            laik_append_slice(ba, otherBA->tslice[i].task, &slc, nextTag, 0);
         }
         slc = otherBA->tslice[i].s;
         if (slc.to.i[0] < sp.to.i[0] - d) {
             slc.from.i[0] = slc.to.i[0];
             slc.to.i[0] += d;
-            laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+            laik_append_slice(ba, otherBA->tslice[i].task, &slc, nextTag, 0);
         }
 
         if (dims > 1) {
@@ -204,13 +204,13 @@ void runHaloPartitioner(Laik_Partitioner* pr,
             if (slc.from.i[1] > sp.from.i[1] + d) {
                 slc.to.i[1] = slc.from.i[1];
                 slc.from.i[1] -= d;
-                laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+                laik_append_slice(ba, otherBA->tslice[i].task, &slc, nextTag, 0);
             }
             slc = otherBA->tslice[i].s;
             if (slc.to.i[1] < sp.to.i[1] - d) {
                 slc.from.i[1] = slc.to.i[1];
                 slc.to.i[1] += d;
-                laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+                laik_append_slice(ba, otherBA->tslice[i].task, &slc, nextTag, 0);
             }
 
             if (dims > 2) {
@@ -218,13 +218,13 @@ void runHaloPartitioner(Laik_Partitioner* pr,
                 if (slc.from.i[2] > sp.from.i[2] + d) {
                     slc.to.i[2] = slc.from.i[2];
                     slc.from.i[2] -= d;
-                    laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+                    laik_append_slice(ba, otherBA->tslice[i].task, &slc, nextTag, 0);
                 }
                 slc = otherBA->tslice[i].s;
                 if (slc.to.i[2] < sp.to.i[2] - d) {
                     slc.from.i[2] = slc.to.i[2];
                     slc.to.i[2] += d;
-                    laik_append_slice(ba, otherBA->tslice[i].task, nextTag, &slc);
+                    laik_append_slice(ba, otherBA->tslice[i].task, &slc, nextTag, 0);
                 }
             }
         }
@@ -250,7 +250,7 @@ static void doBisection(Laik_BorderArray* ba,
 {
     assert(toTask > fromTask);
     if (toTask - fromTask == 1) {
-        laik_append_slice(ba, fromTask, 0, s);
+        laik_append_slice(ba, fromTask, s, 0, 0);
         return;
     }
 
@@ -274,7 +274,7 @@ static void doBisection(Laik_BorderArray* ba,
     }
     assert(width > 0);
     if (width == 1) {
-        laik_append_slice(ba, fromTask, 0, s);
+        laik_append_slice(ba, fromTask, s, 0, 0);
         return;
     }
 
@@ -392,7 +392,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
             if ((task+1 == count) && (cycle+1 == cycles)) break;
             slc.to.i[pdim] = i + s->s.from.i[pdim];
             if (slc.from.i[pdim] < slc.to.i[pdim])
-                laik_append_slice(ba, task, 0, &slc);
+                laik_append_slice(ba, task, &slc, 0, 0);
             task++;
             if (task == count) {
                 task = 0;
@@ -412,7 +412,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
     }
     assert((task+1 == count) && (cycle+1 == cycles));
     slc.to.i[pdim] = s->s.to.i[pdim];
-    laik_append_slice(ba, task, 0, &slc);
+    laik_append_slice(ba, task, &slc, 0, 0);
 }
 
 
@@ -553,7 +553,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
                      oldBA->tslice[sliceNo].s.from.i[0],
                      oldBA->tslice[sliceNo].s.to.i[0]);
 
-            laik_append_slice(ba, origTask, 0, &(oldBA->tslice[sliceNo].s));
+            laik_append_slice(ba, origTask, &(oldBA->tslice[sliceNo].s), 0, 0);
             continue;
         }
 
@@ -573,7 +573,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
             if ((weight >= weightPerTask) && (curTask < newg->size)) {
                 weight -= weightPerTask;
                 slc.to.i[0] = i + 1;
-                laik_append_slice(ba, newg->toParent[curTask], 0, &slc);
+                laik_append_slice(ba, newg->toParent[curTask], &slc, 0, 0);
 
                 laik_log(1, "reassign: re-distribute [%d;%d[ "
                          "of slice %d to task %d (new task %d)",
@@ -592,7 +592,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
         }
         if (slc.from.i[0] < to) {
             slc.to.i[0] = to;
-            laik_append_slice(ba, newg->toParent[curTask], 0, &slc);
+            laik_append_slice(ba, newg->toParent[curTask], &slc, 0, 0);
 
             laik_log(1, "reassign: re-distribute remaining [%d;%d[ "
                      "of slice %d to task %d (new task %d)",

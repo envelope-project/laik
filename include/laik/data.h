@@ -91,7 +91,7 @@ void laik_migrate_data(Laik_Data* d, Laik_Group* g);
 
 // get slice number <n> in own partition of data container <d>
 // returns 0 if partitioning is not set or slice number <n> is invalid
-Laik_Slice* laik_data_slice(Laik_Data* d, int n);
+Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 
 // convenience functions
 

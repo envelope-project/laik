@@ -100,7 +100,10 @@ typedef struct _Laik_Partitioning Laik_Partitioning;
 // set of partitionings to make consistent at the same time
 typedef struct _Laik_PartGroup Laik_PartGroup;
 
-// calculated partitioning borders
+// a slice mapped to a task, created by a partitioner
+typedef struct _Laik_TaskSlice Laik_TaskSlice;
+
+// calculated partitioning borders, final result of a partitioner run
 typedef struct _Laik_BorderArray Laik_BorderArray;
 
 // communication requirements when switching partitioning groups
@@ -290,26 +293,30 @@ void laik_free_partitioning(Laik_Partitioning* p);
 int laik_my_slicecount(Laik_Partitioning* p);
 
 // get slice number <n> from the slices of this task
-Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n);
+Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n);
 
 // get from/to values for 1d slice with number <n> assigned to this task
 // if there is no slice, return 0 and set range to [0;0[ (ie. empty)
-Laik_Slice* laik_my_slice_1d(Laik_Partitioning* p, int n,
-                             uint64_t* from, uint64_t* to);
+Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
+                                 uint64_t* from, uint64_t* to);
 
 // get boundaries [x1;x2[ x [y1;y2[ for 2d slice <n> of this task
 // if there is no slice, return 0 and set ranges to [0;0[ (ie. empty)
-Laik_Slice* laik_my_slice_2d(Laik_Partitioning* p, int n,
-                             uint64_t* x1, uint64_t* x2,
-                             uint64_t* y1, uint64_t* y2);
+Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
+                                 uint64_t* x1, uint64_t* x2,
+                                 uint64_t* y1, uint64_t* y2);
 
 // get boundaries [x1;x2[ x [y1;y2[ x [z1;z2[ for 3d slice <n> of this task
 // if there is no slice, return 0 and set ranges to [0;0[ (ie. empty)
-Laik_Slice* laik_my_slice_3d(Laik_Partitioning* p, int n,
-                             uint64_t* x1, uint64_t* x2,
-                             uint64_t* y1, uint64_t* y2,
-                             uint64_t* z1, uint64_t* z2);
+Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
+                                 uint64_t* x1, uint64_t* x2,
+                                 uint64_t* y1, uint64_t* y2,
+                                 uint64_t* z1, uint64_t* z2);
 
+// applications can attach arbitrary values to a TaskSlice, to be
+// passed from application-specific partitioners to slice processing
+void* laik_get_slice_data(Laik_TaskSlice*);
+void laik_set_slice_data(Laik_TaskSlice*, void* data);
 
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n);

@@ -791,7 +791,7 @@ void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow)
 
 
 // get slice number <n> in own partition
-Laik_Slice* laik_data_slice(Laik_Data* d, int n)
+Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n)
 {
     if (d->activePartitioning == 0) return 0;
     return laik_my_slice(d->activePartitioning, n);

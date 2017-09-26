@@ -531,16 +531,22 @@ Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
 }
 
 // called by partitioners
-void laik_append_slice(Laik_BorderArray* a, int task, int tag, Laik_Slice* s)
+Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
+                                  int tag, void* data)
 {
     assert(a->count < a->capacity);
     assert((task >= 0) && (task < a->group->size));
     assert(laik_slice_within_space(s, a->space));
 
-    a->tslice[a->count].task = task;
-    a->tslice[a->count].tag = tag;
-    a->tslice[a->count].s = *s;
+    Laik_TaskSlice* ts = &(a->tslice[a->count]);
     a->count++;
+
+    ts->task = task;
+    ts->tag = tag;
+    ts->data = data;
+    ts->s = *s;
+
+    return ts;
 }
 
 // sort function, called after partitioner run
@@ -941,7 +947,7 @@ int laik_my_slicecount(Laik_Partitioning* p)
 }
 
 // get slice number <n> from the slices of this task
-Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n)
+Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
 {
     if (!p->bordersValid)
         laik_calc_partitioning(p);
@@ -953,49 +959,62 @@ Laik_Slice* laik_my_slice(Laik_Partitioning* p, int n)
         return 0;
     }
     assert(p->borders->tslice[o].task == myid);
-    return &(p->borders->tslice[o].s);
+    return &(p->borders->tslice[o]);
 }
 
-Laik_Slice* laik_my_slice_1d(Laik_Partitioning* p, int n,
-                           uint64_t* from, uint64_t* to)
+Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
+                                 uint64_t* from, uint64_t* to)
 {
     assert(p->space->dims == 1);
-    Laik_Slice* s = laik_my_slice(p, n);
-    if (from) *from = s ? s->from.i[0] : 0;
-    if (to) *to = s ? s->to.i[0] : 0;
+    Laik_TaskSlice* ts = laik_my_slice(p, n);
+    if (from) *from = ts ? ts->s.from.i[0] : 0;
+    if (to) *to = ts ? ts->s.to.i[0] : 0;
 
-    return s;
+    return ts;
 }
 
-Laik_Slice* laik_my_slice_2d(Laik_Partitioning* p, int n,
+Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
                              uint64_t* x1, uint64_t* x2,
                              uint64_t* y1, uint64_t* y2)
 {
     assert(p->space->dims == 2);
-    Laik_Slice* s = laik_my_slice(p, n);
-    if (x1) *x1 = s ? s->from.i[0] : 0;
-    if (x2) *x2 = s ? s->to.i[0] : 0;
-    if (y1) *y1 = s ? s->from.i[1] : 0;
-    if (y2) *y2 = s ? s->to.i[1] : 0;
+    Laik_TaskSlice* ts = laik_my_slice(p, n);
+    if (x1) *x1 = ts ? ts->s.from.i[0] : 0;
+    if (x2) *x2 = ts ? ts->s.to.i[0] : 0;
+    if (y1) *y1 = ts ? ts->s.from.i[1] : 0;
+    if (y2) *y2 = ts ? ts->s.to.i[1] : 0;
 
-    return s;
+    return ts;
 }
 
-Laik_Slice* laik_my_slice_3d(Laik_Partitioning* p, int n,
-                             uint64_t* x1, uint64_t* x2,
-                             uint64_t* y1, uint64_t* y2,
-                             uint64_t* z1, uint64_t* z2)
+Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
+                                 uint64_t* x1, uint64_t* x2,
+                                 uint64_t* y1, uint64_t* y2,
+                                 uint64_t* z1, uint64_t* z2)
 {
     assert(p->space->dims == 3);
-    Laik_Slice* s = laik_my_slice(p, n);
-    if (x1) *x1 = s ? s->from.i[0] : 0;
-    if (x2) *x2 = s ? s->to.i[0] : 0;
-    if (y1) *y1 = s ? s->from.i[1] : 0;
-    if (y2) *y2 = s ? s->to.i[1] : 0;
-    if (z1) *z1 = s ? s->from.i[2] : 0;
-    if (z2) *z2 = s ? s->to.i[2] : 0;
+    Laik_TaskSlice* ts = laik_my_slice(p, n);
+    if (x1) *x1 = ts ? ts->s.from.i[0] : 0;
+    if (x2) *x2 = ts ? ts->s.to.i[0] : 0;
+    if (y1) *y1 = ts ? ts->s.from.i[1] : 0;
+    if (y2) *y2 = ts ? ts->s.to.i[1] : 0;
+    if (z1) *z1 = ts ? ts->s.from.i[2] : 0;
+    if (z2) *z2 = ts ? ts->s.to.i[2] : 0;
 
-    return s;
+    return ts;
+}
+
+
+// applications can attach arbitrary values to a TaskSlice, to be
+// passed from application-specific partitioners to slice processing
+void* laik_get_slice_data(Laik_TaskSlice* ts)
+{
+    return ts->data;
+}
+
+void laik_set_slice_data(Laik_TaskSlice* ts, void* data)
+{
+    ts->data = data;
 }
 
 
