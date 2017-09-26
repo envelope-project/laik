@@ -194,7 +194,7 @@ typedef void
                           Laik_BorderArray*, Laik_BorderArray*);
 
 // create application-specific partitioner
-Laik_Partitioner* laik_new_partitioner(char* name,
+Laik_Partitioner* laik_new_partitioner(const char* name,
                                        laik_run_partitioner_t f, void* d);
 
 

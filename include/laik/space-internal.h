@@ -48,13 +48,10 @@ void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p);
 void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p);
 
 struct _Laik_Partitioner {
-    char* name;
+    const char* name;
     void* data; // partitioner specific data
     laik_run_partitioner_t run;
 };
-
-Laik_Partitioner* laik_new_partitioner(char* name,
-                                       laik_run_partitioner_t f, void* d);
 
 // to be used by implementations of partitioners
 // the <tag> is a hint for the data layer: if >0, slices with same tag go

@@ -24,7 +24,7 @@ void laik_space_init()
     space_init_done = true;
 }
 
-Laik_Partitioner* laik_new_partitioner(char* name,
+Laik_Partitioner* laik_new_partitioner(const char* name,
                                        laik_run_partitioner_t f, void* d)
 {
     Laik_Partitioner* pr;
