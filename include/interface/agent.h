@@ -20,6 +20,7 @@
 
 
 #define MAX_UID_LENGTH 64
+#define MAX_FAILED_BUFFER 32
 
 /* -------------- NUMBERS and CODES -------------- */
 
