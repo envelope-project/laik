@@ -22,6 +22,14 @@
 #define MAX_UID_LENGTH 64
 #define MAX_FAILED_BUFFER 32
 
+#define MAX_PERF_COUNTERS 128
+#define MAX_PERF_NAME_LENGTH 32
+
+typedef struct counter_kvp_tag{
+    char name[MAX_PERF_NAME_LENGTH];
+    long long value;
+}counter_kvp_t;
+
 /* -------------- NUMBERS and CODES -------------- */
 
 // LAIK Agent Error Numbers
@@ -119,6 +127,13 @@ typedef void (*laik_agent_set_phase) (const int, const char*, const void*);
  */
 typedef void (*laik_agent_shut_node) (int uuid);
 
+typedef void (*get_default_counters) (long long*, long long*, long long*, long long*);
+typedef void (*add_counter) (int);
+typedef int (*peek) (void);
+typedef void (*op) (void);
+typedef void (*get_all_counters) (int* time, counter_kvp_t*);
+typedef long (*gettime) (void);
+
 /* -------------- DATASTRUCTURES -------------- */
 
 struct tag_laik_ext_agent{
@@ -163,4 +178,13 @@ struct tag_laik_ext_profile_agent{
     Laik_Agent base;
 
     // Some Profiling Interface
+    get_default_counters read_def;
+    add_counter add_c;
+    get_all_counters read_all;
+    gettime gettime;
+    peek peek;
+    op start;
+    op end;
+
 };
+
