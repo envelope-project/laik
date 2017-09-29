@@ -227,18 +227,6 @@ Laik_Group* laik_clone_group(Laik_Group* g)
     return g2;
 }
 
-int getIntListStr(char* s, int len, int* list)
-{
-    int o;
-    o = sprintf(s, "[");
-    for(int i = 0; i < len; i++) {
-        o += sprintf(s+o, "%s%d",
-                     (i>0) ? ", ":"", list[i]);
-    }
-    o += sprintf(s+o, "]");
-    return o;
-}
-
 
 // Shrinking (collective)
 Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
@@ -271,9 +259,9 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
         o = sprintf(s, "%d (size %d, myid %d) => %d (size %d, myid %d):",
                     g->gid, g->size, g->myid, g2->gid, g2->size, g2->myid);
         o += sprintf(s+o, "\n  fromParent (to shrinked)  : ");
-        o += getIntListStr(s+o, g->size, g2->fromParent);
+        o += laik_getIntListStr(s+o, g->size, g2->fromParent);
         o += sprintf(s+o, "\n  toParent   (from shrinked): ");
-        o += getIntListStr(s+o, g2->size, g2->toParent);
+        o += laik_getIntListStr(s+o, g2->size, g2->toParent);
 
         laik_log(1, "shrink group: %s\n", s);
     }

@@ -204,13 +204,6 @@ struct _Laik_Transition {
     struct redTOp *red;
 };
 
-// for debug / logging
-int laik_getIndexStr(char* s, int dims, Laik_Index* idx);
-int laik_getSliceStr(char* s, int dims, Laik_Slice* slc);
-int laik_getTransitionStr(char* s, Laik_Transition* t);
-int laik_getDataFlowStr(char* s, Laik_DataFlow flow);
-int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba);
-
 // initialize the LAIK space module, called from laik_new_instance
 void laik_space_init();
 

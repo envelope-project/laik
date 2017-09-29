@@ -15,6 +15,7 @@
 ../src/backend-single.c
 ../src/core.c
 ../src/data.c
+../src/debug.c
 ../src/external.c
 ../src/partitioner.c
 ../src/program.c
@@ -29,6 +30,7 @@
 ../include/laik/backend.h
 ../include/laik/core.h
 ../include/laik/core-internal.h
+../include/laik/debug.h
 ../include/laik/program.h
 ../include/laik/program-internal.h
 ../include/laik/data.h
