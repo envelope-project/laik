@@ -355,34 +355,110 @@ bool laik_logshown(Laik_LogLevel l)
  * <task>        task rank in this LAIK instance
  * <phasemsgctr> log message counter, reset at each phase change
  * <pname>       phase name set by application
+ *
+ * To build the message step by step:
+ * - start: laik_log_begin(<level>)
+ * - optionally multiple times: laik_log_append(<msg>, ...)
+ * - end with laik_log_flush(<msg>, ...)
+ *
+ * Or just use log(<level>, <msg>, ...) which internally uses above functions
 */
-void laik_log(Laik_LogLevel l, const char* msg, ...)
+
+// buffered logging, not thread-safe
+
+static Laik_LogLevel current_logLevel = LAIK_LL_None;
+static char* current_logBuffer = 0;
+static int current_logSize = 0;
+static int current_logPos = 0;
+
+bool laik_log_begin(Laik_LogLevel l)
 {
-    if (l < laik_loglevel) return;
+    // if nothing should be logged, set level to none and return
+    if (l < laik_loglevel) {
+        current_logLevel = LAIK_LL_None;
+        return false;
+    }
     if (laik_log_fromtask >= 0) {
+        assert(laik_loginst != 0);
         assert(laik_log_totask >= laik_log_fromtask);
-        if (laik_loginst->myid < laik_log_fromtask) return;
-        if (laik_loginst->myid > laik_log_totask) return;
+        if ((laik_loginst->myid < laik_log_fromtask) ||
+            (laik_loginst->myid > laik_log_totask)) {
+            current_logLevel = LAIK_LL_None;
+            return false;
+        }
+    }
+    current_logLevel = l;
+
+    current_logPos = 0;
+    if (current_logBuffer == 0) {
+        // init: start with 1k buffer
+        current_logBuffer = malloc(1024);
+        current_logSize = 1024;
+    }
+    return true;
+}
+
+static
+void log_append(const char *format, va_list ap)
+{
+    if (current_logLevel == LAIK_LL_None) return;
+
+    // to be able to do a 2nd pass over ap (if buffer is too small)
+    va_list ap2;
+    va_copy(ap2, ap);
+
+    int left, len;
+    left = current_logSize - current_logPos;
+    assert(left > 0);
+    len = vsnprintf(current_logBuffer + current_logPos, left,
+                    format, ap);
+
+    // does it fit into buffer? (len is without terminating zero byte)
+    if (len >= left) {
+        int size = 2 * current_logSize;
+        if (size < len + 1) size = len + 1;
+        current_logBuffer = realloc(current_logBuffer, size);
+        current_logSize = size;
+        // printf("Enlarging log buffer to %d bytes ...\n", size);
+
+        // print again into enlarged buffer - must fit
+        left = current_logSize - current_logPos;
+        len = vsnprintf(current_logBuffer + current_logPos, left,
+                                   format, ap2);
+        assert(len < left);
     }
 
-    assert(laik_loginst != 0);
+    current_logPos += len;
+}
+
+void laik_log_append(const char* msg, ...)
+{
+    if (current_logLevel == LAIK_LL_None) return;
+
+    va_list args;
+    va_start(args, msg);
+    log_append(msg, args);
+}
+
+static
+void log_flush()
+{
+    if (current_logLevel == LAIK_LL_None) return;
+    if ((current_logPos == 0) || (current_logBuffer == 0)) return;
+
     const char* lstr = 0;
-    switch(l) {
+    switch(current_logLevel) {
         case LAIK_LL_Warning: lstr = "Warning"; break;
         case LAIK_LL_Error:   lstr = "ERROR"; break;
         case LAIK_LL_Panic:   lstr = "PANIC"; break;
         default: break;
     }
 
-    static char buf1[2000];
-    va_list args;
-    va_start(args, msg);
-    vsprintf(buf1, msg, args);
-
     // counters for stable output
     static int counter = 0;
     static int last_phase_counter = 0;
     int line_counter = 0;
+    assert(laik_loginst != 0);
     if (last_phase_counter != laik_loginst->control->phase_counter) {
         counter = 0;
         last_phase_counter = laik_loginst->control->phase_counter;
@@ -390,8 +466,11 @@ void laik_log(Laik_LogLevel l, const char* msg, ...)
     counter++;
 
     // print at once to not mix output from multiple (MPI) tasks
+    // FIXME: no need for buffer, lines can be printed directly
     static char buf2[3000];
     int off1 = 0, off2 = 0, off;
+
+    char* buf1 = current_logBuffer;
 
     const char* phase = laik_loginst->control->cur_phase_name;
     if (!phase) phase = "";
@@ -449,14 +528,37 @@ void laik_log(Laik_LogLevel l, const char* msg, ...)
         off2 += sprintf(buf2+off2, "%s\n", buf1 + off1);
         off1 = off;
     }
+    // TODO: allow to go to debug file
     fprintf(stderr, "%s", buf2);
 
     // terminate program on panic
-    if (l == LAIK_LL_Panic) exit(1);
+    if (current_logLevel == LAIK_LL_Panic) exit(1);
+}
+
+void laik_log_flush(const char* msg, ...)
+{
+    if (current_logLevel == LAIK_LL_None) return;
+
+    va_list args;
+    va_start(args, msg);
+    log_append(msg, args);
+
+    log_flush();
+}
+
+void laik_log(Laik_LogLevel l, const char* msg, ...)
+{
+    if (!laik_log_begin(l)) return;
+
+    va_list args;
+    va_start(args, msg);
+    log_append(msg, args);
+
+    log_flush();
 }
 
 // panic: terminate application
 void laik_panic(const char* msg)
 {
-    laik_log(LAIK_LL_Panic, msg);
+    laik_log(LAIK_LL_Panic, "%s", msg);
 }

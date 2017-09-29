@@ -112,10 +112,8 @@ double laik_get_backend_time();
 
 
 /*********************************************************************/
-/* Core LAIK API: task groups and elasticity
+/* Core LAIK API: Logging
  *********************************************************************/
-
-// Logging
 
 // Log levels control whether a log message should be shown to user.
 // Default is to only show Error/Panic messages.
@@ -144,5 +142,16 @@ void laik_set_loglevel(Laik_LogLevel l);
 
 // return wall clock time (seconds since 1.1.1971) with sub-second precision
 double laik_wtime();
+
+// buffered log API: same as laik_log, but allows to build message in steps
+
+// begin a new log message with log level <l>
+// returns true if message will be shown; can be used instead of laik_logshown
+bool laik_log_begin(Laik_LogLevel l);
+// append to a log message started before with laik_log_begin
+void laik_log_append(const char* msg, ...);
+// finalize the log message build with laik_log_begin/append and print it
+void laik_log_flush(const char* msg, ...);
+
 
 #endif // _LAIK_CORE_H_
