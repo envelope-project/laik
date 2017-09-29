@@ -52,7 +52,6 @@ struct _Laik_Type {
 };
 
 // statistics for switching
-typedef struct _Laik_SwitchStat Laik_SwitchStat;
 struct _Laik_SwitchStat
 {
     int switches, switches_noactions;
@@ -63,7 +62,6 @@ struct _Laik_SwitchStat
 
 Laik_SwitchStat* laik_newSwitchStat();
 void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src);
-int laik_getSwitchStat(char* s, Laik_SwitchStat* ss);
 
 // a data container
 struct _Laik_Data {

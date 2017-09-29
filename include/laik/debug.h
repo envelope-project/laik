@@ -32,5 +32,7 @@ int laik_getReductionStr(char* s, Laik_ReductionOperation op);
 int laik_getDataFlowStr(char* s, Laik_DataFlow flow);
 int laik_getTransitionStr(char* s, Laik_Transition* t);
 int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba);
+void laik_logPrettyInt(uint64_t v);
+void laik_logSwitchStat(Laik_SwitchStat* ss);
 
 #endif // _LAIK_DEBUG_H_

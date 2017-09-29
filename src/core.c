@@ -33,7 +33,6 @@ int laik_myid(Laik_Group* g)
 
 void laik_finalize(Laik_Instance* inst)
 {
-    assert(inst);
     laik_log(1, "finalizing...");
     if (inst->backend && inst->backend->finalize)
         (*inst->backend->finalize)(inst);
@@ -42,17 +41,14 @@ void laik_finalize(Laik_Instance* inst)
         laik_ext_cleanup(inst);
     }
 
-    if (laik_logshown(2)) {
-        char s[5000];
-        int o;
-
-        o = sprintf(s, "switch statistics (this task):\n");
+    if (laik_log_begin(2)) {
+        laik_log_append("switch statistics (this task):\n");
         for(int i=0; i<inst->data_count; i++) {
             Laik_Data* d = inst->data[i];
-            o += sprintf(s+o, "  data '%s': ", d->name);
-            o += laik_getSwitchStat(s+o, d->stat);
+            laik_log_append("  data '%s': ", d->name);
+            laik_logSwitchStat(d->stat);
         }
-        laik_log(2, s);
+        laik_log_flush(0);
     }
 
     free(inst->control);
@@ -539,9 +535,11 @@ void laik_log_flush(const char* msg, ...)
 {
     if (current_logLevel == LAIK_LL_None) return;
 
-    va_list args;
-    va_start(args, msg);
-    log_append(msg, args);
+    if (msg) {
+        va_list args;
+        va_start(args, msg);
+        log_append(msg, args);
+    }
 
     log_flush();
 }

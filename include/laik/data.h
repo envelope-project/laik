@@ -30,6 +30,8 @@
 /* LAIK Data - Data containers for LAIK index spaces
  *********************************************************************/
 
+// statistics for switching
+typedef struct _Laik_SwitchStat Laik_SwitchStat;
 
 //----------------------------------
 // Laik data types

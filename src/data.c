@@ -99,53 +99,6 @@ void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src)
     target->reducedBytes       += src->reducedBytes       ;
 }
 
-static
-int getPretty(char* s, uint64_t v)
-{
-    double vv = (double) v;
-    if (vv > 1000000000.0)
-        return sprintf(s, "%.1f G", vv / 1000000000.0);
-    if (vv > 1000000.0)
-        return sprintf(s, "%.1f M", vv / 1000000.0);
-    if (vv > 1000.0)
-        return sprintf(s, "%.1f K", vv / 1000.0);
-    return sprintf(s, "%.0f ", vv);
-}
-
-int laik_getSwitchStat(char* s, Laik_SwitchStat* ss)
-{
-    int o;
-
-    o = sprintf(s, "%d switches (%d without actions)\n",
-                ss->switches, ss->switches_noactions);
-    if (ss->switches == ss->switches_noactions) return o;
-
-    if (ss->mallocCount > 0) {
-        o += sprintf(s+o, "    malloc: %dx, ", ss->mallocCount);
-        o += getPretty(s+o, ss->mallocedBytes);
-        o += sprintf(s+o, "B, freed: %dx, ", ss->freeCount);
-        o += getPretty(s+o, ss->freedBytes);
-        o += sprintf(s+o, "B, copied ");
-        o += getPretty(s+o, ss->copiedBytes);
-        o += sprintf(s+o, "B\n");
-    }
-    if ((ss->sendCount > 0) || (ss->recvCount > 0)) {
-        o += sprintf(s+o, "    sent: %dx, ", ss->sendCount);
-        o += getPretty(s+o, ss->sentBytes);
-        o += sprintf(s+o, "B, recv: %dx, ", ss->recvCount);
-        o += getPretty(s+o, ss->receivedBytes);
-        o += sprintf(s+o, "B\n");
-    }
-    if (ss->reduceCount) {
-        o += sprintf(s+o, "    reduce: %dx, ", ss->reduceCount);
-        o += getPretty(s+o, ss->reducedBytes);
-        o += sprintf(s+o, "B, initialized ");
-        o += getPretty(s+o, ss->initedBytes);
-        o += sprintf(s+o, "B\n");
-    }
-    return o;
-}
-
 
 static int data_id = 0;
 

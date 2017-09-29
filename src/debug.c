@@ -218,3 +218,52 @@ int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
     return o;
 }
 
+void laik_logPrettyInt(uint64_t v)
+{
+    double vv = (double) v;
+    if (vv > 1000000000.0) {
+        laik_log_append("%.1f G", vv / 1000000000.0);
+        return;
+    }
+    if (vv > 1000000.0) {
+        laik_log_append("%.1f M", vv / 1000000.0);
+        return;
+    }
+    if (vv > 1000.0) {
+        laik_log_append("%.1f K", vv / 1000.0);
+        return;
+    }
+    laik_log_append("%.0f ", vv);
+}
+
+void laik_logSwitchStat(Laik_SwitchStat* ss)
+{
+    laik_log_append("%d switches (%d without actions)\n",
+                    ss->switches, ss->switches_noactions);
+    if (ss->switches == ss->switches_noactions) return;
+
+    if (ss->mallocCount > 0) {
+        laik_log_append("    malloc: %dx, ", ss->mallocCount);
+        laik_logPrettyInt(ss->mallocedBytes);
+        laik_log_append("B, freed: %dx, ", ss->freeCount);
+        laik_logPrettyInt(ss->freedBytes);
+        laik_log_append("B, copied ");
+        laik_logPrettyInt(ss->copiedBytes);
+        laik_log_append("B\n");
+    }
+    if ((ss->sendCount > 0) || (ss->recvCount > 0)) {
+        laik_log_append("    sent: %dx, ", ss->sendCount);
+        laik_logPrettyInt(ss->sentBytes);
+        laik_log_append("B, recv: %dx, ", ss->recvCount);
+        laik_logPrettyInt(ss->receivedBytes);
+        laik_log_append("B\n");
+    }
+    if (ss->reduceCount) {
+        laik_log_append("    reduce: %dx, ", ss->reduceCount);
+        laik_logPrettyInt(ss->reducedBytes);
+        laik_log_append("B, initialized ");
+        laik_logPrettyInt(ss->initedBytes);
+        laik_log_append("B\n");
+    }
+}
+
