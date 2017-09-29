@@ -461,10 +461,10 @@ void log_flush()
     }
     counter++;
 
-    // print at once to not mix output from multiple (MPI) tasks
-    // FIXME: no need for buffer, lines can be printed directly
-    static char buf2[3000];
-    int off1 = 0, off2 = 0, off;
+#define LINE_LEN 100
+    // enough for prefix plus one line of log message
+    static char buf2[100 + LINE_LEN];
+    int off1 = 0, off, off2;
 
     char* buf1 = current_logBuffer;
 
@@ -476,14 +476,15 @@ void log_flush()
     // append prefix at beginning of each line of msg
     while(buf1[off1]) {
 
-        // prefix
+        // prefix to allow sorting of log output
+        // sorting makes chunks from output of each MPI task
         line_counter++;
-        off2 += sprintf(buf2+off2,
-                        "== LAIK-%03d.%02d T%2d/%d %04d.%02d %-10s ",
-                        laik_loginst->control->phase_counter,
-                        laik_loginst->control->cur_iteration,
-                        laik_loginst->myid, laik_loginst->size,
-                        counter, line_counter, phase);
+        off2 = sprintf(buf2,
+                       "== LAIK-%03d.%02d T%2d/%d %04d.%02d %-10s ",
+                       laik_loginst->control->phase_counter,
+                       laik_loginst->control->cur_iteration,
+                       laik_loginst->myid, laik_loginst->size,
+                       counter, line_counter, phase);
         if (lstr)
                 off2 += sprintf(buf2+off2, "%-7s: ",
                                 (line_counter == 1) ? lstr : "");
@@ -511,7 +512,7 @@ void log_flush()
             }
             if (buf1[off] == ' ') {
                 // break line if too long?
-                if (spaces + (off - off1) > 70) {
+                if (spaces + (off - off1) > LINE_LEN) {
                     if (last_break)
                         off = last_break; // go back
                     break;
@@ -523,9 +524,12 @@ void log_flush()
         if (buf1[off]) buf1[off++] = 0;
         off2 += sprintf(buf2+off2, "%s\n", buf1 + off1);
         off1 = off;
+
+        assert(off2 < 100 + LINE_LEN);
+
+        // TODO: allow to go to debug file
+        fprintf(stderr, "%s", buf2);
     }
-    // TODO: allow to go to debug file
-    fprintf(stderr, "%s", buf2);
 
     // terminate program on panic
     if (current_logLevel == LAIK_LL_Panic) exit(1);
