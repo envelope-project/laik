@@ -234,14 +234,17 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             MPI_Datatype mpiDataType = getMPIDataType(d);
 
-            if (laik_logshown(1)) {
-                char rootstr[10];
-                sprintf(rootstr, "%d", op->rootTask);
-                laik_log(1, "MPI Reduce (root %s%s): from %lu, to %lu, "
-                            "elemsize %d, baseptr from/to %p/%p\n",
-                         (op->rootTask == -1) ? "ALL" : rootstr,
-                         (fromBase == toBase) ? ", IN_PLACE" : "",
-                         from, to, d->elemsize, fromBase, toBase);
+            if (laik_log_begin(1)) {
+                laik_log_append("MPI Reduce (root ");
+                if (op->rootTask == -1)
+                    laik_log_append("ALL");
+                else
+                    laik_log_append("%d", op->rootTask);
+                if (fromBase == toBase)
+                    laik_log_append(", IN_PLACE");
+                laik_log_flush("): from %lu, to %lu, "
+                               "elemsize %d, baseptr from/to %p/%p\n",
+                               from, to, d->elemsize, fromBase, toBase);
             }
 
             if (ss) {
@@ -293,10 +296,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (recvFromLower  && (myid < task)) continue;
             if (recvFromHigher && (myid > task)) continue;
 
-            if (laik_logshown(1)) {
-                char s1[100];
-                laik_getSliceStr(s1, dims, &(op->slc));
-                laik_log(1, "MPI Recv %s from T%d", s1, op->fromTask);
+            if (laik_log_begin(1)) {
+                laik_log_append("MPI Recv ");
+                laik_log_Slice(dims, &(op->slc));
+                laik_log_flush(" from T%d", op->fromTask);
             }
 
             assert(myid != op->fromTask);
@@ -384,10 +387,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             if (sendToLower  && (myid < task)) continue;
             if (sendToHigher && (myid > task)) continue;
 
-            if (laik_logshown(1)) {
-                char s1[100];
-                laik_getSliceStr(s1, dims, &(op->slc));
-                laik_log(1, "MPI Send %s to T%d", s1, op->toTask);
+            if (laik_log_begin(1)) {
+                laik_log_append("MPI Send ");
+                laik_log_Slice(dims, &(op->slc));
+                laik_log_flush(" to T%d", op->toTask);
             }
 
             assert(myid != op->toTask);

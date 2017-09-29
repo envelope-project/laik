@@ -218,7 +218,205 @@ int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba)
     return o;
 }
 
-void laik_logPrettyInt(uint64_t v)
+
+// variants using buffered log API
+
+void laik_log_IntList(int len, int* list)
+{
+    laik_log_append("[");
+    for(int i = 0; i < len; i++)
+        laik_log_append("%s%d", (i>0) ? ", ":"", list[i]);
+    laik_log_append("]");
+}
+
+
+void laik_log_Space(Laik_Space* spc)
+{
+    switch(spc->dims) {
+    case 1:
+        laik_log_append("[%llu;%llu[",
+                        (unsigned long long) spc->s.from.i[0],
+                        (unsigned long long) spc->s.to.i[0] );
+        break;
+    case 2:
+        laik_log_append("[%llu;%llu[ x [%llu;%llu[",
+                        (unsigned long long) spc->s.from.i[0],
+                        (unsigned long long) spc->s.to.i[0],
+                        (unsigned long long) spc->s.from.i[1],
+                        (unsigned long long) spc->s.to.i[1] );
+        break;
+    case 3:
+        laik_log_append("[%llu;%llu[ x [%llu;%llu[ x [%llu;%llu[",
+                        (unsigned long long) spc->s.from.i[0],
+                        (unsigned long long) spc->s.to.i[0],
+                        (unsigned long long) spc->s.from.i[1],
+                        (unsigned long long) spc->s.to.i[1],
+                        (unsigned long long) spc->s.from.i[2],
+                        (unsigned long long) spc->s.to.i[2] );
+        break;
+    default: assert(0);
+    }
+}
+
+void laik_log_Index(int dims, Laik_Index* idx)
+{
+    uint64_t i1 = idx->i[0];
+    uint64_t i2 = idx->i[1];
+    uint64_t i3 = idx->i[2];
+
+    switch(dims) {
+    case 1:
+        laik_log_append("%llu", (unsigned long long) i1);
+        break;
+    case 2:
+        laik_log_append("%llu/%llu",
+                        (unsigned long long) i1,
+                        (unsigned long long) i2);
+        break;
+    case 3:
+        laik_log_append("%llu/%llu/%llu",
+                        (unsigned long long) i1,
+                        (unsigned long long) i2,
+                        (unsigned long long) i3);
+        break;
+    default: assert(0);
+    }
+}
+
+void laik_log_Slice(int dims, Laik_Slice* slc)
+{
+    if (laik_slice_isEmpty(dims, slc)) {
+        laik_log_append("(empty)");
+        return;
+    }
+
+    laik_log_append("[");
+    laik_log_Index(dims, &(slc->from));
+    laik_log_append(";");
+    laik_log_Index(dims, &(slc->to));
+    laik_log_append("[");
+}
+
+void laik_log_Reduction(Laik_ReductionOperation op)
+{
+    switch(op) {
+    case LAIK_RO_None: laik_log_append("none"); break;
+    case LAIK_RO_Sum:  laik_log_append("sum"); break;
+    default: assert(0);
+    }
+}
+
+
+void laik_log_DataFlow(Laik_DataFlow flow)
+{
+    bool out = false;
+
+    if (flow & LAIK_DF_CopyIn) {
+        laik_log_append("copyin");
+        out = true;
+    }
+    if (flow & LAIK_DF_CopyOut) {
+        if (out) laik_log_append("|");
+        laik_log_append("copyout");
+        out = true;
+    }
+    if (flow & LAIK_DF_Init) {
+        if (out) laik_log_append("|");
+        laik_log_append("init");
+        out = true;
+    }
+    if (flow & LAIK_DF_ReduceOut) {
+        if (out) laik_log_append("|");
+        laik_log_append("reduceout");
+        out = true;
+    }
+    if (flow & LAIK_DF_Sum) {
+        if (out) laik_log_append("|");
+        laik_log_append("sum");
+        out = true;
+    }
+    if (!out)
+        laik_log_append("none");
+}
+
+
+void laik_log_Transition(Laik_Transition* t)
+{
+    if ((t == 0) ||
+        (t->localCount + t->initCount +
+         t->sendCount + t->recvCount + t->redCount == 0)) {
+        laik_log_append("(no actions)");
+        return;
+    }
+
+    if (t->localCount>0) {
+        laik_log_append("\n   %2d local: ", t->localCount);
+        for(int i=0; i<t->localCount; i++) {
+            if (i>0) laik_log_append(", ");
+            laik_log_Slice(t->dims, &(t->local[i].slc));
+        }
+    }
+
+    if (t->initCount>0) {
+        laik_log_append("\n   %2d init : ", t->initCount);
+        for(int i=0; i<t->initCount; i++) {
+            if (i>0) laik_log_append(", ");
+            laik_log_Reduction(t->init[i].redOp);
+            laik_log_Slice(t->dims, &(t->init[i].slc));
+        }
+    }
+
+    if (t->sendCount>0) {
+        laik_log_append("\n   %2d send : ", t->sendCount);
+        for(int i=0; i<t->sendCount; i++) {
+            if (i>0) laik_log_append(", ");
+            laik_log_Slice(t->dims, &(t->send[i].slc));
+            laik_log_append("==>T%d", t->send[i].toTask);
+        }
+    }
+
+    if (t->recvCount>0) {
+        laik_log_append("\n   %2d recv : ", t->recvCount);
+        for(int i=0; i<t->recvCount; i++) {
+            if (i>0) laik_log_append(", ");
+            laik_log_append("T%d==>", t->recv[i].fromTask);
+            laik_log_Slice(t->dims, &(t->recv[i].slc));
+        }
+    }
+
+    if (t->redCount>0) {
+        laik_log_append("\n   %2d reduc: ", t->redCount);
+        for(int i=0; i<t->redCount; i++) {
+            if (i>0) laik_log_append(", ");
+            laik_log_Reduction(t->red[i].redOp);
+            laik_log_Slice(t->dims, &(t->red[i].slc));
+            laik_log_append("=> %s",
+                            (t->red[i].rootTask == -1) ? "all":"master");
+        }
+    }
+}
+
+void laik_log_BorderArray(Laik_BorderArray* ba)
+{
+    if (!ba) {
+        laik_log_append("(no borders)");
+        return;
+    }
+
+    laik_log_append("%d slices in %d tasks on ",
+                    ba->count, ba->group->size);
+    laik_log_Space(ba->space);
+    laik_log_append(": (task:slice:tag/mapNo)\n    ");
+    for(int i = 0; i < ba->count; i++) {
+        if (i>0)
+            laik_log_append(", ");
+        laik_log_append("%d:", ba->tslice[i].task);
+        laik_log_Slice(ba->space->dims, &(ba->tslice[i].s));
+        laik_log_append(":%d/%d", ba->tslice[i].tag, ba->tslice[i].mapNo);
+    }
+}
+
+void laik_log_PrettyInt(uint64_t v)
 {
     double vv = (double) v;
     if (vv > 1000000000.0) {
@@ -236,7 +434,7 @@ void laik_logPrettyInt(uint64_t v)
     laik_log_append("%.0f ", vv);
 }
 
-void laik_logSwitchStat(Laik_SwitchStat* ss)
+void laik_log_SwitchStat(Laik_SwitchStat* ss)
 {
     laik_log_append("%d switches (%d without actions)\n",
                     ss->switches, ss->switches_noactions);
@@ -244,25 +442,25 @@ void laik_logSwitchStat(Laik_SwitchStat* ss)
 
     if (ss->mallocCount > 0) {
         laik_log_append("    malloc: %dx, ", ss->mallocCount);
-        laik_logPrettyInt(ss->mallocedBytes);
+        laik_log_PrettyInt(ss->mallocedBytes);
         laik_log_append("B, freed: %dx, ", ss->freeCount);
-        laik_logPrettyInt(ss->freedBytes);
+        laik_log_PrettyInt(ss->freedBytes);
         laik_log_append("B, copied ");
-        laik_logPrettyInt(ss->copiedBytes);
+        laik_log_PrettyInt(ss->copiedBytes);
         laik_log_append("B\n");
     }
     if ((ss->sendCount > 0) || (ss->recvCount > 0)) {
         laik_log_append("    sent: %dx, ", ss->sendCount);
-        laik_logPrettyInt(ss->sentBytes);
+        laik_log_PrettyInt(ss->sentBytes);
         laik_log_append("B, recv: %dx, ", ss->recvCount);
-        laik_logPrettyInt(ss->receivedBytes);
+        laik_log_PrettyInt(ss->receivedBytes);
         laik_log_append("B\n");
     }
     if (ss->reduceCount) {
         laik_log_append("    reduce: %dx, ", ss->reduceCount);
-        laik_logPrettyInt(ss->reducedBytes);
+        laik_log_PrettyInt(ss->reducedBytes);
         laik_log_append("B, initialized ");
-        laik_logPrettyInt(ss->initedBytes);
+        laik_log_PrettyInt(ss->initedBytes);
         laik_log_append("B\n");
     }
 }

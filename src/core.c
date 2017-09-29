@@ -46,7 +46,7 @@ void laik_finalize(Laik_Instance* inst)
         for(int i=0; i<inst->data_count; i++) {
             Laik_Data* d = inst->data[i];
             laik_log_append("  data '%s': ", d->name);
-            laik_logSwitchStat(d->stat);
+            laik_log_SwitchStat(d->stat);
         }
         laik_log_flush(0);
     }
@@ -249,17 +249,15 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
     if (g->inst->backend->updateGroup)
         (g->inst->backend->updateGroup)(g2);
 
-    if (laik_logshown(1)) {
-        char s[500];
-        int o;
-        o = sprintf(s, "%d (size %d, myid %d) => %d (size %d, myid %d):",
-                    g->gid, g->size, g->myid, g2->gid, g2->size, g2->myid);
-        o += sprintf(s+o, "\n  fromParent (to shrinked)  : ");
-        o += laik_getIntListStr(s+o, g->size, g2->fromParent);
-        o += sprintf(s+o, "\n  toParent   (from shrinked): ");
-        o += laik_getIntListStr(s+o, g2->size, g2->toParent);
-
-        laik_log(1, "shrink group: %s\n", s);
+    if (laik_log_begin(1)) {
+        laik_log_append("shrink group: "
+                        "%d (size %d, myid %d) => %d (size %d, myid %d):",
+                        g->gid, g->size, g->myid, g2->gid, g2->size, g2->myid);
+        laik_log_append("\n  fromParent (to shrinked)  : ");
+        laik_log_IntList(g->size, g2->fromParent);
+        laik_log_append("\n  toParent   (from shrinked): ");
+        laik_log_IntList(g2->size, g2->toParent);
+        laik_log_flush(0);
     }
 
     return g2;

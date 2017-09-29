@@ -230,13 +230,12 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
         // remember layout request as hint
         m->layout = l;
 
-        if (laik_logshown(1)) {
-            char s[100];
-            laik_getSliceStr(s, dims, &slc);
-            laik_log(1, "prepare map for '%s'/%d: req.slice %s "
-                     "(off %d - %d, count %d, elemsize %d)\n",
-                     d->name, mapNo, s,
-                     m->firstOff, m->lastOff, m->count, d->elemsize);
+        if (laik_log_begin(1)) {
+            laik_log_append("prepare map for '%s'/%d: req.slice ",
+                            d->name, mapNo);
+            laik_log_Slice(dims, &slc);
+            laik_log_flush(" (off %d - %d, count %d, elemsize %d)\n",
+                           m->firstOff, m->lastOff, m->count, d->elemsize);
         }
     }
     assert(n == mapNo);
@@ -379,19 +378,18 @@ void copyMaps(Laik_Transition* t,
             assert(fromMap->base + fromOff * d->elemsize ==
                    toMap->base   + toOff * d->elemsize);
 
-            if (laik_logshown(1)) {
-                char s1[100], s2[100], s3[100];
-                laik_getIndexStr(s1, dims, &(s->from));
-                laik_getIndexStr(s2, dims, &fromStart);
-                laik_getIndexStr(s3, dims, &toStart);
-
-                laik_log(1, "copy map for '%s': (%lu x %lu x %lu) x %d "
-                            "from global (%s): local (%s) slc/map %d/%d "
-                            "==> (%s) slc/map %d/%d, using old map\n",
-                         d->name,
-                         count.i[0], count.i[1], count.i[2], d->elemsize,
-                         s1, s2, op->fromSliceNo, op->fromMapNo,
-                         s3, op->toSliceNo, op->toMapNo);
+            if (laik_log_begin(1)) {
+                laik_log_append("copy map for '%s': (%lu x %lu x %lu)",
+                                d->name, count.i[0], count.i[1], count.i[2]);
+                laik_log_append(" x %d from global (", d->elemsize);
+                laik_log_Index(dims, &(s->from));
+                laik_log_append("): local (");
+                laik_log_Index(dims, &fromStart);
+                laik_log_append(") slc/map %d/%d ==> (",
+                                op->fromSliceNo, op->fromMapNo);
+                laik_log_Index(dims, &toStart);
+                laik_log_flush(") slc/map %d/%d, using old map\n",
+                               op->toSliceNo, op->toMapNo);
             }
             continue;
         }
@@ -405,19 +403,18 @@ void copyMaps(Laik_Transition* t,
         char*    fromPtr  = fromMap->base + fromOff * d->elemsize;
         char*    toPtr    = toMap->base   + toOff * d->elemsize;
 
-        if (laik_logshown(1)) {
-            char s1[100], s2[100], s3[100];
-            laik_getIndexStr(s1, dims, &(s->from));
-            laik_getIndexStr(s2, dims, &fromStart);
-            laik_getIndexStr(s3, dims, &toStart);
-
-            laik_log(1, "copy map for '%s': (%lu/%lu/%lu) x %d "
-                        "from global (%s): local (%s) slc/map %d/%d off %lu/%p"
-                        " ==> (%s) slc/map %d/%d off %lu/%p",
-                     d->name,
-                     count.i[0], count.i[1], count.i[2], d->elemsize,
-                    s1, s2,  op->fromSliceNo, op->fromMapNo, fromOff, fromPtr,
-                    s3, op->toSliceNo, op->toMapNo, toOff, toPtr);
+        if (laik_log_begin(1)) {
+            laik_log_append("copy map for '%s': (%lu x %lu x %lu)",
+                            d->name, count.i[0], count.i[1], count.i[2]);
+            laik_log_append(" x %d from global (", d->elemsize);
+            laik_log_Index(dims, &(s->from));
+            laik_log_append("): local (");
+            laik_log_Index(dims, &fromStart);
+            laik_log_append(") slc/map %d/%d off %lu/%p ==> (",
+                            op->fromSliceNo, op->fromMapNo, fromOff, fromPtr);
+            laik_log_Index(dims, &toStart);
+            laik_log_flush(") slc/map %d/%d off %lu/%p",
+                           op->toSliceNo, op->toMapNo, toOff, toPtr);
         }
 
         if (ss)
@@ -481,15 +478,15 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
             toMap->base = toMap->start + off * d->elemsize;
             fromMap->reusedFor = i; // mark as reused by slice <i>
 
-            if (laik_logshown(1)) {
-                char s[500];
-                int o = laik_getSliceStr(s, dims, &(toMap->requiredSlice));
-                o += sprintf(s+o, " (in ");
-                o += laik_getSliceStr(s+o, dims, &(toMap->allocatedSlice));
-                o += sprintf(s+o, " with off %lu)", off);
-                laik_log(1, "map reuse for '%s'/%d %s, %llu B at %p)\n",
-                         toMap->data->name, i, s,
-                         (unsigned long long) fromMap->capacity, toMap->base);
+            if (laik_log_begin(1)) {
+                laik_log_append("map reuse for '%s'/%d ", toMap->data->name, i);
+                laik_log_Slice(dims, &(toMap->requiredSlice));
+                laik_log_append(" (in ");
+                laik_log_Slice(dims, &(toMap->allocatedSlice));
+                laik_log_flush(" with off %llu), %llu B at %p)\n",
+                               (unsigned long long) off,
+                               (unsigned long long) fromMap->capacity,
+                               toMap->base);
             }
         }
     }
@@ -627,28 +624,20 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
                                               fromBA, d->activeFlow,
                                               toBA, toFlow);
 
-    if (laik_logshown(1)) {
-        int o;
-        char s1[1000];
-        o = sprintf(s1, "transition (data '%s', partition '%s'):\n",
-                    d->name, part ? part->name : "(none)");
-        o += sprintf(s1+o, "  from ");
-        o += laik_getDataFlowStr(s1+o, d->activeFlow);
-        o += sprintf(s1+o, ", ");
-        o += laik_getBorderArrayStr(s1+o, fromBA);
-        o += sprintf(s1+o, "\n  to ");
-        o += laik_getDataFlowStr(s1+o, toFlow);
-        o += sprintf(s1+o, ", ");
-        o += laik_getBorderArrayStr(s1+o, toBA);
-        o += sprintf(s1+o, "\n  actions:");
-
-        char s2[1000];
-        int len = laik_getTransitionStr(s2, t);
-
-        if (len == 0)
-            laik_log(1, "%s (no actions)\n", s1);
-        else
-            laik_log(1, "%s\n%s", s1, s2);
+    if (laik_log_begin(1)) {
+        laik_log_append("transition (data '%s', partition '%s'):\n",
+                        d->name, part ? part->name : "(none)");
+        laik_log_append("  from ");
+        laik_log_DataFlow(d->activeFlow);
+        laik_log_append(", ");
+        laik_log_BorderArray(fromBA);
+        laik_log_append("\n  to ");
+        laik_log_DataFlow(toFlow);
+        laik_log_append(", ");
+        laik_log_BorderArray(toBA);
+        laik_log_append(": ");
+        laik_log_Transition(t);
+        laik_log_flush(0);
     }
 
     doTransition(d, t, d->activeMappings, toList);
@@ -689,23 +678,16 @@ void laik_switchto(Laik_Data* d,
                                               fromBA, d->activeFlow,
                                               toBA, toFlow);
 
-    if (laik_logshown(1)) {
-        int o;
-        char s1[1000];
-        o = sprintf(s1, "switch partitionings for data '%s':\n"
-                    "  %s/",
-                    d->name, fromP ? fromP->name : "(none)");
-        o += laik_getDataFlowStr(s1+o, d->activeFlow);
-        o += sprintf(s1+o, " => %s/", toP ? toP->name : "(none)");
-        o += laik_getDataFlowStr(s1+o, toFlow);
-
-        char s2[1000];
-        int len = laik_getTransitionStr(s2, t);
-
-        if (len == 0)
-            laik_log(1, "%s: (no actions)\n", s1);
-        else
-            laik_log(1, "%s:\n%s", s1, s2);
+    if (laik_log_begin(1)) {
+        laik_log_append("switch partitionings for data '%s':\n"
+                        "  %s/",
+                        d->name, fromP ? fromP->name : "(none)");
+        laik_log_DataFlow(d->activeFlow);
+        laik_log_append(" => %s/", toP ? toP->name : "(none)");
+        laik_log_DataFlow(toFlow);
+        laik_log_append(": ");
+        laik_log_Transition(t);
+        laik_log_flush(0);
     }
 
     doTransition(d, t, d->activeMappings, toList);
@@ -899,22 +881,20 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     // elements to skip after to1 reached
     uint64_t skip1 = m->layout->stride[2] - m->layout->stride[1] * (to1 - from1);
 
-    if (laik_logshown(1)) {
-        char s1[100], s2[100], s3[100], s4[100];
+    if (laik_log_begin(1)) {
         Laik_Index slcsize, localFrom;
         laik_sub_index(&localFrom, &(s->from), &(m->requiredSlice.from));
         laik_sub_index(&slcsize, &(s->to), &(s->from));
-        laik_getIndexStr(s1, dims, &slcsize);
-        laik_getIndexStr(s2, dims, &(s->from));
-        laik_getIndexStr(s3, dims, &localFrom);
-        laik_getIndexStr(s4, dims, idx);
 
-        laik_log(1, "packing for '%s', size (%s) x %d "
-                    "from global (%s) / local (%s)/%d, "
-                    "start (%s) off %lu, buf size %d",
-                 m->data->name, s1, elemsize,
-                 s2, s3, m->mapNo,
-                 s4, idxOff, size);
+        laik_log_append("packing for '%s', size (", m->data->name);
+        laik_log_Index(dims, &slcsize);
+        laik_log_append(") x %d from global (", elemsize);
+        laik_log_Index(dims, &(s->from));
+        laik_log_append(") / local (");
+        laik_log_Index(dims, &localFrom);
+        laik_log_append(")/%d, start (", m->mapNo);
+        laik_log_Index(dims, idx);
+        laik_log_flush(") off %lu, buf size %d", idxOff, size);
     }
 
     bool stop = false;
@@ -956,14 +936,14 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
         i1 = to1;
     }
 
-    if (laik_logshown(1)) {
-        char s1[100];
+    if (laik_log_begin(1)) {
         Laik_Index idx2;
         laik_set_index(&idx2, i0, i1, i2);
-        laik_getIndexStr(s1, dims, &idx2);
 
-        laik_log(1, "packed for '%s': end (%s), %lu elems = %lu bytes, %d left",
-                 m->data->name, s1, count, count * elemsize, size);
+        laik_log_append("packed for '%s': end (", m->data->name);
+        laik_log_Index(dims, &idx2);
+        laik_log_flush("), %lu elems = %lu bytes, %d left",
+                       count, count * elemsize, size);
     }
 
     // save position we reached
@@ -1022,22 +1002,21 @@ int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     // elements to skip after to1 reached
     uint64_t skip1 = m->layout->stride[2] - m->layout->stride[1] * (to1 - from1);
 
-    if (laik_logshown(1)) {
-        char s1[100], s2[100], s3[100], s4[100];
+    if (laik_log_begin(1)) {
         Laik_Index slcsize, localFrom;
         laik_sub_index(&localFrom, &(s->from), &(m->requiredSlice.from));
         laik_sub_index(&slcsize, &(s->to), &(s->from));
-        laik_getIndexStr(s1, dims, &slcsize);
-        laik_getIndexStr(s2, dims, &(s->from));
-        laik_getIndexStr(s3, dims, &localFrom);
-        laik_getIndexStr(s4, dims, idx);
 
-        laik_log(1, "unpacking for '%s', size (%s) x %d "
-                    "from global (%s) / local (%s)/%d, "
-                    "start (%s) off %lu, buf size %d",
-                 m->data->name, s1, elemsize,
-                 s2, s3, m->mapNo,
-                 s4, idxOff, size);
+        laik_log_append("unpacking for '%s', size (", m->data->name);
+        laik_log_Index(dims, &slcsize);
+        laik_log_append(") x %d from global (", elemsize);
+        laik_log_Index(dims, &(s->from));
+        laik_log_append(") / local (");
+        laik_log_Index(dims, &localFrom);
+        laik_log_append(")/%d, start (", m->mapNo);
+        laik_log_Index(dims, idx);
+        laik_log_flush(") off %lu, buf size %d", idxOff, size);
+
     }
 
     bool stop = false;
@@ -1078,14 +1057,14 @@ int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
         i1 = to1;
     }
 
-    if (laik_logshown(1)) {
-        char s1[100];
+    if (laik_log_begin(1)) {
         Laik_Index idx2;
         laik_set_index(&idx2, i0, i1, i2);
-        laik_getIndexStr(s1, dims, &idx2);
 
-        laik_log(1, "unpacked for '%s': end (%s), %lu elems = %lu bytes, %d left",
-                 m->data->name, s1, count, count * elemsize, size);
+        laik_log_append("unpacked for '%s': end (", m->data->name);
+        laik_log_Index(dims, &idx2);
+        laik_log_flush("), %lu elems = %lu bytes, %d left",
+                       count, count * elemsize, size);
     }
 
     // save position we reached

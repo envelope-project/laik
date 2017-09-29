@@ -245,10 +245,10 @@ Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1)
     space->s.from.i[0] = 0;
     space->s.to.i[0] = s1;
 
-    if (laik_logshown(1)) {
-        char s[100];
-        laik_getSpaceStr(s, space);
-        laik_log(1, "new 1d space '%s': %s\n", space->name, s);
+    if (laik_log_begin(1)) {
+        laik_log_append("new 1d space '%s': ", space->name);
+        laik_log_Space(space);
+        laik_log_flush(0);
     }
 
     return space;
@@ -264,10 +264,10 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i,
     space->s.from.i[1] = 0;
     space->s.to.i[1] = s2;
 
-    if (laik_logshown(1)) {
-        char s[100];
-        laik_getSpaceStr(s, space);
-        laik_log(1, "new 2d space '%s': %s\n", space->name, s);
+    if (laik_log_begin(1)) {
+        laik_log_append("new 2d space '%s': ", space->name);
+        laik_log_Space(space);
+        laik_log_flush(0);
     }
 
     return space;
@@ -285,10 +285,10 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i,
     space->s.from.i[2] = 0;
     space->s.to.i[2] = s3;
 
-    if (laik_logshown(1)) {
-        char s[100];
-        laik_getSpaceStr(s, space);
-        laik_log(1, "new 3d space '%s': %s\n", space->name, s);
+    if (laik_log_begin(1)) {
+        laik_log_append("new 3d space '%s': ", space->name);
+        laik_log_Space(space);
+        laik_log_flush(0);
     }
 
     return space;
@@ -667,17 +667,15 @@ laik_new_partitioning(Laik_Group* group, Laik_Space* space,
         laik_addPartitioningForBase(base, p);
     }
 
-    if (laik_logshown(1)) {
-        char s[1000];
-        int o;
-        o = sprintf(s, "new partitioning '%s':\n  space '%s', "
-                    "group %d (size %d, myid %d), partitioner '%s'",
-                    p->name, space->name,
-                    p->group->gid, p->group->size, p->group->myid,
-                    pr->name);
+    if (laik_log_begin(1)) {
+        laik_log_append("new partitioning '%s':\n  space '%s', "
+                        "group %d (size %d, myid %d), partitioner '%s'",
+                        p->name, space->name,
+                        p->group->gid, p->group->size, p->group->myid,
+                        pr->name);
         if (base)
-            sprintf(s+o, ", base '%s'", base->name);
-        laik_log(1, s);
+            laik_log_append(", base '%s'", base->name);
+        laik_log_flush(0);
     }
 
     return p;
@@ -898,16 +896,14 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     if (!coversSpace(ba))
         laik_log(LAIK_LL_Panic, "borders do not cover space");
 
-    if (laik_logshown(1)) {
-        char s[1000];
-        int o;
-        o = sprintf(s, "run partitioner '%s' (group %d, myid %d, space '%s'):",
-                    pr->name, g->gid, g->myid, space->name);
-        o += sprintf(s+o, "\n  other: ");
-        o += laik_getBorderArrayStr(s+o, otherBA);
-        o += sprintf(s+o, "\n  new  : ");
-        o += laik_getBorderArrayStr(s+o, ba);
-        laik_log(1, "%s\n", s);
+    if (laik_log_begin(1)) {
+        laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
+                        pr->name, g->gid, g->myid, space->name);
+        laik_log_append("\n  other: ");
+        laik_log_BorderArray(otherBA);
+        laik_log_append("\n  new  : ");
+        laik_log_BorderArray(ba);
+        laik_log_flush(0);
     }
 
     return ba;
@@ -920,13 +916,11 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
     assert(p->group == ba->group);
     assert(p->space == ba->space);
 
-    if (laik_logshown(1)) {
-        char s[1000];
-        int o;
-        o = sprintf(s, "setting borders for part '%s' (group %d, myid %d):\n  ",
-                    p->name, ba->group->gid, ba->group->myid);
-        o += laik_getBorderArrayStr(s+o, ba);
-        laik_log(1, "%s\n", s);
+    if (laik_log_begin(1)) {
+        laik_log_append("setting borders for part '%s' (group %d, myid %d):\n  ",
+                        p->name, ba->group->gid, ba->group->myid);
+        laik_log_BorderArray(ba);
+        laik_log_flush(0);
     }
 
     if (p->bordersValid && laik_border_isEqual(p->borders, ba)) {
