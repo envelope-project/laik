@@ -35,14 +35,4 @@ void laik_log_Transition(Laik_Transition* t);
 void laik_log_BorderArray(Laik_BorderArray* ba);
 void laik_log_SwitchStat(Laik_SwitchStat* ss);
 
-int laik_getIntListStr(char* s, int len, int* list);
-int laik_getSpaceStr(char* s, Laik_Space* spc);
-int laik_getIndexStr(char* s, int dims, Laik_Index* idx);
-int laik_getSliceStr(char* s, int dims, Laik_Slice* slc);
-int laik_getReductionStr(char* s, Laik_ReductionOperation op);
-int laik_getDataFlowStr(char* s, Laik_DataFlow flow);
-int laik_getTransitionStr(char* s, Laik_Transition* t);
-int laik_getBorderArrayStr(char* s, Laik_BorderArray* ba);
-
-
 #endif // _LAIK_DEBUG_H_

@@ -512,22 +512,21 @@ static void appendToNotcovered(Laik_Slice* s)
     notcovered_count++;
 }
 
-static char* getNotcoveredStr(int dims, Laik_Slice* toRemove)
+#ifdef DEBUG_COVERSPACE
+static void log_Notcovered(int dims, Laik_Slice* toRemove)
 {
-    static char s[1000];
-    int o;
-    o = sprintf(s, "not covered: (");
+    laik_log_append("not covered: (");
     for(int j = 0; j < notcovered_count; j++) {
-        if (j>0) o += sprintf(s+o, ", ");
-        o += laik_getSliceStr(s+o, dims, &(notcovered[j]));
+        if (j>0) laik_log_append(", ");
+        laik_log_Slice(dims, &(notcovered[j]));
     }
-    o += sprintf(s+o, ")");
+    laik_log_append(")");
     if (toRemove) {
-        o += sprintf(s+o, "\n  removing ");
-        o += laik_getSliceStr(s+o, dims, toRemove);
+        laik_log_append("\n  removing ");
+        laik_log_Slice(dims, toRemove);
     }
-    return s;
 }
+#endif
 
 static
 bool coversSpace(Laik_BorderArray* ba)
@@ -543,7 +542,11 @@ bool coversSpace(Laik_BorderArray* ba)
         Laik_Slice* toRemove = &(ba->tslice[i].s);
 
 #ifdef DEBUG_COVERSPACE
-        laik_log(1, "coversSpace - %s", getNotcoveredStr(dims, toRemove));
+        if (laik_log_begin(1)) {
+            laik_log_append("coversSpace - ");
+            log_Notcovered(dims, toRemove);
+            laik_log_flush(0);
+        }
 #endif
 
         int count = notcovered_count; // number of slices to visit
@@ -591,7 +594,11 @@ bool coversSpace(Laik_BorderArray* ba)
     }
 
 #ifdef DEBUG_COVERSPACE
-    laik_log(1, "coversSpace - remaining %s", getNotcoveredStr(dims, 0));
+    if (laik_log_begin(1)) {
+        laik_log_append("coversSpace - remaining ");
+        log_Notcovered(dims, 0);
+        laik_log_flush(0);
+    }
 #endif
 
     // only if no slices are left, we did cover full space
