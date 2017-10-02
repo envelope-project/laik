@@ -30,6 +30,9 @@
 #define MAX_AGENTS        10
 
 
+// key-value store (see below)
+typedef struct _Laik_KVNode Laik_KVNode;
+
 
 struct _Laik_Task {
     int rank;
@@ -58,6 +61,9 @@ struct _Laik_Instance {
     int myid;
     char* mylocation;
     char guid[64];
+
+    // to synchronize internal data among tasks
+    Laik_KVNode* kvstore;
 
     Laik_Backend* backend;
     void* backend_data;
@@ -92,5 +98,74 @@ struct _Laik_Error {
   int type;
   char* desc;
 };
+
+
+/*
+ * Key-Value store for internal LAIK data, organized in a tree structure
+ * Whenever new global objects are created, they are synchronized via the
+ * key-value store.
+ *
+ * This is needed as new joining tasks must become aware of all internal
+ * LAIK objects, such as spaces, partitionings, data containers.
+ * All objects are identified by names.
+ * The objects may be created independently in each task via collective
+ * operations. When a global sync is done, the consistency is verified.
+ * The store can do aggregation of value lists e.g. to communicate external
+ * requests received at arbitrary tasks to all others.
+*/
+
+// value types
+typedef enum _Laik_KVType {
+    LAIK_KV_Invalid = 0,
+
+    // primitive
+    LAIK_KV_Struct, LAIK_KV_Int,
+
+    // LAIK objects
+    LAIK_KV_Space, LAIK_KV_Data,
+    LAIK_KV_Partitioning, LAIK_KV_ArrayBorders,
+
+    // Custom
+    LAIK_KV_CUSTOM = 100
+} Laik_KVType;
+
+typedef struct _Laik_KValue Laik_KValue;
+struct _Laik_KValue {
+    Laik_KVType type;
+    int size;
+    int count; // > 1 if an array of values
+    void* vPtr;
+    bool synched;
+};
+
+struct _Laik_KVNode {
+    char* name;
+    bool synched;
+    Laik_KVNode* parent; // if 0, this is root
+    Laik_KValue* value;  // if 0, no value attached
+
+    Laik_KVNode* firstChild;
+    Laik_KVNode* nextSibling;
+};
+
+// create new node. Takes ownership of <name>
+Laik_KVNode* laik_kv_newNode(char* name, Laik_KVNode* parent, Laik_KValue* v);
+Laik_KVNode* laik_kv_getNode(Laik_KVNode* n, char* path, bool create);
+Laik_KValue* laik_kv_setValue(Laik_KVNode* n,
+                              char* path, int count, int size, void* value);
+int laik_kv_getPathLen(Laik_KVNode* n);
+char* laik_kv_getPath(Laik_KVNode* n);
+// return the value attached to node reachable by <path> from <n>
+Laik_KValue* laik_kv_value(Laik_KVNode* n, char* path);
+// iterate over all children of a node <n>, use 0 for <prev> to get first
+Laik_KVNode* laik_kv_next(Laik_KVNode* n, Laik_KVNode* prev);
+// number of children
+int laik_kv_count(Laik_KVNode* n);
+// remove child with key, return false if not found
+bool laik_kv_remove(Laik_KVNode*n, char* path);
+// synchronize KV store
+void laik_kv_sync(Laik_Instance* inst);
+
+
 
 #endif // _LAIK_CORE_INTERNAL_H_

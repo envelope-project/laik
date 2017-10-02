@@ -26,14 +26,18 @@
 struct _Laik_Backend {
   char* name;
   void (*finalize)(Laik_Instance*);
+
+  // execute a transition from mapping in <from> to <to>
   void (*execTransition)(Laik_Data*, Laik_Transition*,
                          Laik_MappingList* from, Laik_MappingList* to);
 
   // update backend specific data for group if needed
   void (*updateGroup)(Laik_Group*);
 
+  // sync of key-value store
+  void (*globalSync)(Laik_Instance*);
+
   // TODO: async interface: start sending / register receiving / probe
 };
-
 
 #endif // _LAIK_BACKEND_H_
