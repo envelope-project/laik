@@ -99,6 +99,7 @@ cfile.write("DEFS=" + defs + "\n")
 cfile.write("SUBDIRS=" + subdirs + "\n")
 cfile.write("TEST_SUBDIRS=" + test_subdirs + "\n")
 if cc:
+    print("Setting compiler to '" + cc + "' as requested.")
     cfile.write("CC=" + cc + "\n")
 if mpicc:
     cfile.write("MPICC=" + mpicc + "\n")

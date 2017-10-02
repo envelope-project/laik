@@ -87,8 +87,8 @@ before_install:
   - if [ -n "$RUNCLANGTIDY" ]; then cd ..; fi
 
 script:
-  - ./configure
-  - CC=$COMPILERC OMPI_CC=$COMPILERC make
+  - CC=$COMPILERC ./configure
+  - OMPI_CC=$COMPILERC make
   - make test
   - if [ -n "$RUNCLANGTIDY" ]; then make clean; fi
   - if [ -n "$RUNCLANGTIDY" ]; then CC=$COMPILERC OMPI_CC=$COMPILERC bear make test; fi
