@@ -30,10 +30,10 @@ LAIKLIB = liblaik.so
 all: $(LAIKLIB) $(SUBDIRS)
 
 external/MQTT: $(LAIKLIB)
-	cd external/MQTT && $(MAKE) CC=$(CC)
+	cd external/MQTT && $(MAKE)
 
 external/simple: $(LAIKLIB)
-	cd external/simple && $(MAKE) CC=gcc
+	cd external/simple && $(MAKE)
 
 src/backend-mpi.o: src/backend-mpi.c
 	$(MPICC) $(CFLAGS) -c -o src/backend-mpi.o src/backend-mpi.c

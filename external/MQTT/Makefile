@@ -6,11 +6,16 @@
 # (C) 2017 LRR, Technische Universitaet Muenchen
 #
 
-CC= cc
+CC=cc
+OPT=-g
+
+# pull in global config: CC, OPT, DEFS
+-include ../../Makefile.config
+
+CFLAGS = -std=gnu99 -I../../include -fPIC -Wall -Wextra
+CFLAGS += $(OPT) $(DEFS) -MMD -MP
+
 #PROTOCC= protoc-c
-CXX= c++
-FLAGS= -std=gnu99
-CFLAGS= -fPIC -Wall -g -Wextra -ggdb3 -I../../include
 #LDFLAGS= -lprotobuf-c -lmosquitto -luuid -shared
 LDFLAGS= -lmosquitto -shared
 DEBUGFLAGS= -O0 -D DEBUG

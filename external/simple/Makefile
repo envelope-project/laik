@@ -7,12 +7,17 @@
 #
 
 CC= cc
-CXX= c++
-FLAGS= -std=gnu99
-CFLAGS= -fPIC -Wall -g -Wextra -ggdb3 -I../../include
+OPT=-g
+
+# pull in global config: CC, OPT, DEFS
+-include ../../Makefile.config
+
+CFLAGS = -std=gnu99 -I../../include -fPIC -Wall -Wextra
+CFLAGS += $(OPT) $(DEFS) -MMD -MP
+
 LDFLAGS= -shared
 DEBUGFLAGS= -O0 -D DEBUG
-RELEASEFLAGS= -O3 -D NDEBUG -combine -fwhole-program 
+RELEASEFLAGS= -O3 -D NDEBUG -combine -fwhole-program
 
 
 TARGET  = libsimpleagent.so
@@ -26,7 +31,7 @@ BINDIR = $(PREFIX)/bin
 all:  $(TARGET)
 
 $(TARGET): $(OBJECTS)
-	$(CC) $(FLAGS) $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) $(INC) -o $(TARGET) $(OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(DEBUGFLAGS) $(INC) -o $(TARGET) $(OBJECTS)
 
 clean:
 	rm -f *.o
