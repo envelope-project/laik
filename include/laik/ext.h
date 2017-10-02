@@ -1,6 +1,7 @@
 /*
  * This file is part of the LAIK parallel container library.
  * Copyright (c) 2017 Josef Weidendorfer
+ *               2017 Dai Yang
  *
  * LAIK is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -39,7 +40,7 @@ struct _Laik_RepartitionControl {
     int num_agents;
 };
 
-void laik_ext_loadagent (Laik_Instance*, void* , bool, int, char**);
+void laik_ext_loadagent(Laik_Instance*, void* , bool, int, char**);
 void laik_ext_cleanup(Laik_Instance*);
 void laik_ext_init(Laik_Instance*);
 void laik_get_failed(Laik_Instance*, int*, int**, int);

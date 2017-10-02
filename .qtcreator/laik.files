@@ -25,7 +25,6 @@
 ../include/laik-internal.h
 ../include/laik-backend-single.h
 ../include/laik-backend-mpi.h
-../include/laik-ext.h
 
 ../include/laik/backend.h
 ../include/laik/core.h
@@ -37,6 +36,7 @@
 ../include/laik/data-internal.h
 ../include/laik/space.h
 ../include/laik/space-internal.h
+../include/laik/ext.h
 
 ../examples/Makefile
 ../examples/.gitignore
