@@ -132,7 +132,7 @@ typedef void (*add_counter) (int);
 typedef int (*peek) (void);
 typedef void (*op) (void);
 typedef void (*get_all_counters) (int* time, counter_kvp_t*);
-typedef long (*gettime) (void);
+typedef double (*gettime) (void);
 
 /* -------------- DATASTRUCTURES -------------- */
 
