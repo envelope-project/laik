@@ -900,9 +900,6 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     (pr->run)(pr, ba, otherBA);
     updateBorderArrayOffsets(ba);
 
-    if (!coversSpace(ba))
-        laik_log(LAIK_LL_Panic, "borders do not cover space");
-
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
                         pr->name, g->gid, g->myid, space->name);
@@ -912,6 +909,9 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
         laik_log_BorderArray(ba);
         laik_log_flush(0);
     }
+
+    if (!coversSpace(ba))
+        laik_log(LAIK_LL_Panic, "borders do not cover space");
 
     return ba;
 }
