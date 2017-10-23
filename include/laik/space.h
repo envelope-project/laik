@@ -177,6 +177,11 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 // number of indexes in the slice
 uint64_t laik_slice_size(int dims, Laik_Slice* s);
 
+// get the index slice covered by the space
+const Laik_Slice* laik_space_getslice(Laik_Space* space);
+
+// get the number of dimensions if this is a regular space
+int laik_space_getdimensions(Laik_Space* space);
 
 //
 // LAIK partitioners
@@ -198,6 +203,7 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
                                        laik_run_partitioner_t f, void* d);
 
 // to be used by implementations of partitioners
+
 // the <tag> is a hint for the data layer: if >0, slices with same tag go
 //  into same mapping.
 // the <data> pointer is an arbitrary value which can be passed from
@@ -205,6 +211,16 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 //  LAIK provided partitioners set <data> to 0.
 Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
                                   int tag, void* data);
+
+Laik_Space* laik_borderarray_getspace(Laik_BorderArray* ba);
+Laik_Group* laik_borderarray_getgroup(Laik_BorderArray* ba);
+int laik_borderarray_getcount(Laik_BorderArray* ba);
+Laik_TaskSlice* laik_borderarray_get_tslice(Laik_BorderArray* ba, int n);
+const Laik_Slice* laik_taskslice_getslice(Laik_TaskSlice* ts);
+int laik_taskslice_gettask(Laik_TaskSlice* ts);
+
+// get a custom data pointer from the partitioner
+void* laik_partitioner_data(Laik_Partitioner* partitioner);
 
 // Partitioners provided by LAIK
 

@@ -171,6 +171,17 @@ uint64_t laik_slice_size(int dims, Laik_Slice* s)
     return size;
 }
 
+// get the index slice covered by the space
+const Laik_Slice* laik_space_getslice(Laik_Space* space)
+{
+    return &(space->s);
+}
+
+// get the number of dimensions if this is a regular space
+int laik_space_getdimensions(Laik_Space* space)
+{
+    return space->dims;
+}
 
 
 // is this a reduction?
@@ -395,6 +406,44 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
 
     return ts;
 }
+
+Laik_Space* laik_borderarray_getspace(Laik_BorderArray* ba)
+{
+    return ba->space;
+}
+
+Laik_Group* laik_borderarray_getgroup(Laik_BorderArray* ba)
+{
+    return ba->group;
+}
+
+int laik_borderarray_getcount(Laik_BorderArray* ba)
+{
+    return ba->count;
+}
+
+Laik_TaskSlice* laik_borderarray_get_tslice(Laik_BorderArray* ba, int n)
+{
+    assert(n < ba->count);
+    return &(ba->tslice[n]);
+}
+
+const Laik_Slice* laik_taskslice_getslice(Laik_TaskSlice* ts)
+{
+    return &(ts->s);
+}
+
+int laik_taskslice_gettask(Laik_TaskSlice* ts)
+{
+    return ts->task;
+}
+
+// get a custom data pointer from the partitioner
+void* laik_partitioner_data(Laik_Partitioner* partitioner)
+{
+    return partitioner->data;
+}
+
 
 // sort function, called after partitioner run
 static
@@ -895,7 +944,9 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     ba = laik_allocBorders(g, space, 4 * g->size);
     if (otherBA) {
         assert(otherBA->group == g);
-        assert(otherBA->space == space);
+        // we do not check for same space, as there are use cases
+        // where you want to derive a partitioning of one space from
+        // the partitioning of another
     }
     (pr->run)(pr, ba, otherBA);
     updateBorderArrayOffsets(ba);
