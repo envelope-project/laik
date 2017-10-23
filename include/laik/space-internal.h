@@ -53,14 +53,7 @@ struct _Laik_Partitioner {
     laik_run_partitioner_t run;
 };
 
-// to be used by implementations of partitioners
-// the <tag> is a hint for the data layer: if >0, slices with same tag go
-//  into same mapping.
-// the <data> pointer is an arbitrary value which can be passed from
-//  application-specific partitioners to the code processing slices.
-//  LAIK provided partitioners set <data> to 0.
-Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
-                                  int tag, void* data);
+
 
 
 // the output of a partitioner is a Laik_BorderArray
