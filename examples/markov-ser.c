@@ -21,14 +21,26 @@
 #include <stdlib.h>
 #include <malloc.h>
 
+typedef struct _MGraph {
+    int n;   // number of states
+    int in;  // fan-in
+    int* cm; // connectivity
+    double* pm; // probabilities
+} MGraph;
+
 // Produce a graph with <n> nodes and some arbitrary connectivity
 // with a fan-in <in>. The resulting graph will be stored in
 // <cm>[i,c], which is a <n> * (<in> +1) matrix storing the incoming nodes
 // of node i in row i, using columns 1 .. <in> (column 0 is set to i).
 // <pm>[i,j] is initialized with the probability of the transition
 // from node <cm>[i,j] to node i, with cm[i,0] the prob for staying.
-void init(int n, int in, int* cm, double* pm)
+void init(MGraph* mg)
 {
+    int n = mg->n;
+    int in = mg->in;
+    int* cm = mg->cm;
+    double* pm = mg->pm;
+
     // for normalization of probabilites
     double* sum = malloc(n * sizeof(double));
     for(int i=0; i < n; i++) sum[i] = 0.0;
@@ -56,8 +68,13 @@ void init(int n, int in, int* cm, double* pm)
     }
 }
 
-void print(int n, int in, int* cm, double* pm)
+void print(MGraph* mg)
 {
+    int n = mg->n;
+    int in = mg->in;
+    int* cm = mg->cm;
+    double* pm = mg->pm;
+
     for(int i = 0; i < n; i++) {
         printf("State %2d: stay %.3f ", i, pm[i * (in + 1)]);
         for(int j = 1; j <= in; j++)
@@ -67,9 +84,15 @@ void print(int n, int in, int* cm, double* pm)
     }
 }
 
-double* run(int n, int in, int* cm, double* pm,
+// iteratively calculate probability distribution
+double* run(MGraph* mg,
             int miter, double* v1, double* v2)
 {
+    int n = mg->n;
+    int in = mg->in;
+    int* cm = mg->cm;
+    double* pm = mg->pm;
+
     double* src = v1;
     double* dest = v2;
     for(int iter = 0; iter < miter; iter++) {
@@ -115,14 +138,17 @@ void main(int argc, char* argv[])
     if (in == 0) in = 10;
 
     printf("Init Markov chain with %d states, max fan-in %d\n", n, in);
+    printf("Run %d iterations each.\n", miter);
 
-    int*    cm = malloc(n * (in + 1) * sizeof(int));
-    double* pm = malloc(n * (in + 1) * sizeof(double));
+    MGraph mg;
+    mg.n = n;
+    mg.in = in;
+    mg.cm = malloc(n * (in + 1) * sizeof(int));
+    mg.pm = malloc(n * (in + 1) * sizeof(double));
 
-    init(n, in, cm, pm);
-    if (doPrint) print(n, in, cm, pm);
+    init(&mg);
+    if (doPrint) print(&mg);
 
-    // iteratively calculate probablity distribution
     double* v1 = malloc(n * sizeof(double));
     double* v2 = malloc(n * sizeof(double));
     for(int i = 0; i < n; i++) {
@@ -130,19 +156,17 @@ void main(int argc, char* argv[])
         v2[i] = 0.0;
     }
 
-    printf("Run %d iterations each.\n", miter);
-
     printf("Start with state 0 prob 1 ...\n");
     v1[0] = 1.0;
-    run(n, in, cm, pm, miter, v1, v2);
+    run(&mg, miter, v1, v2);
 
     printf("Start with state 1 prob 1 ...\n");
     for(int i = 0; i < n; i++) v1[i] = 0.0;
     v1[1] = 1.0;
-    run(n, in, cm, pm, miter, v1, v2);
+    run(&mg, miter, v1, v2);
 
     printf("Start with all probs equal ...\n");
     double p = 1.0 / n;
     for(int i = 0; i < n; i++) v1[i] = p;
-    run(n, in, cm, pm, miter, v1, v2);
+    run(&mg, miter, v1, v2);
 }
