@@ -1,4 +1,4 @@
-EXAMPLES = vsum vsum2 spmv spmv2 jac1d jac2d jac2d-ser jac3d
+EXAMPLES = vsum vsum2 spmv spmv2 jac1d jac2d jac2d-ser jac3d markov-ser
 
 OPT = -g
 
