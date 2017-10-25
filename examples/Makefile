@@ -1,4 +1,6 @@
-EXAMPLES = vsum vsum2 spmv spmv2 jac1d jac2d jac2d-ser jac3d markov-ser
+EXAMPLES = vsum vsum2 spmv spmv2 \
+    jac1d jac2d jac2d-ser jac3d \
+    markov-ser markov
 
 OPT = -g
 
@@ -29,6 +31,9 @@ jac2d: jac2d.c $(LAIKLIB)
 
 jac3d: jac3d.c $(LAIKLIB)
 	$(CC) $(CFLAGS) $(OMP_FLAGS) jac3d.c $(LAIKLIB) -o jac3d
+
+markov: markov.o $(LAIKLIB)
+	$(CC) $(CFLAGS) markov.o $(LAIKLIB) -o markov
 
 clean:
 	rm -f *.o *~ $(EXAMPLES)

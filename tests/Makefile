@@ -2,7 +2,8 @@ TESTS= \
     test-vsum test-vsum-log test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
     test-jac1d test-jac1d-repart \
-    test-jac2d test-jac3d
+    test-jac2d test-jac3d \
+    test-markov
 
 -include ../Makefile.config
 
@@ -52,6 +53,10 @@ test-jac2d:
 test-jac3d:
 	../examples/jac3d 100 > test-jac3d-100.out
 	cmp test-jac3d-100.out test-jac3d-100.expected
+
+test-markov:
+	../examples/markov 20 4 > test-markov-20-4.out
+	cmp test-markov-20-4.out test-markov-20-4.expected
 
 clean:
 	rm -rf *.out

@@ -49,6 +49,7 @@
 ../examples/jac2d-ser.c
 ../examples/jac3d.c
 ../examples/markov-ser.c
+../examples/markov.c
 
 ../tests/Makefile
 ../tests/.gitignore

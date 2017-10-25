@@ -6,7 +6,8 @@ TESTS= \
     test-spmv2-shrink test-spmv2-shrink-inc \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d \
-    test-jac2d-noc test-jac3d-noc
+    test-jac2d-noc test-jac3d-noc \
+    test-markov
 
 .PHONY: $(TESTS)
 
@@ -63,6 +64,11 @@ test-jac3d:
 test-jac3d-noc:
 	mpirun -np 4 ../../examples/jac3d -n 100 | sort > test-jac3dn-100.out
 	cmp test-jac3dn-100.out test-jac3dn-100.expected
+
+test-markov:
+	mpirun -np 4 ../../examples/markov 40 4 | sort > test-markov-40-4.out
+	cmp test-markov-40-4.out test-markov-40-4.expected
+
 
 clean:
 	rm -rf *.out
