@@ -123,7 +123,7 @@ double* run(MGraph* mg,
     return src;
 }
 
-void main(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
     int n = 1000000;
     int in = 10;
@@ -169,4 +169,6 @@ void main(int argc, char* argv[])
     double p = 1.0 / n;
     for(int i = 0; i < n; i++) v1[i] = p;
     run(&mg, miter, v1, v2);
+
+    return 0;
 }
