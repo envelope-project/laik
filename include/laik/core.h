@@ -44,27 +44,27 @@ typedef struct _Laik_Group Laik_Group;
 Laik_Instance* laik_new_instance(Laik_Backend* b, int size, int myid,
                                  char* location, void* data);
 
-// shut down communication and free resources of this instance
+//! shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance*inst);
 
-// return a backend-dependant string for the location of the calling task
+//! return a backend-dependant string for the location of the calling task
 char* laik_mylocation(Laik_Instance*);
 
-// create a group to be used in this LAIK instance
+//! create a group to be used in this LAIK instance
 Laik_Group* laik_create_group(Laik_Instance*);
 
-// get default group with all tasks within this LAIK instance
+//! get default group with all tasks within this LAIK instance
 Laik_Group* laik_world(Laik_Instance* i);
 
-// return number of LAIK tasks available (within this instance)
+//! return number of LAIK tasks available (within this instance)
 int laik_size(Laik_Group*);
 
-// return my task id in group <g>. By default, the group master
+//! return my task id in group <g>. By default, the group master
 // has task ID 0, which can be changed.
 // Warning: on every shrinking/enlarging, task IDs may change!
 int laik_myid(Laik_Group*);
 
-// create a clone of <g>, derived from <g>.
+//! create a clone of <g>, derived from <g>.
 Laik_Group* laik_clone_group(Laik_Group* g);
 
 // TODO: API for...
@@ -76,19 +76,19 @@ Laik_Group* laik_clone_group(Laik_Group* g);
 // groups derived from this group also get shrinked.
 // On shrinking, task IDs may change.
 
-// Returns shrinked group, by removing the <len> tasks in <list>
+//! Returns shrinked group, by removing the <len> tasks in <list>
 Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
 
-// Enlarging controlled by master in a group (collective)
+//! Enlarging controlled by master in a group (collective)
 bool laik_enlarge_group(Laik_Group* g, int len, char** list);
 
 // change the master to task <id>. Return if successful
 bool laik_set_master(Laik_Group* g, int id);
 
-// get the ID if the master task in this group
+//! get the ID if the master task in this group
 int laik_get_master(Laik_Group* g);
 
-// return true if I am master
+//! return true if I am master
 bool laik_is_master(Laik_Group* g);
 
 // Return true if own process is managed by LAIK instance
@@ -115,7 +115,7 @@ double laik_get_backend_time();
 /* Core LAIK API: Logging
  *********************************************************************/
 
-// Log levels control whether a log message should be shown to user.
+//! Log levels control whether a log message should be shown to user.
 // Default is to only show Error/Panic messages.
 // Set environment variable LAIK_LOG to minimum level (integer) to see.
 typedef enum _Laik_LogLevel {
