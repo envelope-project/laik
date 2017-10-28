@@ -33,7 +33,7 @@ int main() {
     // update v1 cells from v2
     for(y = 1; y < SIZE-1; y++)
       for(x = 1; x < SIZE-1; x++)
-        v2[y][x] = .25 * (v1[y-1][x] + ...);
+        v1[y][x] = .25 * (v2[y-1][x] + ...);
   }
 
   // print solution
@@ -42,22 +42,22 @@ int main() {
 
 ## Parallelization Approach
 
-We note that there is no dependency between updates of cell values in one iteration. Thus, we traversal over all cells could be done in any order. Thus, to parallelize the updates of one iteration, we can distribute all cells of v1 (and v2) among the parallel tasks, which only then do the updates on the cells they "own". To balance the work load, every task has to own the same number of nodes.
+We note that there is no dependency between updates of cell values in one iteration. Thus, we traversal over all cells could be done in any order. Thus, to parallelize the updates of one iteration, we can distribute all cells of v1 (and v2) among the parallel tasks, which only then do the updates on the cells they _own_. To balance the work load, every task has to own the same number of nodes.
 
 For example, with `SIZE = 100` and 4 tasks, we can split the matrix into 4 quadrants, each having a size of `49x49` (with fixed boundaries, only the inner part of size `98x98` has to be updated).
 
-To actually do the updates, we need the values of neighboring cells. That means that for a task responsible for updating the cells within a given rectangle `(x1/y1)-(x2/y2)`, we need values from a so-called halo region with depth 1 around the "owned" rectangle. Assuming each task to use its own memory, with a message passing programming model (eg. MPI), after each update, communication needs to be done to update the halo regions (if the rectangle of cells assigned to a task touches the fixed boundary, of course, no communication needs to be done for this edge).
+To actually do the updates, we need the values of neighboring cells. That means that for a task responsible for updating the cells within a given rectangle `(x1/y1)-(x2/y2)`, we need values from a so-called halo region with depth 1 around the _owned_ rectangle. Assuming each task to use its own memory, with a message passing programming model (eg. MPI), after each update, communication needs to be done to update the halo regions (if the rectangle of cells assigned to a task touches the fixed boundary, of course, no communication needs to be done for this edge).
 
 
 ## Parallelization with LAIK
 
-LAIK programs follow the SPMD (Single Program Multiple Data) style, similar to MPI. That is, your program is launched multiple times as separate processes, eventually on different machines. A program start procedure depending on the communication backend (e.g. `mpirun` if LAIK uses MPI behind the scenes) and a call for LAIK initialization in the code together form the initial LAIK task group we call the world group. During execution, this world group may shrink and expand.
+LAIK programs follow the SPMD (Single Program Multiple Data) style, similar to MPI. That is, your program is launched multiple times as separate processes, eventually on different machines. A program start procedure depending on the communication backend (e.g. `mpirun` if LAIK uses MPI) and the LAIK initialization in the code together form the initial LAIK task group called the _world_ group. During execution, this world group may shrink and expand.
 
 With LAIK, a programmer first has to decribe the parallel program in terms of used data structures and how they are accessed within access phases. Afterwards, the program switches between theses phases, and LAIK makes sure that data for computation is locally available as declared before.
 
 ### Initialization
 
-LAIK relies on so-called "communication backends" to do any communication or synchronization as needed among LAIK tasks. Multiple communication backends can be used at the same time assigned to different active LAIK instances. First, we need to initialize a LAIK instance coupled to a given backend, eg. MPI (if you already called `MPI_Init`, this is not done by passing `(0,0)` as arguments to `laik_init_mpi`). We also ask LAIK for the `world` object representing all tasks available to this instance. 
+LAIK relies on so-called _communication backends_ to do any communication or synchronization as needed among tasks. Multiple communication backends can be used at the same time assigned to different active LAIK _instances_. First, we need to initialize a LAIK instance coupled to a given backend, eg. MPI (if you already called `MPI_Init`, this is skipped by `laik_init_mpi` when passing `(0,0)` as parameters). We also ask LAIK for the `world` object representing all tasks available to this instance. 
 
 ```C
 #include "laik-mpi.h"
@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
   ...
 ```
 
-If we would use MPI, we would explicitly specify the partitioning of matrix cells to each MPI task. With LAIK, we give away the concern of partitioning of data among tasks to LAIK. This allows LAIK to do a re-partitioning whenever there is a request to shrink or enlarge the number of tasks, which is the single purpose of LAIK (enlarging means creating new processes by starting new instances of your program; you can ask a LAIK instance for a program phase counter, and directly jump to the corresponding code after initialization; we show this later).
+If we would use MPI directly, we would explicitly have to specify the partitioning of matrix cells to each MPI task. With LAIK, we give away the concern of how to partition data between tasks to LAIK. This allows LAIK to do a re-partitioning whenever there is a request to shrink or enlarge the number of tasks, which is the single purpose of LAIK (enlarging means creating new processes by starting new instances of your program; you can ask a LAIK instance for a program phase counter, and directly jump to the corresponding code after initialization).
 
 ### Index Spaces and Data Management
 
