@@ -125,6 +125,7 @@ Now that you know the basic structure of LAIK programs, you can read about
 The latter is important for any more complex application, as resulting partitionings actually describe the indexes (and corresponding data) which need to be locally available in different phases, as well as implicitly contain the knowledge about work load resulting from different partition sizes. Both is usually specific to each application.
 
 More advanced topics:
+
 * more complex data binding to indexes
 * defining your own data layout mapping indexes to 1d memory address space
 * enabling asynchronous computation and communication
