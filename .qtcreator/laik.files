@@ -5,8 +5,10 @@
 ../README.md
 ../TODO.md
 
+../doc/index.md
 ../doc/TODO.md
 ../doc/Debugging.md
+../doc/tutorial-jacobi2d.md
 ../doc/design/Mapping.md
 
 ../src/backend.c
