@@ -1,6 +1,6 @@
 # Jacobi 2D Example
 
-In this tutorial, we will look at how a simple iterative solver for solving the Poisson equation on a regular 2d quadratic discretized domain is parallelized with LAIK. C is used as programming language.
+In this tutorial, we will look at how a simple iterative solver for solving the Poisson equation on a regular 2d square discretized domain is parallelized with LAIK. The programming language C is used.
 
 ## Sequential Version
 
@@ -49,7 +49,7 @@ For example, with `SIZE = 100` and 4 tasks, we can split the matrix into 4 quadr
 To actually do the updates, we need the values of neighboring cells. That means that for a task responsible for updating the cells within a given rectangle `(x1/y1)-(x2/y2)`, we need values from a so-called halo region with depth 1 around the _owned_ rectangle. Assuming each task to use its own memory, with a message passing programming model (eg. MPI), after each update, communication needs to be done to update the halo regions (if the rectangle of cells assigned to a task touches the fixed boundary, of course, no communication needs to be done for this edge).
 
 
-## Parallelization with LAIK
+## Basic Parallelization with LAIK
 
 LAIK programs follow the SPMD (Single Program Multiple Data) style, similar to MPI. That is, your program is launched multiple times as separate processes, eventually on different machines. A program start procedure depending on the communication backend (e.g. `mpirun` if LAIK uses MPI) and the LAIK initialization in the code together form the initial LAIK task group called the _world_ group. During execution, this world group may shrink and expand.
 
@@ -87,8 +87,33 @@ space = laik_new_space_2d(inst, SIZE, SIZE);
 We can use LAIK by just working with index spaces and do the management of memory resources for our data structures on our own. However, here we show how to ask LAIK to do the allocation of v1 and v2 for us. Each index space should be coupled with a `double` value:
 
 ```C
-Bla
+Laik_Data* data1 = laik_new_data(world, space, laik_Double);
+Laik_Data* data2 = laik_new_data(world, space, laik_Double);
 ```
+
+### Partitionings
+
+The most important concept of LAIK are partitionings. By changing a partitioning, LAIK can influence the application.
+For 2d Jacobi, there are two partitionings of interest, distributing our two matrices `v1` and `v2` among tasks:
+
+* the partitioning `pWrite` should specify the task ownership of indexes in the index space. That it, is tells which task is responsible for updating a cell. This must be a disjunctive partitioning covering the complete space, ie. each index has exactly one owning task. For performance reasons, it makes sense to group indexes owned by one task into rectangles covering consecutive cells in both dimensions. The actual calculcation of the partitioning is left to a partitioner algorithm.
+
+* the partitioning `pRead` should describe which cell values need to be locally available for a task when updating its owned cell values as given by `pWrite`. To this end, `pRead` extends `pWrite` partitions to allow reading neighbor values. This only matters for cells at the boundary of `pWrite` partitions, and results in halo borders around the rectangle-shaped partitions of `pWrite`. We note that this partitioning has overlapping partitions: the same index may be needed by multiple tasks.
+
+The partitionings are declared with this code:
+
+```C
+    Laik_Partitioning *pWrite, *pRead;
+    pWrite = laik_new_partitioning(world, space,
+                                  laik_new_bisection_partitioner(), 0);
+    pRead = laik_new_partitioning(world, space,
+                                  laik_new_halo_partitioner(1), pWrite);
+```
+
+Todo: describe parameters used...
+
+Now, within an interation, we declare the matrix that should be updated in this iteration to use the `pWrite` partitioning, and the other matrix to use `pRead`. We swap this partitionings after each iteration.
+
 
 ### Program Phases and Data Flows
 
@@ -101,6 +126,18 @@ Bla
 ### Putting it All Together
 
 Bla
+
+## Advanced Functionality with LAIK
+
+Up to now, our code uses LAIK containers and this way, it can make use of communication triggered by LAIK at partitioning changes. However, apart from slightly less lines of code in contrast to using MPI, there is not yet a direct benefit from using LAIK.
+
+### Adding Support for Task Expansion
+
+Todo
+
+### Memory Affinitiy within LAIK Tasks
+
+Todo
 
 ## Summary
 
