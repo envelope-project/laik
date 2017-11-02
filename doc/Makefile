@@ -1,14 +1,28 @@
-# Create HTML/PDF from Markdown documentation via pandoc
+# Create documentation from Markdown files via pandoc.
+# For doxygen documentation, just run 'doxygen'
+#
+# Supported formats:
+#
+# make html
+#   make a set of HTML files
+#
+# make onehtml
+#   create one big HTML file: doc.html
+#
+# make pdf
+#   create doc.pdf
 
 SRCS = index.md tutorial-jacobi2d.md Debugging.md TODO.md
 
 html: $(SRCS:.md=.html)
 
+onehtml: doc.html
+
 %.html: %.md
 	sed 's/.md/.html/' $< | pandoc -o $@
 
 pdf: $(SRCS)
-	pandoc -N -o doc.pdf -t html5 $(SRCS)
+	sed 's/(.*\.md#/(#/' $(SRCS) | pandoc -o doc.html
 
 doc.html: $(SRCS)
     # assume all links use anchors
