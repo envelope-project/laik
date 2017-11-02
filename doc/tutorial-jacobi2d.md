@@ -49,7 +49,7 @@ For example, with `SIZE = 100` and 4 tasks, we can split the matrix into 4 quadr
 To actually do the updates, we need the values of neighboring cells. That means that for a task responsible for updating the cells within a given rectangle `(x1/y1)-(x2/y2)`, we need values from a so-called halo region with depth 1 around the _owned_ rectangle. Assuming each task to use its own memory, with a message passing programming model (eg. MPI), after each update, communication needs to be done to update the halo regions (if the rectangle of cells assigned to a task touches the fixed boundary, of course, no communication needs to be done for this edge).
 
 
-## Basic Parallelization with LAIK
+## Parallelization with LAIK
 
 LAIK programs follow the SPMD (Single Program Multiple Data) style, similar to MPI. That is, your program is launched multiple times as separate processes, eventually on different machines. A program start procedure depending on the communication backend (e.g. `mpirun` if LAIK uses MPI) and the LAIK initialization in the code together form the initial LAIK task group called the _world_ group. During execution, this world group may shrink and expand.
 
@@ -123,7 +123,7 @@ The programmer must make LAIK aware of program phases, where a phase has a speci
 Bla
 ```
 
-### Putting it All Together
+### Putting it Together
 
 Bla
 

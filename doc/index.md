@@ -6,7 +6,9 @@ Warning: this is work in progress, and the API is not stable yet.
 
 ## Tutorials
 
-* [2d Jacobi](tutorial-jacobi2d.md)
+* [2d Jacobi](tutorial-jacobi2d.md#jacobi-2d-example)
+    * [Original sequential version](tutorial-jacobi2d.md#sequential-version)
+    * [LAIK version](tutorial-jacobi2d.md#putting-it-together)
 * Distributed Graph Algorithm
 
 ## Detailed Topics
