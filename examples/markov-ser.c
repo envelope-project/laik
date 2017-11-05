@@ -20,9 +20,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#ifndef __APPLE__
-#include <malloc.h>
-#endif
 
 typedef struct _MGraph {
     int n;   // number of states

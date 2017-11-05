@@ -26,9 +26,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#ifndef __APPLE__
-#include <malloc.h>
-#endif
 #include <assert.h>
 
 typedef struct _MGraph {
