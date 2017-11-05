@@ -10,6 +10,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 // counter for space ID, just for debugging
 static int space_id = 0;
 
@@ -407,6 +410,49 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
     return ts;
 }
 
+void laik_remove_slice(Laik_BorderArray* ba, int task, int index){
+
+    assert (ba->space->dims == 1); // not yet implemented for higher dimensions
+    assert((task >= 0) && (task < ba->group->size));
+    assert(index < ba->count);
+
+    for(int i = index; i < ba->count - 1; i++) 
+    {
+        ba->tslice[i] = ba->tslice[i + 1];
+    }    
+
+    ba->count--;
+
+}
+
+// TODO extend for 2d and 3d
+bool laik_are_slices_mergeable(Laik_Slice* s1, Laik_Slice* s2)
+{
+
+    if (s1->from.i[0] <= s2->from.i[0] && s2->from.i[0] <= s1->to.i[0])
+    {
+        return true;
+    }else if (s2->from.i[0] <= s1->from.i[0] && s1->from.i[0] <= s2->to.i[0])
+    {
+        return true;
+    }
+
+    return false;
+
+}
+
+void laik_merge_slices(Laik_Slice* s1, Laik_Slice* s2, Laik_BorderArray* ba, int task, int index)
+{
+
+    assert (ba->space->dims = 1); // not yet implemented for higher dimensions
+
+    s1->from.i[0] = MIN ( s1->from.i[0] , s2->from.i[0] );
+    s1->to.i[0] = MAX ( s1->to.i[0] , s2->to.i[0] );
+    laik_remove_slice(ba,task,index);
+
+    return; 
+}
+
 Laik_Space* laik_borderarray_getspace(Laik_BorderArray* ba)
 {
     return ba->space;
@@ -444,6 +490,49 @@ void* laik_partitioner_data(Laik_Partitioner* partitioner)
     return partitioner->data;
 }
 
+//TODO extend to 2d and 3d
+static
+void removeBorderArrayMergeSlices (Laik_BorderArray* ba)
+{
+    laik_log(2,"number of slices in ba before merging: %d\n", ba->count);
+    if (ba->space->dims !=1)
+    {
+        return;
+    }
+
+    for(int i = 0; i < laik_borderarray_getcount(ba); i++) {
+
+        Laik_TaskSlice* ts1 = laik_borderarray_get_tslice(ba, i);
+        const Laik_Slice* s1 = laik_taskslice_getslice(ts1);
+        int task1 = laik_taskslice_gettask(ts1);
+
+        for(int j = i+1; j < laik_borderarray_getcount(ba); j++) {
+            Laik_TaskSlice* ts2 = laik_borderarray_get_tslice(ba, j);
+            const Laik_Slice* s2 = laik_taskslice_getslice(ts2);
+            int task2 = laik_taskslice_gettask(ts2);
+
+            if (laik_slice_intersect (1, s1, s2) && task1==task2)
+            {
+                if (laik_are_slices_mergeable(s1,s2))
+                {
+                    laik_log(2,"slices %d and %d are mergeable.\n", i, j);
+                    laik_merge_slices(s1,s2,ba,task2,j);
+                }
+
+                // merge them and create a new slice and append it
+                // for the case of lulesh, we just remove one extra slide
+                //laik_remove_slice(ba,task2,j);
+
+
+                laik_log(2,"task %d, slice %d, from:%d, to:%d\n", task1, i, s1->from.i[0], s1->to.i[0] );
+                laik_log(2,"task %d, slice %d, from:%d, to:%d\n\n", task2, j, s2->from.i[0], s2->to.i[0] );
+                
+            }
+        }
+    }
+    laik_log(2,"number of slices in ba after merging: %d\n", ba->count);
+
+}
 
 // sort function, called after partitioner run
 static
@@ -466,6 +555,8 @@ int ts_cmp(const void *p1, const void *p2)
 static
 void updateBorderArrayOffsets(Laik_BorderArray* ba)
 {
+    removeBorderArrayMergeSlices(ba);
+
     // make sure slices are sorted according by task IDs
     qsort( &(ba->tslice[0]), ba->count,
             sizeof(Laik_TaskSlice), ts_cmp);
