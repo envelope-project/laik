@@ -160,7 +160,7 @@ bool laik_index_isEqual(int dims, Laik_Index* i1, Laik_Index* i2);
 bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
 
 // get the intersection of 2 slices; return 0 if intersection is empty
-Laik_Slice* laik_slice_intersect(int dims, Laik_Slice* s1, Laik_Slice* s2);
+Laik_Slice* laik_slice_intersect(int dims, const Laik_Slice* s1, const Laik_Slice* s2);
 
 // expand slice <dst> such that it contains <src>
 void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src);
