@@ -542,10 +542,6 @@ int ts_cmp(const void *p1, const void *p2)
 static
 void updateBorderArrayOffsets(Laik_BorderArray* ba)
 {
-    // TODO: for now, we do slice merging only for 1d (but always)
-    if (ba->space->dims == 1)
-        removeBorderArrayMergeSlices(ba);
-
     // make sure slices are sorted according by task IDs
     qsort( &(ba->tslice[0]), ba->count,
             sizeof(Laik_TaskSlice), ts_cmp);
@@ -1031,6 +1027,10 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     (pr->run)(pr, ba, otherBA);
     updateBorderArrayOffsets(ba);
 
+    // Check for mergable slices if requested
+    if ((pr->flags & LAIK_PF_Merge) > 0)
+        removeBorderArrayMergeSlices(ba);
+
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
                         pr->name, g->gid, g->myid, space->name);
@@ -1041,8 +1041,11 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
         laik_log_flush(0);
     }
 
-    if (!coversSpace(ba))
-        laik_log(LAIK_LL_Panic, "borders do not cover space");
+    if ((pr->flags & LAIK_PF_NoFullCoverage) == 0) {
+        // by default, check if partitioning covers full space
+        if (!coversSpace(ba))
+            laik_log(LAIK_LL_Panic, "borders do not cover space");
+    }
 
     return ba;
 }

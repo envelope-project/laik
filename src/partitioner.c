@@ -25,13 +25,16 @@ void laik_space_init()
 }
 
 Laik_Partitioner* laik_new_partitioner(const char* name,
-                                       laik_run_partitioner_t f, void* d)
+                                       laik_run_partitioner_t run,
+                                       void* d,
+                                       Laik_PartitionerFlag flags)
 {
     Laik_Partitioner* pr;
     pr = malloc(sizeof(Laik_Partitioner));
 
     pr->name = name;
-    pr->run = f;
+    pr->run = run;
+    pr->flags = flags;
     pr->data = d;
 
     return pr;
@@ -55,7 +58,7 @@ void runAllPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_all_partitioner()
 {
-    return laik_new_partitioner("all", runAllPartitioner, 0);
+    return laik_new_partitioner("all", runAllPartitioner, 0, 0);
 }
 
 // master-partitioner: only task 0 has access to all indexes
@@ -69,7 +72,7 @@ void runMasterPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_master_partitioner()
 {
-    return laik_new_partitioner("master", runMasterPartitioner, 0);
+    return laik_new_partitioner("master", runMasterPartitioner, 0, 0);
 }
 
 // copy-partitioner: copy the borders from base partitioning
@@ -112,7 +115,7 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
     data->fromDim = fromDim;
     data->toDim = toDim;
 
-    return laik_new_partitioner("copy", runCopyPartitioner, data);
+    return laik_new_partitioner("copy", runCopyPartitioner, data, 0);
 }
 
 
@@ -161,7 +164,7 @@ Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth)
     *data = depth;
 
     return laik_new_partitioner("cornerhalo",
-                                runCornerHaloPartitioner, (void*) data);
+                                runCornerHaloPartitioner, data, 0);
 }
 
 
@@ -238,7 +241,7 @@ Laik_Partitioner* laik_new_halo_partitioner(int depth)
     int* data = malloc(sizeof(int));
     *data = depth;
 
-    return laik_new_partitioner("halo", runHaloPartitioner, (void*) data);
+    return laik_new_partitioner("halo", runHaloPartitioner, data, 0);
 }
 
 
@@ -296,7 +299,7 @@ void runBisectionPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_bisection_partitioner()
 {
-    return laik_new_partitioner("bisection", runBisectionPartitioner, 0);
+    return laik_new_partitioner("bisection", runBisectionPartitioner, 0, 0);
 }
 
 
@@ -431,7 +434,7 @@ Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
     data->userData = userData;
     data->getTaskW = tfunc;
 
-    return laik_new_partitioner("block", runBlockPartitioner, data);
+    return laik_new_partitioner("block", runBlockPartitioner, data, 0);
 }
 
 Laik_Partitioner* laik_new_block_partitioner1()
@@ -613,5 +616,5 @@ laik_new_reassign_partitioner(Laik_Group* newg,
     data->userData = userData;
 
     return laik_new_partitioner("reassign", runReassignPartitioner,
-                                (void*) data);
+                                data, 0);
 }

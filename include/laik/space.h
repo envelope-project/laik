@@ -187,8 +187,34 @@ int laik_space_getdimensions(Laik_Space* space);
 // LAIK partitioners
 //
 
+// Flags for partitioners
 
-// Signature for a partitioner:
+typedef enum _Laik_PartitionerFlag {
+    LAIK_PF_None = 0,
+
+    // slices with same tag are grouped into same mapping
+    // (by default, each slice gets its own mapping, with the tag not used)
+    LAIK_PF_GroupByTag = 1,
+
+    // all slices which go into same mapping are packed
+    // (by default, there is no packing, eventually with holes,
+    //  but making local-to-global index calculation easy).
+    LAIK_PF_Compact = 2,
+
+    // the partitioning intentionally does not cover the full space
+    // (by default, LAIK checks for full coverage of the index space)
+    LAIK_PF_NoFullCoverage = 4,
+
+    // the slices which go into same mapping may have overlapping indexes.
+    // This enables a slice merging algorithm
+    // (by default, we expect slices not to overlap)
+    LAIK_PF_Merge = 8,
+
+} Laik_PartitionerFlag;
+
+
+// Signature for a partitioner algorithm
+//
 // we are given a new border object without any slices yet (2st par),
 // which has to be populated with slices (calling laik_append_slice).
 // The border object specifies the group and space to run the partitioner on.
@@ -200,7 +226,8 @@ typedef void
 
 // create application-specific partitioner
 Laik_Partitioner* laik_new_partitioner(const char* name,
-                                       laik_run_partitioner_t f, void* d);
+                                       laik_run_partitioner_t run, void* d,
+                                       Laik_PartitionerFlag flags);
 
 // to be used by implementations of partitioners
 

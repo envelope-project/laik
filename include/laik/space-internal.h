@@ -49,8 +49,9 @@ void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p);
 
 struct _Laik_Partitioner {
     const char* name;
-    void* data; // partitioner specific data
     laik_run_partitioner_t run;
+    Laik_PartitionerFlag flags;
+    void* data; // partitioner specific data
 };
 
 
