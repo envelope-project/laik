@@ -220,7 +220,7 @@ int main(int argc, char* argv[])
     pWrite = laik_new_partitioning(world, space,
                                    laik_new_block_partitioner1(), 0);
     pr = laik_new_partitioner("markovin", run_markovPartitioner,
-                              &mg, 0 /*LAIK_PF_Merge*/);
+                              &mg, LAIK_PF_Merge);
     pRead = laik_new_partitioning(world, space, pr, pWrite);
     pMaster = laik_new_partitioning(world, space, laik_Master, 0);
 

@@ -1197,13 +1197,14 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
         // the partitioning of another
     }
     (pr->run)(pr, ba, otherBA);
-    updateBorderArrayOffsets(ba);
 
     // Check for mergable slices if requested
     if ((pr->flags & LAIK_PF_Merge) > 0){
         BorderArrayMergeSlices(ba);
         BorderArrayRemoveDuplicateSlices(ba);
     }
+
+    updateBorderArrayOffsets(ba);
 
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
