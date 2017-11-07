@@ -210,6 +210,10 @@ typedef enum _Laik_PartitionerFlag {
     // (by default, we expect slices not to overlap)
     LAIK_PF_Merge = 8,
 
+    // use an internal data representation optimized for single index slices.
+    // this is useful for fine-grained partitioning, requiring indirections
+    LAIK_PF_SingleIndex = 16
+
 } Laik_PartitionerFlag;
 
 

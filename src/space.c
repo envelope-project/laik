@@ -372,7 +372,8 @@ void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p)
 //-----------------------
 // Laik_BorderArray
 
-Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s)
+Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s,
+                                    bool useSingle1d)
 {
     Laik_BorderArray* a;
 
@@ -384,8 +385,13 @@ Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s)
 
     a->group = g;
     a->space = s;
-    a->capacity = 0;
     a->count = 0;
+    a->capacity = 4;
+
+    if (useSingle1d)
+        a->tss1d = malloc(sizeof(Laik_TaskSlice_Single1d) * a->capacity);
+    else
+        a->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * a->capacity);
 
     return a;
 }
@@ -396,15 +402,9 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
 {
     if (a->count == a->capacity) {
         assert(a->tss1d == 0);
-        if (a->tslice == 0) {
-            a->capacity = 4;
-            a->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * a->capacity);
-        }
-        else {
-            a->capacity = a->capacity *2;
-            a->tslice = realloc(a->tslice,
-                                sizeof(Laik_TaskSlice_Gen) * a->capacity);
-        }
+        a->capacity = a->capacity * 2;
+        a->tslice = realloc(a->tslice,
+                            sizeof(Laik_TaskSlice_Gen) * a->capacity);
     }
     assert((task >= 0) && (task < a->group->size));
     assert(laik_slice_within_space(s, a->space));
@@ -426,18 +426,21 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
 // append 1d single-index slice
 Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a, int task, uint64_t idx)
 {
+    assert(a->space->dims == 1);
+
+    if (a->tslice) {
+        // append as generic slice
+        Laik_Slice slc;
+        slc.from.i[0] = idx;
+        slc.to.i[0] = idx + 1;
+        return laik_append_slice(a, task, &slc, 1, 0);
+    }
+
     if (a->count == a->capacity) {
         assert(a->tslice == 0);
-        assert(a->space->dims == 1);
-        if (a->tss1d == 0) {
-            a->capacity = 4;
-            a->tss1d = malloc(sizeof(Laik_TaskSlice_Single1d) * a->capacity);
-        }
-        else {
-            a->capacity = a->capacity *2;
-            a->tss1d = realloc(a->tslice,
-                               sizeof(Laik_TaskSlice_Single1d) * a->capacity);
-        }
+        a->capacity = a->capacity *2;
+        a->tss1d = realloc(a->tss1d,
+                           sizeof(Laik_TaskSlice_Single1d) * a->capacity);
     }
     assert((task >= 0) && (task < a->group->size));
     assert((idx >= a->space->s.from.i[0]) && (idx < a->space->s.to.i[0]));
@@ -454,7 +457,7 @@ Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a, int task, uint64_t idx
 }
 
 
-// helpers for slice merging
+// helpers for slice merging: generic
 
 static
 void laik_remove_slice(Laik_BorderArray* ba, int task, int index)
@@ -686,6 +689,8 @@ int tss1d_cmp(const void *p1, const void *p2)
 static
 void updateBorderArrayOffsets(Laik_BorderArray* ba)
 {
+    assert(ba->tslice);
+
     // make sure slices are sorted according by task IDs
     qsort( &(ba->tslice[0]), ba->count,
             sizeof(Laik_TaskSlice_Gen), tsgen_cmp);
@@ -712,6 +717,90 @@ void updateBorderArrayOffsets(Laik_BorderArray* ba)
     assert(off == ba->count);
 }
 
+// update offset array from slices, single index format
+// also, convert to generic format
+static
+void updateBorderArrayOffsetsSI(Laik_BorderArray* ba)
+{
+    assert(ba->tss1d);
+    assert(ba->count > 0);
+
+    // make sure slices are sorted according by task IDs
+    qsort( &(ba->tss1d[0]), ba->count,
+            sizeof(Laik_TaskSlice_Single1d), tss1d_cmp);
+
+    // count slices
+    uint64_t idx, idx0;
+    int task;
+    int count = 1;
+    task = ba->tss1d[0].task;
+    idx = ba->tss1d[0].idx;
+    for(int i = 1; i < ba->count; i++) {
+        if (ba->tss1d[i].task == task) {
+            if (ba->tss1d[i].idx == idx) continue;
+            if (ba->tss1d[i].idx == idx + 1) {
+                idx++;
+                continue;
+            }
+        }
+        task = ba->tss1d[i].task;
+        idx = ba->tss1d[i].idx;
+        count++;
+    }
+    laik_log(1, "Merging single indexes: %d original, %d merged",
+             ba->count, count);
+
+    ba->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * count);
+
+    // convert into generic slices (already sorted)
+    int off = 0, j = 0;
+    task = ba->tss1d[0].task;
+    idx0 = idx = ba->tss1d[0].idx;
+    for(int i = 1; i <= ba->count; i++) {
+        if ((i < ba->count) && (ba->tss1d[i].task == task)) {
+            if (ba->tss1d[i].idx == idx) continue;
+            if (ba->tss1d[i].idx == idx + 1) {
+                idx++;
+                continue;
+            }
+        }
+        laik_log(1, "  adding slice for offsets %d - %d: task %d, [%lu;%lu[",
+                 j, i-1, task, idx0, idx +1);
+
+        Laik_TaskSlice_Gen* ts = &(ba->tslice[off]);
+        ts->type = TS_Generic;
+        ts->task = task;
+        ts->tag = 0;
+        ts->mapNo = 0;
+        ts->data = 0;
+        ts->s.from.i[0] = idx0;
+        ts->s.to.i[0] = idx + 1;
+        off++;
+        if (i == ba->count) break;
+
+        task = ba->tss1d[i].task;
+        idx0 = idx = ba->tss1d[i].idx;
+        j = i;
+    }
+    assert(count == off);
+    ba->count = count;
+    free(ba->tss1d);
+
+    // update offsets
+    off = 0;
+    for(task = 0; task < ba->group->size; task++) {
+        ba->off[task] = off;
+        while(off < ba->count) {
+            Laik_TaskSlice_Gen* ts = &(ba->tslice[off]);
+            if (ts->task > task) break;
+            assert(ts->task == task);
+            off++;
+        }
+    }
+    ba->off[task] = off;
+    assert(off == ba->count);
+}
+
 void laik_clearBorderArray(Laik_BorderArray* ba)
 {
     // to remove all entries, it's enough to set count to 0
@@ -722,6 +811,7 @@ void laik_freeBorderArray(Laik_BorderArray* ba)
 {
     free(ba->off);
     free(ba->tslice);
+    free(ba->tss1d);
     free(ba);
 }
 
@@ -1188,8 +1278,10 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
                                        Laik_BorderArray* otherBA)
 {
     Laik_BorderArray* ba;
+    bool useSingleIndex = (pr->flags & LAIK_PF_SingleIndex) > 0;
 
-    ba = laik_allocBorders(g, space);
+    ba = laik_allocBorders(g, space, useSingleIndex);
+
     if (otherBA) {
         assert(otherBA->group == g);
         // we do not check for same space, as there are use cases
@@ -1198,13 +1290,18 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     }
     (pr->run)(pr, ba, otherBA);
 
-    // Check for mergable slices if requested
-    if ((pr->flags & LAIK_PF_Merge) > 0){
-        BorderArrayMergeSlices(ba);
-        BorderArrayRemoveDuplicateSlices(ba);
+    if (useSingleIndex) {
+        // merge and convert to generic
+        updateBorderArrayOffsetsSI(ba);
     }
-
-    updateBorderArrayOffsets(ba);
+    else {
+        // check for mergable slices if requested
+        if ((pr->flags & LAIK_PF_Merge) > 0) {
+            BorderArrayMergeSlices(ba);
+            BorderArrayRemoveDuplicateSlices(ba);
+        }
+        updateBorderArrayOffsets(ba);
+    }
 
     // TODO: we do not handle compact yet
     assert((pr->flags & LAIK_PF_Compact) == 0);

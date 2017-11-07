@@ -101,7 +101,7 @@ struct _Laik_BorderArray {
     Laik_TaskSlice_Single1d* tss1d;
 };
 
-Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s);
+Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, bool useSingle1d);
 void laik_clearBorderArray(Laik_BorderArray* a);
 void laik_freeBorderArray(Laik_BorderArray* a);
 

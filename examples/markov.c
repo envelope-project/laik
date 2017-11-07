@@ -99,8 +99,6 @@ void run_markovPartitioner(Laik_Partitioner* pr,
     int in = mg->in;
     int* cm = mg->cm;
 
-    Laik_Slice slc;
-
     // go over states and add itself and incoming states to new partitioning
     int sliceCount = laik_borderarray_getcount(otherBA);
     for(int i = 0; i < sliceCount; i++) {
@@ -110,12 +108,8 @@ void run_markovPartitioner(Laik_Partitioner* pr,
         for(int st = s->from.i[0]; st < s->to.i[0]; st++) {
             int off = st * (in + 1);
             // j=0: state itself
-            for(int j = 0; j <= in; j++) {
-                int inNode = cm[off + j];
-                slc.from.i[0] = inNode;
-                slc.to.i[0] = inNode + 1;
-                laik_append_slice(ba, task, &slc, 1, 0);
-            }
+            for(int j = 0; j <= in; j++)
+                laik_append_index_1d(ba, task, cm[off + j]);
         }
     }
 }
@@ -172,8 +166,8 @@ Laik_Data* runSparse(MGraph* mg, int miter,
 // iteratively calculate probability distribution, return last written data
 // this assumes a compact mapping for data1/2, using indirection
 Laik_Data* runIndirection(MGraph* mg, int miter,
-                      Laik_Data* data1, Laik_Data* data2, Laik_Data* idata,
-                      Laik_Partitioning* pWrite, Laik_Partitioning* pRead)
+                          Laik_Data* data1, Laik_Data* data2, Laik_Data* idata,
+                          Laik_Partitioning* pWrite, Laik_Partitioning* pRead)
 {
     int in = mg->in;
     double* pm = mg->pm;
@@ -237,17 +231,20 @@ int main(int argc, char* argv[])
     int doPrint = 0;
     int doCompact = 0;
     int doIndirection = 0;
+    int useSingleIndex = 0;
 
     int arg = 1;
     while((arg < argc) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'c') doCompact = 1;
         if (argv[arg][1] == 'i') doIndirection = 1;
+        if (argv[arg][1] == 's') useSingleIndex = 1;
         if (argv[arg][1] == 'p') doPrint = 1;
         if (argv[arg][1] == 'h') {
             printf("markov [options] [<statecount> [<fan-in> [<iterations>]]]\n"
                    "\nOptions:\n"
                    " -i: use indirection with pre-calculated local indexes\n"
                    " -c: use a compact mapping (implies -i)\n"
+                   " -s: use single index hint\n"
                    " -p: print connectivity\n"
                    " -h: this help text\n");
             exit(1);
@@ -264,7 +261,8 @@ int main(int argc, char* argv[])
 
     if (laik_myid(world) == 0) {
         printf("Init Markov chain with %d states, max fan-in %d\n", n, in);
-        printf("Run %d iterations each.%s%s\n", miter,
+        printf("Run %d iterations each.%s%s%s\n", miter,
+               useSingleIndex ? " Partitioner using single indexes.":"",
                doCompact ? " Using compact mapping.":"",
                doIndirection ? " Using indirection.":"");
     }
@@ -294,7 +292,9 @@ int main(int argc, char* argv[])
     pWrite = laik_new_partitioning(world, space,
                                    laik_new_block_partitioner1(), 0);
     pr = laik_new_partitioner("markovin", run_markovPartitioner, &mg,
-                              LAIK_PF_Merge | (doCompact ? LAIK_PF_Compact:0));
+                              LAIK_PF_Merge |
+                              (useSingleIndex ? LAIK_PF_SingleIndex : 0) |
+                              (doCompact ? LAIK_PF_Compact : 0));
     pRead = laik_new_partitioning(world, space, pr, pWrite);
     pMaster = laik_new_partitioning(world, space, laik_Master, 0);
 
