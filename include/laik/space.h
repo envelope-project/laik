@@ -238,6 +238,9 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 //  LAIK provided partitioners set <data> to 0.
 Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
                                   int tag, void* data);
+// append 1d single-index slice
+Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a,
+                                     int task, uint64_t idx);
 
 Laik_Space* laik_borderarray_getspace(Laik_BorderArray* ba);
 Laik_Group* laik_borderarray_getgroup(Laik_BorderArray* ba);

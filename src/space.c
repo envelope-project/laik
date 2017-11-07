@@ -372,17 +372,19 @@ void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p)
 //-----------------------
 // Laik_BorderArray
 
-Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, int capacity)
+Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s)
 {
     Laik_BorderArray* a;
 
     a = malloc(sizeof(Laik_BorderArray));
     a->off = malloc(sizeof(int) * (g->size + 1));
-    a->tslice = malloc(sizeof(Laik_TaskSlice) * capacity);
+
+    a->tslice = 0;
+    a->tss1d = 0;
 
     a->group = g;
     a->space = s;
-    a->capacity = capacity;
+    a->capacity = 0;
     a->count = 0;
 
     return a;
@@ -393,23 +395,64 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
                                   int tag, void* data)
 {
     if (a->count == a->capacity) {
-        a->capacity *= 2;
-        a->tslice = realloc(a->tslice, sizeof(Laik_TaskSlice) * a->capacity);
+        assert(a->tss1d == 0);
+        if (a->tslice == 0) {
+            a->capacity = 4;
+            a->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * a->capacity);
+        }
+        else {
+            a->capacity = a->capacity *2;
+            a->tslice = realloc(a->tslice,
+                                sizeof(Laik_TaskSlice_Gen) * a->capacity);
+        }
     }
     assert((task >= 0) && (task < a->group->size));
     assert(laik_slice_within_space(s, a->space));
+    assert(a->tslice);
 
-    Laik_TaskSlice* ts = &(a->tslice[a->count]);
+    Laik_TaskSlice_Gen* ts = &(a->tslice[a->count]);
     a->count++;
 
+    ts->type = TS_Generic;
     ts->task = task;
     ts->s = *s;
     ts->tag = tag;
     ts->data = data;
     ts->mapNo = 0;
 
-    return ts;
+    return (Laik_TaskSlice*) ts;
 }
+
+// append 1d single-index slice
+Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a, int task, uint64_t idx)
+{
+    if (a->count == a->capacity) {
+        assert(a->tslice == 0);
+        assert(a->space->dims == 1);
+        if (a->tss1d == 0) {
+            a->capacity = 4;
+            a->tss1d = malloc(sizeof(Laik_TaskSlice_Single1d) * a->capacity);
+        }
+        else {
+            a->capacity = a->capacity *2;
+            a->tss1d = realloc(a->tslice,
+                               sizeof(Laik_TaskSlice_Single1d) * a->capacity);
+        }
+    }
+    assert((task >= 0) && (task < a->group->size));
+    assert((idx >= a->space->s.from.i[0]) && (idx < a->space->s.to.i[0]));
+    assert(a->tss1d);
+
+    Laik_TaskSlice_Single1d* ts = &(a->tss1d[a->count]);
+    a->count++;
+
+    ts->type = TS_Single1d;
+    ts->task = task;
+    ts->idx = idx;
+
+    return (Laik_TaskSlice*) ts;
+}
+
 
 // helpers for slice merging
 
@@ -468,12 +511,30 @@ int laik_borderarray_getcount(Laik_BorderArray* ba)
 Laik_TaskSlice* laik_borderarray_get_tslice(Laik_BorderArray* ba, int n)
 {
     assert(n < ba->count);
-    return &(ba->tslice[n]);
+    if (ba->tslice)
+        return (Laik_TaskSlice*) &(ba->tslice[n]);
+    if (ba->tss1d)
+        return (Laik_TaskSlice*) &(ba->tss1d[n]);
+    assert(0);
+    return 0;
 }
 
 const Laik_Slice* laik_taskslice_getslice(Laik_TaskSlice* ts)
 {
-    return &(ts->s);
+    static Laik_Slice slc;
+
+    if (!ts) return 0;
+    switch(ts->type) {
+    case TS_Generic:
+        return &(((Laik_TaskSlice_Gen*)ts)->s);
+    case TS_Single1d:
+        slc.from.i[0] = ((Laik_TaskSlice_Single1d*)ts)->idx;
+        slc.to.i[0] = slc.from.i[0] + 1;
+        return &slc;
+    default:
+        assert(0);
+    }
+    return 0;
 }
 
 int laik_taskslice_gettask(Laik_TaskSlice* ts)
@@ -523,10 +584,10 @@ void removeBorderArrayMergeSlices(Laik_BorderArray* ba)
 
 // sort function, called after partitioner run
 static
-int ts_cmp(const void *p1, const void *p2)
+int tsgen_cmp(const void *p1, const void *p2)
 {
-    const Laik_TaskSlice* ts1 = (const Laik_TaskSlice*) p1;
-    const Laik_TaskSlice* ts2 = (const Laik_TaskSlice*) p2;
+    const Laik_TaskSlice_Gen* ts1 = (const Laik_TaskSlice_Gen*) p1;
+    const Laik_TaskSlice_Gen* ts2 = (const Laik_TaskSlice_Gen*) p2;
     if (ts1->task == ts2->task) {
         // we want same tags in a row for processing in prepareMaps
         if (ts1->tag == ts2->tag) {
@@ -538,13 +599,26 @@ int ts_cmp(const void *p1, const void *p2)
     return ts1->task - ts2->task;
 }
 
+static
+int tss1d_cmp(const void *p1, const void *p2)
+{
+    const Laik_TaskSlice_Single1d* ts1 = (const Laik_TaskSlice_Single1d*) p1;
+    const Laik_TaskSlice_Single1d* ts2 = (const Laik_TaskSlice_Single1d*) p2;
+    if (ts1->task == ts2->task) {
+        // sort slices for same task by index
+        return ts1->idx - ts2->idx;
+    }
+    return ts1->task - ts2->task;
+}
+
+
 // (1) update offset array from slices, (2) calculate map numbers from tags
 static
 void updateBorderArrayOffsets(Laik_BorderArray* ba)
 {
     // make sure slices are sorted according by task IDs
     qsort( &(ba->tslice[0]), ba->count,
-            sizeof(Laik_TaskSlice), ts_cmp);
+            sizeof(Laik_TaskSlice_Gen), tsgen_cmp);
 
     int task, mapNo, lastTag, off;
     off = 0;
@@ -553,7 +627,7 @@ void updateBorderArrayOffsets(Laik_BorderArray* ba)
         mapNo = -1; // for numbering of mappings according to tags
         lastTag = -1;
         while(off < ba->count) {
-            Laik_TaskSlice* ts = &(ba->tslice[off]);
+            Laik_TaskSlice_Gen* ts = &(ba->tslice[off]);
             if (ts->task > task) break;
             assert(ts->task == task);
             if ((ts->tag == 0) || (ts->tag != lastTag)) {
@@ -942,7 +1016,7 @@ Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
         return 0;
     }
     assert(p->borders->tslice[o].task == myid);
-    return &(p->borders->tslice[o]);
+    return (Laik_TaskSlice*) &(p->borders->tslice[o]);
 }
 
 Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
@@ -950,22 +1024,44 @@ Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
 {
     assert(p->space->dims == 1);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
-    if (from) *from = ts ? ts->s.from.i[0] : 0;
-    if (to) *to = ts ? ts->s.to.i[0] : 0;
+    if (ts == 0) {
+        if (from) *from = 0;
+        if (to) *to = 0;
+        return 0;
+    }
+
+    switch(ts->type) {
+    case TS_Generic: {
+        Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+        if (from) *from = tsg->s.from.i[0];
+        if (to) *to = tsg->s.to.i[0];
+        break;
+    }
+    case TS_Single1d: {
+        Laik_TaskSlice_Single1d* tss = (Laik_TaskSlice_Single1d*) ts;
+        if (from) *from = tss->idx;
+        if (to) *to = tss->idx + 1;
+        break;
+    }
+    default:
+        assert(0);
+    }
 
     return ts;
 }
 
 Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
-                             uint64_t* x1, uint64_t* x2,
-                             uint64_t* y1, uint64_t* y2)
+                                 uint64_t* x1, uint64_t* x2,
+                                 uint64_t* y1, uint64_t* y2)
 {
     assert(p->space->dims == 2);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
-    if (x1) *x1 = ts ? ts->s.from.i[0] : 0;
-    if (x2) *x2 = ts ? ts->s.to.i[0] : 0;
-    if (y1) *y1 = ts ? ts->s.from.i[1] : 0;
-    if (y2) *y2 = ts ? ts->s.to.i[1] : 0;
+    assert((ts == 0) || (ts->type == TS_Generic));
+    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+    if (x1) *x1 = ts ? tsg->s.from.i[0] : 0;
+    if (x2) *x2 = ts ? tsg->s.to.i[0] : 0;
+    if (y1) *y1 = ts ? tsg->s.from.i[1] : 0;
+    if (y2) *y2 = ts ? tsg->s.to.i[1] : 0;
 
     return ts;
 }
@@ -977,12 +1073,14 @@ Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
 {
     assert(p->space->dims == 3);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
-    if (x1) *x1 = ts ? ts->s.from.i[0] : 0;
-    if (x2) *x2 = ts ? ts->s.to.i[0] : 0;
-    if (y1) *y1 = ts ? ts->s.from.i[1] : 0;
-    if (y2) *y2 = ts ? ts->s.to.i[1] : 0;
-    if (z1) *z1 = ts ? ts->s.from.i[2] : 0;
-    if (z2) *z2 = ts ? ts->s.to.i[2] : 0;
+    assert((ts == 0) || (ts->type == TS_Generic));
+    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+    if (x1) *x1 = ts ? tsg->s.from.i[0] : 0;
+    if (x2) *x2 = ts ? tsg->s.to.i[0] : 0;
+    if (y1) *y1 = ts ? tsg->s.from.i[1] : 0;
+    if (y2) *y2 = ts ? tsg->s.to.i[1] : 0;
+    if (z1) *z1 = ts ? tsg->s.from.i[2] : 0;
+    if (z2) *z2 = ts ? tsg->s.to.i[2] : 0;
 
     return ts;
 }
@@ -992,12 +1090,16 @@ Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
 // passed from application-specific partitioners to slice processing
 void* laik_get_slice_data(Laik_TaskSlice* ts)
 {
-    return ts->data;
+    assert(ts->type == TS_Generic);
+    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+    return tsg->data;
 }
 
 void laik_set_slice_data(Laik_TaskSlice* ts, void* data)
 {
-    ts->data = data;
+    assert(ts->type == TS_Generic);
+    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+    tsg->data = data;
 }
 
 
@@ -1017,7 +1119,7 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
 {
     Laik_BorderArray* ba;
 
-    ba = laik_allocBorders(g, space, 4 * g->size);
+    ba = laik_allocBorders(g, space);
     if (otherBA) {
         assert(otherBA->group == g);
         // we do not check for same space, as there are use cases

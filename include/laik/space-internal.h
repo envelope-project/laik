@@ -60,9 +60,20 @@ struct _Laik_Partitioner {
 // the output of a partitioner is a Laik_BorderArray
 
 // A TaskSlice is used in BorderArray to map a slice to a task.
+
+// different internal types are used to save memory
+enum { TS_Generic = 1, TS_Single1d };
+
+struct _Laik_TaskSlice {
+    int type;
+    int task;
+};
+
+// generic task slice
 // the tag is a hint for the data layer: if >0, slices with same tag
 // go into same mapping
-struct _Laik_TaskSlice {
+typedef struct _Laik_TaskSlice_Gen {
+    int type;
     int task;
     Laik_Slice s;
 
@@ -71,7 +82,14 @@ struct _Laik_TaskSlice {
 
     // calculated from <tag> after partitioner run
     int mapNo;
-};
+} Laik_TaskSlice_Gen;
+
+// for single-index slices in 1d
+typedef struct _Laik_TaskSlice_Single1d {
+    int type;
+    int task;
+    uint64_t idx;
+} Laik_TaskSlice_Single1d;
 
 struct _Laik_BorderArray {
     Laik_Group* group; // task IDs used belong to this group
@@ -79,10 +97,11 @@ struct _Laik_BorderArray {
     int capacity;  // slices allocated
     int count;     // slices used
     int* off;      // offsets from task IDs into border array
-    Laik_TaskSlice* tslice; // slice borders, may be multiple per task
+    Laik_TaskSlice_Gen* tslice; // slice borders, may be multiple per task
+    Laik_TaskSlice_Single1d* tss1d;
 };
 
-Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, int capacity);
+Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s);
 void laik_clearBorderArray(Laik_BorderArray* a);
 void laik_freeBorderArray(Laik_BorderArray* a);
 
