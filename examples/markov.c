@@ -182,17 +182,33 @@ int main(int argc, char* argv[])
     int in = 10;
     int miter = 10;
     int doPrint = 0;
+    int doCompact = 0;
 
-    if (argc > 1) n = atoi(argv[1]);
-    if (argc > 2) in = atoi(argv[2]);
-    if (argc > 3) miter = atoi(argv[3]);
-    if (argc > 4) doPrint = 1;
+    int arg = 1;
+    while((arg < argc) && (argv[arg][0] == '-')) {
+        if (argv[arg][1] == 'c') doCompact = 1;
+        if (argv[arg][1] == 'p') doPrint = 1;
+        if (argv[arg][1] == 'h') {
+            printf("markov [options] [<statecount> [<fan-in> [<iterations>]]]\n"
+                   "\nOptions:\n"
+                   " -c: use a compact mapping\n"
+                   " -p: print connectivity\n"
+                   " -h: this help text\n");
+            exit(1);
+        }
+        arg++;
+    }
+    if (argc > arg) n = atoi(argv[arg]);
+    if (argc > arg + 1) in = atoi(argv[arg + 1]);
+    if (argc > arg + 2) miter = atoi(argv[arg + 2]);
+
     if (n == 0) n = 1000000;
     if (in == 0) in = 10;
 
     if (laik_myid(world) == 0) {
         printf("Init Markov chain with %d states, max fan-in %d\n", n, in);
-        printf("Run %d iterations each.\n", miter);
+        printf("Run %d iterations each.%s\n", miter,
+               doCompact ? " Using compact mapping.":"");
     }
 
     MGraph mg;
@@ -219,8 +235,8 @@ int main(int argc, char* argv[])
     Laik_Partitioner* pr;
     pWrite = laik_new_partitioning(world, space,
                                    laik_new_block_partitioner1(), 0);
-    pr = laik_new_partitioner("markovin", run_markovPartitioner,
-                              &mg, LAIK_PF_Merge);
+    pr = laik_new_partitioner("markovin", run_markovPartitioner, &mg,
+                              LAIK_PF_Merge | (doCompact ? LAIK_PF_Compact:0));
     pRead = laik_new_partitioning(world, space, pr, pWrite);
     pMaster = laik_new_partitioning(world, space, laik_Master, 0);
 
