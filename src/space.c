@@ -888,6 +888,14 @@ static void log_Notcovered(int dims, Laik_Slice* toRemove)
 #endif
 
 static
+int tsgen_cmpfrom(const void *p1, const void *p2)
+{
+    const Laik_TaskSlice_Gen* ts1 = (const Laik_TaskSlice_Gen*) p1;
+    const Laik_TaskSlice_Gen* ts2 = (const Laik_TaskSlice_Gen*) p2;
+    return ts1->s.from.i[0] - ts2->s.from.i[0];
+}
+
+static
 bool coversSpace(Laik_BorderArray* ba)
 {
     int dims = ba->space->dims;
@@ -896,9 +904,15 @@ bool coversSpace(Laik_BorderArray* ba)
     // start with full space not-yet-covered
     appendToNotcovered(&(ba->space->s));
 
+    // use a copy of slice list which is just sorted by slice start
+    Laik_TaskSlice_Gen* list;
+    list = malloc(ba->count * sizeof(Laik_TaskSlice_Gen));
+    memcpy(list, ba->tslice, ba->count * sizeof(Laik_TaskSlice_Gen));
+    qsort(list, ba->count, sizeof(Laik_TaskSlice_Gen), tsgen_cmpfrom);
+
     // remove each slice in border array
     for(int i = 0; i < ba->count; i++) {
-        Laik_Slice* toRemove = &(ba->tslice[i].s);
+        Laik_Slice* toRemove = &(list[i].s);
 
 #ifdef DEBUG_COVERSPACE
         if (laik_log_begin(1)) {
@@ -959,6 +973,8 @@ bool coversSpace(Laik_BorderArray* ba)
         laik_log_flush(0);
     }
 #endif
+
+    free(list);
 
     // only if no slices are left, we did cover full space
     return (notcovered_count == 0);

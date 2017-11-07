@@ -41,7 +41,7 @@ typedef struct _MGraph {
 // of node i in row i, using columns 1 .. <in> (column 0 is set to i).
 // <pm>[i,j] is initialized with the probability of the transition
 // from node <cm>[i,j] to node i, with cm[i,0] the prob for staying.
-void init(MGraph* mg)
+void init(MGraph* mg, int fineGrained)
 {
     int n = mg->n;
     int in = mg->in;
@@ -64,7 +64,7 @@ void init(MGraph* mg)
             sum[fromNode] += prob;
             cm[i * (in + 1) + j] = fromNode;
             pm[i * (in + 1) + j] = prob;
-            step = 2 * step + j;
+            step = 2 * step + j + fineGrained * (i % 37);
             while(step > n) step -= n;
         }
     }
@@ -232,12 +232,14 @@ int main(int argc, char* argv[])
     int doCompact = 0;
     int doIndirection = 0;
     int useSingleIndex = 0;
+    int fineGrained = 0;
 
     int arg = 1;
     while((arg < argc) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'c') doCompact = 1;
         if (argv[arg][1] == 'i') doIndirection = 1;
         if (argv[arg][1] == 's') useSingleIndex = 1;
+        if (argv[arg][1] == 'f') fineGrained = 1;
         if (argv[arg][1] == 'p') doPrint = 1;
         if (argv[arg][1] == 'h') {
             printf("markov [options] [<statecount> [<fan-in> [<iterations>]]]\n"
@@ -273,7 +275,7 @@ int main(int argc, char* argv[])
     mg.cm = malloc(n * (in + 1) * sizeof(int));
     mg.pm = malloc(n * (in + 1) * sizeof(double));
 
-    init(&mg);
+    init(&mg, fineGrained);
     if (doPrint) print(&mg);
 
     // two 1d arrays, using same space
