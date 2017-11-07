@@ -1207,7 +1207,7 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
     updateBorderArrayOffsets(ba);
 
     // TODO: we do not handle compact yet
-    assert((pr->flags && LAIK_PF_Compact) == 0);
+    assert((pr->flags & LAIK_PF_Compact) == 0);
 
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
