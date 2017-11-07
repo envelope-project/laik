@@ -123,11 +123,11 @@ void run_markovPartitioner(Laik_Partitioner* pr,
 
 
 // iteratively calculate probability distribution, return last written data
-Laik_Data* run(MGraph* mg, int miter,
-               Laik_Data* data1, Laik_Data* data2,
-               Laik_Partitioning* pWrite, Laik_Partitioning* pRead)
+// this version expects one (sparse) mapping of data1/data2 each
+Laik_Data* runSparse(MGraph* mg, int miter,
+                     Laik_Data* data1, Laik_Data* data2,
+                     Laik_Partitioning* pWrite, Laik_Partitioning* pRead)
 {
-    int n = mg->n;
     int in = mg->in;
     int* cm = mg->cm;
     double* pm = mg->pm;
@@ -169,6 +169,59 @@ Laik_Data* run(MGraph* mg, int miter,
     return dWrite;
 }
 
+// iteratively calculate probability distribution, return last written data
+// this assumes a compact mapping for data1/2, using indirection
+Laik_Data* runIndirection(MGraph* mg, int miter,
+                      Laik_Data* data1, Laik_Data* data2, Laik_Data* idata,
+                      Laik_Partitioning* pWrite, Laik_Partitioning* pRead)
+{
+    int in = mg->in;
+    double* pm = mg->pm;
+
+    // local index array
+    int* iarray;
+    uint64_t icount;
+    laik_map_def1(idata, (void**) &iarray, &icount);
+
+    // start reading from data1, writing to data2
+    Laik_Data *dRead = data1, *dWrite = data2;
+    double *src, *dst;
+    uint64_t srcCount, dstCount, srcFrom, dstFrom, dstTo;
+
+    int iter = 0;
+    while(1) {
+        // switch dRead to pRead, dWrite to pWrite
+        laik_switchto(dRead,  pRead,  LAIK_DF_CopyIn);
+        laik_map_def1(dRead, (void**) &src, &srcCount);
+        srcFrom = laik_local2global_1d(dRead, 0);
+
+        laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
+        laik_map_def1(dWrite, (void**) &dst, &dstCount);
+        laik_my_slice_1d(pWrite, 0, &dstFrom, &dstTo);
+        assert(dstCount == dstTo - dstFrom);
+
+        // spread values according to probability distribution
+        for(int i = 0; i < dstCount; i++) {
+            int off = i * (in + 1);
+            int goff = (i + dstFrom) * (in + 1);
+            double v = src[iarray[off]] * pm[goff];
+            for(int j = 1; j <= in; j++)
+                v += src[iarray[off + j]] * pm[goff + j];
+            dst[i] = v;
+        }
+
+        iter++;
+        if (iter == miter) break;
+
+        // swap role of data1 and data2
+        if (dRead == data1) { dRead = data2; dWrite = data1; }
+        else                { dRead = data1; dWrite = data2; }
+    }
+
+    return dWrite;
+}
+
+
 int main(int argc, char* argv[])
 {
 #ifdef USE_MPI
@@ -183,15 +236,18 @@ int main(int argc, char* argv[])
     int miter = 10;
     int doPrint = 0;
     int doCompact = 0;
+    int doIndirection = 0;
 
     int arg = 1;
     while((arg < argc) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'c') doCompact = 1;
+        if (argv[arg][1] == 'i') doIndirection = 1;
         if (argv[arg][1] == 'p') doPrint = 1;
         if (argv[arg][1] == 'h') {
             printf("markov [options] [<statecount> [<fan-in> [<iterations>]]]\n"
                    "\nOptions:\n"
-                   " -c: use a compact mapping\n"
+                   " -i: use indirection with pre-calculated local indexes\n"
+                   " -c: use a compact mapping (implies -i)\n"
                    " -p: print connectivity\n"
                    " -h: this help text\n");
             exit(1);
@@ -204,11 +260,13 @@ int main(int argc, char* argv[])
 
     if (n == 0) n = 1000000;
     if (in == 0) in = 10;
+    if (doCompact) doIndirection = 1;
 
     if (laik_myid(world) == 0) {
         printf("Init Markov chain with %d states, max fan-in %d\n", n, in);
-        printf("Run %d iterations each.%s\n", miter,
-               doCompact ? " Using compact mapping.":"");
+        printf("Run %d iterations each.%s%s\n", miter,
+               doCompact ? " Using compact mapping.":"",
+               doIndirection ? " Using indirection.":"");
     }
 
     MGraph mg;
@@ -240,6 +298,30 @@ int main(int argc, char* argv[])
     pRead = laik_new_partitioning(world, space, pr, pWrite);
     pMaster = laik_new_partitioning(world, space, laik_Master, 0);
 
+
+    // for indirection, we store local indexes in a LAIK container
+    Laik_Type* itype = laik_register_type("l-indexes", (in + 1) * sizeof(int));
+    Laik_Data* idata = laik_new_data(world, space, itype);
+
+    if (doIndirection) {
+        // register initialization function for global-to-local index data
+        // this is called whenever the partitioning is changing
+        // FIXME: add API to specify function for init
+        laik_switchto(idata, pWrite, 0);
+        // TODO: move to inititialization function
+        int* iarray;
+        uint64_t icount, ioff;
+        laik_map_def1(idata, (void**) &iarray, &icount);
+        for(uint64_t i = 0; i < icount; i++) {
+            int gi = laik_local2global_1d(idata, i);
+            for(int j = 0; j <= in; j++) {
+                int gidx = mg.cm[gi * (in + 1) + j];
+                assert(laik_global2local_1d(idata, gidx, &ioff) != 0);
+                iarray[i * (in + 1) + j] = ioff;
+            }
+        }
+    }
+
     if (laik_myid(world) == 0)
         printf("Start with state 0 prob 1 ...\n");
 
@@ -258,7 +340,10 @@ int main(int argc, char* argv[])
     }
 
     Laik_Data* dRes;
-    dRes = run(&mg, miter, data1, data2, pWrite, pRead);
+    if (doIndirection)
+        dRes = runIndirection(&mg, miter, data1, data2, idata, pWrite, pRead);
+    else
+        dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
 
     laik_switchto(dRes, pMaster, LAIK_DF_CopyIn);
     laik_map_def1(dRes, (void**) &v, &count);
@@ -279,7 +364,12 @@ int main(int argc, char* argv[])
         v[i] = (double) 0.0;
     if (laik_global2local_1d(data1, 1, &off))
         v[off] = 1.0;
-    dRes = run(&mg, miter, data1, data2, pWrite, pRead);
+
+    if (doIndirection)
+        dRes = runIndirection(&mg, miter, data1, data2, idata, pWrite, pRead);
+    else
+        dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
+
     laik_switchto(dRes, pMaster, LAIK_DF_CopyIn);
     laik_map_def1(dRes, (void**) &v, &count);
     if (laik_myid(world) == 0) {
@@ -297,7 +387,12 @@ int main(int argc, char* argv[])
     double p = 1.0 / n;
     for(uint64_t i = 0; i < count; i++)
         v[i] = p;
-    dRes = run(&mg, miter, data1, data2, pWrite, pRead);
+
+    if (doIndirection)
+        dRes = runIndirection(&mg, miter, data1, data2, idata, pWrite, pRead);
+    else
+        dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
+
     laik_switchto(dRes, pMaster, LAIK_DF_CopyIn);
     laik_map_def1(dRes, (void**) &v, &count);
     if (laik_myid(world) == 0) {

@@ -47,6 +47,11 @@ Laik_Type* laik_new_type(char* name, Laik_TypeKind kind, int size)
     return t;
 }
 
+Laik_Type* laik_register_type(char* name, int size)
+{
+    return laik_new_type(name, LAIK_TK_POD, size);
+}
+
 void laik_data_init()
 {
     if (type_id > 0) return;
