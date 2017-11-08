@@ -644,6 +644,14 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
         laik_log_Transition(t);
         laik_log_flush(0);
     }
+#if 0 // don't pollute log level 2, should introduce more...
+    else
+        laik_log(2, "switch in '%s' (data '%s'): "
+                 "%d local, %d init, %d send, %d recv, %d red",
+                 part ? part->name : "(none)", d->name,
+                 t->localCount, t->initCount,
+                 t->sendCount, t->recvCount, t->redCount);
+#endif
 
     doTransition(d, t, d->activeMappings, toList);
 
@@ -694,6 +702,14 @@ void laik_switchto(Laik_Data* d,
         laik_log_Transition(t);
         laik_log_flush(0);
     }
+#if 0 // don't pollute log level 2, should introduce more...
+    else
+        laik_log(2, "switch to '%s' (data '%s'): "
+                 "%d local, %d init, %d send, %d recv, %d red",
+                 d->name, toP ? toP->name : "(none)",
+                 t->localCount, t->initCount,
+                 t->sendCount, t->recvCount, t->redCount);
+#endif
 
     doTransition(d, t, d->activeMappings, toList);
 

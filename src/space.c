@@ -1331,6 +1331,9 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
         laik_log_BorderArray(ba);
         laik_log_flush(0);
     }
+    else
+        laik_log(2, "run partitioner '%s' (group %d, space '%s'): %d slices",
+                 pr->name, g->gid, space->name, ba->count);
 
 
     if ((pr->flags & LAIK_PF_NoFullCoverage) == 0) {
