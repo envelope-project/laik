@@ -153,7 +153,11 @@ void laik_removeDataFromPartitioning(Laik_Partitioning* p, Laik_Data* d);
 // Laik_Transition
 //
 
-// sub-structures of Laik_Transition
+// Sub-structures of Laik_Transition.
+// Notes:
+// - slice indexes are always global
+// - there are separate slice vs. map numbers, as multiple slices may go to
+//   one mapping
 
 // slice staying local
 struct localTOp {

@@ -1332,6 +1332,7 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
         laik_log_flush(0);
     }
 
+
     if ((pr->flags & LAIK_PF_NoFullCoverage) == 0) {
         // by default, check if partitioning covers full space
         if (!coversSpace(ba))
@@ -1422,6 +1423,143 @@ void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p)
     assert(0); // TODO
 }
 
+
+//
+// Laik_Transition
+//
+
+// temporary buffers used when calculating a transition
+static struct localTOp *localBuf = 0;
+static struct initTOp  *initBuf = 0;
+static struct sendTOp  *sendBuf = 0;
+static struct recvTOp  *recvBuf = 0;
+static struct redTOp   *redBuf = 0;
+static int localBufSize = 0, localBufCount = 0;
+static int initBufSize = 0, initBufCount = 0;
+static int sendBufSize = 0, sendBufCount = 0;
+static int recvBufSize = 0, recvBufCount = 0;
+static int redBufSize = 0, redBufCount = 0;
+
+static
+void cleanTOpBufs(bool doFree)
+{
+    localBufCount = 0;
+    initBufCount = 0;
+    sendBufCount = 0;
+    recvBufCount = 0;
+    redBufCount = 0;
+    if (doFree) {
+        free(localBuf); localBufSize = 0;
+        free(initBuf); initBufSize = 0;
+        free(sendBuf); sendBufSize = 0;
+        free(recvBuf); recvBufSize = 0;
+        free(redBuf); redBufSize = 0;
+    }
+}
+
+static
+struct localTOp* appendLocalTOp(Laik_Slice* slc,
+                                int fromSliceNo, int toSliceNo,
+                                int fromMapNo, int toMapNo)
+{
+    if (localBufCount == localBufSize) {
+        // enlarge temp buffer
+        localBufSize = (localBufSize + 20) * 2;
+        localBuf = realloc(localBuf, localBufSize * sizeof(struct localTOp));
+    }
+    struct localTOp* op = &(localBuf[localBufCount]);
+    localBufCount++;
+
+    op->slc = *slc;
+    op->fromSliceNo = fromSliceNo;
+    op->toSliceNo = toSliceNo;
+    op->fromMapNo = fromMapNo;
+    op->toMapNo = toMapNo;
+
+    return op;
+}
+
+static
+struct initTOp* appendInitTOp(Laik_Slice* slc,
+                              int sliceNo, int mapNo,
+                              Laik_ReductionOperation redOp)
+{
+    if (initBufCount == initBufSize) {
+        // enlarge temp buffer
+        initBufSize = (initBufSize + 20) * 2;
+        initBuf = realloc(initBuf, initBufSize * sizeof(struct initTOp));
+    }
+    struct initTOp* op = &(initBuf[initBufCount]);
+    initBufCount++;
+
+    op->slc = *slc;
+    op->sliceNo = sliceNo;
+    op->mapNo = mapNo;
+    op->redOp = redOp;
+
+    return op;
+}
+
+static
+struct sendTOp* appendSendTOp(Laik_Slice* slc,
+                              int sliceNo, int mapNo, int toTask)
+{
+    if (sendBufCount == sendBufSize) {
+        // enlarge temp buffer
+        sendBufSize = (sendBufSize + 20) * 2;
+        sendBuf = realloc(sendBuf, sendBufSize * sizeof(struct sendTOp));
+    }
+    struct sendTOp* op = &(sendBuf[sendBufCount]);
+    sendBufCount++;
+
+    op->slc = *slc;
+    op->sliceNo = sliceNo;
+    op->mapNo = mapNo;
+    op->toTask = toTask;
+
+    return op;
+}
+
+static
+struct recvTOp* appendRecvTOp(Laik_Slice* slc,
+                              int sliceNo, int mapNo, int fromTask)
+{
+    if (recvBufCount == recvBufSize) {
+        // enlarge temp buffer
+        recvBufSize = (recvBufSize + 20) * 2;
+        recvBuf = realloc(recvBuf, recvBufSize * sizeof(struct recvTOp));
+    }
+    struct recvTOp* op = &(recvBuf[recvBufCount]);
+    recvBufCount++;
+
+    op->slc = *slc;
+    op->sliceNo = sliceNo;
+    op->mapNo = mapNo;
+    op->fromTask = fromTask;
+
+    return op;
+}
+
+static
+struct redTOp* appendRedTOp(Laik_Slice* slc,
+                            Laik_ReductionOperation redOp, int rootTask)
+{
+    if (redBufCount == redBufSize) {
+        // enlarge temp buffer
+        redBufSize = (redBufSize + 20) * 2;
+        redBuf = realloc(redBuf, redBufSize * sizeof(struct redTOp));
+    }
+    struct redTOp* op = &(redBuf[redBufCount]);
+    redBufCount++;
+
+    op->slc = *slc;
+    op->redOp = redOp;
+    op->rootTask = rootTask;
+
+    return op;
+}
+
+
 // Calculate communication required for transitioning between partitionings
 Laik_Transition*
 laik_calc_transition(Laik_Group* group, Laik_Space* space,
@@ -1434,19 +1572,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
     Laik_Slice* slc;
 
-#define TRANSSLICES_MAX 100
-    struct localTOp local[TRANSSLICES_MAX];
-    struct initTOp init[TRANSSLICES_MAX];
-    struct sendTOp send[TRANSSLICES_MAX];
-    struct recvTOp recv[TRANSSLICES_MAX];
-    struct redTOp red[TRANSSLICES_MAX];
-    int localCount, initCount, sendCount, recvCount, redCount;
-
-    localCount = 0;
-    initCount = 0;
-    sendCount = 0;
-    recvCount = 0;
-    redCount = 0;
+    cleanTOpBufs(false);
 
     // make sure requested operation is consistent
     if (fromBA == 0) {
@@ -1485,14 +1611,13 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
         for(int o = toBA->off[myid]; o < toBA->off[myid+1]; o++) {
             if (laik_slice_isEmpty(dims, &(toBA->tslice[o].s))) continue;
-            assert(initCount < TRANSSLICES_MAX);
-            struct initTOp* op = &(init[initCount]);
-            op->slc = toBA->tslice[o].s;
-            op->sliceNo = o - toBA->off[myid];
-            op->mapNo = toBA->tslice[o].mapNo;
-            op->redOp = laik_get_reduction(toFlow);
-            assert(op->redOp != LAIK_RO_None);
-            initCount++;
+
+            int redOp = laik_get_reduction(toFlow);
+            assert(redOp != LAIK_RO_None);
+            appendInitTOp( &(toBA->tslice[o].s),
+                           o - toBA->off[myid],
+                           toBA->tslice[o].mapNo,
+                           redOp);
         }
     }
 
@@ -1509,15 +1634,11 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                                                &(toBA->tslice[o2].s));
                     if (slc == 0) continue;
 
-                    assert(localCount < TRANSSLICES_MAX);
-                    struct localTOp* op = &(local[localCount]);
-                    op->slc = *slc;
-                    op->fromSliceNo = o1 - fromBA->off[myid];
-                    op->fromMapNo = fromBA->tslice[o1].mapNo;
-                    op->toSliceNo = o2 - toBA->off[myid];
-                    op->toMapNo = toBA->tslice[o2].mapNo;
-
-                    localCount++;
+                    appendLocalTOp(slc,
+                                   o1 - fromBA->off[myid],
+                                   o2 - toBA->off[myid],
+                                   fromBA->tslice[o1].mapNo,
+                                   toBA->tslice[o2].mapNo);
                 }
             }
         }
@@ -1527,17 +1648,13 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
             // reductions always should involve everyone
             assert(bordersIsAll(fromBA));
             if (laik_do_copyin(toFlow)) {
-                assert(redCount < TRANSSLICES_MAX);
                 // reduction result either goes to all or master
                 int root = bordersIsSingle(toBA);
                 assert(bordersIsAll(toBA) || (root == 0));
 
-                struct redTOp* op = &(red[redCount]);
-                op->slc = space->s; // complete space
-                op->redOp = laik_get_reduction(fromFlow);
-                op->rootTask = (root >= 0) ? root : -1;
-
-                redCount++;
+                appendRedTOp( &(space->s), // complete space
+                              laik_get_reduction(fromFlow),
+                              (root >= 0) ? root : -1);
             }
         }
 
@@ -1569,13 +1686,8 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                                                    &(toBA->tslice[o2].s));
                         if (slc == 0) continue;
 
-                        assert(sendCount < TRANSSLICES_MAX);
-                        struct sendTOp* op = &(send[sendCount]);
-                        op->slc = *slc;
-                        op->sliceNo = o1 - fromBA->off[myid];
-                        op->mapNo = fromBA->tslice[o1].mapNo;
-                        op->toTask = task;
-                        sendCount++;
+                        appendSendTOp(slc, o1 - fromBA->off[myid],
+                                      fromBA->tslice[o1].mapNo, task);
                     }
                 }
             }
@@ -1608,13 +1720,8 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                                                    &(toBA->tslice[o1].s));
                         if (slc == 0) continue;
 
-                        assert(recvCount < TRANSSLICES_MAX);
-                        struct recvTOp* op = &(recv[recvCount]);
-                        op->slc = *slc;
-                        op->sliceNo = o1 - toBA->off[myid];
-                        op->mapNo = toBA->tslice[o1].mapNo;
-                        op->fromTask = task;
-                        recvCount++;
+                        appendRecvTOp(slc, o1 - toBA->off[myid],
+                                      toBA->tslice[o1].mapNo, task);
                     }
                 }
             }
@@ -1622,11 +1729,11 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     }
 
     // allocate space as needed
-    int localSize = localCount * sizeof(struct localTOp);
-    int initSize  = initCount  * sizeof(struct initTOp);
-    int sendSize  = sendCount  * sizeof(struct sendTOp);
-    int recvSize  = recvCount  * sizeof(struct recvTOp);
-    int redSize   = redCount   * sizeof(struct redTOp);
+    int localSize = localBufCount * sizeof(struct localTOp);
+    int initSize  = initBufCount  * sizeof(struct initTOp);
+    int sendSize  = sendBufCount  * sizeof(struct sendTOp);
+    int recvSize  = recvBufCount  * sizeof(struct recvTOp);
+    int redSize   = redBufCount   * sizeof(struct redTOp);
     int tsize = sizeof(Laik_Transition) +
                 localSize + initSize + sendSize + recvSize + redSize;
     int localOff = sizeof(Laik_Transition);
@@ -1638,22 +1745,23 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
     Laik_Transition* t = malloc(tsize);
     t->dims = dims;
-    t->actionCount = localCount + initCount + sendCount + recvCount + redCount;
+    t->actionCount = localBufCount + initBufCount +
+                     sendBufCount + recvBufCount + redBufCount;
     t->local = (struct localTOp*) (((char*)t) + localOff);
     t->init  = (struct initTOp*)  (((char*)t) + initOff);
     t->send  = (struct sendTOp*)  (((char*)t) + sendOff);
     t->recv  = (struct recvTOp*)  (((char*)t) + recvOff);
     t->red   = (struct redTOp*)   (((char*)t) + redOff);
-    t->localCount = localCount;
-    t->initCount  = initCount;
-    t->sendCount  = sendCount;
-    t->recvCount  = recvCount;
-    t->redCount   = redCount;
-    memcpy(t->local, local, localSize);
-    memcpy(t->init, init,  initSize);
-    memcpy(t->send, send,  sendSize);
-    memcpy(t->recv, recv,  recvSize);
-    memcpy(t->red,  red,   redSize);
+    t->localCount = localBufCount;
+    t->initCount  = initBufCount;
+    t->sendCount  = sendBufCount;
+    t->recvCount  = recvBufCount;
+    t->redCount   = redBufCount;
+    memcpy(t->local, localBuf, localSize);
+    memcpy(t->init, initBuf,  initSize);
+    memcpy(t->send, sendBuf,  sendSize);
+    memcpy(t->recv, recvBuf,  recvSize);
+    memcpy(t->red,  redBuf,   redSize);
 
     return t;
 }

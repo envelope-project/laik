@@ -34,7 +34,7 @@ typedef struct _MGraph {
 // of node i in row i, using columns 1 .. <in> (column 0 is set to i).
 // <pm>[i,j] is initialized with the probability of the transition
 // from node <cm>[i,j] to node i, with cm[i,0] the prob for staying.
-void init(MGraph* mg)
+void init(MGraph* mg, int fineGrained)
 {
     int n = mg->n;
     int in = mg->in;
@@ -57,7 +57,7 @@ void init(MGraph* mg)
             sum[fromNode] += prob;
             cm[i * (in + 1) + j] = fromNode;
             pm[i * (in + 1) + j] = prob;
-            step = 2 * step + j;
+            step = 2 * step + j + fineGrained * (i % 37);
             while(step > n) step -= n;
         }
     }
@@ -129,11 +129,26 @@ int main(int argc, char* argv[])
     int in = 10;
     int miter = 10;
     int doPrint = 0;
+    int fineGrained = 0;
 
-    if (argc > 1) n = atoi(argv[1]);
-    if (argc > 2) in = atoi(argv[2]);
-    if (argc > 3) miter = atoi(argv[3]);
-    if (argc > 4) doPrint = 1;
+    int arg = 1;
+    while((arg < argc) && (argv[arg][0] == '-')) {
+        if (argv[arg][1] == 'f') fineGrained = 1;
+        if (argv[arg][1] == 'p') doPrint = 1;
+        if (argv[arg][1] == 'h') {
+            printf("markov-ser [options] [<statecount> [<fan-in> [<iterations>]]]\n"
+                   "\nOptions:\n"
+                   " -f: use pseudo-random connectivity (much more slices)\n"
+                   " -p: print connectivity\n"
+                   " -h: this help text\n");
+            exit(1);
+        }
+        arg++;
+    }
+    if (argc > arg) n = atoi(argv[arg]);
+    if (argc > arg + 1) in = atoi(argv[arg + 1]);
+    if (argc > arg + 2) miter = atoi(argv[arg + 2]);
+
     if (n == 0) n = 1000000;
     if (in == 0) in = 10;
 
@@ -146,7 +161,7 @@ int main(int argc, char* argv[])
     mg.cm = malloc(n * (in + 1) * sizeof(int));
     mg.pm = malloc(n * (in + 1) * sizeof(double));
 
-    init(&mg);
+    init(&mg, fineGrained);
     if (doPrint) print(&mg);
 
     double* v1 = malloc(n * sizeof(double));

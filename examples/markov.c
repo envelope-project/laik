@@ -247,6 +247,7 @@ int main(int argc, char* argv[])
                    " -i: use indirection with pre-calculated local indexes\n"
                    " -c: use a compact mapping (implies -i)\n"
                    " -s: use single index hint\n"
+                   " -f: use pseudo-random connectivity (much more slices)\n"
                    " -p: print connectivity\n"
                    " -h: this help text\n");
             exit(1);
