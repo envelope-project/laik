@@ -74,6 +74,9 @@ int main(int argc, char* argv[])
         printf("\n");
     }
 
+    //Start profiling interface
+    laik_enable_profiling_file(inst, "jac3d_profiling.txt");    
+
     double *baseR, *baseW, *sumPtr;
     uint64_t zsizeR, zstrideR, ysizeR, ystrideR, xsizeR;
     uint64_t zsizeW, zstrideW, ysizeW, ystrideW, xsizeW;
@@ -168,6 +171,7 @@ int main(int argc, char* argv[])
 
     int iter = 0;
     for(; iter < maxiter; iter++) {
+        laik_reset_profiling(inst);
         laik_set_iteration(inst, iter + 1);
 
         // switch roles: data written before now is read
@@ -247,7 +251,7 @@ int main(int argc, char* argv[])
         }
 
         // do jacobi
-
+        
         // check for residuum every 10 iterations (3 Flops more per update)
         if ((iter % 10) == 0) {
 
@@ -320,7 +324,7 @@ int main(int argc, char* argv[])
                 }
             }
         }
-
+        laik_writeout_profile();
         // TODO: allow repartitioning
     }
 

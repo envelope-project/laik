@@ -51,6 +51,8 @@ void laik_finalize(Laik_Instance* inst)
         laik_log_flush(0);
     }
 
+    laik_close_profiling_file(inst);
+    
     free(inst->control);
 }
 
@@ -300,6 +302,32 @@ void laik_reset_profiling(Laik_Instance* i){
     }
 }
 
+void laik_enable_profiling_file(
+    Laik_Instance* i,
+    const char* filename
+){
+    if (laik_profinst) {
+        if (laik_profinst == i) return;
+        laik_profinst->do_profiling = false;
+    }
+
+    laik_profinst = i;
+    if (!i) return;
+
+    i->do_profiling = true;
+    i->time_backend = 0.0;
+    i->time_total = 0.0;
+
+    i->profile_file = fopen(filename, "a+");
+    if(i->profile_file == NULL){
+        laik_log(LAIK_LL_Error, "Unable to start file based profiling");
+    }
+
+    fprintf((FILE*)i->profile_file, "======MEASUREMENT START AT: %lu======\n", 
+        (unsigned long) time(NULL));
+
+}
+
 double laik_get_total_time()
 {
     if (!laik_profinst) return 0.0;
@@ -314,6 +342,36 @@ double laik_get_backend_time()
     return laik_profinst->time_backend;
 }
 
+void laik_writeout_profile(){
+    if (!laik_profinst) return;
+    if (!laik_profinst->profile_file) return;
+    fprintf( (FILE*)laik_profinst->profile_file, 
+        "%s, %d, %d, %f, %f\n", 
+            laik_profinst->guid,
+            laik_profinst->control->cur_phase, laik_profinst->control->cur_iteration,
+            laik_profinst->time_total, laik_profinst->time_backend
+    );    
+}
+
+void laik_close_profiling_file(
+    Laik_Instance* i
+){
+    if(i->profile_file != NULL){
+        fprintf((FILE*)i->profile_file, "======MEASUREMENT END AT: %lu======\n", 
+            (unsigned long) time(NULL));
+        fclose(i->profile_file);
+        i->profile_file = NULL;
+    }
+}
+
+void laik_profile_printf(const char* msg, ...)
+{
+    if(laik_profinst->profile_file){
+        va_list args;
+        va_start(args, msg);
+        fprintf((FILE*)laik_profinst->profile_file, msg, args);
+    }
+}
 
 
 // Logging

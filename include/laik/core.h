@@ -106,8 +106,12 @@ char* laik_get_guid(Laik_Instance* i);
 // start profiling for given instance
 void laik_enable_profiling(Laik_Instance* i);
 void laik_reset_profiling(Laik_Instance* i);
+void laik_enable_profiling_file(Laik_Instance* i, const char* filename);
+void laik_close_profiling_file(Laik_Instance* i);
 double laik_get_total_time();
 double laik_get_backend_time();
+void laik_writeout_profile();
+void laik_profile_printf(const char* msg, ...);
 
 
 

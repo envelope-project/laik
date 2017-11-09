@@ -81,6 +81,7 @@ struct _Laik_Instance {
     bool do_profiling;
     double timer_total, timer_backend;
     double time_total, time_backend;
+    void* profile_file;
 
     // External Control Related
     Laik_RepartitionControl* repart_ctrl;
