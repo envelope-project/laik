@@ -1,3 +1,7 @@
+*.dSYM
+*.txt
+*.csv
+*.out
 vsum
 vsum2
 spmv
