@@ -17,6 +17,7 @@
 
 // default log level
 static Laik_LogLevel laik_loglevel = LAIK_LL_Error;
+static FILE* laik_logfile = NULL;
 static Laik_Instance* laik_loginst = 0;
 // filter
 static int laik_log_fromtask = -1;
@@ -53,6 +54,9 @@ void laik_finalize(Laik_Instance* inst)
     }
 
     laik_close_profiling_file(inst);
+    if(laik_logfile){
+        fclose(laik_logfile);
+    }
     
     free(inst->control);
 }
@@ -111,6 +115,16 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
             else
                 laik_log_totask = laik_log_fromtask;
         }
+    }
+
+    str = getenv("LAIK_LOG_FILE");
+    if(str){
+        laik_logfile = freopen(str, "a+", stdout);
+        if(!laik_logfile){
+            laik_log(LAIK_LL_Error, "Cannot Initialize File for print output.\n");
+        }
+        stderr = laik_logfile;
+        stdout = laik_logfile;
     }
 
     return instance;
