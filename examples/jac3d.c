@@ -47,13 +47,19 @@ int main(int argc, char* argv[])
     int maxiter = 0;
     int repart = 0; // enforce repartitioning after <repart> iterations
     bool use_cornerhalo = true; // use halo partitioner including corners?
+    bool do_profiling = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
-        if (argv[arg][1] == 'n')
-            use_cornerhalo = false;
+        if (argv[arg][1] == 'n') use_cornerhalo = false;
+        if (argv[arg][1] == 'p') do_profiling = true;
         if (argv[arg][1] == 'h') {
-            printf("Usage: %s [-n] <side width> <maxiter> <repart>\n", argv[0]);
+            printf("Usage: %s [-n] <side width> <maxiter> <repart>\n\n"
+                   "Options:\n"
+                   " -n : use partitioner which does not include corners\n"
+                   " -p : write profiling data to 'jac3d_profiling.txt'\n"
+                   " -h : print this help text and exit\n",
+                   argv[0]);
             exit(1);
         }
         arg++;
@@ -74,8 +80,9 @@ int main(int argc, char* argv[])
         printf("\n");
     }
 
-    //Start profiling interface
-    laik_enable_profiling_file(inst, "jac3d_profiling.txt");    
+    // start profiling interface
+    if (do_profiling)
+        laik_enable_profiling_file(inst, "jac3d_profiling.txt");
 
     double *baseR, *baseW, *sumPtr;
     uint64_t zsizeR, zstrideR, ysizeR, ystrideR, xsizeR;
