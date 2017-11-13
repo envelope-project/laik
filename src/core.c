@@ -634,8 +634,8 @@ void log_flush()
         fprintf(stderr, "%s", buf2);
     }
 
-    // terminate program on panic
-    if (current_logLevel == LAIK_LL_Panic) exit(1);
+    // stop program on panic with failed assertion
+    if (current_logLevel == LAIK_LL_Panic) assert(0);
 }
 
 void laik_log_flush(const char* msg, ...)

@@ -398,7 +398,16 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             assert(op->mapNo < fromList->count);
             Laik_Mapping* fromMap = &(fromList->map[op->mapNo]);
             // data to send must exist in local memory
-            assert(fromMap && fromMap->base);
+            assert(fromMap);
+            if (!fromMap->base) {
+                laik_log_begin(LAIK_LL_Panic);
+                laik_log_append("About to send data ('%s', slice ", d->name);
+                laik_log_Slice(dims, &(op->slc));
+                laik_log_flush(") to preserve it for the next phase as"
+                                " requested by you, but it never was written"
+                                " to in the previous phase. Fix your code!");
+                assert(0);
+            }
 
             uint64_t count;
             MPI_Datatype mpiDataType = getMPIDataType(d);
