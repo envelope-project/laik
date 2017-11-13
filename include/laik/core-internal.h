@@ -78,9 +78,9 @@ struct _Laik_Instance {
     Laik_Program_Control* control; //new, for iteration numer and program phase
 
     // profiling
-    bool do_profiling;
-    double timer_total, timer_backend;
-    double time_total, time_backend;
+    bool do_profiling, user_timer_active;
+    double timer_total, timer_backend, timer_user;
+    double time_total, time_backend, time_user;
     void* profile_file;
 
     // External Control Related

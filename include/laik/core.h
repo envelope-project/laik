@@ -112,6 +112,8 @@ double laik_get_total_time();
 double laik_get_backend_time();
 void laik_writeout_profile();
 void laik_profile_printf(const char* msg, ...);
+void laik_profile_user_start(Laik_Instance *i);
+void laik_profile_user_stop(Laik_Instance* i);
 
 
 

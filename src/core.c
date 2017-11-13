@@ -303,6 +303,7 @@ void laik_enable_profiling(Laik_Instance* i)
     i->do_profiling = true;
     i->time_backend = 0.0;
     i->time_total = 0.0;
+    i->time_user = 0.0;
 }
 
 void laik_reset_profiling(Laik_Instance* i){
@@ -312,6 +313,36 @@ void laik_reset_profiling(Laik_Instance* i){
             i->do_profiling = true;
             i->time_backend = 0.0;
             i->time_total = 0.0;
+            i->time_user = 0.0;
+        }
+    }
+    }
+}
+
+void laik_profile_user_start(
+    Laik_Instance* i
+){
+    if(laik_profinst){
+        if(laik_profinst == i) {
+            if(i->do_profiling){
+            i->timer_user = laik_wtime();
+                i->user_timer_active = 1;
+        }
+    }
+    }
+}
+
+void laik_profile_user_stop(
+    Laik_Instance* i
+){
+    if(laik_profinst){
+        if(laik_profinst == i) {
+            if(i->do_profiling){
+                if(i->user_timer_active){
+                i->time_user = laik_wtime() -  i->timer_user;
+                i->timer_user = 0.0; 
+                i->user_timer_active = 0;
+            }
         }
     }
     }
