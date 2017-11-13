@@ -93,6 +93,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     instance->control = laik_program_control_init();
 
     instance->do_profiling = false;
+    instance->profile_file = 0;
 
     instance->repart_ctrl = 0;
 
@@ -306,52 +307,49 @@ void laik_enable_profiling(Laik_Instance* i)
     i->time_user = 0.0;
 }
 
-void laik_reset_profiling(Laik_Instance* i){
-    if(laik_profinst){
-        if(laik_profinst == i) {
-            if(i->do_profiling){
-            i->do_profiling = true;
-            i->time_backend = 0.0;
-            i->time_total = 0.0;
-            i->time_user = 0.0;
-        }
-    }
-    }
-}
-
-void laik_profile_user_start(
-    Laik_Instance* i
-){
-    if(laik_profinst){
-        if(laik_profinst == i) {
-            if(i->do_profiling){
-            i->timer_user = laik_wtime();
-                i->user_timer_active = 1;
-        }
-    }
-    }
-}
-
-void laik_profile_user_stop(
-    Laik_Instance* i
-){
-    if(laik_profinst){
-        if(laik_profinst == i) {
-            if(i->do_profiling){
-                if(i->user_timer_active){
-                i->time_user = laik_wtime() -  i->timer_user;
-                i->timer_user = 0.0; 
-                i->user_timer_active = 0;
+void laik_reset_profiling(Laik_Instance* i)
+{
+    if (laik_profinst) {
+        if (laik_profinst == i) {
+            if (i->do_profiling) {
+                i->do_profiling = true;
+                i->time_backend = 0.0;
+                i->time_total = 0.0;
+                i->time_user = 0.0;
             }
         }
     }
+}
+
+void laik_profile_user_start(Laik_Instance* i)
+{
+    if (laik_profinst) {
+        if (laik_profinst == i) {
+            if (i->do_profiling) {
+                i->timer_user = laik_wtime();
+                i->user_timer_active = 1;
+            }
+        }
     }
 }
 
-void laik_enable_profiling_file(
-    Laik_Instance* i,
-    const char* filename
-){
+void laik_profile_user_stop(Laik_Instance* i)
+{
+    if (laik_profinst) {
+        if (laik_profinst == i) {
+            if (i->do_profiling) {
+                if (i->user_timer_active) {
+                    i->time_user = laik_wtime() -  i->timer_user;
+                    i->timer_user = 0.0;
+                    i->user_timer_active = 0;
+                }
+            }
+        }
+    }
+}
+
+void laik_enable_profiling_file(Laik_Instance* i, const char* filename)
+{
     if (laik_profinst) {
         if (laik_profinst == i) return;
         laik_profinst->do_profiling = false;
@@ -365,12 +363,12 @@ void laik_enable_profiling_file(
     i->time_total = 0.0;
 
     i->profile_file = fopen(filename, "a+");
-    if(i->profile_file == NULL){
+    if (i->profile_file == NULL) {
         laik_log(LAIK_LL_Error, "Unable to start file based profiling");
     }
 
     fprintf((FILE*)i->profile_file, "======MEASUREMENT START AT: %lu======\n", 
-        (unsigned long) time(NULL));
+            (unsigned long) time(NULL));
 
 }
 
@@ -388,23 +386,22 @@ double laik_get_backend_time()
     return laik_profinst->time_backend;
 }
 
-void laik_writeout_profile(){
+void laik_writeout_profile()
+{
     if (!laik_profinst) return;
     if (!laik_profinst->profile_file) return;
-    fprintf( (FILE*)laik_profinst->profile_file, 
-        "%s, %d, %d, %f, %f\n", 
-            laik_profinst->guid,
-            laik_profinst->control->cur_phase, laik_profinst->control->cur_iteration,
-            laik_profinst->time_total, laik_profinst->time_backend
-    );    
+    fprintf( (FILE*)laik_profinst->profile_file,
+             "%s, %d, %d, %f, %f\n",
+             laik_profinst->guid,
+             laik_profinst->control->cur_phase, laik_profinst->control->cur_iteration,
+             laik_profinst->time_total, laik_profinst->time_backend );
 }
 
-void laik_close_profiling_file(
-    Laik_Instance* i
-){
-    if(i->profile_file != NULL){
-        fprintf((FILE*)i->profile_file, "======MEASUREMENT END AT: %lu======\n", 
-            (unsigned long) time(NULL));
+void laik_close_profiling_file(Laik_Instance* i)
+{
+    if (i->profile_file != NULL) {
+        fprintf((FILE*)i->profile_file, "======MEASUREMENT END AT: %lu======\n",
+                (unsigned long) time(NULL));
         fclose(i->profile_file);
         i->profile_file = NULL;
     }
@@ -415,7 +412,7 @@ void laik_profile_printf(const char* msg, ...)
     if(laik_profinst->profile_file){
         va_list args;
         va_start(args, msg);
-        fprintf((FILE*)laik_profinst->profile_file, msg, args);
+        vfprintf((FILE*)laik_profinst->profile_file, msg, args);
     }
 }
 
