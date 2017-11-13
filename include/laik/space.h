@@ -353,8 +353,15 @@ int laik_my_slicecount(Laik_Partitioning* p);
 // get number of mappings of this task
 int laik_my_mapcount(Laik_Partitioning* p);
 
+// get number of slices within same mapping in this task, with ID <mapNo>
+int laik_mymap_slicecount(Laik_Partitioning* p, int mapNo);
+
 // get slice number <n> from the slices of this task
 Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n);
+
+// get slice number <n> within a given map with ID <mapNo> in this task
+Laik_TaskSlice* laik_mymap_slice(Laik_Partitioning* p, int mapNo, int n);
+
 
 // get from/to values for 1d slice with number <n> assigned to this task
 // if there is no slice, return 0 and set range to [0;0[ (ie. empty)
@@ -378,6 +385,13 @@ Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
 // passed from application-specific partitioners to slice processing
 void* laik_get_slice_data(Laik_TaskSlice*);
 void laik_set_slice_data(Laik_TaskSlice*, void* data);
+
+// return the mapping number of this task slice, calculated from tags
+// provided by the partitioner
+int laik_tslice_get_mapNo(Laik_TaskSlice*);
+
+// get slice of a task slice
+Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice*);
 
 // give a partitioning a name, for debug output
 void laik_set_partitioning_name(Laik_Partitioning* p, char* n);

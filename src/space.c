@@ -380,6 +380,10 @@ Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s,
     a = malloc(sizeof(Laik_BorderArray));
     a->off = malloc(sizeof(int) * (g->size + 1));
 
+    // number of maps still unknown
+    a->myMapOff = 0;
+    a->myMapCount = -1;
+
     a->tslice = 0;
     a->tss1d = 0;
 
@@ -715,6 +719,13 @@ void updateBorderArrayOffsets(Laik_BorderArray* ba)
     }
     ba->off[task] = off;
     assert(off == ba->count);
+
+    // there was a new partitioner run, which may change my mappings
+    if (ba->myMapCount >= 0) {
+        free(ba->myMapOff);
+        ba->myMapOff = 0;
+        ba->myMapCount = -1;
+    }
 }
 
 // update offset array from slices, single index format
@@ -799,7 +810,53 @@ void updateBorderArrayOffsetsSI(Laik_BorderArray* ba)
     }
     ba->off[task] = off;
     assert(off == ba->count);
+
+    // there was a new partitioner run, which may change my mappings
+    if (ba->myMapCount >= 0) {
+        free(ba->myMapOff);
+        ba->myMapOff = 0;
+        ba->myMapCount = -1;
+    }
 }
+
+static
+void updateMyMapOffsets(Laik_BorderArray* ba)
+{
+    // already calculated?
+    if (ba->myMapCount >= 0) return;
+
+    int myid = ba->group->myid;
+    assert(myid >= 0);
+
+    int mapNo;
+    int firstOff = ba->off[myid];
+    int lastOff = ba->off[myid + 1];
+    if (lastOff > firstOff)
+        ba->myMapCount = ba->tslice[lastOff - 1].mapNo + 1;
+    else {
+        ba->myMapCount = 0;
+        return;
+    }
+
+    ba->myMapOff = malloc((ba->myMapCount + 1) * sizeof(int));
+
+    // we only have generic task slices (single-1d are already converted)
+    assert(ba->tss1d == 0);
+
+    int off = firstOff;
+    for(mapNo = 0; mapNo < ba->myMapCount; mapNo++) {
+        ba->myMapOff[mapNo] = off;
+        while(off < lastOff) {
+            Laik_TaskSlice_Gen* ts = &(ba->tslice[off]);
+            if (ts->mapNo > mapNo) break;
+            assert(ts->mapNo == mapNo);
+            off++;
+        }
+    }
+    ba->myMapOff[mapNo] = off;
+    assert(off == lastOff);
+}
+
 
 void laik_clearBorderArray(Laik_BorderArray* ba)
 {
@@ -810,6 +867,7 @@ void laik_clearBorderArray(Laik_BorderArray* ba)
 void laik_freeBorderArray(Laik_BorderArray* ba)
 {
     free(ba->off);
+    free(ba->myMapOff);
     free(ba->tslice);
     free(ba->tss1d);
     free(ba);
@@ -1178,6 +1236,48 @@ int laik_my_mapcount(Laik_Partitioning* p)
     return p->borders->tslice[p->borders->off[myid+1] - 1].mapNo + 1;
 }
 
+int laik_mymap_slicecount(Laik_Partitioning* p, int mapNo)
+{
+    if (!p->bordersValid)
+        laik_calc_partitioning(p);
+
+    int myid = p->group->myid;
+    if (myid < 0) return 0; // this task is not part of task group
+
+    // lazily calculate my map offsets
+    Laik_BorderArray* ba = p->borders;
+    if (ba->myMapCount < 0)
+        updateMyMapOffsets(ba);
+
+    if (mapNo >= ba->myMapCount) return 0;
+    return ba->myMapOff[mapNo + 1] - ba->myMapOff[mapNo];
+}
+
+int laik_tslice_get_mapNo(Laik_TaskSlice* ts)
+{
+    switch(ts->type) {
+    case TS_Generic: {
+        Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+        return tsg->mapNo;
+    }
+    case TS_Single1d:
+        return 0;
+    default:
+        assert(0);
+    }
+}
+
+Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice* ts)
+{
+    switch(ts->type) {
+    case TS_Generic: {
+        Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+        return &(tsg->s);
+    }
+    default:
+        assert(0);
+    }
+}
 
 // get slice number <n> from the slices of this task
 Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
@@ -1186,6 +1286,7 @@ Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
         laik_calc_partitioning(p);
 
     int myid = p->group->myid;
+    if (myid < 0) return 0; // this task is not part of task group
     int o = p->borders->off[myid] + n;
     if (o >= p->borders->off[myid+1]) {
         // slice <n> is invalid
@@ -1193,6 +1294,32 @@ Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
     }
     assert(p->borders->tslice[o].task == myid);
     return (Laik_TaskSlice*) &(p->borders->tslice[o]);
+}
+
+Laik_TaskSlice* laik_mymap_slice(Laik_Partitioning* p, int mapNo, int n)
+{
+    if (!p->bordersValid)
+        laik_calc_partitioning(p);
+
+    int myid = p->group->myid;
+    if (myid < 0) return 0; // this task is not part of task group
+
+    // lazily calculate my map offsets
+    Laik_BorderArray* ba = p->borders;
+    if (ba->myMapCount < 0)
+        updateMyMapOffsets(ba);
+
+    // does map with mapNo exist?
+    if (mapNo >= ba->myMapCount) return 0;
+
+    int o = ba->myMapOff[mapNo] + n;
+    if (o >= ba->off[mapNo + 1]) {
+        // slice <n> is invalid
+        return 0;
+    }
+    assert(ba->tslice[o].task == myid);
+    assert(ba->tslice[o].mapNo == mapNo);
+    return (Laik_TaskSlice*) &(ba->tslice[o]);
 }
 
 Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,

@@ -128,7 +128,7 @@ struct _Laik_Mapping {
     uint64_t size[3];
 
     char* start; // start address of mapping
-    char* base; // address matching validSlice.from (usually same as start)
+    char* base; // address matching requiredSlice.from (usually same as start)
     uint64_t capacity; // number of bytes allocated
     int reusedFor; // -1: not reused, otherwise map number used for
 };

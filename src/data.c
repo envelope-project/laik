@@ -1237,6 +1237,7 @@ uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
     assert(d->space->dims == 1);
     assert(d->activeMappings && (d->activeMappings->count == 1));
 
+    // TODO: check all mappings, not just map 0
     Laik_Mapping* m = &(d->activeMappings->map[0]);
     assert(off < m->count);
 

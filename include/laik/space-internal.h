@@ -97,6 +97,10 @@ struct _Laik_BorderArray {
     int capacity;  // slices allocated
     int count;     // slices used
     int* off;      // offsets from task IDs into border array
+
+    int myMapCount; // number of maps in slices of this task
+    int* myMapOff; // offsets from local map IDs into border array
+
     Laik_TaskSlice_Gen* tslice; // slice borders, may be multiple per task
     Laik_TaskSlice_Single1d* tss1d;
 };

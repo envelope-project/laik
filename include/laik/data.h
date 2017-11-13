@@ -194,8 +194,8 @@ uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off);
 //  (lx/ly) and return mapping, otherwise return false
 // to be able to access the mapping, the local offset has to be calculated
 // from local coordinates (lx/ly), using memory layout information
-Laik_Mapping laik_global2local_2d(Laik_Data* d, uint64_t gx, uint64_t gy,
-                                  uint64_t* lx, uint64_t* ly);
+Laik_Mapping* laik_global2local_2d(Laik_Data* d, uint64_t gx, uint64_t gy,
+                                   uint64_t* lx, uint64_t* ly);
 
 
 // 2d local to 2d global in a single local mapping (thus ...global1).
