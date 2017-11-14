@@ -423,6 +423,7 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
     ts->tag = tag;
     ts->data = data;
     ts->mapNo = 0;
+    ts->compactStart = 0;
 
     return (Laik_TaskSlice*) ts;
 }
@@ -598,8 +599,9 @@ void updateBorderArrayOffsets(Laik_BorderArray* ba)
 
     // we assume that the slices where sorted with sortSlices()
 
-    int task, mapNo, lastTag, off;
+    int task, mapNo, lastTag, off, compactStart;
     off = 0;
+    compactStart = 0;
     for(task = 0; task < ba->group->size; task++) {
         ba->off[task] = off;
         mapNo = -1; // for numbering of mappings according to tags
@@ -610,9 +612,12 @@ void updateBorderArrayOffsets(Laik_BorderArray* ba)
             assert(ts->task == task);
             if ((ts->tag == 0) || (ts->tag != lastTag)) {
                 mapNo++;
+                compactStart = 0;
                 lastTag = ts->tag;
             }
             ts->mapNo = mapNo;
+            ts->compactStart = compactStart;
+            compactStart += laik_slice_size(ba->space->dims, &(ts->s));
             off++;
         }
     }
@@ -1345,9 +1350,6 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
 
         updateBorderArrayOffsets(ba);
     }
-
-    // TODO: we do not handle compact yet
-    assert((pr->flags & LAIK_PF_Compact) == 0);
 
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",

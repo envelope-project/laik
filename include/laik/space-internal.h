@@ -82,6 +82,7 @@ typedef struct _Laik_TaskSlice_Gen {
 
     // calculated from <tag> after partitioner run
     int mapNo;
+    int compactStart; // for compact mapping: offset of slice in mapping
 } Laik_TaskSlice_Gen;
 
 // for single-index slices in 1d
@@ -100,6 +101,7 @@ struct _Laik_BorderArray {
 
     int myMapCount; // number of maps in slices of this task
     int* myMapOff; // offsets from local map IDs into border array
+
 
     Laik_TaskSlice_Gen* tslice; // slice borders, may be multiple per task
     Laik_TaskSlice_Single1d* tss1d;

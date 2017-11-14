@@ -212,16 +212,18 @@ void laik_log_BorderArray(Laik_BorderArray* ba)
         return;
     }
 
+    assert(ba->tslice); // only show generic slices
     laik_log_append("%d slices in %d tasks on ",
                     ba->count, ba->group->size);
     laik_log_Space(ba->space);
-    laik_log_append(": (task:slice:tag/mapNo)\n    ");
+    laik_log_append(": (task:slice:tag/mapNo/start)\n    ");
     for(int i = 0; i < ba->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(ba->tslice[i]);
         if (i>0)
             laik_log_append(", ");
-        laik_log_append("%d:", ba->tslice[i].task);
-        laik_log_Slice(ba->space->dims, &(ba->tslice[i].s));
-        laik_log_append(":%d/%d", ba->tslice[i].tag, ba->tslice[i].mapNo);
+        laik_log_append("%d:", ts->task);
+        laik_log_Slice(ba->space->dims, &(ts->s));
+        laik_log_append(":%d/%d/%d", ts->tag, ts->mapNo, ts->compactStart);
     }
 }
 
