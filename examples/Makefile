@@ -45,4 +45,4 @@ raytracer: raytracer.cpp $(LAIKLIB)
 	$(CXX) $(CXXFLAGS) raytracer.cpp $(LAIKLIB) -o raytracer
 
 clean:
-	rm -f *.o *~ $(EXAMPLES)
+	rm -f *.o *~ *.ppm $(EXAMPLES)

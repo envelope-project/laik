@@ -2,6 +2,7 @@
 *.txt
 *.csv
 *.out
+*.ppm
 vsum
 vsum2
 spmv
@@ -14,4 +15,3 @@ markov-ser
 markov
 markov2
 raytracer
-*.ppm
