@@ -38,7 +38,7 @@ markov: markov.o $(LAIKLIB)
 	$(CC) $(CFLAGS) markov.o $(LAIKLIB) -o markov
 
 raytracer: raytracer.cpp $(LAIKLIB)
-	$(CXX) $(CXXFLAGS) raytracer.cpp $(LAIKLIB) -lmpi -o raytracer
+	$(CXX) $(CXXFLAGS) raytracer.cpp $(LAIKLIB) -o raytracer
 
 clean:
 	rm -f *.o *~ $(EXAMPLES)

@@ -45,7 +45,6 @@ extern "C"{
 #define USE_MPI
 #include "laik-backend-mpi.h"
 #include "laik-internal.h"
-#include <mpi.h>
 }
 
 // C++ additions to LAIK header
