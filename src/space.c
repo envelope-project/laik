@@ -1321,7 +1321,7 @@ Laik_TaskSlice* laik_mymap_slice(Laik_Partitioning* p, int mapNo, int n)
     if (mapNo >= ba->myMapCount) return 0;
 
     int o = ba->myMapOff[mapNo] + n;
-    if (o >= ba->off[mapNo + 1]) {
+    if (o >= ba->myMapOff[mapNo + 1]) {
         // slice <n> is invalid
         return 0;
     }
