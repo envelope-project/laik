@@ -229,6 +229,10 @@ int main(int argc, char **argv)
     std::vector<Sphere> spheres; 
     // position, radius, surface color, reflectivity, transparency, emission color
     spheres.push_back(Sphere(Vec3f( 0.0, -10004, -20), 10000, Vec3f(0.20, 0.20, 0.20), 0, 0.0)); 
+    spheres.push_back(Sphere(Vec3f( 0.0, -1000, -20), 10000, Vec3f(0.20, 0.20, 0.20), 0, 0.0));
+    spheres.push_back(Sphere(Vec3f( 0.0, -10, -20), 10000, Vec3f(0.20, 0.20, 0.20), 0, 0.0));
+    spheres.push_back(Sphere(Vec3f( 0.0, -104, -20), 10000, Vec3f(0.20, 0.20, 0.20), 0, 0.0));
+    spheres.push_back(Sphere(Vec3f( 0.0, -10504, -20), 10000, Vec3f(0.20, 0.20, 0.20), 0, 0.0));
     spheres.push_back(Sphere(Vec3f( 0.0,      0, -20),     4, Vec3f(1.00, 0.32, 0.36), 1, 0.5)); 
     spheres.push_back(Sphere(Vec3f( 5.0,     -1, -15),     2, Vec3f(0.90, 0.76, 0.46), 1, 0.0)); 
     spheres.push_back(Sphere(Vec3f( 5.0,      0, -25),     3, Vec3f(0.65, 0.77, 0.97), 1, 0.0)); 
@@ -236,7 +240,7 @@ int main(int argc, char **argv)
     // light
     spheres.push_back(Sphere(Vec3f( 0.0,     20, -30),     3, Vec3f(0.00, 0.00, 0.00), 0, 0.0, Vec3f(3))); 
     
-    unsigned width = 6400, height = 4800; 
+    unsigned width = 6400, height = 4800;
     
     size_t sz_image = width * height;
 
@@ -272,15 +276,15 @@ int main(int argc, char **argv)
     // Trace rays
     for (unsigned y = ystart; y < yend; ++y) { 
         for (unsigned x = xstart; x < xend; ++x) { 
-            Vec3f *pixel;
+            Vec3f pixel;
             double xx = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio; 
             double yy = (1 - 2 * ((y + 0.5) * invHeight)) * angle; 
             Vec3f raydir(xx, yy, -1); 
             raydir.normalize(); 
-            *pixel = trace(Vec3f(0), raydir, spheres, 0); 
-            xvalues[width*y+x] = pixel->x;
-            yvalues[width*y+x] = pixel->y;
-            zvalues[width*y+x] = pixel->z;
+            pixel = trace(Vec3f(0), raydir, spheres, 0);
+            xvalues[width*y+x] = pixel.x;
+            yvalues[width*y+x] = pixel.y;
+            zvalues[width*y+x] = pixel.z;
         } 
     } 
 

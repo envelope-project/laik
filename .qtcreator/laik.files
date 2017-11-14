@@ -52,6 +52,7 @@
 ../examples/jac3d.c
 ../examples/markov-ser.c
 ../examples/markov.c
+../examples/raytracer.cpp
 
 ../tests/Makefile
 ../tests/.gitignore
