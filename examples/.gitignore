@@ -14,4 +14,4 @@ markov-ser
 markov
 markov2
 raytracer
-*.out
+*.ppm
