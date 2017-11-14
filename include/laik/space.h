@@ -411,6 +411,11 @@ Laik_BorderArray* laik_get_borders(Laik_Partitioning* p);
 // calculate partition borders
 void laik_calc_partitioning(Laik_Partitioning* p);
 
+// get local index from global one. return false if not local
+bool laik_index_global2local(Laik_BorderArray*,
+                             Laik_Index* global, Laik_Index* local);
+
+
 // append a partitioning to a partioning group whose consistency should
 // be enforced at the same point in time
 void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p);

@@ -1447,6 +1447,15 @@ void laik_calc_partitioning(Laik_Partitioning* p)
 }
 
 
+// get local index from global one. return false if not local
+bool laik_index_global2local(Laik_BorderArray* ba,
+                             Laik_Index* global, Laik_Index* local)
+{
+    // TODO
+
+    return true;
+}
+
 
 // append a partitioning to a partioning group whose consistency should
 // be enforced at the same point in time
