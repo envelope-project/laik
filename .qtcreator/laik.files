@@ -39,7 +39,6 @@
 ../include/laik/space-internal.h
 ../include/laik/ext.h
 
-../examples/TODO.md
 ../examples/Makefile
 ../examples/.gitignore
 ../examples/vsum.c
@@ -52,7 +51,10 @@
 ../examples/jac3d.c
 ../examples/markov-ser.c
 ../examples/markov.c
+../examples/markov2.c
 ../examples/raytracer.cpp
+../examples/README.md
+../examples/TODO.md
 
 ../tests/Makefile
 ../tests/.gitignore

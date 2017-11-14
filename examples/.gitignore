@@ -12,5 +12,6 @@ jac2d-ser
 jac3d
 markov-ser
 markov
+markov2
 raytracer
 *.out

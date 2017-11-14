@@ -1,7 +1,8 @@
 CXX = c++
 EXAMPLES = vsum vsum2 spmv spmv2 \
     jac1d jac2d jac2d-ser jac3d \
-    markov-ser markov raytracer
+    markov-ser markov markov2 \
+    raytracer
 OPT = -g
 
 # include Makefile.config if existing
@@ -36,6 +37,9 @@ jac3d: jac3d.c $(LAIKLIB)
 
 markov: markov.o $(LAIKLIB)
 	$(CC) $(CFLAGS) markov.o $(LAIKLIB) -o markov
+
+markov2: markov2.o $(LAIKLIB)
+	$(CC) $(CFLAGS) markov2.o $(LAIKLIB) -o markov2
 
 raytracer: raytracer.cpp $(LAIKLIB)
 	$(CXX) $(CXXFLAGS) raytracer.cpp $(LAIKLIB) -o raytracer
