@@ -688,6 +688,16 @@ int tss1d_cmp(const void *p1, const void *p2)
     return ts1->task - ts2->task;
 }
 
+static
+void sortSlices(Laik_BorderArray* ba)
+{
+    // slices get sorted into groups for each task,
+    //  then per tag (to go into one mapping),
+    //  then per start index (to enable merging)
+    assert(ba->tslice);
+    qsort( &(ba->tslice[0]), ba->count,
+            sizeof(Laik_TaskSlice_Gen), tsgen_cmp);
+}
 
 // (1) update offset array from slices, (2) calculate map numbers from tags
 static
@@ -695,9 +705,7 @@ void updateBorderArrayOffsets(Laik_BorderArray* ba)
 {
     assert(ba->tslice);
 
-    // make sure slices are sorted according by task IDs
-    qsort( &(ba->tslice[0]), ba->count,
-            sizeof(Laik_TaskSlice_Gen), tsgen_cmp);
+    // we assume that the slices where sorted with sortSlices()
 
     int task, mapNo, lastTag, off;
     off = 0;
@@ -1438,6 +1446,8 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
         updateBorderArrayOffsetsSI(ba);
     }
     else {
+        sortSlices(ba);
+
         // check for mergable slices if requested
         if ((pr->flags & LAIK_PF_Merge) > 0) {
             BorderArrayMergeSlices(ba);
@@ -1962,6 +1972,7 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg)
         ba->off = malloc((newg->size +1) * sizeof(int));
     }
     ba->group = newg;
+    sortSlices(ba);
     updateBorderArrayOffsets(ba);
 }
 
