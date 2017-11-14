@@ -3,7 +3,7 @@ TESTS= \
     test-spmv test-spmv2 test-spmv2r \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d \
-    test-markov
+    test-markov test-markov2
 
 -include ../Makefile.config
 
@@ -57,6 +57,10 @@ test-jac3d:
 test-markov:
 	../examples/markov 20 4 > test-markov-20-4.out
 	cmp test-markov-20-4.out test-markov-20-4.expected
+
+test-markov2:
+	../examples/markov2 20 4 > test-markov2-20-4.out
+	cmp test-markov2-20-4.out test-markov2-20-4.expected
 
 clean:
 	rm -rf *.out

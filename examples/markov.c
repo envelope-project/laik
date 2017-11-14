@@ -35,6 +35,9 @@ typedef struct _MGraph {
     double* pm; // probabilities
 } MGraph;
 
+// global options
+int doPrint = 0;
+
 // Produce a graph with <n> nodes and some arbitrary connectivity
 // with a fan-in <in>. The resulting graph will be stored in
 // <cm>[i,c], which is a <n> * (<in> +1) matrix storing the incoming nodes
@@ -126,6 +129,8 @@ Laik_Data* runSparse(MGraph* mg, int miter,
     int* cm = mg->cm;
     double* pm = mg->pm;
 
+    if (miter == 0) return data1;
+
     // start reading from data1, writing to data2
     Laik_Data *dRead = data1, *dWrite = data2;
     double *src, *dst;
@@ -171,6 +176,8 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
 {
     int in = mg->in;
     double* pm = mg->pm;
+
+    if (miter == 0) return data1;
 
     // local index array
     int* iarray;
@@ -228,11 +235,11 @@ int main(int argc, char* argv[])
     int n = 1000000;
     int in = 10;
     int miter = 10;
-    int doPrint = 0;
     int doCompact = 0;
     int doIndirection = 0;
     int useSingleIndex = 0;
     int fineGrained = 0;
+    doPrint = 0;
 
     int arg = 1;
     while((arg < argc) && (argv[arg][0] == '-')) {

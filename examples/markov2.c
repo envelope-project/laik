@@ -35,6 +35,9 @@ typedef struct _MGraph {
     double* pm; // probabilities
 } MGraph;
 
+// global options
+int doPrint = 0;
+
 // Produce a graph with <n> nodes and some arbitrary connectivity
 // with a fan-in <in>. The resulting graph will be stored in
 // <cm>[i,c], which is a <n> * (<in> +1) matrix storing the incoming nodes
@@ -122,6 +125,8 @@ Laik_Data* runSparse(MGraph* mg, int miter,
     int* cm = mg->cm;
     double* pm = mg->pm;
 
+    if (miter == 0) return data1;
+
     // start reading from data1, writing to data2
     Laik_Data *dRead = data1, *dWrite = data2;
     double *src, *dst;
@@ -140,10 +145,17 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         dstFrom = laik_local2global_1d(dWrite, 0);
 
+        if (doPrint) {
+            printf("Src values at iter %d:\n", iter);
+            for(int i = srcFrom; i < srcTo; i++)
+                printf("  %d: %f", i, src[i - srcFrom]);
+            printf("\n");
+        }
+
         // spread values according to probability distribution
         for(int i = srcFrom; i < srcTo; i++) {
             int off = i * (out + 1);
-            dst[i - dstFrom] = src[i - srcFrom] * pm[off];
+            dst[i - dstFrom] += src[i - srcFrom] * pm[off];
             for(int j = 1; j <= out; j++)
                 dst[cm[off + j] - dstFrom] += src[i - srcFrom] * pm[off + j];
         }
@@ -168,6 +180,8 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
     int out = mg->out;
     double* pm = mg->pm;
 
+    if (miter == 0) return data1;
+
     // local index array
     int* iarray;
     uint64_t icount;
@@ -191,11 +205,18 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         dstFrom = laik_local2global_1d(dWrite, 0);
 
+        if (doPrint) {
+            printf("Src values at iter %d:\n", iter);
+            for(int i = srcFrom; i < srcTo; i++)
+                printf("  %d: %f", i, src[i - srcFrom]);
+            printf("\n");
+        }
+
         // spread values according to probability distribution
         for(int i = 0; i < srcCount; i++) {
             int off = i * (out + 1);
             int goff = (i + srcFrom) * (out + 1);
-            dst[iarray[off]] = src[i] * pm[goff];
+            dst[iarray[off]] += src[i] * pm[goff];
             for(int j = 1; j <= out; j++)
                 dst[iarray[off + j]] += src[i] * pm[goff + j];
         }
@@ -224,11 +245,11 @@ int main(int argc, char* argv[])
     int n = 1000000;
     int out = 10;
     int miter = 10;
-    int doPrint = 0;
     int doCompact = 0;
     int doIndirection = 0;
     int useSingleIndex = 0;
     int fineGrained = 0;
+    doPrint = 0;
 
     int arg = 1;
     while((arg < argc) && (argv[arg][0] == '-')) {
