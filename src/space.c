@@ -460,50 +460,6 @@ Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a, int task, uint64_t idx
     return (Laik_TaskSlice*) ts;
 }
 
-
-// helpers for slice merging: generic
-
-static
-void laik_remove_slice(Laik_BorderArray* ba, int task, int index)
-{
-    assert(ba->space->dims == 1); // not yet implemented for higher dimensions
-    assert((task >= 0) && (task < ba->group->size));
-    assert(index <= ba->count);
-
-    for(int i = index; i < ba->count - 1; i++) {
-        ba->tslice[i] = ba->tslice[i + 1];
-    }
-    ba->count--;
-}
-
-// TODO extend for 2d and 3d
-static
-bool laik_are_slices_mergeable(const Laik_Slice* s1, const Laik_Slice* s2)
-{
-    if ((s1->to.i[0]) < (s2->from.i[0]) || (s2->to.i[0]) < (s1->from.i[0]) )
-    {
-        return false;
-    }
-    else
-    {
-        return true;
-    }
-}
-
-static
-void laik_merge_slices(Laik_Slice* s1,Laik_Slice* s2,
-                       Laik_BorderArray* ba)
-{
-    assert(ba->space->dims == 1); // not yet implemented for higher dimensions
-
-    s1->from.i[0] = MIN ( s1->from.i[0] , s2->from.i[0] );
-    s1->to.i[0] = MAX ( s1->to.i[0] , s2->to.i[0] );
-
-    s2->from.i[0] = MIN ( s1->from.i[0] , s2->from.i[0] );
-    s2->to.i[0] = MAX ( s1->to.i[0] , s2->to.i[0] );
-
-}
-
 Laik_Space* laik_borderarray_getspace(Laik_BorderArray* ba)
 {
     return ba->space;
@@ -559,106 +515,6 @@ void* laik_partitioner_data(Laik_Partitioner* partitioner)
     return partitioner->data;
 }
 
-//TODO extend to 2d and 3d
-static
-void BorderArrayMergeSlices(Laik_BorderArray* ba)
-{
-    assert(ba->space->dims == 1);
-
-    for(int i = 0; i < ba->count; i++) {
-
-        Laik_Slice* s1 = &(ba->tslice[i].s);
-        int task1 = ba->tslice[i].task;
-
-        for(int j = 0; j < ba->count; j++) {
-
-            Laik_Slice* s2 = &(ba->tslice[j].s);
-            int task2 = ba->tslice[j].task;
-
-                if (laik_are_slices_mergeable(s1, s2) && (task1 == task2)) {
-
-                    laik_log(1, "  task %d, slice %d, from:%d, to:%d\n",
-                    task1, i, s1->from.i[0], s1->to.i[0] );
-                    laik_log(1, "  task %d, slice %d, from:%d, to:%d\n",
-                    task2, j, s2->from.i[0], s2->to.i[0] );
-
-                    laik_log(1,"    slices %d and %d are mergeable.\n", i, j);
-                    // merge the mergeable slices
-                    // both slices will be updated 
-                    // and will be simillar (duplicated)
-                    laik_merge_slices(s1, s2, ba);
-                }
-
-        }
-    }
-
-}
-
-static
-void BorderArrayRemoveDuplicateSlices(Laik_BorderArray* ba)
-{
-
-    assert(ba->space->dims == 1);
-    
-    laik_log(2,"Number of slices before removing the douplicate slices: %d\n", ba->count);
-
-    for(int i = 0; i < ba->count; i++) {
-        Laik_Slice* s1 = &(ba->tslice[i].s);
-        int task1 = ba->tslice[i].task;
-
-        for(int j = 0; j < ba->count; j++) {
-
-            if (i==j)
-            {
-                continue;
-            }
-
-            Laik_Slice* s2 = &(ba->tslice[j].s);
-            int task2 = ba->tslice[j].task;
-
-            if (laik_slice_isEqual(ba->space->dims, s1, s2) && task1==task2)
-            {
-                laik_remove_slice(ba,task2,j);
-                j--;
-            }
-
-        }
-    }
-
-    laik_log(2, "Number of slices in ba after removing the douplicate slices: %d\n", ba->count);
-    
-    // check if all the slices are mutually exclussive 
-    bool exclusive = true;
-    for(int i = 0; i < ba->count; i++) 
-    {
-        Laik_Slice* s1 = &(ba->tslice[i].s);
-        int task1 = ba->tslice[i].task;
-        for(int j = i+1; j < ba->count; j++) 
-        {
-            Laik_Slice* s2 = &(ba->tslice[j].s);
-            int task2 = ba->tslice[j].task;
-            if (laik_are_slices_mergeable(s1, s2) && (task1 == task2))
-            {
-                laik_log(2, "  task %d, slice %d, from:%d, to:%d\n",
-                task1, i, s1->from.i[0], s1->to.i[0] );
-                laik_log(2, "  task %d, slice %d, from:%d, to:%d\n",
-                task2, j, s2->from.i[0], s2->to.i[0] );
-                exclusive = false;
-            }
-        }
-    }
-
-    if (exclusive)
-    {
-        laik_log(2, "all the slices are mutually exclusive and cannot be merged anymore\n");
-    }
-    else
-    {
-        laik_log(2, "need to merge the slices\n");
-    }
-
-}
-
 // sort function, called after partitioner run
 static
 int tsgen_cmp(const void *p1, const void *p2)
@@ -697,6 +553,41 @@ void sortSlices(Laik_BorderArray* ba)
     assert(ba->tslice);
     qsort( &(ba->tslice[0]), ba->count,
             sizeof(Laik_TaskSlice_Gen), tsgen_cmp);
+}
+
+static
+void mergeSortedSlices(Laik_BorderArray* ba)
+{
+    assert(ba->tslice); // this is for generic slices
+    if (ba->count == 0) return;
+
+    assert(ba->space->dims == 1); // current algorithm only works for 1d
+
+    // for sorted slices of same task and same mapping, we do one traversal:
+    // either a slice can be merged with the previous one or it can not.
+    // - if yes, the merging only can increase the slice end index, but never
+    //   decrease the start index (due to sorting), thus no merging with
+    //   old slices needs to be checked
+    // - if not, no later slice can be mergable with the previous one, as
+    //   start index is same or larger than current one
+
+    int srcOff = 1, dstOff = 0;
+    for(; srcOff < ba->count; srcOff++) {
+        if ((ba->tslice[srcOff].task != ba->tslice[dstOff].task) ||
+            (ba->tslice[srcOff].tag  != ba->tslice[dstOff].tag) ||
+            (ba->tslice[srcOff].s.from.i[0] > ba->tslice[dstOff].s.to.i[0])) {
+            // different task/tag or not overlapping/directly after:
+            //  not mergable
+            dstOff++;
+            if (dstOff < srcOff)
+                ba->tslice[dstOff] = ba->tslice[srcOff];
+            continue;
+        }
+        // merge: only may need to extend end index to include src slice
+        if (ba->tslice[dstOff].s.to.i[0] < ba->tslice[srcOff].s.to.i[0])
+            ba->tslice[dstOff].s.to.i[0] = ba->tslice[srcOff].s.to.i[0];
+    }
+    ba->count = dstOff + 1;
 }
 
 // (1) update offset array from slices, (2) calculate map numbers from tags
@@ -1449,10 +1340,9 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
         sortSlices(ba);
 
         // check for mergable slices if requested
-        if ((pr->flags & LAIK_PF_Merge) > 0) {
-            BorderArrayMergeSlices(ba);
-            BorderArrayRemoveDuplicateSlices(ba);
-        }
+        if ((pr->flags & LAIK_PF_Merge) > 0)
+            mergeSortedSlices(ba);
+
         updateBorderArrayOffsets(ba);
     }
 
