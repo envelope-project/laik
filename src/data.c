@@ -582,14 +582,14 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
             // let backend do send/recv/reduce actions
 
             Laik_Instance* inst = d->space->inst;
-            if (inst->do_profiling)
-                inst->timer_backend = laik_wtime();
+            if (inst->profiling->do_profiling)
+                inst->profiling->timer_backend = laik_wtime();
 
             assert(inst->backend->execTransition);
             (inst->backend->execTransition)(d, t, fromList, toList);
 
-            if (inst->do_profiling)
-                inst->time_backend += laik_wtime() - inst->timer_backend;
+            if (inst->profiling->do_profiling)
+                inst->profiling->time_backend += laik_wtime() - inst->profiling->timer_backend;
         }
 
         // local copy actions
@@ -664,8 +664,8 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
 void laik_switchto(Laik_Data* d,
                    Laik_Partitioning* toP, Laik_DataFlow toFlow)
 {
-    if (d->space->inst->do_profiling)
-        d->space->inst->timer_total = laik_wtime();
+    if (d->space->inst->profiling->do_profiling)
+        d->space->inst->profiling->timer_total = laik_wtime();
 
     // calculate borders with configured partitioner if borders not set
     if (toP && (!toP->bordersValid))
@@ -725,9 +725,9 @@ void laik_switchto(Laik_Data* d,
     if (toP)
         laik_addDataForPartitioning(toP, d);
 
-    if (d->space->inst->do_profiling)
-        d->space->inst->time_total += laik_wtime() -
-                                     d->space->inst->timer_total;
+    if (d->space->inst->profiling->do_profiling)
+        d->space->inst->profiling->time_total += laik_wtime() -
+                                     d->space->inst->profiling->timer_total;
 }
 
 // switch to another data flow, keep partitioning

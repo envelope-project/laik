@@ -286,6 +286,7 @@ int main(int argc, char* argv[])
     init(&mg, fineGrained);
     if (doPrint) print(&mg);
 
+    laik_enable_profiling_file(inst, "markov_profiling.txt");
     // two 1d arrays, using same space
     Laik_Space* space = laik_new_space_1d(inst, n);
     Laik_Data* data1 = laik_new_data(world, space, laik_Double);

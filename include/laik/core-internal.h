@@ -22,17 +22,13 @@
 #error "include laik-internal.h instead"
 #endif
 
-#define MAX_GROUPS        10
-#define MAX_SPACES        10
-#define MAX_PARTITIONINGS 10
-#define MAX_DATAS         10
-#define MAX_MAPPINGS      10
-#define MAX_AGENTS        10
+#include "ext.h"
+#include "laik-internal.h"
+#include "definitions.h"
 
 
 // key-value store (see below)
 typedef struct _Laik_KVNode Laik_KVNode;
-
 
 struct _Laik_Task {
     int rank;
@@ -77,11 +73,9 @@ struct _Laik_Instance {
 
     Laik_Program_Control* control; //new, for iteration numer and program phase
 
+
     // profiling
-    bool do_profiling, user_timer_active;
-    double timer_total, timer_backend, timer_user;
-    double time_total, time_backend, time_user;
-    void* profile_file;
+    Laik_Profiling_Controller* profiling;
 
     // External Control Related
     Laik_RepartitionControl* repart_ctrl;
