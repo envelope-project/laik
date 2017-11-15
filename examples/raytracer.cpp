@@ -39,7 +39,8 @@
 #include <fstream> 
 #include <vector> 
 #include <iostream> 
-#include <cassert> 
+#include <cassert>
+#include <cstring>
 
 extern "C"{
 #define USE_MPI
