@@ -142,17 +142,18 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
 // for a local index (1d/2d/3d), return offset into memory mapping
 uint64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
 
-// make own partition available for direct access in local memory.
+// Make own partition available for direct access in local memory.
+// A partition for a task can consist of multiple consecutive ranges
+// of memory allocated for the partition. Each range is called a
+// mapping. Each mapping may cover multiple slices.
 //
-// own partition my consist of multiple slices, so <n> is the slice number
-// in the partition, starting from 0. Returns 0 for invalid slice numbers.
-// The number of slices in own partition is returned by
-//   laik_my_slicecount(laik_get_partitioning(<data>));
+// <n> is the mapping ID, going from 0 to number of current mappings -1,
+// see laik_my_mapcount(laik_get_partitioning(<data>)).
 //
-// if layout is 0, it will be choosen by LAIK, and can be requested with
+// If <layout> is 0, it will be choosen by LAIK, and can be requested with
 // laik_map_layout(). Otherwise a new layout with a hint can be provided,
-// and the layout object directly is written to the actually used layout.
-// TODO: API only works for single-slice layouts
+// and the layout object is updated to reflect the used layout.
+// Returns 0 for invalid mapping IDs.
 Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout);
 
 // similar to laik_map, but force a default mapping
