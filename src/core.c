@@ -23,6 +23,9 @@ static Laik_Instance* laik_loginst = 0;
 static int laik_log_fromtask = -1;
 static int laik_log_totask = -1;
 
+//program name
+extern const char *__progname;
+
 int laik_size(Laik_Group* g)
 {
     return g->size;
@@ -370,6 +373,9 @@ void laik_enable_profiling_file(Laik_Instance* i, const char* filename)
     fprintf((FILE*)i->profile_file, "======MEASUREMENT START AT: %lu======\n", 
             (unsigned long) time(NULL));
 
+    fprintf((FILE*)i->profile_file, "======Application %s======\n", 
+            __progname);
+
 }
 
 double laik_get_total_time()
@@ -390,11 +396,14 @@ void laik_writeout_profile()
 {
     if (!laik_profinst) return;
     if (!laik_profinst->profile_file) return;
+    //backend-id, phase, iteration, time_total, time_ackend, user_time
     fprintf( (FILE*)laik_profinst->profile_file,
-             "%s, %d, %d, %f, %f\n",
+             "%s, %d, %d, %f, %f, %f\n",
              laik_profinst->guid,
              laik_profinst->control->cur_phase, laik_profinst->control->cur_iteration,
-             laik_profinst->time_total, laik_profinst->time_backend );
+             laik_profinst->time_total, laik_profinst->time_backend,
+             laik_profinst->time_user
+            );
 }
 
 void laik_close_profiling_file(Laik_Instance* i)

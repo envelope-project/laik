@@ -180,7 +180,7 @@ int main(int argc, char* argv[])
     for(; iter < maxiter; iter++) {
         laik_reset_profiling(inst);
         laik_set_iteration(inst, iter + 1);
-
+        laik_profile_user_start(inst);
         // switch roles: data written before now is read
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
@@ -331,6 +331,7 @@ int main(int argc, char* argv[])
                 }
             }
         }
+        laik_profile_user_stop(inst);
         laik_writeout_profile();
         // TODO: allow repartitioning
     }
