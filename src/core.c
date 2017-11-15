@@ -62,6 +62,7 @@ void laik_finalize(Laik_Instance* inst)
     }
     
     free(inst->control);
+    laik_free_profiling(inst);
 }
 
 // return a backend-dependant string for the location of the calling task
@@ -94,6 +95,7 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     laik_space_init();
     laik_data_init();
     instance->control = laik_program_control_init();
+    instance->profiling = laik_init_profiling();
 
     instance->repart_ctrl = 0;
 
