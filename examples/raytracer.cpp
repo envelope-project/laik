@@ -47,6 +47,12 @@ extern "C"{
 #include "laik-internal.h"
 }
 
+typedef struct _programops{
+    int width;
+    int height;
+    int max_depth;
+}programops_t;
+
 // C++ additions to LAIK header
 inline Laik_DataFlow operator|(Laik_DataFlow a, Laik_DataFlow b)
 {
@@ -54,10 +60,7 @@ inline Laik_DataFlow operator|(Laik_DataFlow a, Laik_DataFlow b)
 }
 
 
-#define MAX_RAY_DEPTH 10 
-
-static 
-int size, rank;
+static int  MAX_RAY_DEPTH = 10;
 
 static inline  
 double mix(const double &a, const double &b, const double &mix) 
@@ -65,7 +68,45 @@ double mix(const double &a, const double &b, const double &mix)
     return b * mix + a * (1 - mix); 
 }
 
+programops_t handleCmdlineArgs(
+    int argc, 
+    char** argv
+){
+    int arg = 1;
+    programops_t ops;
+    memset(&ops, 0x0, sizeof(ops));
+    while((arg < argc) && (argv[arg][0] == '-')) {
+        if (argv[arg][1] == 'w') {
+            arg++;
+            if(arg < argc){
+                ops.width = atoi(argv[arg]);
+            }
+        } 
+        if (argv[arg][1] == 'h') {
+            arg++;
+            if(arg < argc){
+                ops.height = atoi(argv[arg]);
+            }
+        } 
+        if (argv[arg][1] == 'd'){
+            arg++;
+            if(arg < argc){
+                ops.max_depth = atoi(argv[arg]);
+            }
+        } 
+        if (argv[arg][1] == '?') {
+            printf("raytracer [options]\n"
+                   "\nOptions:\n"
+                   " -w: width of output image\n"
+                   " -h: height of the output image\n"
+                   " -d: max recursive depth\n");
+            exit(1);
+        }
+        arg++;
+    }
 
+    return ops;
+}
 
 template<typename T> 
 class Vec3 
@@ -225,7 +266,13 @@ int main(int argc, char **argv)
     Laik_Group* world = laik_world(inst);
     laik_enable_profiling(inst);
     
-    srand48(13); 
+    programops_t ops = handleCmdlineArgs(argc, argv);
+
+    //std::cout << ops.width << ";" << ops.height << ";" << ops.max_depth <<std::endl;
+    unsigned width = ops.width > 0 ?  ops.width : 640;
+    unsigned height = ops.height > 0 ? ops.height : 480;
+    MAX_RAY_DEPTH = ops.max_depth > 0 ? ops.max_depth : MAX_RAY_DEPTH;
+
     std::vector<Sphere> spheres; 
     // position, radius, surface color, reflectivity, transparency, emission color
     spheres.push_back(Sphere(Vec3f( 0.0, -10004, -20), 10000, Vec3f(0.20, 0.20, 0.20), 0, 0.0)); 
@@ -239,9 +286,7 @@ int main(int argc, char **argv)
     spheres.push_back(Sphere(Vec3f(-5.5,      0, -15),     3, Vec3f(0.90, 0.90, 0.90), 1, 0.0)); 
     // light
     spheres.push_back(Sphere(Vec3f( 0.0,     20, -30),     3, Vec3f(0.00, 0.00, 0.00), 0, 0.0, Vec3f(3))); 
-    
-    unsigned width = 6400, height = 4800;
-    
+        
     size_t sz_image = width * height;
 
     Laik_Space* space = laik_new_space_1d(inst, sz_image);
