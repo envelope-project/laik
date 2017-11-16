@@ -19,6 +19,7 @@
 ../src/debug.c
 ../src/external.c
 ../src/partitioner.c
+../src/profiling.c
 ../src/program.c
 ../src/space.c
 
@@ -30,14 +31,16 @@
 ../include/laik/backend.h
 ../include/laik/core.h
 ../include/laik/core-internal.h
-../include/laik/debug.h
-../include/laik/program.h
-../include/laik/program-internal.h
 ../include/laik/data.h
 ../include/laik/data-internal.h
+../include/laik/debug.h
+../include/laik/ext.h
+../include/laik/profiling.h
+../include/laik/profiling-internal.h
+../include/laik/program.h
+../include/laik/program-internal.h
 ../include/laik/space.h
 ../include/laik/space-internal.h
-../include/laik/ext.h
 
 ../examples/Makefile
 ../examples/.gitignore

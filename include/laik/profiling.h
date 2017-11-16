@@ -16,30 +16,44 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LAIK_PROFILING_H
-#define LAIK_PROFILING_H
+#ifndef _LAIK_PROFILING_H_
+#define _LAIK_PROFILING_H_
 
 #ifndef _LAIK_H_
 #error "include laik.h instead"
 #endif
 
+//
+// application controlled profiling
+//
 
 typedef struct _Laik_Profiling_Controller Laik_Profiling_Controller;
+
+// called by laik_init
 Laik_Profiling_Controller* laik_init_profiling(void);
+// called by laik_finalize
 void laik_free_profiling(Laik_Instance* i);
-// profiling
 
-// start profiling for given instance
+// start profiling measurement for given instance
 void laik_enable_profiling(Laik_Instance* i);
+// reset measured time spans
 void laik_reset_profiling(Laik_Instance* i);
-void laik_enable_profiling_file(Laik_Instance* i, const char* filename);
-void laik_close_profiling_file(Laik_Instance* i);
-double laik_get_total_time();
-double laik_get_backend_time();
-void laik_writeout_profile();
-void laik_profile_printf(const char* msg, ...);
+// start user-time measurement
 void laik_profile_user_start(Laik_Instance *i);
+// stop user-time measurement
 void laik_profile_user_stop(Laik_Instance* i);
+// enable output-to-file mode for use of laik_writeout_profile()
+void laik_enable_profiling_file(Laik_Instance* i, const char* filename);
+// get LAIK total time for LAIK instance for which profiling is enabled
+double laik_get_total_time();
+// get LAIK backend time for LAIK instance for which profiling is enabled
+double laik_get_backend_time();
+// for output-to-file mode, write out meassured times
+void laik_writeout_profile();
+// disable output-to-file mode, eventually closing yet open file before
+void laik_close_profiling_file(Laik_Instance* i);
+// print arbitrary text to file in output-to-file mode
+void laik_profile_printf(const char* msg, ...);
 
 
-#endif //LAIK_PROFILING_H
+#endif // _LAIK_PROFILING_H_

@@ -15,13 +15,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LAIK_PROFILING_INTERNAL
-#define LAIK_PROFILING_INTERNAL
+#ifndef _LAIK_PROFILING_INTERNAL_
+#define _LAIK_PROFILING_INTERNAL_
+
+#ifndef _LAIK_INTERNAL_H_
+#error "include laik-internal.h instead"
+#endif
 
 #include "definitions.h"
 
 
-struct _Laik_Profiling_Controller{
+struct _Laik_Profiling_Controller
+{
+    // is profiling currently active?
     bool do_profiling;
     bool user_timer_active;
 
@@ -29,8 +35,8 @@ struct _Laik_Profiling_Controller{
     double time_total, time_backend, time_user;
 
     char filename[MAX_FILENAME_LENGTH];
+    // to avoid including <stdio.h> here: use void* instead of FILE*
     void* profile_file;
 };
 
-
-#endif //LAIK_PROFILING_INTERNAL
+#endif // _LAIK_PROFILING_INTERNAL_
