@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 #ifndef USE_MPI
 
@@ -62,8 +63,6 @@ static int mpi_bug = 0;
 #define PACKBUFSIZE (10*1024*1024)
 //#define PACKBUFSIZE (10*800)
 static char packbuf[PACKBUFSIZE];
-
-
 
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
@@ -118,6 +117,17 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     // for intentionally buggy MPI backend behavior
     char* str = getenv("LAIK_MPI_BUG");
     if (str) mpi_bug = atoi(str);
+
+    // wait for debugger to attach?
+    char* rstr = getenv("LAIK_DEBUG_RANK");
+    if (rstr) {
+        int wrank = atoi(rstr);
+        if ((wrank < 0) || (wrank == rank)) {
+            // as long as "wait" is 1, wait in loop for debugger
+            volatile int wait = 1;
+            while(wait) { usleep(10000); }
+        }
+    }
 
     mpi_instance = inst;
     return inst;
