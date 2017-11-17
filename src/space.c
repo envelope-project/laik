@@ -236,6 +236,10 @@ bool laik_do_init(Laik_DataFlow flow)
 Laik_Space* laik_new_space(Laik_Instance* inst)
 {
     Laik_Space* space = malloc(sizeof(Laik_Space));
+    if (!space) {
+        laik_panic("Out of memory allocating Laik_Space object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     space->id = space_id++;
     space->name = strdup("space-0     ");
@@ -379,6 +383,10 @@ Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s,
 
     a = malloc(sizeof(Laik_BorderArray));
     a->off = malloc(sizeof(int) * (g->size + 1));
+    if ((a == 0) || (a->off == 0)) {
+        laik_panic("Out of memory allocating Laik_BorderArray object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     // number of maps still unknown
     a->myMapOff = 0;
@@ -392,10 +400,19 @@ Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s,
     a->count = 0;
     a->capacity = 4;
 
-    if (useSingle1d)
+    void* p;
+    if (useSingle1d) {
         a->tss1d = malloc(sizeof(Laik_TaskSlice_Single1d) * a->capacity);
-    else
+        p = a->tss1d;
+    }
+    else {
         a->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * a->capacity);
+        p = a->tslice;
+    }
+    if (!p) {
+        laik_panic("Out of memory allocating memory for Laik_BorderArray");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     return a;
 }
@@ -409,6 +426,10 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
         a->capacity = a->capacity * 2;
         a->tslice = realloc(a->tslice,
                             sizeof(Laik_TaskSlice_Gen) * a->capacity);
+        if (!a->tslice) {
+            laik_panic("Out of memory allocating memory for Laik_BorderArray");
+            exit(1); // not actually needed, laik_panic never returns
+        }
     }
     assert((task >= 0) && (task < a->group->size));
     assert(laik_slice_within_space(s, a->space));
@@ -446,6 +467,10 @@ Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a, int task, uint64_t idx
         a->capacity = a->capacity *2;
         a->tss1d = realloc(a->tss1d,
                            sizeof(Laik_TaskSlice_Single1d) * a->capacity);
+        if (!a->tss1d) {
+            laik_panic("Out of memory allocating memory for Laik_BorderArray");
+            exit(1); // not actually needed, laik_panic never returns
+        }
     }
     assert((task >= 0) && (task < a->group->size));
     assert((idx >= a->space->s.from.i[0]) && (idx < a->space->s.to.i[0]));
@@ -666,6 +691,10 @@ void updateBorderArrayOffsetsSI(Laik_BorderArray* ba)
              ba->count, count);
 
     ba->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * count);
+    if (!ba->tslice) {
+        laik_panic("Out of memory allocating memory for Laik_BorderArray");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     // convert into generic slices (already sorted)
     int off = 0, j = 0;
@@ -743,6 +772,10 @@ void updateMyMapOffsets(Laik_BorderArray* ba)
     }
 
     ba->myMapOff = malloc((ba->myMapCount + 1) * sizeof(int));
+    if (!ba->myMapOff) {
+        laik_panic("Out of memory allocating memory for Laik_BorderArray");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     // we only have generic task slices (single-1d are already converted)
     assert(ba->tss1d == 0);
@@ -869,6 +902,11 @@ bool coversSpace(Laik_BorderArray* ba)
     // use a copy of slice list which is just sorted by slice start
     Laik_TaskSlice_Gen* list;
     list = malloc(ba->count * sizeof(Laik_TaskSlice_Gen));
+    if (!list) {
+        laik_panic("Out of memory allocating memory for coversSpace");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
     memcpy(list, ba->tslice, ba->count * sizeof(Laik_TaskSlice_Gen));
     qsort(list, ba->count, sizeof(Laik_TaskSlice_Gen), tsgen_cmpfrom);
 
@@ -982,6 +1020,10 @@ laik_new_partitioning(Laik_Group* group, Laik_Space* space,
 {
     Laik_Partitioning* p;
     p = malloc(sizeof(Laik_Partitioning));
+    if (!p) {
+        laik_panic("Out of memory allocating Laik_Partitioning object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     p->id = part_id++;
     p->name = strdup("partng-0     ");
@@ -1507,6 +1549,10 @@ struct localTOp* appendLocalTOp(Laik_Slice* slc,
         // enlarge temp buffer
         localBufSize = (localBufSize + 20) * 2;
         localBuf = realloc(localBuf, localBufSize * sizeof(struct localTOp));
+        if (!localBuf) {
+            laik_panic("Out of memory allocating memory for Laik_Transition");
+            exit(1); // not actually needed, laik_panic never returns
+        }
     }
     struct localTOp* op = &(localBuf[localBufCount]);
     localBufCount++;
@@ -1529,6 +1575,10 @@ struct initTOp* appendInitTOp(Laik_Slice* slc,
         // enlarge temp buffer
         initBufSize = (initBufSize + 20) * 2;
         initBuf = realloc(initBuf, initBufSize * sizeof(struct initTOp));
+        if (!initBuf) {
+            laik_panic("Out of memory allocating memory for Laik_Transition");
+            exit(1); // not actually needed, laik_panic never returns
+        }
     }
     struct initTOp* op = &(initBuf[initBufCount]);
     initBufCount++;
@@ -1549,6 +1599,10 @@ struct sendTOp* appendSendTOp(Laik_Slice* slc,
         // enlarge temp buffer
         sendBufSize = (sendBufSize + 20) * 2;
         sendBuf = realloc(sendBuf, sendBufSize * sizeof(struct sendTOp));
+        if (!sendBuf) {
+            laik_panic("Out of memory allocating memory for Laik_Transition");
+            exit(1); // not actually needed, laik_panic never returns
+        }
     }
     struct sendTOp* op = &(sendBuf[sendBufCount]);
     sendBufCount++;
@@ -1569,6 +1623,10 @@ struct recvTOp* appendRecvTOp(Laik_Slice* slc,
         // enlarge temp buffer
         recvBufSize = (recvBufSize + 20) * 2;
         recvBuf = realloc(recvBuf, recvBufSize * sizeof(struct recvTOp));
+        if (!recvBuf) {
+            laik_panic("Out of memory allocating memory for Laik_Transition");
+            exit(1); // not actually needed, laik_panic never returns
+        }
     }
     struct recvTOp* op = &(recvBuf[recvBufCount]);
     recvBufCount++;
@@ -1589,6 +1647,10 @@ struct redTOp* appendRedTOp(Laik_Slice* slc,
         // enlarge temp buffer
         redBufSize = (redBufSize + 20) * 2;
         redBuf = realloc(redBuf, redBufSize * sizeof(struct redTOp));
+        if (!redBuf) {
+            laik_panic("Out of memory allocating memory for Laik_Transition");
+            exit(1); // not actually needed, laik_panic never returns
+        }
     }
     struct redTOp* op = &(redBuf[redBufCount]);
     redBufCount++;
@@ -1785,6 +1847,13 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     assert(redOff + redSize == tsize);
 
     Laik_Transition* t = malloc(tsize);
+    if (!t) {
+        laik_log(LAIK_LL_Panic,
+                 "Out of memory allocating Laik_Transition object, size %d",
+                 tsize);
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
     t->dims = dims;
     t->actionCount = localBufCount + initBufCount +
                      sendBufCount + recvBufCount + redBufCount;
@@ -1871,6 +1940,10 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg)
     if (newg->size > oldg->size) {
         free(ba->off);
         ba->off = malloc((newg->size +1) * sizeof(int));
+        if (!ba->off) {
+            laik_panic("Out of memory allocating memory for Laik_BorderArray");
+            exit(1); // not actually needed, laik_panic never returns
+        }
     }
     ba->group = newg;
     sortSlices(ba);

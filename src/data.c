@@ -28,6 +28,10 @@ static int type_id = 0;
 Laik_Type* laik_new_type(char* name, Laik_TypeKind kind, int size)
 {
     Laik_Type* t = malloc(sizeof(Laik_Type));
+    if (!t) {
+        laik_panic("Out of memory allocating Laik_Type object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     t->id = type_id++;
     if (name)
@@ -67,6 +71,10 @@ Laik_SwitchStat* laik_newSwitchStat()
 {
     Laik_SwitchStat* ss;
     ss = malloc(sizeof(Laik_SwitchStat));
+    if (!ss) {
+        laik_panic("Out of memory allocating Laik_SwitchStat object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     ss->switches           = 0;
     ss->switches_noactions = 0;
@@ -112,6 +120,10 @@ Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type)
     assert(group->inst == space->inst);
 
     Laik_Data* d = malloc(sizeof(Laik_Data));
+    if (!d) {
+        laik_panic("Out of memory allocating Laik_Data object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     d->id = data_id++;
     d->name = strdup("data-0     ");
@@ -204,6 +216,10 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
 
     Laik_MappingList* ml;
     ml = malloc(sizeof(Laik_MappingList) + (n-1) * sizeof(Laik_Mapping));
+    if (!ml) {
+        laik_panic("Out of memory allocating Laik_Mapping object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
     ml->count = n;
 
     int mapNo = 0;
@@ -304,6 +320,14 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
         m->base = malloc(m->capacity);
     else
         m->base = (d->allocator->malloc)(d, m->capacity);
+
+    if (!m->base) {
+        laik_log(LAIK_LL_Panic,
+                 "Out of memory allocating memory for mapping "
+                 "(data '%s', mapNo %s, size %llu)",
+                 m->data->name, m->mapNo, m->capacity);
+        exit(1); // not actually needed, laik_log never returns
+    }
 
     // no space around valid indexes
     m->start = m->base;
@@ -796,6 +820,10 @@ void laik_fill_double(Laik_Data* d, double v)
 Laik_Layout* laik_new_layout(Laik_LayoutType t)
 {
     Laik_Layout* l = malloc(sizeof(Laik_Layout));
+    if (!l) {
+        laik_panic("Out of memory allocating Laik_Layout object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     l->type = t;
     l->isFixed = false;
@@ -1262,6 +1290,10 @@ void laik_free(Laik_Data* d)
 Laik_Allocator* laik_new_allocator()
 {
     Laik_Allocator* a = malloc(sizeof(Laik_Allocator));
+    if (!a) {
+        laik_panic("Out of memory allocating Laik_Allocator object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     a->policy = LAIK_MP_NewAllocOnRepartition;
     a->malloc = 0;  // use malloc

@@ -31,6 +31,10 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 {
     Laik_Partitioner* pr;
     pr = malloc(sizeof(Laik_Partitioner));
+    if (!pr) {
+        laik_panic("Out of memory allocating Laik_Partitioner object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     pr->name = name;
     pr->run = run;
@@ -111,6 +115,11 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
     Laik_CopyPartitionerData* data;
     int dsize = sizeof(Laik_CopyPartitionerData);
     data = malloc(dsize);
+    if (!data) {
+        laik_panic("Out of memory allocating Laik_CopyPartitionerData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
 
     data->fromDim = fromDim;
     data->toDim = toDim;
@@ -161,6 +170,7 @@ void runCornerHaloPartitioner(Laik_Partitioner* pr,
 Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth)
 {
     int* data = malloc(sizeof(int));
+    assert(data);
     *data = depth;
 
     return laik_new_partitioner("cornerhalo",
@@ -239,6 +249,7 @@ void runHaloPartitioner(Laik_Partitioner* pr,
 Laik_Partitioner* laik_new_halo_partitioner(int depth)
 {
     int* data = malloc(sizeof(int));
+    assert(data);
     *data = depth;
 
     return laik_new_partitioner("halo", runHaloPartitioner, data, 0);
@@ -427,6 +438,10 @@ Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
     Laik_BlockPartitionerData* data;
     int dsize = sizeof(Laik_BlockPartitionerData);
     data = malloc(dsize);
+    if (!data) {
+        laik_panic("Out of memory allocating Laik_BlockPartitionerData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     data->pdim = pdim;
     data->cycles = cycles;
@@ -611,6 +626,11 @@ laik_new_reassign_partitioner(Laik_Group* newg,
                               const void* userData)
 {
     ReassignData* data = malloc(sizeof(ReassignData));
+    if (!data) {
+        laik_panic("Out of memory allocating ReassignData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
     data->newg = newg;
     data->getIdxW = getIdxW;
     data->userData = userData;

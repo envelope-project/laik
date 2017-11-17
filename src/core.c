@@ -78,6 +78,10 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
 {
     Laik_Instance* instance;
     instance = malloc(sizeof(Laik_Instance));
+    if (!instance) {
+        laik_panic("Out of memory allocating Laik_Instance object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     instance->backend = b;
     instance->backend_data = data;
@@ -173,6 +177,10 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     Laik_Group* g;
 
     g = malloc(sizeof(Laik_Group) + 2 * (i->size) * sizeof(int));
+    if (!g) {
+        laik_panic("Out of memory allocating Laik_Group object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
     i->group[i->group_count] = g;
 
     g->inst = i;
@@ -362,6 +370,7 @@ bool laik_log_begin(Laik_LogLevel l)
     if (current_logBuffer == 0) {
         // init: start with 1k buffer
         current_logBuffer = malloc(1024);
+        assert(current_logBuffer); // cannot call laik_panic
         current_logSize = 1024;
     }
     return true;
@@ -544,6 +553,11 @@ void laik_panic(const char* msg)
 Laik_KVNode* laik_kv_newNode(char* name, Laik_KVNode* parent, Laik_KValue* v)
 {
     Laik_KVNode* n = malloc(sizeof(Laik_KVNode));
+    if (!n) {
+        laik_panic("Out of memory allocating Laik_KVNode object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
     n->name = name; // take ownership
     n->parent = parent;
     n->value = v;
@@ -594,6 +608,11 @@ Laik_KValue* laik_kv_setValue(Laik_KVNode* n,
     assert(nn->value == 0); // should not be set yet
 
     Laik_KValue* v = malloc(sizeof(Laik_KValue));
+    if (!v) {
+        laik_panic("Out of memory allocating Laik_KValue object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
     v->type = LAIK_KV_Struct;
     v->size = size;
     v->vPtr = value;

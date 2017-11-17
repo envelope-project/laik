@@ -70,6 +70,10 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     if (mpi_instance) return mpi_instance;
 
     MPIData* d = malloc(sizeof(MPIData));
+    if (!d) {
+        laik_panic("Out of memory allocating MPIData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
     d->didInit = false;
     d->comm = MPI_COMM_WORLD;
 
@@ -96,6 +100,10 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     // group world
 
     MPIGroupData* gd = malloc(sizeof(MPIGroupData));
+    if (!gd) {
+        laik_panic("Out of memory allocating MPIGroupData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
     gd->comm = MPI_COMM_WORLD;
 
     Laik_Group* g = laik_create_group(inst);
@@ -153,6 +161,10 @@ void laik_mpi_updateGroup(Laik_Group* g)
     MPIGroupData* gd = (MPIGroupData*) g->backend_data;
     assert(gd == 0); // must not be updated yet
     gd = malloc(sizeof(MPIGroupData));
+    if (!gd) {
+        laik_panic("Out of memory allocating MPIGroupData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
     g->backend_data = gd;
 
     laik_log(1, "MPI Comm_split: old myid %d => new myid %d",
