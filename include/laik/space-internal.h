@@ -24,6 +24,9 @@
 
 #include <stdbool.h>
 
+// "laik-internal.h" includes the following. This is just to make IDE happy
+#include "space.h"
+
 void laik_set_index(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3);
 void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
 void laik_sub_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
@@ -193,11 +196,17 @@ struct recvTOp {
     int fromTask;
 };
 
+// referenced in reduction operation within a transition
+struct taskGroup {
+    int count;
+    int* task; // sorted list
+};
+
 // slice to reduce
 struct redTOp {
     Laik_Slice slc;
     Laik_ReductionOperation redOp;
-    int rootTask; // -1: all
+    int inputGroup, outputGroup; // references into group list, or -1: all
 };
 
 struct _Laik_Transition {
@@ -225,6 +234,10 @@ struct _Laik_Transition {
     // slices to reduce
     int redCount;
     struct redTOp *red;
+
+    // groups referenced by reduction operations
+    int groupCount;
+    struct taskGroup *group;
 };
 
 // initialize the LAIK space module, called from laik_new_instance

@@ -235,7 +235,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             assert(fromBase != 0);
             // if current task is receiver, toBase should be allocated
-            if ((op->rootTask == -1) || (op->rootTask == inst->myid))
+            if (laik_isInGroup(t, op->outputGroup, inst->myid))
                 assert(toBase != 0);
 
             MPI_Op mpiRedOp;
@@ -246,12 +246,20 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             MPI_Datatype mpiDataType = getMPIDataType(d);
 
+            int rootTask;
+            if (op->outputGroup == -1) rootTask = -1;
+            else {
+                // TODO: support more then 1 receiver
+                assert(t->group[op->outputGroup].count == 1);
+                rootTask = t->group[op->outputGroup].task[0];
+            }
+
             if (laik_log_begin(1)) {
                 laik_log_append("MPI Reduce (root ");
-                if (op->rootTask == -1)
+                if (rootTask == -1)
                     laik_log_append("ALL");
                 else
-                    laik_log_append("%d", op->rootTask);
+                    laik_log_append("%d", rootTask);
                 if (fromBase == toBase)
                     laik_log_append(", IN_PLACE");
                 laik_log_flush("): from %lu, to %lu, "
@@ -264,7 +272,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 ss->reducedBytes += (to - from) * d->elemsize;
             }
 
-            if (op->rootTask == -1) {
+            if (rootTask == -1) {
                 if (fromBase == toBase)
                     MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
                                   mpiDataType, mpiRedOp, comm);
@@ -275,10 +283,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             else {
                 if (fromBase == toBase)
                     MPI_Reduce(MPI_IN_PLACE, toBase, to - from,
-                               mpiDataType, mpiRedOp, op->rootTask, comm);
+                               mpiDataType, mpiRedOp, rootTask, comm);
                 else
                     MPI_Reduce(fromBase, toBase, to - from,
-                               mpiDataType, mpiRedOp, op->rootTask, comm);
+                               mpiDataType, mpiRedOp, rootTask, comm);
             }
         }
     }

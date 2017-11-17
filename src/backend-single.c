@@ -67,7 +67,7 @@ void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
             uint64_t from = op->slc.from.i[0];
             uint64_t to   = op->slc.to.i[0];
             assert(fromBase != 0);
-            assert((op->rootTask == -1) || (op->rootTask == inst->myid));
+            assert(laik_isInGroup(t, op->outputGroup, inst->myid));
             assert(toBase != 0);
             assert(to > from);
 

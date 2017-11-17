@@ -1511,6 +1511,46 @@ void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p)
 // Laik_Transition
 //
 
+
+static struct taskGroup* groupList = 0;
+static int groupListSize = 0, groupListCount = 0;
+
+void cleanGroupList()
+{
+    for(int i = 0; i < groupListCount; i++)
+        free(groupList[i].task);
+    groupListCount = 0;
+
+    // we keep the groupList array
+}
+
+int getGroupSingle(int task)
+{
+    // already existing?
+    for(int i = 0; i < groupListCount; i++)
+        if ((groupList[i].count == 1) && (groupList[i].task[0] == task))
+            return i;
+
+    if (groupListCount == groupListSize) {
+        // enlarge group list
+        groupListSize = (groupListSize + 10) * 2;
+        groupList = realloc(groupList, groupListSize * sizeof(struct taskGroup));
+        if (!groupList) {
+            laik_panic("Out of memory allocating memory for Laik_Transition");
+            exit(1); // not actually needed, laik_panic never returns
+        }
+    }
+    struct taskGroup* g = &(groupList[groupListCount]);
+    groupListCount++;
+
+    g->count = 1;
+    g->task = malloc(sizeof(int));
+    assert(g->task);
+    g->task[0] = task;
+
+    return groupListCount - 1;
+}
+
 // temporary buffers used when calculating a transition
 static struct localTOp *localBuf = 0;
 static struct initTOp  *initBuf = 0;
@@ -1657,7 +1697,8 @@ struct redTOp* appendRedTOp(Laik_Slice* slc,
 
     op->slc = *slc;
     op->redOp = redOp;
-    op->rootTask = rootTask;
+    op->inputGroup = -1; // all
+    op->outputGroup = getGroupSingle(rootTask);
 
     return op;
 }
@@ -1676,6 +1717,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     Laik_Slice* slc;
 
     cleanTOpBufs(false);
+    cleanGroupList();
 
     // make sure requested operation is consistent
     if (fromBA == 0) {
@@ -1837,14 +1879,22 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     int sendSize  = sendBufCount  * sizeof(struct sendTOp);
     int recvSize  = recvBufCount  * sizeof(struct recvTOp);
     int redSize   = redBufCount   * sizeof(struct redTOp);
-    int tsize = sizeof(Laik_Transition) +
+    // we copy group list into transition object
+    int gListSize = groupListCount * sizeof(struct taskGroup);
+    int tListSize = 0;
+    for (int i = 0; i < groupListCount; i++)
+        tListSize += groupList[i].count * sizeof(int);
+
+    int tsize = sizeof(Laik_Transition) + gListSize + tListSize +
                 localSize + initSize + sendSize + recvSize + redSize;
     int localOff = sizeof(Laik_Transition);
     int initOff  = localOff + localSize;
     int sendOff  = initOff  + initSize;
     int recvOff  = sendOff  + sendSize;
     int redOff   = recvOff  + recvSize;
-    assert(redOff + redSize == tsize);
+    int gListOff = redOff   + redSize;
+    int tListOff = gListOff + gListSize;
+    assert(tListOff + tListSize == tsize);
 
     Laik_Transition* t = malloc(tsize);
     if (!t) {
@@ -1862,16 +1912,29 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     t->send  = (struct sendTOp*)  (((char*)t) + sendOff);
     t->recv  = (struct recvTOp*)  (((char*)t) + recvOff);
     t->red   = (struct redTOp*)   (((char*)t) + redOff);
+    t->group = (struct taskGroup*)(((char*)t) + gListOff);
     t->localCount = localBufCount;
     t->initCount  = initBufCount;
     t->sendCount  = sendBufCount;
     t->recvCount  = recvBufCount;
     t->redCount   = redBufCount;
+    t->groupCount = groupListCount;
     memcpy(t->local, localBuf, localSize);
     memcpy(t->init, initBuf,  initSize);
     memcpy(t->send, sendBuf,  sendSize);
     memcpy(t->recv, recvBuf,  recvSize);
     memcpy(t->red,  redBuf,   redSize);
+
+    // copy group list and task list of each group into transition object
+    char* tList = ((char*)t) + tListOff;
+    for (int i = 0; i < groupListCount; i++) {
+        t->group[i].count = groupList[i].count;
+        t->group[i].task = (int*) tList;
+        tListSize = groupList[i].count * sizeof(int);
+        memcpy(tList, groupList[i].task, tListSize);
+        tList += tListSize;
+    }
+    assert(tList == ((char*)t) + tsize);
 
     return t;
 }

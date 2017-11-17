@@ -148,6 +148,23 @@ void laik_log_DataFlow(Laik_DataFlow flow)
         laik_log_append("none");
 }
 
+void laik_log_TransitionGroup(Laik_Transition* t, int group)
+{
+    if (group == -1) {
+        laik_log_append("(all)");
+        return;
+    }
+
+    assert(group < t->groupCount);
+    struct taskGroup* tg = &(t->group[group]);
+
+    laik_log_append("(");
+    for(int i = 0; i < tg->count; i++) {
+        if (i > 0) laik_log_append(", ");
+        laik_log_append("T%d", tg->task[i]);
+    }
+    laik_log_append(")");
+}
 
 void laik_log_Transition(Laik_Transition* t)
 {
@@ -197,10 +214,13 @@ void laik_log_Transition(Laik_Transition* t)
         laik_log_append("\n   %2d reduc: ", t->redCount);
         for(int i=0; i<t->redCount; i++) {
             if (i>0) laik_log_append(", ");
-            laik_log_Reduction(t->red[i].redOp);
             laik_log_Slice(t->dims, &(t->red[i].slc));
-            laik_log_append("=> %s",
-                            (t->red[i].rootTask == -1) ? "all":"master");
+            laik_log_append(" ");
+            laik_log_TransitionGroup(t, t->red[i].inputGroup);
+            laik_log_append(" ==(");
+            laik_log_Reduction(t->red[i].redOp);
+            laik_log_append(")=> ");
+            laik_log_TransitionGroup(t, t->red[i].outputGroup);
         }
     }
 }

@@ -18,9 +18,21 @@
 #ifndef _LAIK_BACKEND_H_
 #define _LAIK_BACKEND_H_
 
-#ifndef _LAIK_H_
-#error "include laik.h instead"
+//
+// Header file defining the interface between LAIK and a LAIK backend
+// This is not public LAIK API, but for backend implementations.
+// Do not include this file in LAIK applications!
+//
+
+#ifndef _LAIK_INTERNAL_H_
+#error "include laik-internal.h instead"
 #endif
+
+// "laik-internal.h" includes all the following. This is just to make IDE happy
+#include "core.h"
+#include "space.h"
+#include "space-internal.h"
+#include "data-internal.h"
 
 // LAIK communication back-end
 struct _Laik_Backend {
@@ -45,5 +57,11 @@ struct _Laik_Backend {
 
   // TODO: async interface: start sending / register receiving / probe
 };
+
+
+// helpers for backends
+
+bool laik_isInGroup(Laik_Transition* t, int group, int task);
+
 
 #endif // _LAIK_BACKEND_H_

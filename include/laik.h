@@ -23,7 +23,6 @@
 #include "laik/space.h"
 #include "laik/data.h"
 #include "laik/debug.h"
-#include "laik/backend.h"
 #include "laik/program.h"
 #include "laik/profiling.h"
 #include "laik/ext.h"
