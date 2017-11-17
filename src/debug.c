@@ -156,7 +156,7 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
     }
 
     assert(group < t->groupCount);
-    struct taskGroup* tg = &(t->group[group]);
+    TaskGroup* tg = &(t->group[group]);
 
     laik_log_append("(");
     for(int i = 0; i < tg->count; i++) {

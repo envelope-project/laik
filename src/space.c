@@ -1507,14 +1507,19 @@ void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p)
 }
 
 
+
 //
 // Laik_Transition
 //
 
 
-static struct taskGroup* groupList = 0;
+// helper functions for laik_calc_transition
+
+
+static TaskGroup* groupList = 0;
 static int groupListSize = 0, groupListCount = 0;
 
+static
 void cleanGroupList()
 {
     for(int i = 0; i < groupListCount; i++)
@@ -1524,32 +1529,165 @@ void cleanGroupList()
     // we keep the groupList array
 }
 
-int getGroupSingle(int task)
+static
+TaskGroup* newTaskGroup(int* group)
+{
+    if (groupListCount == groupListSize) {
+        // enlarge group list
+        groupListSize = (groupListSize + 10) * 2;
+        groupList = realloc(groupList, groupListSize * sizeof(TaskGroup));
+        if (!groupList) {
+            laik_panic("Out of memory allocating memory for Laik_Transition");
+            exit(1); // not actually needed, laik_panic never returns
+        }
+    }
+    TaskGroup* g = &(groupList[groupListCount]);
+    if (group) *group = groupListCount;
+    groupListCount++;
+
+    g->count = 0; // invalid
+    g->task = 0;
+
+    return g;
+}
+
+static int getTaskGroupSingle(int task)
 {
     // already existing?
     for(int i = 0; i < groupListCount; i++)
         if ((groupList[i].count == 1) && (groupList[i].task[0] == task))
             return i;
 
-    if (groupListCount == groupListSize) {
-        // enlarge group list
-        groupListSize = (groupListSize + 10) * 2;
-        groupList = realloc(groupList, groupListSize * sizeof(struct taskGroup));
-        if (!groupList) {
-            laik_panic("Out of memory allocating memory for Laik_Transition");
-            exit(1); // not actually needed, laik_panic never returns
-        }
-    }
-    struct taskGroup* g = &(groupList[groupListCount]);
-    groupListCount++;
+    int group;
+    TaskGroup* g = newTaskGroup(&group);
 
     g->count = 1;
     g->task = malloc(sizeof(int));
     assert(g->task);
     g->task[0] = task;
 
-    return groupListCount - 1;
+    return group;
 }
+
+// append given task group if not already in groupList, return index
+static int getTaskGroup(TaskGroup* tg)
+{
+    // already existing?
+    int i, j;
+    for(i = 0; i < groupListCount; i++) {
+        if (tg->count != groupList[i].count) continue;
+        for(j = 0; j < tg->count; j++)
+            if (tg->task[j] != groupList[i].task[j]) break;
+        if (j == tg->count)
+            return i; // found
+    }
+
+    int group;
+    TaskGroup* g = newTaskGroup(&group);
+
+    g->count = tg->count;
+    int tsize = tg->count * sizeof(int);
+    g->task = malloc(tsize);
+    assert(g->task);
+    memcpy(g->task, tg->task, tsize);
+
+    return group;
+}
+
+
+// only for 1d
+typedef struct _SliceBorder {
+    uint64_t b;
+    int task;
+    unsigned int isStart :1;
+    unsigned int isInput :1;
+} SliceBorder;
+
+static SliceBorder* borderList = 0;
+int borderListSize = 0, borderListCount = 0;
+
+static
+void cleanBorderList()
+{
+    borderListCount = 0;
+}
+
+static
+void appendBorder(uint64_t b, int task, bool isStart, bool isInput)
+{
+    if (borderListCount == borderListSize) {
+        // enlarge list
+        borderListSize = (borderListSize + 10) * 2;
+        borderList = realloc(borderList, borderListSize * sizeof(SliceBorder));
+        if (!borderList) {
+            laik_panic("Out of memory allocating memory for Laik_Transition");
+            exit(1); // not actually needed, laik_panic never returns
+        }
+    }
+    SliceBorder *sb = &(borderList[borderListCount]);
+    borderListCount++;
+
+    sb->b = b;
+    sb->task = task;
+    sb->isStart = isStart ? 1 : 0;
+    sb->isInput = isInput ? 1 : 0;
+
+    laik_log(1, "add border %lu, task %d (%s, %s)",
+             b, task, isStart ? "start" : "end", isInput ? "input" : "output");
+}
+
+static int sb_cmp(const void *p1, const void *p2)
+{
+    const SliceBorder* sb1 = (const SliceBorder*) p1;
+    const SliceBorder* sb2 = (const SliceBorder*) p2;
+    return sb1->b - sb2->b; // order just by border
+}
+
+static bool addTask(TaskGroup* g, int task, int maxTasks)
+{
+    int o = 0;
+    while(o < g->count) {
+        if (task < g->task[o]) break;
+        if (task == g->task[o]) return false; // already in group
+        o++;
+    }
+    while(o < g->count) {
+        int tmp = g->task[o];
+        g->task[o] = task;
+        task = tmp;
+        o++;
+    }
+    assert(g->count < maxTasks);
+    g->task[o] = task;
+    g->count++;
+    return true;
+}
+
+static bool removeTask(TaskGroup* g, int task)
+{
+    if (g->count == 0) return false;
+    int o = 0;
+    while(o < g->count) {
+        if (task < g->task[o]) return false; // not found
+        if (task == g->task[o]) break;
+        o++;
+    }
+    o++;
+    while(o < g->count) {
+        g->task[o - 1] = g->task[o];
+        o++;
+    }
+    g->count--;
+    return true;
+}
+
+static bool isInTaskGroup(TaskGroup* g, int task)
+{
+    for(int i = 0; i< g->count; i++)
+        if (task == g->task[i]) return true;
+    return false;
+}
+
 
 // temporary buffers used when calculating a transition
 static struct localTOp *localBuf = 0;
@@ -1681,7 +1819,8 @@ struct recvTOp* appendRecvTOp(Laik_Slice* slc,
 
 static
 struct redTOp* appendRedTOp(Laik_Slice* slc,
-                            Laik_ReductionOperation redOp, int rootTask)
+                            Laik_ReductionOperation redOp,
+                            int inputGroup, int outputGroup)
 {
     if (redBufCount == redBufSize) {
         // enlarge temp buffer
@@ -1697,10 +1836,117 @@ struct redTOp* appendRedTOp(Laik_Slice* slc,
 
     op->slc = *slc;
     op->redOp = redOp;
-    op->inputGroup = -1; // all
-    op->outputGroup = getGroupSingle(rootTask);
+    op->inputGroup = inputGroup;
+    op->outputGroup = outputGroup;
 
     return op;
+}
+
+
+// find all slices where this task takes part in a reduction, and add
+// them to the reduction operation list
+static
+void calcAddReductions(Laik_Group* group,
+                       Laik_ReductionOperation redOp,
+                       Laik_BorderArray* fromBA, Laik_BorderArray* toBA)
+{
+    // add slice borders of all tasks
+    cleanBorderList();
+    for(int i = 0; i < fromBA->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(fromBA->tslice[i]);
+        appendBorder(ts->s.from.i[0], ts->task, true, true);
+        appendBorder(ts->s.to.i[0], ts->task, false, true);
+    }
+    for(int i = 0; i < toBA->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(toBA->tslice[i]);
+        appendBorder(ts->s.from.i[0], ts->task, true, false);
+        appendBorder(ts->s.to.i[0], ts->task, false, false);
+    }
+    if (borderListCount == 0) return;
+
+    // order by border to travers in border order
+    qsort(borderList, borderListCount, sizeof(SliceBorder), sb_cmp);
+
+    // add list end marker
+    int myid = group->myid;
+    uint64_t endBorder = borderList[borderListCount-1].b + 1;
+    appendBorder(endBorder, myid, false, false);
+
+#define MAX_TASKS 32
+    int inputTask[MAX_TASKS], outputTask[MAX_TASKS];
+    TaskGroup inputGroup, outputGroup;
+    inputGroup.count = 0;
+    inputGroup.task = inputTask;
+    outputGroup.count = 0;
+    outputGroup.task = outputTask;
+
+    // travers borders and if this task has reduction input or wants output,
+    // append reduction action to transaction
+
+    int myCurrentActivity = 0, myOldActivity = 0; // bit0: input, bit1: output
+    uint64_t lastBorder = borderList[0].b;
+    uint64_t oldBorder = borderList[0].b;
+    Laik_Slice slc;
+    for(int i = 0; i < borderListCount; i++) {
+        SliceBorder* sb = &(borderList[i]);
+
+        laik_log(1, "processing border %lu, task %d (%s, %s)",
+                 sb->b, sb->task,
+                 sb->isStart ? "start" : "end",
+                 sb->isInput ? "input" : "output");
+
+        if (sb->b > lastBorder) {
+            laik_log(1, "  range (%lu - %lu), act (%d - %d)",
+                     oldBorder, lastBorder, myOldActivity, myCurrentActivity);
+
+            // all tasks at border lastBorder are processed
+            if (myOldActivity > 0) {
+                assert(isInTaskGroup(&inputGroup, myid) ||
+                       isInTaskGroup(&outputGroup, myid));
+
+                // add reduction operation
+                slc.from.i[0] = oldBorder;
+                slc.to.i[0] = lastBorder;
+                int in = getTaskGroup(&inputGroup);
+                int out = getTaskGroup(&outputGroup);
+                appendRedTOp(&slc, redOp, in, out);
+            }
+            myOldActivity = myCurrentActivity;
+            oldBorder = lastBorder;
+            lastBorder = sb->b;
+
+            if (sb->b == endBorder) {
+                assert(sb->b == myid);
+                return;
+            }
+        }
+
+        // update input/output task lists and activity flags of this task
+        bool isOk = true;
+        if (sb->isInput) {
+            if (sb->isStart) {
+                isOk = addTask(&inputGroup, sb->task, MAX_TASKS);
+                if (sb->task == myid) myCurrentActivity |= 1;
+            }
+            else {
+                isOk = removeTask(&inputGroup, sb->task);
+                if (sb->task == myid) myCurrentActivity &= ~1;
+            }
+        }
+        else {
+            if (sb->isStart) {
+                isOk = addTask(&outputGroup, sb->task, MAX_TASKS);
+                if (sb->task == myid) myCurrentActivity |= 2;
+            }
+            else {
+                isOk = removeTask(&outputGroup, sb->task);
+                if (sb->task == myid) myCurrentActivity &= ~2;
+            }
+        }
+        assert(isOk);
+    }
+    // we never should reach this point, as we return at end marker
+    assert(0);
 }
 
 
@@ -1789,17 +2035,29 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
         }
 
         // something to reduce?
-        if (laik_is_reduction(fromFlow)) {
-            // reductions always should involve everyone
-            assert(bordersIsAll(fromBA));
-            if (laik_do_copyin(toFlow)) {
+        if (laik_is_reduction(fromFlow) && laik_do_copyin(toFlow)) {
+            // special case: reduction on full space involving everyone?
+            if (bordersIsAll(fromBA)) {
                 // reduction result either goes to all or master
-                int root = bordersIsSingle(toBA);
-                assert(bordersIsAll(toBA) || (root == 0));
+                int task = bordersIsSingle(toBA);
+                int outputGroup;
+                if (task < 0) {
+                    // output is not a single task: must be all
+                    assert(bordersIsAll(toBA));
+                    // output -1 is group ALL
+                    outputGroup = -1;
+                }
+                else
+                    outputGroup = getTaskGroupSingle(task);
 
                 appendRedTOp( &(space->s), // complete space
                               laik_get_reduction(fromFlow),
-                              (root >= 0) ? root : -1);
+                              -1, outputGroup);
+            }
+            else {
+                assert(dims == 1);
+                calcAddReductions(group, laik_get_reduction(fromFlow),
+                                  fromBA, toBA);
             }
         }
 
@@ -1880,7 +2138,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     int recvSize  = recvBufCount  * sizeof(struct recvTOp);
     int redSize   = redBufCount   * sizeof(struct redTOp);
     // we copy group list into transition object
-    int gListSize = groupListCount * sizeof(struct taskGroup);
+    int gListSize = groupListCount * sizeof(TaskGroup);
     int tListSize = 0;
     for (int i = 0; i < groupListCount; i++)
         tListSize += groupList[i].count * sizeof(int);
@@ -1912,7 +2170,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
     t->send  = (struct sendTOp*)  (((char*)t) + sendOff);
     t->recv  = (struct recvTOp*)  (((char*)t) + recvOff);
     t->red   = (struct redTOp*)   (((char*)t) + redOff);
-    t->group = (struct taskGroup*)(((char*)t) + gListOff);
+    t->group = (TaskGroup*)       (((char*)t) + gListOff);
     t->localCount = localBufCount;
     t->initCount  = initBufCount;
     t->sendCount  = sendBufCount;

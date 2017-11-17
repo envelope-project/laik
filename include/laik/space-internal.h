@@ -197,10 +197,10 @@ struct recvTOp {
 };
 
 // referenced in reduction operation within a transition
-struct taskGroup {
+typedef struct _TaskGroup {
     int count;
     int* task; // sorted list
-};
+} TaskGroup;
 
 // slice to reduce
 struct redTOp {
@@ -237,7 +237,7 @@ struct _Laik_Transition {
 
     // groups referenced by reduction operations
     int groupCount;
-    struct taskGroup *group;
+    TaskGroup *group;
 };
 
 // initialize the LAIK space module, called from laik_new_instance
