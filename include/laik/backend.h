@@ -27,6 +27,12 @@ struct _Laik_Backend {
   char* name;
   void (*finalize)(Laik_Instance*);
 
+  // prepare the execution of a transition: setup reduction groups etc.
+  void (*prepareTransition)(Laik_Data*, Laik_Transition*);
+
+  // free resources allocated in prepareTransition for given transition
+  void (*cleanupTransition)(Laik_Data*, Laik_Transition*);
+
   // execute a transition from mapping in <from> to <to>
   void (*execTransition)(Laik_Data*, Laik_Transition*,
                          Laik_MappingList* from, Laik_MappingList* to);

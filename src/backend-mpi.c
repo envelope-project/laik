@@ -36,7 +36,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t,
 void laik_mpi_updateGroup(Laik_Group*);
 
 static Laik_Backend laik_backend_mpi = {"MPI Backend",
-                                        laik_mpi_finalize,
+                                        laik_mpi_finalize, 0, 0,
                                         laik_mpi_execTransition,
                                         laik_mpi_updateGroup};
 static Laik_Instance* mpi_instance = 0;

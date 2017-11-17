@@ -15,7 +15,7 @@
 void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
                                 Laik_MappingList* fromList, Laik_MappingList* toList);
 
-static Laik_Backend laik_backend_single = {"Single Task Backend", 0,
+static Laik_Backend laik_backend_single = {"Single Task Backend", 0, 0, 0,
                                            laik_single_execTransition, 0 };
 static Laik_Instance* single_instance = 0;
 
