@@ -239,6 +239,7 @@ int main(int argc, char* argv[])
     int doIndirection = 0;
     int useSingleIndex = 0;
     int fineGrained = 0;
+    int doProfiling = 0;
     doPrint = 0;
 
     int arg = 1;
@@ -247,7 +248,8 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'i') doIndirection = 1;
         if (argv[arg][1] == 's') useSingleIndex = 1;
         if (argv[arg][1] == 'f') fineGrained = 1;
-        if (argv[arg][1] == 'p') doPrint = 1;
+        if (argv[arg][1] == 'v') doPrint = 1;
+        if (argv[arg][1] == 'p') doProfiling = 1;
         if (argv[arg][1] == 'h') {
             printf("markov [options] [<statecount> [<fan-in> [<iterations>]]]\n"
                    "\nOptions:\n"
@@ -255,7 +257,8 @@ int main(int argc, char* argv[])
                    " -c: use a compact mapping (implies -i)\n"
                    " -s: use single index hint\n"
                    " -f: use pseudo-random connectivity (much more slices)\n"
-                   " -p: print connectivity\n"
+                   " -v: verbose: print connectivity\n"
+                   " -p: write profiling measurements to 'markov_profiling.txt'\n"
                    " -h: this help text\n");
             exit(1);
         }
@@ -286,7 +289,9 @@ int main(int argc, char* argv[])
     init(&mg, fineGrained);
     if (doPrint) print(&mg);
 
-    laik_enable_profiling_file(inst, "markov_profiling.txt");
+    if (doProfiling)
+        laik_enable_profiling_file(inst, "markov_profiling.txt");
+
     // two 1d arrays, using same space
     Laik_Space* space = laik_new_space_1d(inst, n);
     Laik_Data* data1 = laik_new_data(world, space, laik_Double);
