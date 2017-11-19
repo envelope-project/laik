@@ -1515,6 +1515,9 @@ void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p)
 
 // helper functions for laik_calc_transition
 
+// print verbose debug output for creating slices for reductions?
+#define DEBUG_REDUCTIONSLICES 1
+
 
 static TaskGroup* groupList = 0;
 static int groupListSize = 0, groupListCount = 0;
@@ -1632,8 +1635,10 @@ void appendBorder(uint64_t b, int task, bool isStart, bool isInput)
     sb->isStart = isStart ? 1 : 0;
     sb->isInput = isInput ? 1 : 0;
 
-    laik_log(1, "add border %lu, task %d (%s, %s)",
+#ifdef DEBUG_REDUCTIONSLICES
+    laik_log(1, "  add border %lu, task %d (%s, %s)",
              b, task, isStart ? "start" : "end", isInput ? "input" : "output");
+#endif
 }
 
 static int sb_cmp(const void *p1, const void *p2)
@@ -1850,6 +1855,8 @@ void calcAddReductions(Laik_Group* group,
                        Laik_ReductionOperation redOp,
                        Laik_BorderArray* fromBA, Laik_BorderArray* toBA)
 {
+    laik_log(1, "calc reductions:");
+
     // add slice borders of all tasks
     cleanBorderList();
     for(int i = 0; i < fromBA->count; i++) {
@@ -1867,11 +1874,6 @@ void calcAddReductions(Laik_Group* group,
     // order by border to travers in border order
     qsort(borderList, borderListCount, sizeof(SliceBorder), sb_cmp);
 
-    // add list end marker
-    int myid = group->myid;
-    uint64_t endBorder = borderList[borderListCount-1].b + 1;
-    appendBorder(endBorder, myid, false, false);
-
 #define MAX_TASKS 32
     int inputTask[MAX_TASKS], outputTask[MAX_TASKS];
     TaskGroup inputGroup, outputGroup;
@@ -1883,70 +1885,85 @@ void calcAddReductions(Laik_Group* group,
     // travers borders and if this task has reduction input or wants output,
     // append reduction action to transaction
 
-    int myCurrentActivity = 0, myOldActivity = 0; // bit0: input, bit1: output
-    uint64_t lastBorder = borderList[0].b;
-    uint64_t oldBorder = borderList[0].b;
+    int myid = group->myid;
+    int myActivity = 0; // bit0: input, bit1: output
     Laik_Slice slc;
     for(int i = 0; i < borderListCount; i++) {
         SliceBorder* sb = &(borderList[i]);
 
+#ifdef DEBUG_REDUCTIONSLICES
         laik_log(1, "processing border %lu, task %d (%s, %s)",
                  sb->b, sb->task,
                  sb->isStart ? "start" : "end",
                  sb->isInput ? "input" : "output");
-
-        if (sb->b > lastBorder) {
-            laik_log(1, "  range (%lu - %lu), act (%d - %d)",
-                     oldBorder, lastBorder, myOldActivity, myCurrentActivity);
-
-            // all tasks at border lastBorder are processed
-            if (myOldActivity > 0) {
-                assert(isInTaskGroup(&inputGroup, myid) ||
-                       isInTaskGroup(&outputGroup, myid));
-
-                // add reduction operation
-                slc.from.i[0] = oldBorder;
-                slc.to.i[0] = lastBorder;
-                int in = getTaskGroup(&inputGroup);
-                int out = getTaskGroup(&outputGroup);
-                appendRedTOp(&slc, redOp, in, out);
-            }
-            myOldActivity = myCurrentActivity;
-            oldBorder = lastBorder;
-            lastBorder = sb->b;
-
-            if (sb->b == endBorder) {
-                assert(sb->b == myid);
-                return;
-            }
-        }
+#endif
 
         // update input/output task lists and activity flags of this task
         bool isOk = true;
         if (sb->isInput) {
             if (sb->isStart) {
                 isOk = addTask(&inputGroup, sb->task, MAX_TASKS);
-                if (sb->task == myid) myCurrentActivity |= 1;
+                if (sb->task == myid) myActivity |= 1;
             }
             else {
                 isOk = removeTask(&inputGroup, sb->task);
-                if (sb->task == myid) myCurrentActivity &= ~1;
+                if (sb->task == myid) myActivity &= ~1;
             }
         }
         else {
             if (sb->isStart) {
                 isOk = addTask(&outputGroup, sb->task, MAX_TASKS);
-                if (sb->task == myid) myCurrentActivity |= 2;
+                if (sb->task == myid) myActivity |= 2;
             }
             else {
                 isOk = removeTask(&outputGroup, sb->task);
-                if (sb->task == myid) myCurrentActivity &= ~2;
+                if (sb->task == myid) myActivity &= ~2;
             }
         }
         assert(isOk);
+
+        if ((i < borderListCount - 1) && (borderList[i + 1].b > sb->b)) {
+            // about to leave a range with given input/output tasks
+            uint64_t nextBorder = borderList[i + 1].b;
+
+#ifdef DEBUG_REDUCTIONSLICES
+            laik_log(1, "  range (%lu - %lu), act %d",
+                     sb->b, nextBorder, myActivity);
+#endif
+
+            if (myActivity > 0) {
+                assert(isInTaskGroup(&inputGroup, myid) ||
+                       isInTaskGroup(&outputGroup, myid));
+
+                // add reduction operation
+                slc.from.i[0] = sb->b;
+                slc.to.i[0] = nextBorder;
+                int in = getTaskGroup(&inputGroup);
+                int out = getTaskGroup(&outputGroup);
+
+#ifdef DEBUG_REDUCTIONSLICES
+                laik_log_begin(1);
+                laik_log_append("  adding (%lu - %lu), in %d:(",
+                                sb->b, nextBorder, in);
+                for(int i = 0; i < groupList[in].count; i++) {
+                    if (i > 0) laik_log_append(", ");
+                    laik_log_append("T%d", groupList[in].task[i]);
+                }
+                laik_log_append("), out %d:(", out);
+                for(int i = 0; i < groupList[out].count; i++) {
+                    if (i > 0) laik_log_append(", ");
+                    laik_log_append("T%d", groupList[out].task[i]);
+                }
+                laik_log_flush(")");
+#endif
+
+                appendRedTOp(&slc, redOp, in, out);
+            }
+        }
     }
-    // we never should reach this point, as we return at end marker
-    assert(0);
+    // all tasks should be removed from input/output groups
+    assert(inputGroup.count == 0);
+    assert(outputGroup.count == 0);
 }
 
 
