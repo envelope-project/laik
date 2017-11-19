@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #ifndef USE_MPI
@@ -112,7 +113,8 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     g->myid = inst->myid;
     g->backend_data = gd;
 
-    laik_log(1, "MPI backend initialized (location '%s')\n", inst->mylocation);
+    laik_log(1, "MPI backend initialized (location '%s', pid %d)\n",
+             inst->mylocation, (int) getpid());
 
     // for intentionally buggy MPI backend behavior
     char* str = getenv("LAIK_MPI_BUG");
