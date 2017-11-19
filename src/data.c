@@ -342,9 +342,16 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     // TODO: assume that default layout was requested:
     // default is: elements on dim0 consecutive, then dim1, then dim2
     l->stride[0] = 1;
-    l->stride[1] = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
-    l->stride[2] = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
-    l->stride[2] *= l->stride[1];
+    if (l->dims > 1)
+        l->stride[1] = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
+    else
+        l->stride[1] = 0; // not used
+    if (l->dims > 2) {
+        l->stride[2] = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
+        l->stride[2] *= l->stride[1];
+    }
+    else
+        l->stride[2] = 0; // not used
     l->isFixed = true;
     l->pack = laik_pack_def;
     l->unpack = laik_unpack_def;
