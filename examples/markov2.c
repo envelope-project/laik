@@ -249,6 +249,7 @@ int main(int argc, char* argv[])
     int doIndirection = 0;
     int useSingleIndex = 0;
     int fineGrained = 0;
+    int doProfiling = 0;
     doPrint = 0;
 
     int arg = 1;
@@ -258,6 +259,7 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 's') useSingleIndex = 1;
         if (argv[arg][1] == 'f') fineGrained = 1;
         if (argv[arg][1] == 'p') doPrint = 1;
+        if (argv[arg][1] == 'z') doProfiling = 1;
         if (argv[arg][1] == 'h') {
             printf("markov [options] [<statecount> [<fan-out> [<iterations>]]]\n"
                    "\nOptions:\n"
@@ -300,6 +302,11 @@ int main(int argc, char* argv[])
     Laik_Space* space = laik_new_space_1d(inst, n);
     Laik_Data* data1 = laik_new_data(world, space, laik_Double);
     Laik_Data* data2 = laik_new_data(world, space, laik_Double);
+
+    //profiling
+    if(doProfiling){
+        laik_enable_profiling_file(inst, "markov2.csv");
+    }
 
     // partitionings:
     // - pRead  : distributes the states owned by tasks, propagating from
@@ -360,13 +367,22 @@ int main(int argc, char* argv[])
         v[off] = 1.0;
     }
 
+    laik_reset_profiling(inst);
+    laik_profile_user_start(inst);
     Laik_Data* dRes;
     if (doIndirection)
         dRes = runIndirection(&mg, miter, data1, data2, idata, pWrite, pRead);
     else
         dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
 
+    laik_profile_user_stop(inst);
+    laik_writeout_profile();
+
+    laik_reset_profiling(inst);
     laik_switchto(dRes, pMaster, LAIK_DF_CopyIn);
+    laik_writeout_profile();
+
+
     laik_map_def1(dRes, (void**) &v, &count);
     if (laik_myid(world) == 0) {
         assert(count == n);
@@ -377,6 +393,8 @@ int main(int argc, char* argv[])
                v[0], v[1], v[2], sum);
     }
 
+    laik_reset_profiling(inst);
+    laik_profile_user_start(inst);
     if (laik_myid(world) == 0)
         printf("Start with state 1 prob 1 ...\n");
     laik_switchto(data1, pRead, LAIK_DF_CopyOut);
@@ -386,6 +404,12 @@ int main(int argc, char* argv[])
     if (laik_global2local_1d(data1, 1, &off))
         v[off] = 1.0;
 
+    laik_profile_user_stop(inst);
+    laik_writeout_profile();
+
+
+    laik_reset_profiling(inst);
+    laik_profile_user_start(inst);
     if (doIndirection)
         dRes = runIndirection(&mg, miter, data1, data2, idata, pWrite, pRead);
     else
@@ -400,6 +424,12 @@ int main(int argc, char* argv[])
         printf("  result probs: p0 = %g, p1 = %g, p2 = %g, Sum: %f\n",
                v[0], v[1], v[2], sum);
     }
+
+    laik_profile_user_stop(inst);
+    laik_writeout_profile();
+
+    laik_reset_profiling(inst);
+    laik_profile_user_start(inst);
 
     if (laik_myid(world) == 0)
         printf("Start with all probs equal ...\n");
@@ -423,6 +453,8 @@ int main(int argc, char* argv[])
         printf("  result probs: p0 = %g, p1 = %g, p2 = %g, Sum: %f\n",
                v[0], v[1], v[2], sum);
     }
+    laik_profile_user_stop(inst);
+    laik_writeout_profile();
 
     laik_finalize(inst);
     return 0;
