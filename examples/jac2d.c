@@ -54,13 +54,22 @@ int main(int argc, char* argv[])
     int maxiter = 0;
     int repart = 0; // enforce repartitioning after <repart> iterations
     bool use_cornerhalo = true; // use halo partitioner including corners?
+    bool do_profiling = false;
+    bool do_sum = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
-        if (argv[arg][1] == 'n')
-            use_cornerhalo = false;
+        if (argv[arg][1] == 'n') use_cornerhalo = false;
+        if (argv[arg][1] == 'p') do_profiling = true;
+        if (argv[arg][1] == 's') do_sum = true;
         if (argv[arg][1] == 'h') {
-            printf("Usage: %s [-n] <side width> <maxiter> <repart>\n", argv[0]);
+            printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
+                   "Options:\n"
+                   " -n : use partitioner which does not include corners\n"
+                   " -p : write profiling data to 'jac2d_profiling.txt'\n"
+                   " -s : print value sum at end (warning: sum done at master)\n"
+                   " -h : print this help text and exit\n",
+                   argv[0]);
             exit(1);
         }
         arg++;
@@ -81,6 +90,10 @@ int main(int argc, char* argv[])
             printf("\n  with repartitioning every %d iterations\n", repart);
         printf("\n");
     }
+
+    // start profiling interface
+    if (do_profiling)
+        laik_enable_profiling_file(inst, "jac2d_profiling.txt");
 
     double *baseR, *baseW, *sumPtr;
     uint64_t ysizeR, ystrideR, xsizeR;
@@ -288,17 +301,19 @@ int main(int argc, char* argv[])
                  gUpdates * diter * 40 / dt);
     }
 
-    // for check at end: sum up all just written values
-    laik_switchto_new(dWrite,  laik_Master,  LAIK_DF_CopyIn);
+    if (do_sum) {
+        // for check at end: sum up all just written values
+        laik_switchto_new(dWrite,  laik_Master,  LAIK_DF_CopyIn);
 
-    if (laik_myid(laik_get_dgroup(dWrite)) == 0) {
-        double sum = 0.0;
-        laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
-        for(uint64_t y = 0; y < ysizeW; y++)
-            for(uint64_t x = 0; x < xsizeW; x++)
-                sum += baseW[ y * ystrideW + x];
-        printf("Global value sum after %d iterations: %f\n",
-               iter, sum);
+        if (laik_myid(laik_get_dgroup(dWrite)) == 0) {
+            double sum = 0.0;
+            laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+            for(uint64_t y = 0; y < ysizeW; y++)
+                for(uint64_t x = 0; x < xsizeW; x++)
+                    sum += baseW[ y * ystrideW + x];
+            printf("Global value sum after %d iterations: %f\n",
+                   iter, sum);
+        }
     }
 
     laik_finalize(inst);

@@ -47,7 +47,7 @@ test-jac1d-repart:
 	cmp test-jac1d-1000-repart.out test-jac1d-1000-repart.expected
 
 test-jac2d:
-	../examples/jac2d 1000 > test-jac2d-1000.out
+	../examples/jac2d -s 1000 > test-jac2d-1000.out
 	cmp test-jac2d-1000.out test-jac2d-1000.expected
 
 test-jac3d:

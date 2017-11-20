@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'p') do_profiling = true;
         if (argv[arg][1] == 's') do_sum = true;
         if (argv[arg][1] == 'h') {
-            printf("Usage: %s [-n] <side width> <maxiter> <repart>\n\n"
+            printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac3d_profiling.txt'\n"
