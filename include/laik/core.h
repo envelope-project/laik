@@ -146,9 +146,6 @@ bool laik_logshown(Laik_LogLevel l);
 // to overwrite environment variable LAIK_LOG
 void laik_set_loglevel(Laik_LogLevel l);
 
-// return wall clock time (seconds since 1.1.1971) with sub-second precision
-double laik_wtime();
-
 // buffered log API: same as laik_log, but allows to build message in steps
 
 // begin a new log message with log level <l>

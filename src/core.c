@@ -10,7 +10,6 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
@@ -300,13 +299,7 @@ char* laik_get_guid(Laik_Instance* i){
 
 // Logging
 
-double laik_wtime()
-{
-  struct timeval tv;
-  gettimeofday(&tv, 0);
 
-  return tv.tv_sec+1e-6*tv.tv_usec;
-}
 
 // to overwrite environment variable LAIK_LOG
 void laik_set_loglevel(Laik_LogLevel l)

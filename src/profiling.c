@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <sys/time.h>
 #include <stdarg.h>
 
 /**
@@ -64,6 +65,33 @@ Laik_Profiling_Controller* laik_init_profiling(void)
             calloc(1, sizeof(Laik_Profiling_Controller));
 
     return ctrl;
+}
+
+//Time Measurement Funcitonality
+double laik_realtime(){
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+
+    return tv.tv_sec+1e-6*tv.tv_usec;
+}
+
+// NOTE: See Discussion
+// https://stackoverflow.com/questions/6498972/faster-equivalent-of-gettimeofday
+// The CLOCK_MONOTONIC_COARSE is way faster but delivers a significant lower precision 
+double laik_fast_realtime(){
+    struct timespec tv;
+    clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+    return (double)tv.tv_sec+(double)1e-9*tv.tv_nsec;
+}
+
+double laik_cputime(){
+    clock_t clk = clock();
+    return (double)clk/CLOCKS_PER_SEC;
+}
+
+double laik_wtime()
+{
+  return laik_realtime();
 }
 
 // called by laik_finalize

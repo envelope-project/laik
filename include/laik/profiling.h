@@ -29,6 +29,9 @@
 
 typedef struct _Laik_Profiling_Controller Laik_Profiling_Controller;
 
+// return wall clock time (seconds since 1.1.1971) with sub-second precision
+double laik_wtime();
+
 // called by laik_init
 Laik_Profiling_Controller* laik_init_profiling(void);
 // called by laik_finalize
