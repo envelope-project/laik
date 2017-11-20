@@ -48,16 +48,19 @@ int main(int argc, char* argv[])
     int repart = 0; // enforce repartitioning after <repart> iterations
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
+    bool do_sum = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'n') use_cornerhalo = false;
         if (argv[arg][1] == 'p') do_profiling = true;
+        if (argv[arg][1] == 's') do_sum = true;
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [-n] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac3d_profiling.txt'\n"
+                   " -s : print value sum at end (warning: sum done at master)\n"
                    " -h : print this help text and exit\n",
                    argv[0]);
             exit(1);
@@ -351,19 +354,21 @@ int main(int argc, char* argv[])
                  gUpdates * diter * 56 / dt);
     }
 
-    // for check at end: sum up all just written values
-    laik_switchto_new(dWrite,  laik_Master,  LAIK_DF_CopyIn);
+    if (do_sum) {
+        // for check at end: sum up all just written values
+        laik_switchto_new(dWrite,  laik_Master,  LAIK_DF_CopyIn);
 
-    if (laik_myid(laik_get_dgroup(dWrite)) == 0) {
-        double sum = 0.0;
-        laik_map_def1_3d(dWrite, (void**) &baseW,
-                         &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
-        for(uint64_t z = 0; z < zsizeW; z++)
-            for(uint64_t y = 0; y < ysizeW; y++)
-                for(uint64_t x = 0; x < xsizeW; x++)
-                    sum += baseW[z * zstrideW + y * ystrideW + x];
-        printf("Global value sum after %d iterations: %f\n",
-               iter, sum);
+        if (laik_myid(laik_get_dgroup(dWrite)) == 0) {
+            double sum = 0.0;
+            laik_map_def1_3d(dWrite, (void**) &baseW,
+                             &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
+            for(uint64_t z = 0; z < zsizeW; z++)
+                for(uint64_t y = 0; y < ysizeW; y++)
+                    for(uint64_t x = 0; x < xsizeW; x++)
+                        sum += baseW[z * zstrideW + y * ystrideW + x];
+            printf("Global value sum after %d iterations: %f\n",
+                   iter, sum);
+        }
     }
 
     laik_finalize(inst);

@@ -58,11 +58,11 @@ test-jac2d-noc:
 	cmp test-jac2dn-1000.out test-jac2dn-1000.expected
 
 test-jac3d:
-	mpirun -np 4 ../../examples/jac3d 100 | sort > test-jac3d-100.out
+	mpirun -np 4 ../../examples/jac3d -s 100 | sort > test-jac3d-100.out
 	cmp test-jac3d-100.out test-jac3d-100.expected
 
 test-jac3d-noc:
-	mpirun -np 4 ../../examples/jac3d -n 100 | sort > test-jac3dn-100.out
+	mpirun -np 4 ../../examples/jac3d -s -n 100 | sort > test-jac3dn-100.out
 	cmp test-jac3dn-100.out test-jac3dn-100.expected
 
 test-markov:

@@ -51,7 +51,7 @@ test-jac2d:
 	cmp test-jac2d-1000.out test-jac2d-1000.expected
 
 test-jac3d:
-	../examples/jac3d 100 > test-jac3d-100.out
+	../examples/jac3d -s 100 > test-jac3d-100.out
 	cmp test-jac3d-100.out test-jac3d-100.expected
 
 test-markov:
