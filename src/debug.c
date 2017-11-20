@@ -160,7 +160,7 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
 
     laik_log_append("(");
     for(int i = 0; i < tg->count; i++) {
-        if (i > 0) laik_log_append(", ");
+        if (i > 0) laik_log_append(",");
         laik_log_append("T%d", tg->task[i]);
     }
     laik_log_append(")");
@@ -217,9 +217,9 @@ void laik_log_Transition(Laik_Transition* t)
             laik_log_Slice(t->dims, &(t->red[i].slc));
             laik_log_append(" ");
             laik_log_TransitionGroup(t, t->red[i].inputGroup);
-            laik_log_append(" ==(");
+            laik_log_append("=(");
             laik_log_Reduction(t->red[i].redOp);
-            laik_log_append(")=> ");
+            laik_log_append(")=>");
             laik_log_TransitionGroup(t, t->red[i].outputGroup);
         }
     }

@@ -1,4 +1,4 @@
-/* 
+/*
  * This file is part of the LAIK parallel container library.
  * Copyright (c) 2017 Josef Weidendorfer
  */
@@ -1849,7 +1849,9 @@ struct redTOp* appendRedTOp(Laik_Slice* slc,
 
 
 // find all slices where this task takes part in a reduction, and add
-// them to the reduction operation list
+// them to the reduction operation list.
+// TODO: we only support one mapping in each task for reductions
+//       better: support multiple mappings for same index in same task
 static
 void calcAddReductions(Laik_Group* group,
                        Laik_ReductionOperation redOp,
@@ -1857,15 +1859,20 @@ void calcAddReductions(Laik_Group* group,
 {
     laik_log(1, "calc reductions:");
 
+    // TODO: only for 1d
+    assert(fromBA->space->dims == 1);
+
     // add slice borders of all tasks
     cleanBorderList();
     for(int i = 0; i < fromBA->count; i++) {
         Laik_TaskSlice_Gen* ts = &(fromBA->tslice[i]);
+        assert(ts->mapNo == 0); // we support only one mapping for reductions
         appendBorder(ts->s.from.i[0], ts->task, true, true);
         appendBorder(ts->s.to.i[0], ts->task, false, true);
     }
     for(int i = 0; i < toBA->count; i++) {
         Laik_TaskSlice_Gen* ts = &(toBA->tslice[i]);
+        assert(ts->mapNo == 0); // we support only one mapping for reductions
         appendBorder(ts->s.from.i[0], ts->task, true, false);
         appendBorder(ts->s.to.i[0], ts->task, false, false);
     }
@@ -1935,23 +1942,55 @@ void calcAddReductions(Laik_Group* group,
                 assert(isInTaskGroup(&inputGroup, myid) ||
                        isInTaskGroup(&outputGroup, myid));
 
-                // add reduction operation
                 slc.from.i[0] = sb->b;
                 slc.to.i[0] = nextBorder;
+
+                // check for special cases
+                if (inputGroup.count == 1) {
+                    if (inputGroup.task[0] == myid) {
+                        // only this task as input
+                        if (outputGroup.count == 1) {
+                            if (outputGroup.task[0] == myid) {
+                                // local (copy) operation
+                                assert(redOp == LAIK_RO_Sum);
+                                appendLocalTOp(&slc, 0, 0, 0, 0);
+                                continue;
+                            }
+                            // send operation
+                            assert(redOp == LAIK_RO_Sum);
+                            appendSendTOp(&slc, 0, 0, outputGroup.task[0]);
+                            continue;
+                        }
+                        // a broadcast... to be supported in backend
+                    }
+                    else {
+                        // one input from somebody else
+                        if (outputGroup.count == 1) {
+                            // must be this task as it is involved
+                            assert(outputGroup.task[0] == myid);
+                            // receive operation
+                            assert(redOp == LAIK_RO_Sum);
+                            appendRecvTOp(&slc, 0, 0, inputGroup.task[0]);
+                            continue;
+                        }
+                    }
+                }
+
+                // add reduction operation
                 int in = getTaskGroup(&inputGroup);
                 int out = getTaskGroup(&outputGroup);
 
 #ifdef DEBUG_REDUCTIONSLICES
                 laik_log_begin(1);
-                laik_log_append("  adding (%lu - %lu), in %d:(",
-                                sb->b, nextBorder, in);
+                laik_log_append("  adding reduction (%lu - %lu), in %d:(",
+                                slc.from.i[0], slc.to.i[0], in);
                 for(int i = 0; i < groupList[in].count; i++) {
-                    if (i > 0) laik_log_append(", ");
+                    if (i > 0) laik_log_append(",");
                     laik_log_append("T%d", groupList[in].task[i]);
                 }
                 laik_log_append("), out %d:(", out);
                 for(int i = 0; i < groupList[out].count; i++) {
-                    if (i > 0) laik_log_append(", ");
+                    if (i > 0) laik_log_append(",");
                     laik_log_append("T%d", groupList[out].task[i]);
                 }
                 laik_log_flush(")");

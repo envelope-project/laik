@@ -1,4 +1,4 @@
-/* 
+/*
  * This file is part of the LAIK parallel container library.
  * Copyright (c) 2017 Josef Weidendorfer
  */
