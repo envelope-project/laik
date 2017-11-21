@@ -2,7 +2,9 @@ CXX = c++
 EXAMPLES = vsum vsum2 spmv spmv2 \
     jac1d jac2d jac2d-ser jac3d \
     markov-ser markov markov2 \
-    raytracer
+    raytracer \
+    propagation1d propagation2d
+
 OPT = -g
 
 # include Makefile.config if existing
@@ -43,6 +45,12 @@ markov2: markov2.o $(LAIKLIB)
 
 raytracer: raytracer.cpp $(LAIKLIB)
 	$(CXX) $(CXXFLAGS) raytracer.cpp $(LAIKLIB) -o raytracer
+
+propagation1d: propagation1d.c $(LAIKLIB)
+	$(CC) $(CFLAGS) propagation1d.c $(LAIKLIB) -o propagation1d -lm
+
+propagation2d: propagation2d.c $(LAIKLIB)
+	$(CC) $(CFLAGS) propagation2d.c $(LAIKLIB)  -o propagation2d -lm
 
 clean:
 	rm -f *.o *~ *.ppm $(EXAMPLES)
