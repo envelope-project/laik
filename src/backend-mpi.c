@@ -217,38 +217,50 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
         return;
     }
 
-    Laik_Instance* inst = d->group->inst;
     MPIGroupData* gd = mpiGroupData(d->group);
     assert(gd); // must have been updated by laik_mpi_updateGroup()
     MPI_Comm comm = gd->comm;
 
     if (t->redCount > 0) {
         assert(dims == 1);
+        bool reuseMap = false; // set to true if we reused fromMap for toMap
+        // we only support reductions within one mapping
+        assert((fromList != 0) && (fromList->count == 1));
+        Laik_Mapping* fromMap = &(fromList->map[0]);
+        assert(fromMap);
+        // result goes to all tasks or just one => toList may be 0
+        if (toList)
+            assert(toList->count == 1);
+        Laik_Mapping* toMap = toList ? &(toList->map[0]) : 0;
+
+        if (toMap && (toMap->base == 0)) {
+            // we may reuse previous mapping
+            // only possible if is has the same size
+            if (toMap->count == fromMap->count) {
+                // we can do IN_PLACE reduction
+                toMap->base = fromMap->base;
+                reuseMap = true;
+            }
+            else {
+                laik_allocateMap(toMap, ss);
+                assert(toMap->base != 0);
+            }
+        }
+
         for(int i=0; i < t->redCount; i++) {
             struct redTOp* op = &(t->red[i]);
             uint64_t from = op->slc.from.i[0];
             uint64_t to   = op->slc.to.i[0];
 
-            // reductions go over all indexes => one slice covering all
-            assert((fromList != 0) && (fromList->count == 1));
-            Laik_Mapping* fromMap = &(fromList->map[0]);
             char* fromBase = fromMap ? fromMap->base : 0;
-
-            // result goes to all tasks or just one => toList may be 0
-            if (toList)
-                assert(toList->count == 1);
-            Laik_Mapping* toMap = toList ? &(toList->map[0]) : 0;
-            if (toMap && (toMap->base == 0)) {
-                // we can do IN_PLACE reduction
-                toMap->base = fromBase;
-                if (fromMap) fromMap->base = 0; // take over memory
-            }
             char* toBase = toMap ? toMap->base : 0;
 
             assert(fromBase != 0);
             // if current task is receiver, toBase should be allocated
-            if (laik_isInGroup(t, op->outputGroup, inst->myid))
+            if (laik_isInGroup(t, op->outputGroup, myid))
                 assert(toBase != 0);
+            else
+                toBase = 0; // no interest in receiving anything
 
             MPI_Op mpiRedOp;
             switch(op->redOp) {
@@ -284,6 +296,13 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 ss->reducedBytes += (to - from) * d->elemsize;
             }
 
+            assert(from >= fromMap->requiredSlice.from.i[0]);
+            fromBase += (from - fromMap->requiredSlice.from.i[0]) * d->elemsize;
+            if (toBase) {
+                assert(from >= toMap->requiredSlice.from.i[0]);
+                toBase += (from - toMap->requiredSlice.from.i[0]) * d->elemsize;
+            }
+
             if (rootTask == -1) {
                 if (fromBase == toBase)
                     MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
@@ -300,6 +319,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                     MPI_Reduce(fromBase, toBase, to - from,
                                mpiDataType, mpiRedOp, rootTask, comm);
             }
+        }
+        if (reuseMap) {
+            assert(fromMap);
+            // do not free memory behind fromMap, as we reused the mapping
+            fromMap->base = 0;
         }
     }
 
