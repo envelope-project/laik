@@ -269,7 +269,8 @@ int main(int argc, char* argv[])
     // perform the propagation maxIt times
     for (int i = 0; i < maxIt; i++)
     {
-        laik_switchto(node, pNodes, LAIK_DF_CopyOut);
+        laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
 
         int nMapsElements = laik_my_mapcount(pElements);
 
@@ -277,9 +278,10 @@ int main(int argc, char* argv[])
         int m0, m1, m2, m3;
         const Laik_Mapping *map;
 
-        // update the nodes using their neighbours
+        // propagation
+        // update the nodes using elements
         // go through all the elements and refere
-        // to their neighbouring nodes
+        // to their neighbouring nodes and update them
         for (size_t m = 0; m < nMapsElements; m++)
         {
             laik_map_def(element, m, (void **)&baseE, &countE);
@@ -319,9 +321,49 @@ int main(int argc, char* argv[])
                 baseN[j3] += baseE[i] / 4;
             }
         }
+        laik_switchto(node, pNodes, LAIK_DF_CopyIn);
 
-        // perform a reduction on the the nodes
-        laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        // back-propagation
+        // update the elements using their neighbours
+        // go through all the elements and refere
+        // to their neighbouring nodes and update the 
+        //elements
+        laik_switchto(element, pElements, LAIK_DF_CopyOut);
+        for (size_t m = 0; m < nMapsElements; m++)
+        {
+            laik_map_def(element, m, (void **)&baseE, &countE);
+
+            for (uint64_t i = 0; i < countE; i++)
+            {
+
+                gi = laik_local2global_with_mapnumber_1d(element, m, i);
+
+                gj0 = get_element_neighbour(neighbours, gi, 0);
+                gj1 = get_element_neighbour(neighbours, gi, 1);
+                gj2 = get_element_neighbour(neighbours, gi, 2);
+                gj3 = get_element_neighbour(neighbours, gi, 3);
+
+                map = laik_global2local_1d(node, gj0, &j0);
+                m0 = laik_map_get_mapNo(map);
+                map = laik_global2local_1d(node, gj1, &j1);
+                m1 = laik_map_get_mapNo(map);
+                map = laik_global2local_1d(node, gj2, &j2);
+                m2 = laik_map_get_mapNo(map);
+                map = laik_global2local_1d(node, gj3, &j3);
+                m3 = laik_map_get_mapNo(map);
+
+                laik_map_def(node, m0, (void **)&baseN, &countN);
+                baseE[i] += baseN[j0] / 4;
+                laik_map_def(node, m1, (void **)&baseN, &countN);
+                baseE[i] += baseN[j1] / 4;
+                laik_map_def(node, m2, (void **)&baseN, &countN);
+                baseE[i] += baseN[j2] / 4;
+                laik_map_def(node, m3, (void **)&baseN, &countN);
+                baseE[i] += baseN[j3] / 4;
+
+            }
+        }
+        laik_switchto(element, pElements, LAIK_DF_CopyIn);
     }
 
     // for debug only

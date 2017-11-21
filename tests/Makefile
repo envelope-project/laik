@@ -64,8 +64,8 @@ test-markov2:
 	cmp test-markov2-20-4.out test-markov2-20-4.expected
 
 test-propagation2d:
-	../examples/propagation2d 100 10 > test-propagation2d-100.out
-	cmp test-propagation2d-100.out test-propagation2d-100.expected
+	../examples/propagation2d 10 10 > test-propagation2d-10.out
+	cmp test-propagation2d-10.out test-propagation2d-10.expected
 
 clean:
 	rm -rf *.out
