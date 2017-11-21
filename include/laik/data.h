@@ -190,6 +190,12 @@ Laik_Mapping* laik_global2local_1d(Laik_Data* d, uint64_t gidx, uint64_t* lidx);
 // local to global: return global index of offset in a single local mapping
 uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off);
 
+// local to global: return global index of offset in a local mapping with mapping number <mapNo>
+uint64_t laik_local2global_with_mapnumber_1d (Laik_Data* d, uint64_t mapNo, uint64_t li);
+
+// return the mapping number of a <map> in the MappingList
+int laik_map_get_mapNo(const Laik_Mapping* map);
+
 // 2d global to 2d local
 // if global coordinate (gx/gy) is in local mapping, set output parameters
 //  (lx/ly) and return mapping, otherwise return false

@@ -1281,6 +1281,26 @@ uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
 }
 
 
+uint64_t laik_local2global_with_mapnumber_1d (Laik_Data* d, uint64_t mapNo, uint64_t li)
+{
+    assert(d->space->dims == 1);
+    assert(d->activeMappings);
+
+    // TODO: check all mappings, not just map 0
+    Laik_Mapping* m = &(d->activeMappings->map[mapNo]);
+    assert(li < m->count);
+
+    // TODO: take layout into account
+    return m->requiredSlice.from.i[0] + li;
+}
+
+int laik_map_get_mapNo(const Laik_Mapping* map)
+{
+    assert(map);
+
+    return map->mapNo;
+}
+
 
 void laik_free(Laik_Data* d)
 {
