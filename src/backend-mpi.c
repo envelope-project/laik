@@ -286,9 +286,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                     laik_log_append("%d", rootTask);
                 if (fromBase == toBase)
                     laik_log_append(", IN_PLACE");
-                laik_log_flush("): from %lu, to %lu, "
+                laik_log_flush("): (%lu - %lu) sliceNo in/out %d/%d, "
                                "elemsize %d, baseptr from/to %p/%p\n",
-                               from, to, d->elemsize, fromBase, toBase);
+                               from, to,
+                               op->myInputSliceNo, op->myOutputSliceNo,
+                               d->elemsize, fromBase, toBase);
             }
 
             if (ss) {
@@ -476,7 +478,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 uint64_t to   = op->slc.to.i[0] - fromMap->requiredSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "  direct send: from local [%lu;%lu[, slice/map %d, "
+                laik_log(1, "  direct send: from local [%lu;%lu[, slice/map %d/%d, "
                             "elemsize %d, baseptr %p\n",
                          from, to, op->sliceNo, op->mapNo,
                          d->elemsize, fromMap->base);

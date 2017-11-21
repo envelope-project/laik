@@ -206,6 +206,7 @@ typedef struct _TaskGroup {
 struct redTOp {
     Laik_Slice slc;
     Laik_ReductionOperation redOp;
+    int myInputSliceNo, myOutputSliceNo;
     int inputGroup, outputGroup; // references into group list, or -1: all
 };
 
