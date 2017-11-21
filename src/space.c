@@ -1602,7 +1602,7 @@ static int getTaskGroup(TaskGroup* tg)
 typedef struct _SliceBorder {
     uint64_t b;
     int task;
-    int sliceNo;
+    int sliceNo, mapNo;
     unsigned int isStart :1;
     unsigned int isInput :1;
 } SliceBorder;
@@ -1617,7 +1617,8 @@ void cleanBorderList()
 }
 
 static
-void appendBorder(uint64_t b, int task, int sliceNo, bool isStart, bool isInput)
+void appendBorder(uint64_t b, int task, int sliceNo, int mapNo,
+                  bool isStart, bool isInput)
 {
     if (borderListCount == borderListSize) {
         // enlarge list
@@ -1634,12 +1635,14 @@ void appendBorder(uint64_t b, int task, int sliceNo, bool isStart, bool isInput)
     sb->b = b;
     sb->task = task;
     sb->sliceNo = sliceNo;
+    sb->mapNo = mapNo;
     sb->isStart = isStart ? 1 : 0;
     sb->isInput = isInput ? 1 : 0;
 
 #ifdef DEBUG_REDUCTIONSLICES
-    laik_log(1, "  add border %lu, task %d (%s, %s)",
-             b, task, isStart ? "start" : "end", isInput ? "input" : "output");
+    laik_log(1, "  add border %lu, task %d slice/map %d/%d (%s, %s)",
+             b, task, sliceNo, mapNo,
+             isStart ? "start" : "end", isInput ? "input" : "output");
 #endif
 }
 
@@ -1828,7 +1831,8 @@ static
 struct redTOp* appendRedTOp(Laik_Slice* slc,
                             Laik_ReductionOperation redOp,
                             int inputGroup, int outputGroup,
-                            int myInputSliceNo, int myOutputSliceNo)
+                            int myInputSliceNo, int myOutputSliceNo,
+                            int myInputMapNo, int myOutputMapNo)
 {
     if (redBufCount == redBufSize) {
         // enlarge temp buffer
@@ -1848,6 +1852,9 @@ struct redTOp* appendRedTOp(Laik_Slice* slc,
     op->outputGroup = outputGroup;
     op->myInputSliceNo = myInputSliceNo;
     op->myOutputSliceNo = myOutputSliceNo;
+    op->myInputMapNo = myInputMapNo;
+    op->myOutputMapNo = myOutputMapNo;
+
 
     return op;
 }
@@ -1869,29 +1876,33 @@ void calcAddReductions(Laik_Group* group,
 
     // add slice borders of all tasks
     cleanBorderList();
-    int sliceNo, lastTask;
+    int sliceNo, lastTask, lastMapNo;
     lastTask = -1;
+    lastMapNo = -1;
     for(int i = 0; i < fromBA->count; i++) {
         Laik_TaskSlice_Gen* ts = &(fromBA->tslice[i]);
-        assert(ts->mapNo == 0); // we support only one mapping for reductions
-        if (ts->task != lastTask) {
+        // reset sliceNo to 0 on every task/mapNo change
+        if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
             lastTask = ts->task;
+            lastMapNo = ts->mapNo;
         }
-        appendBorder(ts->s.from.i[0], ts->task, sliceNo, true, true);
-        appendBorder(ts->s.to.i[0], ts->task, sliceNo, false, true);
+        appendBorder(ts->s.from.i[0], ts->task, sliceNo, ts->mapNo, true, true);
+        appendBorder(ts->s.to.i[0], ts->task, sliceNo, ts->mapNo, false, true);
         sliceNo++;
     }
     lastTask = -1;
+    lastMapNo = -1;
     for(int i = 0; i < toBA->count; i++) {
         Laik_TaskSlice_Gen* ts = &(toBA->tslice[i]);
-        assert(ts->mapNo == 0); // we support only one mapping for reductions
-        if (ts->task != lastTask) {
+        // reset sliceNo to 0 on every task/mapNo change
+        if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
             lastTask = ts->task;
+            lastMapNo = ts->mapNo;
         }
-        appendBorder(ts->s.from.i[0], ts->task, sliceNo, true, false);
-        appendBorder(ts->s.to.i[0], ts->task, sliceNo, false, false);
+        appendBorder(ts->s.from.i[0], ts->task, sliceNo, ts->mapNo, true, false);
+        appendBorder(ts->s.to.i[0], ts->task, sliceNo, ts->mapNo, false, false);
         sliceNo++;
     }
     if (borderListCount == 0) return;
@@ -1913,6 +1924,7 @@ void calcAddReductions(Laik_Group* group,
     int myid = group->myid;
     int myActivity = 0; // bit0: input, bit1: output
     int myInputSliceNo = -1, myOutputSliceNo = -1;
+    int myInputMapNo = -1, myOutputMapNo = -1;
     Laik_Slice slc;
     for(int i = 0; i < borderListCount; i++) {
         SliceBorder* sb = &(borderList[i]);
@@ -1932,6 +1944,7 @@ void calcAddReductions(Laik_Group* group,
                 if (sb->task == myid) {
                     myActivity |= 1;
                     myInputSliceNo = sb->sliceNo;
+                    myInputMapNo = sb->mapNo;
                 }
             }
             else {
@@ -1945,6 +1958,7 @@ void calcAddReductions(Laik_Group* group,
                 if (sb->task == myid) {
                     myActivity |= 2;
                     myOutputSliceNo = sb->sliceNo;
+                    myOutputMapNo = sb->mapNo;
                 }
             }
             else {
@@ -1980,24 +1994,27 @@ void calcAddReductions(Laik_Group* group,
                                 assert(redOp == LAIK_RO_Sum);
                                 appendLocalTOp(&slc,
                                                myInputSliceNo, myOutputSliceNo,
-                                               0, 0);
+                                               myInputMapNo, myOutputMapNo);
 #ifdef DEBUG_REDUCTIONSLICES
                             laik_log(1, "  adding local (special reduction)"
-                                        " (%lu - %lu) sliceNo to/from %d/%d",
+                                        " (%lu - %lu) from %d/%d to %d/%d (slc/map)",
                                      slc.from.i[0], slc.to.i[0],
-                                    myInputSliceNo, myOutputSliceNo);
+                                    myInputSliceNo, myInputMapNo,
+                                    myOutputSliceNo, myOutputMapNo);
 #endif
                                 continue;
                             }
                             // send operation
                             assert(redOp == LAIK_RO_Sum);
-                            appendSendTOp(&slc, myInputSliceNo,
-                                          0, outputGroup.task[0]);
+                            appendSendTOp(&slc,
+                                          myInputSliceNo, myInputMapNo,
+                                          outputGroup.task[0]);
 #ifdef DEBUG_REDUCTIONSLICES
                             laik_log(1, "  adding send (special reduction)"
-                                        " (%lu - %lu) sliceNo %d, to T%d",
+                                        " (%lu - %lu) slc/map %d/%d to T%d",
                                      slc.from.i[0], slc.to.i[0],
-                                    myInputSliceNo, outputGroup.task[0]);
+                                    myInputSliceNo, myInputMapNo,
+                                    outputGroup.task[0]);
 #endif
                             continue;
                         }
@@ -2010,14 +2027,16 @@ void calcAddReductions(Laik_Group* group,
                             assert(outputGroup.task[0] == myid);
                             // receive operation
                             assert(redOp == LAIK_RO_Sum);
-                            appendRecvTOp(&slc, myOutputSliceNo,
-                                          0, inputGroup.task[0]);
+                            appendRecvTOp(&slc,
+                                          myOutputSliceNo, myOutputMapNo,
+                                          inputGroup.task[0]);
 
 #ifdef DEBUG_REDUCTIONSLICES
                             laik_log(1, "  adding recv (special reduction)"
-                                        " (%lu - %lu) sliceNo %d, from T%d",
+                                        " (%lu - %lu) slc/map %d/%d from T%d",
                                      slc.from.i[0], slc.to.i[0],
-                                    myOutputSliceNo, inputGroup.task[0]);
+                                    myOutputSliceNo, myOutputMapNo,
+                                    inputGroup.task[0]);
 #endif
                             continue;
                         }
@@ -2045,7 +2064,8 @@ void calcAddReductions(Laik_Group* group,
 #endif
 
                 appendRedTOp(&slc, redOp, in, out,
-                             myInputSliceNo, myOutputSliceNo);
+                             myInputSliceNo, myOutputSliceNo,
+                             myInputMapNo, myOutputMapNo);
             }
         }
     }
@@ -2155,9 +2175,10 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                 else
                     outputGroup = getTaskGroupSingle(task);
 
-                appendRedTOp( &(space->s), // complete space
+                // complete space, always sliceNo 0 and mapNo 0
+                appendRedTOp( &(space->s),
                               laik_get_reduction(fromFlow),
-                              -1, outputGroup, 0, 0);
+                              -1, outputGroup, 0, 0, 0, 0);
             }
             else {
                 assert(dims == 1);
