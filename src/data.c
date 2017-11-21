@@ -567,7 +567,7 @@ void initMaps(Laik_Transition* t,
             default:
                 assert(0);
             }
-            for(int j = s->from.i[0]; j < s->to.i[0]; j++)
+            for(int j = 0; j < count; j++)
                 dbase[j] = v;
         }
         else if (d->type == laik_Float) {
@@ -579,7 +579,7 @@ void initMaps(Laik_Transition* t,
             default:
                 assert(0);
             }
-            for(int j = s->from.i[0]; j < s->to.i[0]; j++)
+            for(int j = 0; j < count; j++)
                 dbase[j] = v;
         }
         else assert(0);

@@ -2060,8 +2060,14 @@ void calcAddReductions(Laik_Group* group,
                     if (i > 0) laik_log_append(",");
                     laik_log_append("T%d", groupList[out].task[i]);
                 }
-                laik_log_flush(")");
+                laik_log_flush("), in %d/%d out %d/d (slc/map)",
+                               myInputSliceNo, myInputMapNo,
+                               myOutputSliceNo, myOutputMapNo);
 #endif
+
+                // convert to all-group if possible
+                if (groupList[in].count == group->size) in = -1;
+                if (groupList[out].count == group->size) out = -1;
 
                 appendRedTOp(&slc, redOp, in, out,
                              myInputSliceNo, myOutputSliceNo,
@@ -2120,7 +2126,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
     int dims = space->dims;
     int myid = group->myid;
-    int count = group->size;
+    int taskCount = group->size;
 
     // init values as next phase does a reduction?
     if ((toBA != 0) && laik_do_init(toFlow)) {
@@ -2172,8 +2178,13 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                     // output -1 is group ALL
                     outputGroup = -1;
                 }
-                else
+                else {
                     outputGroup = getTaskGroupSingle(task);
+                    if (taskCount == 1) {
+                        assert(task == 0);
+                        outputGroup = -1; // with only 1 task: all-group
+                    }
+                }
 
                 // complete space, always sliceNo 0 and mapNo 0
                 appendRedTOp( &(space->s),
@@ -2189,7 +2200,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
         // something to send?
         if (laik_do_copyout(fromFlow)) {
-            for(int task = 0; task < count; task++) {
+            for(int task = 0; task < taskCount; task++) {
                 if (task == myid) continue;
                 for(int o1 = fromBA->off[myid]; o1 < fromBA->off[myid+1]; o1++) {
 
@@ -2224,7 +2235,7 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
         // something to receive not coming from a reduction?
         if (!laik_is_reduction(fromFlow) && laik_do_copyin(toFlow)) {
-            for(int task = 0; task < count; task++) {
+            for(int task = 0; task < taskCount; task++) {
                 if (task == myid) continue;
                 for(int o1 = toBA->off[myid]; o1 < toBA->off[myid+1]; o1++) {
 

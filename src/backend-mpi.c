@@ -12,6 +12,8 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
+
 
 #ifndef USE_MPI
 
@@ -220,6 +222,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
     MPIGroupData* gd = mpiGroupData(d->group);
     assert(gd); // must have been updated by laik_mpi_updateGroup()
     MPI_Comm comm = gd->comm;
+    MPI_Status status;
 
     if (t->redCount > 0) {
         assert(dims == 1);
@@ -254,6 +257,8 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
             char* fromBase = fromMap ? fromMap->base : 0;
             char* toBase = toMap ? toMap->base : 0;
+            uint64_t elemCount = to - from;
+            uint64_t byteCount = elemCount * d->elemsize;
 
             assert(fromBase != 0);
             // if current task is receiver, toBase should be allocated
@@ -262,43 +267,6 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
             else
                 toBase = 0; // no interest in receiving anything
 
-            MPI_Op mpiRedOp;
-            switch(op->redOp) {
-            case LAIK_RO_Sum: mpiRedOp = MPI_SUM; break;
-            default: assert(0);
-            }
-
-            MPI_Datatype mpiDataType = getMPIDataType(d);
-
-            int rootTask;
-            if (op->outputGroup == -1) rootTask = -1;
-            else {
-                // TODO: support more then 1 receiver
-                assert(t->group[op->outputGroup].count == 1);
-                rootTask = t->group[op->outputGroup].task[0];
-            }
-
-            if (laik_log_begin(1)) {
-                laik_log_append("MPI Reduce (root ");
-                if (rootTask == -1)
-                    laik_log_append("ALL");
-                else
-                    laik_log_append("%d", rootTask);
-                if (fromBase == toBase)
-                    laik_log_append(", IN_PLACE");
-                laik_log_flush("): (%lu - %lu) in %d/%d out %d/%d (slc/map), "
-                               "elemsize %d, baseptr from/to %p/%p\n",
-                               from, to,
-                               op->myInputSliceNo, op->myInputMapNo,
-                               op->myOutputSliceNo, op->myOutputMapNo,
-                               d->elemsize, fromBase, toBase);
-            }
-
-            if (ss) {
-                ss->reduceCount++;
-                ss->reducedBytes += (to - from) * d->elemsize;
-            }
-
             assert(from >= fromMap->requiredSlice.from.i[0]);
             fromBase += (from - fromMap->requiredSlice.from.i[0]) * d->elemsize;
             if (toBase) {
@@ -306,21 +274,144 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 toBase += (from - toMap->requiredSlice.from.i[0]) * d->elemsize;
             }
 
-            if (rootTask == -1) {
-                if (fromBase == toBase)
-                    MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
-                                  mpiDataType, mpiRedOp, comm);
-                else
-                    MPI_Allreduce(fromBase, toBase, to - from,
-                                  mpiDataType, mpiRedOp, comm);
+            MPI_Datatype mpiDataType = getMPIDataType(d);
+
+            // all-groups never should be specified explicitly
+            if (op->outputGroup < 0)
+                assert(t->group[op->outputGroup].count < d->group->size);
+            if (op->inputGroup >= 0)
+                assert(t->group[op->inputGroup].count < d->group->size);
+
+            // if neither input nor output are all-groups: manual reduction
+            if ((op->inputGroup >= 0) && (op->inputGroup >= 0)) {
+
+                // do the manual reduction on smallest rank of output group
+                int reduceTask = t->group[op->outputGroup].task[0];
+
+                laik_log(1, "Manual reduction at T%d: (%lu - %lu) slc/map %d/%d",
+                         reduceTask, from, to,
+                         op->myInputSliceNo, op->myInputMapNo);
+
+                if (reduceTask == myid) {
+                    TaskGroup* tg;
+
+                    // collect values from tasks in input group
+                    tg = &(t->group[op->inputGroup]);
+                    // check that bufsize is enough
+                    assert(tg->count * byteCount < PACKBUFSIZE);
+
+                    char* ptr[32], *p;
+                    assert(tg->count <= 32);
+                    p = packbuf;
+                    for(int i = 0; i< tg->count; i++) {
+                        if (tg->task[i] == myid) {
+                            ptr[i] = fromBase;
+                            continue;
+                        }
+
+                        laik_log(1, "  MPI_Recv from T%d (buf off %d)",
+                                 tg->task[i], p - packbuf);
+
+                        ptr[i] = p;
+                        MPI_Recv(p, elemCount, mpiDataType,
+                                 tg->task[i], 1, comm, &status);
+                        p += byteCount;
+                    }
+
+                    // do the reduction, put result back to my input buffer
+                    assert(op->redOp == LAIK_RO_Sum);
+                    assert(d->type == laik_Double);
+                    for(int i = 0; i < elemCount; i++) {
+                        double v = ((double*)fromBase)[i];
+                        for(int t = 1; t < tg->count; t++)
+                            v += ((double*)ptr[t])[i];
+                        ((double*)toBase)[i] = v;
+                    }
+
+                    // send result to tasks in output group
+                    tg = &(t->group[op->outputGroup]);
+                    for(int i = 0; i< tg->count; i++) {
+                        if (tg->task[0] == myid) {
+                            // that's myself: nothing to do
+                            continue;
+                        }
+
+                        laik_log(1, "  MPI_Send result to T%d", tg->task[i]);
+
+                        MPI_Send(toBase, elemCount, mpiDataType,
+                                 tg->task[i], 1, comm);
+                    }
+                }
+                else {
+                    if (laik_isInGroup(t, op->inputGroup, myid)) {
+                        laik_log(1, "  MPI_Send to T%d", reduceTask);
+
+                        MPI_Send(fromBase, elemCount, mpiDataType,
+                                 reduceTask, 1, comm);
+                    }
+                    if (laik_isInGroup(t, op->outputGroup, myid)) {
+                        laik_log(1, "  MPI_Recv from T%d", reduceTask);
+
+                        MPI_Recv(toBase, elemCount, mpiDataType,
+                                 reduceTask, 1, comm, &status);
+                    }
+                }
             }
             else {
-                if (fromBase == toBase)
-                    MPI_Reduce(MPI_IN_PLACE, toBase, to - from,
-                               mpiDataType, mpiRedOp, rootTask, comm);
-                else
-                    MPI_Reduce(fromBase, toBase, to - from,
-                               mpiDataType, mpiRedOp, rootTask, comm);
+                // not handled yet: either input or output is all-group
+                assert((op->inputGroup == -1) || (op->outputGroup == -1));
+
+                MPI_Op mpiRedOp;
+                switch(op->redOp) {
+                case LAIK_RO_Sum: mpiRedOp = MPI_SUM; break;
+                default: assert(0);
+                }
+
+                int rootTask;
+                if (op->outputGroup == -1) rootTask = -1;
+                else {
+                    // TODO: support more then 1 receiver
+                    assert(t->group[op->outputGroup].count == 1);
+                    rootTask = t->group[op->outputGroup].task[0];
+                }
+
+                if (laik_log_begin(1)) {
+                    laik_log_append("MPI Reduce (root ");
+                    if (rootTask == -1)
+                        laik_log_append("ALL");
+                    else
+                        laik_log_append("%d", rootTask);
+                    if (fromBase == toBase)
+                        laik_log_append(", IN_PLACE");
+                    laik_log_flush("): (%lu - %lu) in %d/%d out %d/%d (slc/map), "
+                                   "elemsize %d, baseptr from/to %p/%p\n",
+                                   from, to,
+                                   op->myInputSliceNo, op->myInputMapNo,
+                                   op->myOutputSliceNo, op->myOutputMapNo,
+                                   d->elemsize, fromBase, toBase);
+                }
+
+                if (rootTask == -1) {
+                    if (fromBase == toBase)
+                        MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
+                                      mpiDataType, mpiRedOp, comm);
+                    else
+                        MPI_Allreduce(fromBase, toBase, to - from,
+                                      mpiDataType, mpiRedOp, comm);
+                }
+                else {
+                    if (fromBase == toBase)
+                        MPI_Reduce(MPI_IN_PLACE, toBase, to - from,
+                                   mpiDataType, mpiRedOp, rootTask, comm);
+                    else
+                        MPI_Reduce(fromBase, toBase, to - from,
+                                   mpiDataType, mpiRedOp, rootTask, comm);
+                }
+            }
+
+            if (ss) {
+                ss->reduceCount++;
+                ss->reducedBytes += (to - from) * d->elemsize;
             }
         }
         if (reuseMap) {
