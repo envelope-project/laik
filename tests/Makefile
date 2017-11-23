@@ -3,8 +3,8 @@ TESTS= \
     test-spmv test-spmv2 test-spmv2r \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d \
-    test-markov test-markov2\
-	test-propagation2d
+    test-markov test-markov2 \
+    test-propagation2d
 
 -include ../Makefile.config
 

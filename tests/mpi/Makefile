@@ -7,7 +7,7 @@ TESTS= \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d \
     test-jac2d-noc test-jac3d-noc \
-    test-markov
+    test-markov test-markov2
 
 .PHONY: $(TESTS)
 
@@ -69,6 +69,9 @@ test-markov:
 	mpirun -np 4 ../../examples/markov 40 4 | sort > test-markov-40-4.out
 	cmp test-markov-40-4.out test-markov-40-4.expected
 
+test-markov2:
+	mpirun -np 4 ../../examples/markov2 40 4 | sort > test-markov2-40-4.out
+	cmp test-markov2-40-4.out test-markov2-40-4.expected
 
 clean:
 	rm -rf *.out

@@ -2060,7 +2060,7 @@ void calcAddReductions(Laik_Group* group,
                     if (i > 0) laik_log_append(",");
                     laik_log_append("T%d", groupList[out].task[i]);
                 }
-                laik_log_flush("), in %d/%d out %d/d (slc/map)",
+                laik_log_flush("), in %d/%d out %d/%d (slc/map)",
                                myInputSliceNo, myInputMapNo,
                                myOutputSliceNo, myOutputMapNo);
 #endif

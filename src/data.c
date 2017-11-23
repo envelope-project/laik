@@ -559,39 +559,45 @@ void initMaps(Laik_Transition* t,
         assert(dims == 1); // only for 1d now
         Laik_Data* d = toMap->data;
         Laik_Slice* s = &(op->slc);
-        int count = s->to.i[0] - s->from.i[0];
+        int from = s->from.i[0];
+        int to = s->to.i[0];
+        int elemCount = to - from;
+
+        char* toBase = toMap->base;
+        assert(from >= toMap->requiredSlice.from.i[0]);
+        toBase += (from - toMap->requiredSlice.from.i[0]) * d->elemsize;
 
         if (ss)
-            ss->initedBytes += count * d->elemsize;
+            ss->initedBytes += elemCount * d->elemsize;
 
         if (d->type == laik_Double) {
             double v;
-            double* dbase = (double*) toMap->base;
+            double* dbase = (double*) toBase;
 
-            switch(t->init[i].redOp) {
+            switch(op->redOp) {
             case LAIK_RO_Sum: v = 0.0; break;
             default:
                 assert(0);
             }
-            for(int j = 0; j < count; j++)
+            for(int j = 0; j < elemCount; j++)
                 dbase[j] = v;
         }
         else if (d->type == laik_Float) {
             float v;
-            float* dbase = (float*) toMap->base;
+            float* dbase = (float*) toBase;
 
             switch(t->init[i].redOp) {
             case LAIK_RO_Sum: v = 0.0; break;
             default:
                 assert(0);
             }
-            for(int j = 0; j < count; j++)
+            for(int j = 0; j < elemCount; j++)
                 dbase[j] = v;
         }
         else assert(0);
 
-        laik_log(1, "init map for '%s' slc/map %d/%d: %d x at [%lu\n",
-                 d->name, op->sliceNo, op->mapNo, count, s->from.i[0]);
+        laik_log(1, "init map for '%s' slc/map %d/%d: %d entries in [%lu;%lu[ from %p\n",
+                 d->name, op->sliceNo, op->mapNo, elemCount, from, to, toBase);
     }
 }
 
