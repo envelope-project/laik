@@ -73,7 +73,9 @@ typedef enum _Laik_DataFlow {
 // reduction operation
 typedef enum _Laik_ReductionOperation {
     LAIK_RO_None = 0,
-    LAIK_RO_Sum
+    LAIK_RO_Sum, LAIK_RO_Prod,
+    LAIK_RO_Min, LAIK_RO_Max,
+    LAIK_RO_And, LAIK_RO_Or
 } Laik_ReductionOperation;
 
 // a point in an index space

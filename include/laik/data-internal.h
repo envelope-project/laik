@@ -22,8 +22,8 @@
 #error "include laik-internal.h instead"
 #endif
 
-#include "laik/data.h"
-
+// already included - this is just for an IDE to know about LAIK types
+#include "laik-internal.h"
 
 // kinds of data types supported by Laik
 typedef enum _Laik_TypeKind {
@@ -41,10 +41,9 @@ struct _Laik_Type {
 
     // callbacks for reductions
     // initialize values of this type with neutral element
-    void (*init)(void* base, int count, Laik_DataFlow a);
+    laik_init_t init;
     // do a reduction on input arrays
-    void (*reduce)(void* out, void* in1, void* in2,
-                   int count, Laik_DataFlow a);
+    laik_reduce_t reduce;
 
     // callbacks for packing/unpacking
     int (*getLength)(Laik_Data*,Laik_Slice*);

@@ -37,16 +37,29 @@ typedef struct _Laik_SwitchStat Laik_SwitchStat;
 // Laik data types
 
 typedef struct _Laik_Type Laik_Type;
+
 // predefined
+extern Laik_Type *laik_Char;
 extern Laik_Type *laik_Int32;
 extern Laik_Type *laik_Int64;
+extern Laik_Type *laik_UChar;
+extern Laik_Type *laik_UInt32;
+extern Laik_Type *laik_UInt64;
 extern Laik_Type *laik_Float;
 extern Laik_Type *laik_Double;
 
-// simple type, no support for reductions
+// simple type. To support reductions, need to set callbacks init/reduce
 Laik_Type* laik_register_type(char* name, int size);
 
+typedef void (*laik_init_t)(void* base, int count, Laik_ReductionOperation o);
+typedef void (*laik_reduce_t)(void* out, void* in1, void* in2,
+                              int count, Laik_ReductionOperation o);
 
+// provide an initialization function for this type
+void laik_type_set_init(Laik_Type* type, laik_init_t init);
+
+// provide a reduction function for this type
+void laik_type_set_reduce(Laik_Type* type, laik_reduce_t reduce);
 
 //----------------------------------
 // LAIK data container
