@@ -38,6 +38,9 @@ typedef struct _MGraph {
 // global options
 int doPrint = 0;
 
+// LAIK world
+Laik_Group* world = 0;
+
 // Produce a graph with <n> nodes and some arbitrary connectivity
 // with a fan-in <in>. The resulting graph will be stored in
 // <cm>[i,c], which is a <n> * (<in> +1) matrix storing the incoming nodes
@@ -82,11 +85,12 @@ void print(MGraph* mg)
     double* pm = mg->pm;
 
     for(int i = 0; i < n; i++) {
-        printf("State %2d: stay %.3f ", i, pm[i * (out + 1)]);
+        laik_log_begin(2);
+        laik_log_append("State %2d: stay %.3f ", i, pm[i * (out + 1)]);
         for(int j = 1; j <= out; j++)
-            printf("=(%.3f)=>%-2d  ",
-                   pm[i * (out + 1) + j], cm[i * (out + 1) + j]);
-        printf("\n");
+            laik_log_append("=(%.3f)=>%-2d  ",
+                            pm[i * (out + 1) + j], cm[i * (out + 1) + j]);
+        laik_log_flush("\n");
     }
 }
 
@@ -134,6 +138,8 @@ Laik_Data* runSparse(MGraph* mg, int miter,
 
     int iter = 0;
     while(1) {
+        laik_set_iteration(laik_get_dinst(data1), iter+1);
+
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto(dRead,  pRead,  LAIK_DF_CopyIn);
         laik_map_def1(dRead, (void**) &src, &srcCount);
@@ -146,18 +152,33 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         dstFrom = laik_local2global_1d(dWrite, 0);
 
         if (doPrint) {
-            printf("Src values at iter %d:\n", iter);
+            laik_log_begin(2);
+            laik_log_append("Src values before iter %d:\n", iter);
             for(int i = srcFrom; i < srcTo; i++)
-                printf("  %d: %f", i, src[i - srcFrom]);
-            printf("\n");
+                laik_log_append("  %d: %f", i, src[i - srcFrom]);
+            laik_log_flush("\n");
         }
 
         // spread values according to probability distribution
         for(int i = srcFrom; i < srcTo; i++) {
             int off = i * (out + 1);
-            dst[i - dstFrom] += src[i - srcFrom] * pm[off];
-            for(int j = 1; j <= out; j++)
+            for(int j = 0; j <= out; j++) {
+                laik_log(2,
+                         "  adding %f from state %d to state %d: before %f, after %f",
+                         src[i - srcFrom] * pm[off + j], i, cm[off + j],
+                        dst[cm[off + j] - dstFrom],
+                        dst[cm[off + j] - dstFrom] + src[i - srcFrom] * pm[off + j]);
+
                 dst[cm[off + j] - dstFrom] += src[i - srcFrom] * pm[off + j];
+            }
+        }
+
+        if (doPrint) {
+            laik_log_begin(2);
+            laik_log_append("Src values after after %d:\n", iter);
+            for(int i = srcFrom; i < srcTo; i++)
+                laik_log_append("  %d: %f", i, dst[i - dstFrom]);
+            laik_log_flush("\n");
         }
 
         iter++;
@@ -194,6 +215,8 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
 
     int iter = 0;
     while(1) {
+        laik_set_iteration(laik_get_dinst(data1), iter+1);
+
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto(dRead,  pRead,  LAIK_DF_CopyIn);
         laik_map_def1(dRead, (void**) &src, &srcCount);
@@ -206,18 +229,18 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         dstFrom = laik_local2global_1d(dWrite, 0);
 
         if (doPrint) {
-            printf("Src values at iter %d:\n", iter);
+            laik_log_begin(2);
+            laik_log_append("Src values at iter %d:\n", iter);
             for(int i = srcFrom; i < srcTo; i++)
-                printf("  %d: %f", i, src[i - srcFrom]);
-            printf("\n");
+                laik_log_append("  %d: %f", i, src[i - srcFrom]);
+            laik_log_flush("\n");
         }
 
         // spread values according to probability distribution
         for(int i = 0; i < srcCount; i++) {
             int off = i * (out + 1);
             int goff = (i + srcFrom) * (out + 1);
-            dst[iarray[off]] += src[i] * pm[goff];
-            for(int j = 1; j <= out; j++)
+            for(int j = 0; j <= out; j++)
                 dst[iarray[off + j]] += src[i] * pm[goff + j];
         }
 
@@ -240,11 +263,12 @@ int main(int argc, char* argv[])
 #else
     Laik_Instance* inst = laik_init_single();
 #endif
-    Laik_Group* world = laik_world(inst);
+    world = laik_world(inst);
 
-    int n = 1000000;
+    int n = 100000;
     int out = 10;
     int miter = 10;
+    int onestate = -1;
     int doCompact = 0;
     int doIndirection = 0;
     int useSingleIndex = 0;
@@ -254,21 +278,30 @@ int main(int argc, char* argv[])
 
     int arg = 1;
     while((arg < argc) && (argv[arg][0] == '-')) {
-        if (argv[arg][1] == 'c') doCompact = 1;
-        if (argv[arg][1] == 'i') doIndirection = 1;
-        if (argv[arg][1] == 's') useSingleIndex = 1;
-        if (argv[arg][1] == 'f') fineGrained = 1;
-        if (argv[arg][1] == 'p') doPrint = 1;
-        if (argv[arg][1] == 'z') doProfiling = 1;
-        if (argv[arg][1] == 'h') {
-            printf("markov [options] [<statecount> [<fan-out> [<iterations>]]]\n"
+        switch(argv[arg][1]) {
+        case 'c': doCompact = 1; break;
+        case 'i': doIndirection = 1; break;
+        case 's': useSingleIndex = 1; break;
+        case 'f': fineGrained = 1; break;
+        case 'v': doPrint = 1; break;
+        case 'p': doProfiling = 1; break;
+        case 'h':
+        default:
+            printf("markov [options] [<states> [<fan-out> [<iterations> [<istate>]]]]\n"
+                   "\nParameters:\n"
+                   "  <states>     : number of states (def %d)\n"
+                   "  <fan-ou>     : number of outgoing edges per state (def %d)\n"
+                   "  <iterations> : number of iterations to run\n"
+                   "  <istate>     : if given: state with initial value 1, others 0\n"
+                   "                 default: all states set to same value\n"
                    "\nOptions:\n"
                    " -i: use indirection with pre-calculated local indexes\n"
                    " -c: use a compact mapping (implies -i)\n"
                    " -s: use single index hint\n"
                    " -f: use pseudo-random connectivity (much more slices)\n"
-                   " -p: print connectivity\n"
-                   " -h: this help text\n");
+                   " -v: be verbose using laik_log(), level 2\n"
+                   " -p: write profiling measurements to 'markov2_profiling.txt'\n"
+                   " -h: this help text\n", n, out);
             exit(1);
         }
         arg++;
@@ -276,17 +309,23 @@ int main(int argc, char* argv[])
     if (argc > arg) n = atoi(argv[arg]);
     if (argc > arg + 1) out = atoi(argv[arg + 1]);
     if (argc > arg + 2) miter = atoi(argv[arg + 2]);
+    if (argc > arg + 3) onestate = atoi(argv[arg + 3]);
 
-    if (n == 0) n = 1000000;
+    if (n == 0) n = 100000;
     if (out == 0) out = 10;
     if (doCompact) doIndirection = 1;
+    if (onestate >= n) onestate = -1;
 
     if (laik_myid(world) == 0) {
-        printf("Init Markov chain with %d states, max fan-out %d\n", n, out);
-        printf("Run %d iterations each.%s%s%s\n", miter,
+        printf("Init Markov chain with %d states, max fan-out %d.\n", n, out);
+        printf("Running %d iterations.%s%s%s\n", miter,
                useSingleIndex ? " Partitioner using single indexes.":"",
                doCompact ? " Using compact mapping.":"",
                doIndirection ? " Using indirection.":"");
+        if (onestate >= 0)
+            printf("Initial values: all 0, just state %d set to 1.\n", onestate);
+        else
+            printf("All initial values set to %f.\n", 1.0 / n);
     }
 
     MGraph mg;
@@ -304,9 +343,8 @@ int main(int argc, char* argv[])
     Laik_Data* data2 = laik_new_data(world, space, laik_Double);
 
     //profiling
-    if(doProfiling){
-        laik_enable_profiling_file(inst, "markov2.csv");
-    }
+    if (doProfiling)
+        laik_enable_profiling_file(inst, "markov2_profiling.txt");
 
     // partitionings:
     // - pRead  : distributes the states owned by tasks, propagating from
@@ -348,8 +386,11 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (laik_myid(world) == 0)
-        printf("Start with state 0 prob 1 ...\n");
+
+    laik_set_phase(inst, 1, "Init", 0);
+
+    laik_reset_profiling(inst);
+    laik_profile_user_start(inst);
 
     // distributed initialization of data1
     // (uses pRead with disjuntive partitioning here, in contrast to reading
@@ -358,103 +399,59 @@ int main(int argc, char* argv[])
     uint64_t count, off;
     laik_switchto(data1, pRead, LAIK_DF_CopyOut);
     laik_map_def1(data1, (void**) &v, &count);
-    for(uint64_t i = 0; i < count; i++)
-        v[i] = (double) 0.0;
-    // set state 0 to probability 1
-    if (laik_global2local_1d(data1, 0, &off)) {
-        // if global index 0 is local, it must be at local index 0
-        assert(off == 0);
-        v[off] = 1.0;
-    }
-
-    laik_reset_profiling(inst);
-    laik_profile_user_start(inst);
-    Laik_Data* dRes;
-    if (doIndirection)
-        dRes = runIndirection(&mg, miter, data1, data2, idata, pWrite, pRead);
-    else
-        dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
-
-    laik_profile_user_stop(inst);
-    laik_writeout_profile();
-
-    laik_reset_profiling(inst);
-    laik_switchto(dRes, pMaster, LAIK_DF_CopyIn);
-    laik_writeout_profile();
-
-
-    laik_map_def1(dRes, (void**) &v, &count);
-    if (laik_myid(world) == 0) {
-        assert(count == n);
-        double sum = 0.0;
-        for(int i=0; i < n; i++)
-            sum += v[i];
-        printf("  result probs: p0 = %g, p1 = %g, p2 = %g, Sum: %f\n",
-               v[0], v[1], v[2], sum);
-    }
-
-    laik_reset_profiling(inst);
-    laik_profile_user_start(inst);
-    if (laik_myid(world) == 0)
-        printf("Start with state 1 prob 1 ...\n");
-    laik_switchto(data1, pRead, LAIK_DF_CopyOut);
-    laik_map_def1(data1, (void**) &v, &count);
-    for(uint64_t i = 0; i < count; i++)
-        v[i] = (double) 0.0;
-    if (laik_global2local_1d(data1, 1, &off))
-        v[off] = 1.0;
-
-    laik_profile_user_stop(inst);
-    laik_writeout_profile();
-
-
-    laik_reset_profiling(inst);
-    laik_profile_user_start(inst);
-    if (doIndirection)
-        dRes = runIndirection(&mg, miter, data1, data2, idata, pWrite, pRead);
-    else
-        dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
-
-    laik_switchto(dRes, pMaster, LAIK_DF_CopyIn);
-    laik_map_def1(dRes, (void**) &v, &count);
-    if (laik_myid(world) == 0) {
-        double sum = 0.0;
-        for(int i=0; i < n; i++)
-            sum += v[i];
-        printf("  result probs: p0 = %g, p1 = %g, p2 = %g, Sum: %f\n",
-               v[0], v[1], v[2], sum);
-    }
-
-    laik_profile_user_stop(inst);
-    laik_writeout_profile();
-
-    laik_reset_profiling(inst);
-    laik_profile_user_start(inst);
-
-    if (laik_myid(world) == 0)
-        printf("Start with all probs equal ...\n");
-    laik_switchto(data1, pRead, LAIK_DF_CopyOut);
-    laik_map_def1(data1, (void**) &v, &count);
-    double p = 1.0 / n;
+    double p = (onestate < 0) ? (1.0 / n) : 0.0;
     for(uint64_t i = 0; i < count; i++)
         v[i] = p;
+    if (onestate >= 0) {
+        // set state <phase> to probability 1
+        if (laik_global2local_1d(data1, onestate, &off)) {
+            // if global index 0 is local, it must be at local index 0
+            assert(off == onestate);
+            v[off] = 1.0;
+        }
+    }
 
+    laik_profile_user_stop(inst);
+    laik_writeout_profile();
+    laik_reset_profiling(inst);
+    laik_profile_user_start(inst);
+
+    laik_set_phase(inst, 2, "Calc", 0);
+
+    Laik_Data* dRes;
     if (doIndirection)
-        dRes = runIndirection(&mg, miter, data1, data2, idata, pWrite, pRead);
+        dRes = runIndirection(&mg, miter, data1, data2,
+                              idata, pWrite, pRead);
     else
         dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
 
+    laik_profile_user_stop(inst);
+    laik_writeout_profile();
+    laik_reset_profiling(inst);
+    laik_set_phase(inst, 3, "Collect", 0);
+
     laik_switchto(dRes, pMaster, LAIK_DF_CopyIn);
+    laik_writeout_profile();
     laik_map_def1(dRes, (void**) &v, &count);
+    laik_set_phase(inst, 4, "Out", 0);
     if (laik_myid(world) == 0) {
+
+        assert(count == n);
+
+        if (doPrint) {
+            laik_log_begin(2);
+            laik_log_append("Result values:\n");
+            for(int i = 0; i < n; i++)
+                laik_log_append("  %d: %f", i, v[i]);
+            laik_log_flush("\n");
+        }
+
         double sum = 0.0;
         for(int i=0; i < n; i++)
             sum += v[i];
-        printf("  result probs: p0 = %g, p1 = %g, p2 = %g, Sum: %f\n",
+        printf("Result probs: p0 = %g, p1 = %g, p2 = %g, Sum: %f\n",
                v[0], v[1], v[2], sum);
     }
-    laik_profile_user_stop(inst);
-    laik_writeout_profile();
 
     laik_finalize(inst);
     return 0;

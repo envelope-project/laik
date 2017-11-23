@@ -438,7 +438,7 @@ void log_flush()
 
 #define LINE_LEN 100
     // enough for prefix plus one line of log message
-    static char buf2[100 + LINE_LEN];
+    static char buf2[150 + LINE_LEN];
     int off1 = 0, off, off2;
 
     char* buf1 = current_logBuffer;
@@ -500,7 +500,7 @@ void log_flush()
         off2 += sprintf(buf2+off2, "%s\n", buf1 + off1);
         off1 = off;
 
-        assert(off2 < 100 + LINE_LEN);
+        assert(off2 < 150 + LINE_LEN);
 
         // TODO: allow to go to debug file
         fprintf(stderr, "%s", buf2);
