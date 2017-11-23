@@ -1061,31 +1061,14 @@ void initMaps(Laik_Transition* t,
         if (ss)
             ss->initedBytes += elemCount * d->elemsize;
 
-        if (d->type == laik_Double) {
-            double v;
-            double* dbase = (double*) toBase;
-
-            switch(op->redOp) {
-            case LAIK_RO_Sum: v = 0.0; break;
-            default:
-                assert(0);
-            }
-            for(int j = 0; j < elemCount; j++)
-                dbase[j] = v;
+        if (d->type->init)
+            (d->type->init)(toBase, elemCount, op->redOp);
+        else {
+            laik_log(LAIK_LL_Panic,
+                     "Need initialization function for type '%s'. Not set!",
+                     d->type->name);
+            assert(0);
         }
-        else if (d->type == laik_Float) {
-            float v;
-            float* dbase = (float*) toBase;
-
-            switch(t->init[i].redOp) {
-            case LAIK_RO_Sum: v = 0.0; break;
-            default:
-                assert(0);
-            }
-            for(int j = 0; j < elemCount; j++)
-                dbase[j] = v;
-        }
-        else assert(0);
 
         laik_log(1, "init map for '%s' slc/map %d/%d: %d entries in [%lu;%lu[ from %p\n",
                  d->name, op->sliceNo, op->mapNo, elemCount, from, to, toBase);

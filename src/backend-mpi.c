@@ -304,9 +304,17 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                     char* ptr[32], *p;
                     assert(tg->count <= 32);
                     p = packbuf;
+                    int myIdx = -1;
                     for(int i = 0; i< tg->count; i++) {
                         if (tg->task[i] == myid) {
                             ptr[i] = fromBase;
+                            myIdx = i;
+
+#ifdef LOG_DOUBLE_VALUES
+                            for(int i = 0; i < elemCount; i++)
+                                laik_log(1, "    have at %d: %f", from + i,
+                                         ((double*)fromBase)[i]);
+#endif
                             continue;
                         }
 
@@ -318,13 +326,23 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                                  tg->task[i], 1, comm, &status);
 #ifdef LOG_DOUBLE_VALUES
                         for(int i = 0; i < elemCount; i++)
-                            laik_log(1, "    at %d: %f", from + i,
+                            laik_log(1, "    got at %d: %f", from + i,
                                      ((double*)p)[i]);
 #endif
                         p += byteCount;
                     }
 
+                    // toBase may be same as fromBase (= our values).
+                    // e.g. when we are 3rd task (ptr[3] == fromBase), we
+                    // would overwrite our values. Swap ptr[0] with ptr[3].
+                    if (myIdx >= 0) {
+                        assert(ptr[myIdx] == fromBase);
+                        ptr[myIdx] = ptr[0];
+                        ptr[0] = fromBase;
+                    }
+
                     // do the reduction, put result back to my input buffer
+#if 0
                     assert(op->redOp == LAIK_RO_Sum);
                     assert(d->type == laik_Double);
                     for(int i = 0; i < elemCount; i++) {
@@ -332,12 +350,32 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                         for(int t = 0; t < tg->count; t++)
                             v += ((double*)ptr[t])[i];
                         ((double*)toBase)[i] = v;
+                    }
+#else
+                    if (d->type->reduce) {
+                        assert(tg->count > 1);
+
+
+                        (d->type->reduce)(toBase, ptr[0], ptr[1],
+                                elemCount, op->redOp);
+                        for(int t = 2; t < tg->count; t++)
+                            (d->type->reduce)(toBase, toBase, ptr[t],
+                                              elemCount, op->redOp);
+                    }
+                    else {
+                        laik_log(LAIK_LL_Panic,
+                                 "Need reduce function for type '%s'. Not set!",
+                                 d->type->name);
+                        assert(0);
+                    }
+#endif
+
 
 #ifdef LOG_DOUBLE_VALUES
+                    for(int i = 0; i < elemCount; i++)
                         laik_log(1, "    sum at %d: %f", from + i,
                                  ((double*)toBase)[i]);
 #endif
-                    }
 
                     // send result to tasks in output group
                     tg = &(t->group[op->outputGroup]);
