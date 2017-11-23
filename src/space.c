@@ -2167,16 +2167,20 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 
         // something to reduce?
         if (laik_is_reduction(fromFlow) && laik_do_copyin(toFlow)) {
-            // special case: reduction on full space involving everyone?
+            // special case: reduction on full space involving everyone with
+            //               result to one or all?
+            bool fromAllto1OrAll = false;
+            int outputGroup = -2;
             if (bordersIsAll(fromBA)) {
                 // reduction result either goes to all or master
                 int task = bordersIsSingle(toBA);
-                int outputGroup;
                 if (task < 0) {
-                    // output is not a single task: must be all
-                    assert(bordersIsAll(toBA));
-                    // output -1 is group ALL
-                    outputGroup = -1;
+                    // output is not a single task
+                    if (bordersIsAll(toBA)) {
+                        // output -1 is group ALL
+                        outputGroup = -1;
+                        fromAllto1OrAll = true;
+                    }
                 }
                 else {
                     outputGroup = getTaskGroupSingle(task);
@@ -2184,8 +2188,12 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                         assert(task == 0);
                         outputGroup = -1; // with only 1 task: all-group
                     }
+                    fromAllto1OrAll = true;
                 }
+            }
 
+            if (fromAllto1OrAll) {
+                assert(outputGroup > -2);
                 // complete space, always sliceNo 0 and mapNo 0
                 appendRedTOp( &(space->s),
                               laik_get_reduction(fromFlow),
