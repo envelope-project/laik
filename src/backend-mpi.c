@@ -29,6 +29,8 @@ void laik_mpi_finalize() {}
 
 #include <mpi.h>
 
+// print out values received/sent
+#define LOG_DOUBLE_VALUES 1
 
 // forward decls, types/structs , global variables
 
@@ -200,7 +202,6 @@ MPI_Datatype getMPIDataType(Laik_Data* d)
     return mpiDataType;
 }
 
-
 void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                              Laik_MappingList* fromList, Laik_MappingList* toList)
 {
@@ -283,7 +284,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 assert(t->group[op->inputGroup].count < d->group->size);
 
             // if neither input nor output are all-groups: manual reduction
-            if ((op->inputGroup >= 0) && (op->inputGroup >= 0)) {
+            if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
 
                 // do the manual reduction on smallest rank of output group
                 int reduceTask = t->group[op->outputGroup].task[0];
@@ -315,6 +316,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                         ptr[i] = p;
                         MPI_Recv(p, elemCount, mpiDataType,
                                  tg->task[i], 1, comm, &status);
+#ifdef LOG_DOUBLE_VALUES
+                        for(int i = 0; i < elemCount; i++)
+                            laik_log(1, "    at %d: %f", from + i,
+                                     ((double*)p)[i]);
+#endif
                         p += byteCount;
                     }
 
@@ -322,10 +328,15 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                     assert(op->redOp == LAIK_RO_Sum);
                     assert(d->type == laik_Double);
                     for(int i = 0; i < elemCount; i++) {
-                        double v = ((double*)fromBase)[i];
-                        for(int t = 1; t < tg->count; t++)
+                        double v = 0.0;
+                        for(int t = 0; t < tg->count; t++)
                             v += ((double*)ptr[t])[i];
                         ((double*)toBase)[i] = v;
+
+#ifdef LOG_DOUBLE_VALUES
+                        laik_log(1, "    sum at %d: %f", from + i,
+                                 ((double*)toBase)[i]);
+#endif
                     }
 
                     // send result to tasks in output group
@@ -346,6 +357,12 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                     if (laik_isInGroup(t, op->inputGroup, myid)) {
                         laik_log(1, "  MPI_Send to T%d", reduceTask);
 
+#ifdef LOG_DOUBLE_VALUES
+                        for(int i = 0; i < elemCount; i++)
+                            laik_log(1, "    at %d: %f", from + i,
+                                     ((double*)fromBase)[i]);
+#endif
+
                         MPI_Send(fromBase, elemCount, mpiDataType,
                                  reduceTask, 1, comm);
                     }
@@ -354,6 +371,11 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
                         MPI_Recv(toBase, elemCount, mpiDataType,
                                  reduceTask, 1, comm, &status);
+#ifdef LOG_DOUBLE_VALUES
+                        for(int i = 0; i < elemCount; i++)
+                            laik_log(1, "    at %d: %f", from + i,
+                                     ((double*)toBase)[i]);
+#endif
                     }
                 }
             }
@@ -391,6 +413,13 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                                    d->elemsize, fromBase, toBase);
                 }
 
+#ifdef LOG_DOUBLE_VALUES
+                if (fromBase)
+                    for(int i = 0; i < elemCount; i++)
+                        laik_log(1, "    before at %d: %f", from + i,
+                                 ((double*)fromBase)[i]);
+#endif
+
                 if (rootTask == -1) {
                     if (fromBase == toBase)
                         MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
@@ -407,6 +436,14 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                         MPI_Reduce(fromBase, toBase, to - from,
                                    mpiDataType, mpiRedOp, rootTask, comm);
                 }
+
+#ifdef LOG_DOUBLE_VALUES
+                if (toBase)
+                    for(int i = 0; i < elemCount; i++)
+                        laik_log(1, "    after at %d: %f", from + i,
+                                 ((double*)toBase)[i]);
+#endif
+
             }
 
             if (ss) {

@@ -72,6 +72,9 @@ Laik_Space* laik_get_dspace(Laik_Data*);
 // get task group used for data
 Laik_Group* laik_get_dgroup(Laik_Data* d);
 
+// get instance managing data
+Laik_Instance* laik_get_dinst(Laik_Data* d);
+
 // get active partitioning of data container
 Laik_Partitioning* laik_get_active(Laik_Data* d);
 

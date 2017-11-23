@@ -187,6 +187,12 @@ Laik_Group* laik_get_dgroup(Laik_Data* d)
     return d->group;
 }
 
+// get instance managing data
+Laik_Instance* laik_get_dinst(Laik_Data* d)
+{
+    return d->group->inst;
+}
+
 // get active partitioning of data container
 Laik_Partitioning* laik_get_active(Laik_Data* d)
 {
