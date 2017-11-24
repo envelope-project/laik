@@ -113,17 +113,23 @@ and build LAIK with minimal features enabled:
     make
     python
 
+As communication backend, we currently focus on MPI. To enable MPI support,
+install an MPI library such as MPICH or OpenMPI. For OpenMPI, you need
+
+    libopenmpi-dev
+    openmpi-bin
+
 Additionally installing the following packages will allow building with all
 optional features enabled:
 
-    g++
     libmosquitto-dev
-    libopenmpi-dev
-    libpapi-dev
     libprotobuf-c-dev
-    openmpi-bin
-    openmpi-bin
-    openssh-client
+    libpapi-dev
+    g++
+
+Mosquitto and protobuf will enable external agents, and PAPI allows
+to use performance counters for profiling. C++ is used in some examples.
+
 
 # License
 
