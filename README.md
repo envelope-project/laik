@@ -90,19 +90,41 @@ To run this example (could use vectorsum directly for OpenMP backend):
 
 # Build and Install
 
-There is a 'configure' command that detects features of your system and enables corresponding LAIK functionality if found:
-* for MPI backend support, MPI must be installed
-* for external control via MQTT, mosquitto and protobuf must be installed
+LAIK uses ```meson``` for building. If you have a C compiler and ```meson```
+installed, simply calling
 
-To compile, run
+    meson setup build
 
-    ./configure
-    make
+will configure LAIK with the minimal feature set in the newly-created
+```build``` directory. If you want to enable optional features, you could for
+example modify the command like this:
 
-There also are clean, install, and uninstall targets. The install defaults
-to '/usr/local'. To set the installation path to your home directory, use
+    meson setup -Denable-mpi=true build-mpi
 
-    PREFIX=~ ./configure
+If you have the necessary packages (see below) installed, this will configure
+LAIK with MPI enabled in ```build-mpi```. However please note that you don't
+have to create a new directory everytime you want to change the options, but can
+also modify the options of an existing directory like this:
+
+    meson configure build -Denable-mpi=true
+
+Have a look at the ```meson-options.txt``` file and the output of the ```meson
+configure ${YOUR_BUILD_DIRECTORY}``` command to learn about available options
+and their current values! In order to actually build LAIK with the specified
+configuration, all you have to do is call ```ninja```, the actual build tool
+used by ```meson```:
+
+    ninja -C build
+
+However, please note that after the initial setup, you'll never have to call
+```meson``` again (unless you want to change the configuration options again):
+```ninja``` is smart enough to ask meson for any new rules from the
+```meson.build``` file before starting the build process!
+
+Finally, installing/uninstalling works just like with ```make```:
+
+    ninja -C build install
+    ninja -C build uninstall
 
 ## Installing the dependencies on Debian/Ubuntu
 
@@ -110,8 +132,7 @@ On Debian/Ubuntu, installing the following packages will allow you to configure
 and build LAIK with minimal features enabled:
 
     gcc
-    make
-    python
+    meson
 
 As communication backend, we currently focus on MPI. To enable MPI support,
 install an MPI library such as MPICH or OpenMPI. For OpenMPI, you need
@@ -124,12 +145,12 @@ optional features enabled:
 
     libmosquitto-dev
     libprotobuf-c-dev
+    protobuf-c-compiler
     libpapi-dev
     g++
 
 Mosquitto and protobuf will enable external agents, and PAPI allows
 to use performance counters for profiling. C++ is used in some examples.
-
 
 # License
 

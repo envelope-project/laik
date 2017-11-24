@@ -1,0 +1,35 @@
+option (
+    'enable-cpp',
+    type : 'boolean',
+    value : false,
+)
+
+option (
+    'enable-doc',
+    type : 'boolean',
+    value : false,
+)
+
+option (
+    'enable-mosquitto',
+    type : 'boolean',
+    value : false,
+)
+
+option (
+    'enable-mpi',
+    type : 'boolean',
+    value : false,
+)
+
+option (
+    'enable-papi',
+    type : 'boolean',
+    value : false,
+)
+
+option (
+    'enable-protobuf',
+    type : 'boolean',
+    value : false,
+)
