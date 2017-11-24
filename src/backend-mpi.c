@@ -227,34 +227,42 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
 
     if (t->redCount > 0) {
         assert(dims == 1);
-        bool reuseMap = false; // set to true if we reused fromMap for toMap
-        // we only support reductions within one mapping
-        assert((fromList != 0) && (fromList->count == 1));
-        Laik_Mapping* fromMap = &(fromList->map[0]);
-        assert(fromMap);
-        // result goes to all tasks or just one => toList may be 0
-        if (toList)
-            assert(toList->count == 1);
-        Laik_Mapping* toMap = toList ? &(toList->map[0]) : 0;
 
-        if (toMap && (toMap->base == 0)) {
-            // we may reuse previous mapping
-            // only possible if is has the same size
-            if (toMap->count == fromMap->count) {
-                // we can do IN_PLACE reduction
-                toMap->base = fromMap->base;
-                reuseMap = true;
-            }
-            else {
-                laik_allocateMap(toMap, ss);
-                assert(toMap->base != 0);
-            }
-        }
+        // TODO: pull reuse check into data.c
+        assert(!toList || (toList->count < 100));
+        int reuse[100]; // for toMap index, remember which map we used
+        for(int i = 0; i < 100; i++) reuse[i] = -1;
+
+        assert(fromList);
 
         for(int i=0; i < t->redCount; i++) {
             struct redTOp* op = &(t->red[i]);
             uint64_t from = op->slc.from.i[0];
             uint64_t to   = op->slc.to.i[0];
+
+            assert(op->myInputMapNo >= 0);
+            assert(op->myInputMapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[op->myInputMapNo]);
+
+            Laik_Mapping* toMap = 0;
+            if (toList && (op->myOutputMapNo >= 0)) {
+                assert(op->myOutputMapNo < toList->count);
+                toMap = &(toList->map[op->myOutputMapNo]);
+
+                if (toMap->base == 0) {
+                    // we may reuse previous mapping
+                    // only possible if it has the same size (FIXME: includes old!)
+                    if (toMap->count == fromMap->count) {
+                        // we can do IN_PLACE reduction
+                        toMap->base = fromMap->base;
+                        assert(op->myOutputMapNo < toList->count);
+                        reuse[op->myOutputMapNo] = op->myInputMapNo;
+                    }
+                    else
+                        laik_allocateMap(toMap, ss);
+                }
+                assert(toMap->base != 0);
+            }
 
             char* fromBase = fromMap ? fromMap->base : 0;
             char* toBase = toMap ? toMap->base : 0;
@@ -342,16 +350,6 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                     }
 
                     // do the reduction, put result back to my input buffer
-#if 0
-                    assert(op->redOp == LAIK_RO_Sum);
-                    assert(d->type == laik_Double);
-                    for(int i = 0; i < elemCount; i++) {
-                        double v = 0.0;
-                        for(int t = 0; t < tg->count; t++)
-                            v += ((double*)ptr[t])[i];
-                        ((double*)toBase)[i] = v;
-                    }
-#else
                     if (d->type->reduce) {
                         assert(tg->count > 1);
 
@@ -368,8 +366,6 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                                  d->type->name);
                         assert(0);
                     }
-#endif
-
 
 #ifdef LOG_DOUBLE_VALUES
                     for(int i = 0; i < elemCount; i++)
@@ -380,7 +376,7 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                     // send result to tasks in output group
                     tg = &(t->group[op->outputGroup]);
                     for(int i = 0; i< tg->count; i++) {
-                        if (tg->task[0] == myid) {
+                        if (tg->task[i] == myid) {
                             // that's myself: nothing to do
                             continue;
                         }
@@ -489,10 +485,10 @@ void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
                 ss->reducedBytes += (to - from) * d->elemsize;
             }
         }
-        if (reuseMap) {
-            assert(fromMap);
-            // do not free memory behind fromMap, as we reused the mapping
-            fromMap->base = 0;
+        for(int i = 0; i < 100; i++) {
+            // do not free memory of reused maps
+            if (reuse[i] > -1)
+                fromList->map[reuse[i]].base = 0;
         }
     }
 
