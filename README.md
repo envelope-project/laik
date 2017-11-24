@@ -104,13 +104,26 @@ to '/usr/local'. To set the installation path to your home directory, use
 
     PREFIX=~ ./configure
 
-## Ubuntu
+## Installing the dependencies on Debian/Ubuntu
 
-On Ubuntu, install the following packages to enable MPI and MQTT:
+On Debian/Ubuntu, installing the following packages will allow you to configure
+and build LAIK with minimal features enabled:
 
-    libopenmpi-dev libmosquitto-dev libprotobuf-c-dev
+    gcc
+    make
+    python
 
+Additionally installing the following packages will allow building with all
+optional features enabled:
 
+    g++
+    libmosquitto-dev
+    libopenmpi-dev
+    libpapi-dev
+    libprotobuf-c-dev
+    openmpi-bin
+    openmpi-bin
+    openssh-client
 
 # License
 
