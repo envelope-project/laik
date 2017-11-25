@@ -194,6 +194,9 @@ Laik_Agent* agent_init(
     int argc, 
     char** argv
 ){
+    (void) argc; /* FIXME: Why have this parameter if it's never used */
+    (void) argv; /* FIXME: Why have this parameter if it's never used */
+
     Laik_Profiling_Agent* me = (Laik_Profiling_Agent*)
             calloc(1, sizeof(Laik_Profiling_Agent));
     assert(me);

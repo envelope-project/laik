@@ -24,6 +24,9 @@
 void runLuleshElementPartitioner(Laik_Partitioner* pr,
                                    Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
+    (void) pr;      /* FIXME: Why have this parameter if it's never used */
+    (void) otherBA; /* FIXME: Why have this parameter if it's never used */
+
     Laik_Space* space = laik_borderarray_getspace(ba);
     const Laik_Slice* slice = laik_space_getslice(space);
     Laik_Group* group = laik_borderarray_getgroup(ba);
@@ -62,6 +65,8 @@ Laik_Partitioner* laik_new_lulesh_element_partitioner()
 void runLuleshNodePartitioner(Laik_Partitioner* pr,
                                 Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
+    (void) otherBA; /* FIXME: Why have this parameter if it's never used */
+
     Laik_Space* space = laik_borderarray_getspace(ba);
     Laik_Space* otherSpace = laik_borderarray_getspace(otherBA);
     const Laik_Slice* slice = laik_space_getslice(space);

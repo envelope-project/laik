@@ -1030,6 +1030,8 @@ void initMaps(Laik_Transition* t,
               Laik_MappingList* toList, Laik_MappingList* fromList,
               Laik_SwitchStat* ss)
 {
+    (void) fromList; /* FIXME: Why have this parameter if it's never used */
+
     assert(t->initCount > 0);
     for(int i = 0; i < t->initCount; i++) {
         struct initTOp* op = &(t->init[i]);
