@@ -58,10 +58,6 @@ int main(int argc, char* argv[])
     double *base;
     uint64_t count;
 
-    // different partitionings used
-    Laik_Partitioning *p1;
-    Laik_Mapping* m;
-
     // do partial sums using different partitionings
     double mysum[4] = { 0.0, 0.0, 0.0, 0.0 };
 
@@ -71,10 +67,10 @@ int main(int argc, char* argv[])
     laik_set_phase(inst, 1, "master-only", NULL);
 
     // initialize at master (others do nothing, empty partition)
-    p1 = laik_switchto_new(a, laik_Master, LAIK_DF_CopyOut);
+    laik_switchto_new(a, laik_Master, LAIK_DF_CopyOut);
     if (laik_myid(world) == 0) {
         // it is ensured this is exactly one slice
-        m = laik_map_def1(a, (void**) &base, &count);
+        laik_map_def1(a, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) base[i] = (double) i;
     }
     // partial sum (according to master partitioning)
