@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/envelope-project/laik.svg?branch=master)](https://travis-ci.org/envelope-project/laik)
 
-# A Library for Automatic Data Migration in HPC Applications
+# A Library for Automatic Data Migration in Parallel Applications
 
 With LAIK, HPC programmers describe their communication needs on
 the level of switching among access phases to partitionings of
@@ -11,16 +11,15 @@ communication operations required among the parallel processes
 on ranges of these index spaces. The application can map these
 to adequate communication operations for the used data structures
 itself, or it can ask LAIK to manage memory attached to indexes.
-Then, on each switch between access phase, LAIK directly executes
-the required real data communication e.g. using MPI.
+This way, on a switch between access phase, LAIK directly executes
+the required real data communication itself e.g. using MPI.
 
 Benefits of the LAIK parallel programming model:
 
 * explicit decoupling of the specification of data decomposition
-  among parallel tasks and application code executing required
-  communication primitives for data structures. This makes it
-  easier to exchange partitioning algorithms or to implement dynamic
-  re-partitioning schemes as well as external control.
+  among parallel tasks from application code specifying the computation.
+  This makes it easier to exchange partitioning algorithms or to
+  implement dynamic re-partitioning schemes as well as external control.
 
 * programming style becomes agnostic to the number of parallel processes:
   each process works on index ranges as specified in the partitioning
@@ -29,12 +28,20 @@ Benefits of the LAIK parallel programming model:
 
 * using LAIK data containers can significantly reduce application code
   required for explicit data communication. This makes maintance easier.
+  
+* the declarative style of programming allows LAIK to trigger communication
+  early, enabling it to overlap communication and computation.
 
 While similar parallel programming models exist (Charm++, Legion), LAIK
 is designed to make it easy to integrate LAIK functionality step-by-step
 into existing legacy HPC code written in C/C++/Fortran. At each incremental
-step, the application can be tested for correct integration of LAIK
-(see: typical steps to integrate LAIK).
+step, the application can be tested for correctness.
+
+If the same phase switches are done repeatedly, the required communication
+operations are cached by LAIK, resulting only in a one-time initial cost
+to pay for the programming abstraction. Typical HPC applications should trigger
+e.g. the exact same MPI calls with LAIK than without, keeping its original
+scalability.
 
 # Motivation
 
