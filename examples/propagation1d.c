@@ -53,7 +53,6 @@ int main(int argc, char* argv[])
     #endif
     
     // application defines the number of elements and nodes
-    int size = SIZE;
     int size_nodes = (SIZE+1);
     int size_elems = SIZE;
 
