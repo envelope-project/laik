@@ -64,7 +64,7 @@ decode_step(
     assert(step);
 
     ret = sscanf(opcode, "%d %d %d %d%n",
-            &(step->type),
+            (int*) &(step->type), /* FIXME: This is clearly wrong, enum != int */
             &(step->tic_or_iter), 
             &(step->num_nodes),
             &(step->num_components), 
