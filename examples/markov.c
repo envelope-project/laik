@@ -194,7 +194,6 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto(dRead,  pRead,  LAIK_DF_CopyIn);
         laik_map_def1(dRead, (void**) &src, &srcCount);
-        (void) laik_local2global_1d(dRead, 0);
 
         laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);

@@ -226,7 +226,6 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         laik_switchto(dWrite, pWrite,
                       LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
-        (void) laik_local2global_1d(dWrite, 0);
 
         if (doPrint) {
             laik_log_begin(2);
