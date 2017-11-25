@@ -32,8 +32,8 @@ static int type_id = 0;
 
 void laik_char_init(void* base, int count, Laik_ReductionOperation o)
 {
-    signed char* p = base;
-    char v;
+    unsigned char* p = base;
+    unsigned char v;
     switch(o) {
     case LAIK_RO_Sum:
     case LAIK_RO_Or:   v = 0; break;
@@ -94,7 +94,7 @@ void laik_char_reduce(void* out, void* in1, void* in2,
 void laik_uchar_init(void* base, int count, Laik_ReductionOperation o)
 {
     unsigned char* p = base;
-    char v;
+    unsigned char v;
     switch(o) {
     case LAIK_RO_Sum:
     case LAIK_RO_Or:   v = 0; break;
