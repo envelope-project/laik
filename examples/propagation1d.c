@@ -16,6 +16,8 @@
 void runLuleshPartitioner1d(Laik_Partitioner* pr,
                             Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
+    (void) pr; /* FIXME: Why have this parameter if it's never used */
+
     assert(ba->space->dims == otherBA->space->dims);
     Laik_Space* space = ba->space;
     //Laik_Group* g = ba->group;

@@ -52,6 +52,9 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 void runAllPartitioner(Laik_Partitioner* pr,
                        Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
+    (void) pr;    /* FIXME: Why have this parameter if it's never used */
+    (void) oldBA; /* FIXME: Why have this parameter if it's never used */
+
     Laik_Space* space = ba->space;
     Laik_Group* g = ba->group;
 
@@ -70,6 +73,9 @@ Laik_Partitioner* laik_new_all_partitioner()
 void runMasterPartitioner(Laik_Partitioner* pr,
                           Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
+    (void) pr;    /* FIXME: Why have this parameter if it's never used */
+    (void) oldBA; /* FIXME: Why have this parameter if it's never used */
+
     // only full slice for master
     laik_append_slice(ba, 0, &(ba->space->s), 0, 0);
 }
@@ -305,6 +311,9 @@ static void doBisection(Laik_BorderArray* ba,
 void runBisectionPartitioner(Laik_Partitioner* pr,
                              Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
+    (void) pr;      /* FIXME: Why have this parameter if it's never used */
+    (void) otherBA; /* FIXME: Why have this parameter if it's never used */
+
     doBisection(ba, &(ba->space->s), 0, ba->group->size);
 }
 
@@ -340,6 +349,8 @@ struct _Laik_BlockPartitionerData {
 void runBlockPartitioner(Laik_Partitioner* pr,
                          Laik_BorderArray* ba, Laik_BorderArray* oldBA)
 {
+    (void) oldBA; /* FIXME: Why have this parameter if it's never used */
+
     Laik_BlockPartitionerData* data;
     data = (Laik_BlockPartitionerData*) pr->data;
 

@@ -1493,6 +1493,10 @@ void laik_calc_partitioning(Laik_Partitioning* p)
 bool laik_index_global2local(Laik_BorderArray* ba,
                              Laik_Index* global, Laik_Index* local)
 {
+    (void) ba;     /* FIXME: Why have this parameter if it's never used */
+    (void) global; /* FIXME: Why have this parameter if it's never used */
+    (void) local;  /* FIXME: Why have this parameter if it's never used */
+
     // TODO
 
     return true;
@@ -1503,6 +1507,9 @@ bool laik_index_global2local(Laik_BorderArray* ba,
 // be enforced at the same point in time
 void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p)
 {
+    (void) g; /* FIXME: Why have this parameter if it's never used */
+    (void) p; /* FIXME: Why have this parameter if it's never used */
+
     assert(0); // TODO
 }
 
@@ -2347,6 +2354,9 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
 Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
                                        Laik_PartGroup* to)
 {
+    (void) from; /* FIXME: Why have this parameter if it's never used */
+    (void) to;   /* FIXME: Why have this parameter if it's never used */
+
     // Laik_Transition* t;
 
     assert(0); // TODO
@@ -2355,6 +2365,9 @@ Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
 // enforce consistency for the partitioning group, depending on previous
 void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g)
 {
+    (void) i; /* FIXME: Why have this parameter if it's never used */
+    (void) g; /* FIXME: Why have this parameter if it's never used */
+
     assert(0); // TODO
 }
 
@@ -2363,6 +2376,9 @@ void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g)
 // one partition of calling task in outer space is mapped to inner space
 void laik_couple_nested(Laik_Space* outer, Laik_Space* inner)
 {
+    (void) outer; /* FIXME: Why have this parameter if it's never used */
+    (void) inner; /* FIXME: Why have this parameter if it's never used */
+
     assert(0); // TODO
 }
 

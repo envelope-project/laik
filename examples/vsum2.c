@@ -34,7 +34,13 @@
 #include <assert.h>
 
 // for element-wise weighted partitioning: same as index
-double getEW(Laik_Index* i, const void* d) { return (double) i->i[0]; }
+double getEW(Laik_Index* i, const void* d)
+{
+    (void) d; /* FIXME: Why have this parameter if it's never used */
+
+    return (double) i->i[0];
+}
+
 // for task-wise weighted partitioning: skip task given as user data
 double getTW(int r, const void* d) { return ((long int)d == r) ? 0.0 : 1.0; }
 
