@@ -2,7 +2,41 @@
 
 [![Build Status](https://travis-ci.org/envelope-project/laik.svg?branch=master)](https://travis-ci.org/envelope-project/laik)
 
-# A Library for Dynamic Partitioning of Data in HPC Applications
+# A Library for Automatic Data Migration in HPC Applications
+
+With LAIK, HPC programmers describe their communication needs on
+the level of switching among access phases to partitionings of
+global index spaces. For each switch, LAIK determines the
+communication operations required among the parallel processes
+on ranges of these index spaces. The application can map these
+to adequate communication operations for the used data structures
+itself, or it can ask LAIK to manage memory attached to indexes.
+Then, on each switch between access phase, LAIK directly executes
+the required real data communication e.g. using MPI.
+
+Benefits of the LAIK parallel programming model:
+
+* explicit decoupling of the specification of data decomposition
+  among parallel tasks and application code executing required
+  communication primitives for data structures. This makes it
+  easier to exchange partitioning algorithms or to implement dynamic
+  re-partitioning schemes as well as external control.
+
+* programming style becomes agnostic to the number of parallel processes:
+  each process works on index ranges as specified in the partitioning
+  by LAIK. This makes it easier to support elasticity, ie. dynamically
+  shrinking and expanding parallel applications.
+
+* using LAIK data containers can significantly reduce application code
+  required for explicit data communication. This makes maintance easier.
+
+While similar parallel programming models exist (Charm++, Legion), LAIK
+is designed to make it easy to integrate LAIK functionality step-by-step
+into existing legacy HPC code written in C/C++/Fortran. At each incremental
+step, the application can be tested for correct integration of LAIK
+(see: typical steps to integrate LAIK).
+
+# Motivation
 
 Parallel HPC applications usually are written in a low-level parallel programming model, such as MPI. If computational demands of the application are dynamic, adaptive load balancing has to be implemented by the programmer explictly. The resulting code often is application-specific and quite complex, making future extensions and maintainability tricky. With components used in future HPC systems to become more heterogenous and with variable computational capacity, HPC applications are expected to require load balancing for high scalability.
 
