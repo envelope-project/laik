@@ -45,7 +45,6 @@ int main(int argc, char* argv[])
 
     int size = 0;
     int maxiter = 0;
-    int repart = 0; // enforce repartitioning after <repart> iterations
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
     bool do_sum = false;
@@ -69,7 +68,6 @@ int main(int argc, char* argv[])
     }
     if (argc > arg) size = atoi(argv[arg]);
     if (argc > arg + 1) maxiter = atoi(argv[arg + 1]);
-    if (argc > arg + 2) repart = atoi(argv[arg + 2]);
 
     if (size == 0) size = 200; // 8 mio entries
     if (maxiter == 0) maxiter = 50;
