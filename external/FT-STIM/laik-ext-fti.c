@@ -272,7 +272,7 @@ int
 cleanup_fti(
     fti_file* f
 ){
-    int i,j;
+    int i;
     for(i=0; i<f->num_steps; i++){
         free(f->steps[i]->nodes);
         free(f->steps[i]->components);
