@@ -129,10 +129,10 @@ typedef void (*laik_agent_shut_node) (int uuid);
 
 typedef void (*get_default_counters) (long long*, long long*, long long*, long long*);
 typedef void (*add_counter) (int);
-typedef int (*peek) (void);
+typedef int (*peek_t) (void);
 typedef void (*op) (void);
 typedef void (*get_all_counters) (int* time, counter_kvp_t*);
-typedef double (*gettime) (void);
+typedef double (*gettime_t) (void);
 
 /* -------------- DATASTRUCTURES -------------- */
 
@@ -181,8 +181,8 @@ struct tag_laik_ext_profile_agent{
     get_default_counters read_def;
     add_counter add_c;
     get_all_counters read_all;
-    gettime gettime;
-    peek peek;
+    gettime_t gettime;
+    peek_t peek;
     op start;
     op end;
 
