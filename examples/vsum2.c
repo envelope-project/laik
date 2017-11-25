@@ -53,8 +53,7 @@ int main(int argc, char* argv[])
     uint64_t count;
 
     // different partitionings used
-    Laik_Partitioning *p1, *p2, *p3, *p4;
-    Laik_Partitioner *pr;
+    Laik_Partitioning *p1;
     Laik_Mapping* m;
 
     // do partial sums using different partitionings
