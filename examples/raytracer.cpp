@@ -306,7 +306,6 @@ int main(int argc, char **argv)
     double invWidth = 1 / double(width), invHeight = 1 / double(height); 
     double fov = 30, aspectratio = width / double(height); 
     double angle = tan(M_PI * 0.5 * fov / 180.); 
-    Laik_DataFlow myinitflow = LAIK_DF_CopyOut;
 
     laik_switchto_new(xval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_switchto_new(yval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
