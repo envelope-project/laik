@@ -1,5 +1,6 @@
-# often same tests as in tests/, but using 4 MPI tasks
+include ../../Makefile.common
 
+# often same tests as in tests/, but using 4 MPI tasks
 TESTS= \
     test-vsum test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
@@ -81,4 +82,3 @@ test-propagation2d:
 
 clean:
 	rm -rf *.out
-

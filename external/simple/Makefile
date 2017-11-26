@@ -6,19 +6,13 @@
 # (C) 2017 LRR, Technische Universitaet Muenchen
 #
 
-CC= cc
-OPT=-g
+include ../../Makefile.common
 
-# pull in global config: CC, OPT, DEFS
--include ../../Makefile.config
+CFLAGS  += -I '../../include'
+LDFLAGS += -shared
 
-CFLAGS = -std=gnu99 -I../../include -fPIC -Wall -Wextra
-CFLAGS += $(OPT) $(DEFS) -MMD -MP
-
-LDFLAGS= -shared
 DEBUGFLAGS= -O0 -D DEBUG
 RELEASEFLAGS= -O3 -D NDEBUG -combine -fwhole-program
-
 
 TARGET  = libsimpleagent.so
 SOURCES = $(wildcard *.c)
@@ -31,7 +25,7 @@ BINDIR = $(PREFIX)/bin
 all:  $(TARGET)
 
 $(TARGET): $(OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(DEBUGFLAGS) $(INC) -o $(TARGET) $(OBJECTS)
+	$(CC) $(LDFLAGS) -o '$@' $+ $(LDLIBS)
 
 clean:
 	rm -f *.o
