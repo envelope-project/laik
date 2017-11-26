@@ -73,7 +73,8 @@ matrix:
 before_install:
   - sudo add-apt-repository ppa:mosquitto-dev/mosquitto-ppa -y
   - sudo apt-get -qq update
-  - sudo apt-get install -y openmpi-bin libopenmpi-dev libmosquitto-dev libprotobuf-c0-dev protobuf-c-compiler uuid uuid-dev
+  - sudo apt-get install -y openmpi-bin libopenmpi-dev libmosquitto-dev libprotobuf-c0-dev protobuf-c-compiler uuid uuid-dev libiomp5
+  - sudo ln --symbolic /usr/lib/libiomp5.so.5 /usr/lib/libomp.so
   - mkdir $HOME/clang+llvm
   - export PATH=$HOME/clang+llvm/bin:$PATH
   - if [ -n "$CLANGV" ]; then wget http://llvm.org/releases/$CLANGV/clang+llvm-$CLANGV-x86_64-linux-gnu-debian8.tar.xz -O $HOME/clang+llvm.tar.xz; fi
