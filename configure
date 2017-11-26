@@ -33,12 +33,10 @@ if not protobuf_found:
         defs += " -I/usr/include/google"
 #  check for protobuf compiler
 protoc_found = distutils.spawn.find_executable("protoc-c")
-#  check for UUID header
-uuid_found = os.path.isfile(ipath + "/uuid/uuid.h")
 
-mqtt_enabled = mosq_found and protobuf_found and protoc_found and uuid_found
+mqtt_enabled = mosq_found and protobuf_found and protoc_found
 if mqtt_enabled:
-    print("Mosquitto/Protobuf/UUID found. MQTT enabled.")
+    print("Mosquitto/Protobuf found. MQTT enabled.")
     defs += " -DUSE_MQTT"
     subdirs += " external/MQTT"
 else:
@@ -52,10 +50,6 @@ else:
     if not protoc_found:
         print(" Protobuf compiler not found.")
         print("  On Ubuntu, install 'protobuf-c-compiler'")
-    if not uuid_found:
-        print(" UUID header file not found.")
-        print("  On Ubuntu, install 'uuid-dev'")
-
 
 #------------------------------------
 #Simple Agent
