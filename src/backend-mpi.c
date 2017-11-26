@@ -19,6 +19,9 @@
 
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
+    (void) argc; /* Dummy method, argument not required */
+    (void) argv; /* Dummy method, argument not required */
+
     printf("ERROR: LAIK is not compiled with MPI backend.");
     exit(1);
 }
