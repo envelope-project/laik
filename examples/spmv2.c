@@ -272,7 +272,9 @@ int main(int argc, char* argv[])
             // my partition slice of result vector (local indexing, from 0)
             laik_map_def(resD, sNo, (void**) &res, &rcount);
 
+#ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic,50)
+#endif
             for(uint64_t r = fromRow; r < toRow; r++) {
                 res[r - fromRow] = 0.0;
                 for(int o = m->row[r]; o < m->row[r+1]; o++)
