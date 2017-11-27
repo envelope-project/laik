@@ -28,20 +28,16 @@ PROTODIR =.
 PREFIX = $(DESTDIR)/usr/local
 BINDIR = $(PREFIX)/bin
 
-all: $(PROTOCOLC) $(TARGET)
+all: $(TARGET)
 
 $(PROTOCOLC): $(PROTOS)
 	$(PROTOCC) $(PROTOCFLAGS)$(PROTODIR) $(PROTOS)
 
-
-$(TARGET):  $(OBJECTS)
+$(TARGET):  $(OBJECTS) $(PROTOCOLC)
 	$(CC) $(FLAGS) $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $(TARGET) $(OBJECTS)
 
 clean:
-	rm -f *.o
-	rm -f *.d
-	rm -f *.pb-c.*
-	rm -f liblaikmqtt.so
+	rm --force *.d *.o *.pb-c.c *.pb-c.h *.so
 
 .PHONY: all clean
 
