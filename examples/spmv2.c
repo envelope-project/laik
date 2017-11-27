@@ -186,10 +186,12 @@ int main(int argc, char* argv[])
         char soargs[2][2];
         sprintf(soargs[0], "%d", shrink);
         sprintf(soargs[1], "%d", removeTask);
-        agent = laik_ext_loadagent(
-            "Simple Agent", LAIK_AGENT_DYNAMIC, 
-            "../external/simple/libsimpleagent.so", 2, 
-            soargs);
+        agent = laik_ext_load_agent_from_file (
+            "Simple Agent",
+            "../external/simple/libsimpleagent.so",
+            2,
+            soargs
+        );
     }
 #endif
 

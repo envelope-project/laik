@@ -34,21 +34,23 @@
  * @retval NULL, if the function is not found;
            f_ptr, if the function is found.
  */
-static void* probfunc(
+static laik_agent_init probfunc(
     void* handle,
     char* name
 ){
-    void* func;
     assert(handle);
     assert(name);
 
-    func = dlsym(handle, name);
-    if(!handle){
+    laik_agent_init result;
+
+    /* Work around dlsym()'s broken type signature */
+    *((void**) (&result)) = dlsym (handle, name);
+    if(!result){
         dlclose(handle);
         laik_log(LAIK_LL_Error, dlerror());
         exit(1);
     }
-    return func;
+    return result;
 }
 
 /** 
@@ -76,28 +78,74 @@ static int laik_map_id(
  * @brief  Load an external agent.
  * @note   
  * @param  inst: The LAIK instance
- * @param  name: Path or the Pointer of the agent
+ * @param  name: Path of the agent
  * @param  isDynamic: type of the agent
+ * @param  argc: arguments to pass to the agent
+ * @param  argv: arguments to pass to the agent
+ * @retval None
+ */
+void laik_ext_load_agent_from_file (
+    Laik_Instance* instance,
+    char* path,
+    int argc, 
+    char** argv
+){
+    assert(instance);
+    assert(path);
+    assert(argc == 0 || argv);
+
+    void *handle;
+    Laik_Agent* agent;
+    laik_agent_init init;
+    Laik_RepartitionControl* ctrl;
+    
+    if(instance->repart_ctrl == NULL){
+        laik_ext_init(instance);
+    }
+
+    ctrl = instance->repart_ctrl;
+
+    //ensure less than MAX_AGENT
+    assert(ctrl->num_agents <= MAX_AGENTS);
+
+    handle = dlopen(path, RTLD_LAZY);
+    if(!handle){
+        laik_log(LAIK_LL_Error, dlerror());
+        exit(1);
+    }
+    init = probfunc(handle, "agent_init");
+    assert(init);
+
+    agent = init(argc, argv);
+
+    assert(agent);
+
+    ctrl->agents[ctrl->num_agents] = agent;
+    ctrl->num_agents++;
+    ctrl->handles[ctrl->num_agents] = handle;
+}
+
+/** 
+ * @brief  Load an external agent.
+ * @note   
+ * @param  inst: The LAIK instance
+ * @param  name: Pointer of the agent
  * @param  argc: arguments to pass to the agent
  * @param  argv: arguments to pass to the agent
  * @retval None
  */
 void laik_ext_loadagent (
     Laik_Instance* instance,
-    void* name,
-    bool isDynamic,
-    int carg, 
-    char** vargs
+    laik_agent_init init,
+    int argc, 
+    char** argv
 ){
-    void *handle;
-    Laik_Agent* agent;
-    laik_agent_init init;
-    char* path;
-    Laik_RepartitionControl* ctrl;
-    
     assert(instance);
-    assert(name);
-    if(carg>0)  assert(vargs);
+    assert(init);
+    assert(argc == 0 || argv);
+
+    Laik_Agent* agent;
+    Laik_RepartitionControl* ctrl;
 
     if(instance->repart_ctrl == NULL){
         laik_ext_init(instance);
@@ -108,31 +156,13 @@ void laik_ext_loadagent (
     //ensure less than MAX_AGENT
     assert(ctrl->num_agents <= MAX_AGENTS);
 
-    if(!isDynamic){
-        init = (laik_agent_init) name;
-    }else{
-        path = (char*) name;
-        handle = dlopen(path, RTLD_LAZY);
-        if(!handle){
-            laik_log(LAIK_LL_Error, dlerror());
-            exit(1);
-        }
-        init = (laik_agent_init) probfunc(handle, "agent_init");
-        assert(init);
-    }
-
-    agent = init(carg, vargs);
+    agent = init(argc, argv);
 
     assert(agent);
 
     ctrl->agents[ctrl->num_agents] = agent;
     ctrl->num_agents++;
-    if(isDynamic){         
-        ctrl->handles[ctrl->num_agents] = handle;
-    }else{
-        ctrl->handles[ctrl->num_agents] = NULL;
-    }
-
+    ctrl->handles[ctrl->num_agents] = NULL;
 }
 
 /** 
