@@ -19,6 +19,11 @@
 // neighbours of 0 -> 0,1,5,6.
 // then comes the neighbours of the next element and so on.
 
+void calculate_task_topology(int numRanks, int* Rx, int* Ry){
+    *Rx = (int) sqrt(numRanks);
+    *Ry = (int) sqrt(numRanks);
+}
+
 //partitioner handler for the elements
 void runLuleshElementPartitioner(Laik_Partitioner* pr,
                                    Laik_BorderArray* ba, Laik_BorderArray* otherBA)
@@ -29,11 +34,13 @@ void runLuleshElementPartitioner(Laik_Partitioner* pr,
 
     int N_elems_x = sqrt(slice->to.i[0]+1) ;
     int N_elems_y = sqrt(slice->to.i[0]+1) ;
-    int N_tasks_x = sqrt (laik_size(group));
-    int N_tasks_y = sqrt (laik_size(group));
+
+    int N_tasks_x;
+    int N_tasks_y;
+    calculate_task_topology(laik_size(group), &N_tasks_x, &N_tasks_y);
 
     int N_local_x = N_elems_x / N_tasks_x ;
-    int N_local_y = N_elems_y / N_tasks_y ;
+    int N_local_y = N_elems_y / N_tasks_y ;  
 
     Laik_Slice slc = *slice;
 
@@ -197,12 +204,12 @@ int main(int argc, char* argv[])
     // not all the configurations are supported
     // number of elements per task should be
     // devisable by the number of tasks
-    assert (size > sqrt(laik_size(world)) && size % (int) sqrt(laik_size(world)) == 0);
 
-    int Rx = 2;
-    int Ry = 2;
+    int Rx;
+    int Ry;
+    calculate_task_topology(laik_size(world),&Rx,&Ry);
     int Nx = size;
-    int Ny = size;
+    int Ny = size;  //at the moment the partitioners only support Ny=Nx
     int Lx = Nx*Rx;
     int Ly = Ny*Ry;
 
