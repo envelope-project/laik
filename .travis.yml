@@ -1,96 +1,66 @@
-language:           c
-sudo:               true
-dist:               trusty
+dist: trusty
+sudo: true
 
-matrix:
-  include:
-    - compiler:     gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-4.9
-      env:
-          - COMPILERCXX=g++-4.9
-          - COMPILERC=gcc-4.9
-    - compiler:     gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-5
-      env:
-          - COMPILERCXX=g++-5
-          - COMPILERC=gcc-5
-    - compiler:     gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6
-      env:
-          - COMPILERCXX=g++-6
-          - COMPILERC=gcc-6
-    - compiler:     clang
-      env:
-          - COMPILERC=clang
-          - COMPILERCXX=clang++
-          - CLANGV=3.8.1
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6
-    - compiler:     clang
-      env:
-          - COMPILERC=clang
-          - COMPILERCXX=clang++
-          - CLANGV=3.9.1
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6
-    - compiler:     clang
-      env:
-          - COMPILERC=clang
-          - COMPILERCXX=clang++
-          - CLANGV=4.0.1
-          - RUNCLANGTIDY=TRUE
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6
-
+env:
+ - CC=clang-3.8 CXX=clang++-3.8 PACKAGES='clang-3.8 libomp-dev'
+ - CC=clang-3.9 CXX=clang++-3.9 PACKAGES='clang-3.9 libomp-dev'
+ - CC=clang-4.0 CXX=clang++-4.0 PACKAGES='clang-4.0 libomp-dev'
+ - CC=gcc-4.7   CXX=g++-4.7     PACKAGES='gcc-4.7 g++-4.7'
+ - CC=gcc-4.8   CXX=g++-4.8     PACKAGES='gcc-4.8 g++-4.8'
+ - CC=gcc-4.9   CXX=g++-4.9     PACKAGES='gcc-4.9 g++-4.9'
+ - CC=gcc-5     CXX=g++-5       PACKAGES='gcc-5   g++-5'
 
 before_install:
-  - sudo add-apt-repository ppa:mosquitto-dev/mosquitto-ppa -y
-  - sudo apt-get -qq update
-  - sudo apt-get install -y openmpi-bin libopenmpi-dev libmosquitto-dev libprotobuf-c0-dev protobuf-c-compiler libiomp5
-  - sudo ln --symbolic /usr/lib/libiomp5.so.5 /usr/lib/libomp.so
-  - mkdir $HOME/clang+llvm
-  - export PATH=$HOME/clang+llvm/bin:$PATH
-  - if [ -n "$CLANGV" ]; then wget http://llvm.org/releases/$CLANGV/clang+llvm-$CLANGV-x86_64-linux-gnu-debian8.tar.xz -O $HOME/clang+llvm.tar.xz; fi
-  - if [ -n "$CLANGV" ]; then tar xf $HOME/clang+llvm.tar.xz -C $HOME/clang+llvm --strip-components 1; fi
-  # install Bear 2.3.5 (higher is buggy) for clang-tidy
-  - if [ -n "$RUNCLANGTIDY" ]; then git clone https://github.com/rizsotto/Bear.git; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then cd Bear && git checkout 2.3.5; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then cmake .; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then make all; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then sudo make install; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then cd ..; fi
+ # Get rid of all the APT configurarion Travis "helpfully" provides per default
+ - sudo rm --force --recursive --verbose /etc/apt
+
+ # Create /etc/apt
+ - sudo mkdir /etc/apt
+
+ # Set up /etc/preferences
+ - echo 'Package:*'                       | sudo tee --append /etc/apt/preferences
+ - echo 'Pin:release a=xenial-backports'  | sudo tee --append /etc/apt/preferences
+ - echo 'Pin-Priority:500'                | sudo tee --append /etc/apt/preferences
+
+ # Set up /etc/sources.list
+ - echo "deb http://archive.ubuntu.com/ubuntu xenial           main universe" | sudo tee --append /etc/apt/sources.list
+ - echo "deb http://archive.ubuntu.com/ubuntu xenial-backports main universe" | sudo tee --append /etc/apt/sources.list
+ - echo "deb http://archive.ubuntu.com/ubuntu xenial-security  main universe" | sudo tee --append /etc/apt/sources.list
+
+ # Set up /etc/apt/trusted.gpg
+ - sudo cp /usr/share/keyrings/ubuntu-archive-keyring.gpg /etc/apt/trusted.gpg
+
+ # Update the package lists, but ...
+ - sudo apt-get update
+
+ # ... only uprade selected packages.
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes binutils
+
+install:
+ # Install the packages needed for the specific build we are on
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes ${PACKAGES}
+
+ # Install the packages needed for all builds
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes bear
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes clang-tidy
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes libmosquitto-dev
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes libopenmpi-dev
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes libpapi-dev
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes libprotobuf-c-dev
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes make
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes openmpi-bin
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes protobuf-c-compiler
+ - sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes python
 
 script:
-  - CC=$COMPILERC ./configure
-  - OMPI_CC=$COMPILERC make
-  - make test
-  - if [ -n "$RUNCLANGTIDY" ]; then make clean; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then CC=$COMPILERC OMPI_CC=$COMPILERC bear make test || true; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then git ls-files '*.c' | xargs -P 1 -I{} clang-tidy {}; fi
+ # Build and test everything
+ - ./configure
+ - make
+ - make test
+
+ # Test installation
+ - sudo make install
+ - sudo make uninstall
+
+ # Run the linter
+ - make tidy
