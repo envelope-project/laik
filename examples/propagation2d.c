@@ -19,14 +19,10 @@
 // neighbours of 0 -> 0,1,5,6.
 // then comes the neighbours of the next element and so on.
 
-
 //partitioner handler for the elements
 void runLuleshElementPartitioner(Laik_Partitioner* pr,
                                    Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
-    (void) pr;      /* FIXME: Why have this parameter if it's never used */
-    (void) otherBA; /* FIXME: Why have this parameter if it's never used */
-
     Laik_Space* space = laik_borderarray_getspace(ba);
     const Laik_Slice* slice = laik_space_getslice(space);
     Laik_Group* group = laik_borderarray_getgroup(ba);
@@ -65,8 +61,6 @@ Laik_Partitioner* laik_new_lulesh_element_partitioner()
 void runLuleshNodePartitioner(Laik_Partitioner* pr,
                                 Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
-    (void) otherBA; /* FIXME: Why have this parameter if it's never used */
-
     Laik_Space* space = laik_borderarray_getspace(ba);
     Laik_Space* otherSpace = laik_borderarray_getspace(otherBA);
     const Laik_Slice* slice = laik_space_getslice(space);
@@ -101,9 +95,9 @@ Laik_Partitioner* laik_new_lulesh_node_partitioner(int* neighbours)
 }
 
 // create a global list of neighbors of the elements
-int* build_element_neighbour_list(int size){
+int* build_element_neighbour_list(int Lx, int Ly){
 
-    int num_nodes=size*size;
+    int num_nodes=Lx*Ly;
 
     //allocate memory for the integers
     int* neighbours = (int*) malloc (sizeof(int)*num_nodes*4);
@@ -111,11 +105,11 @@ int* build_element_neighbour_list(int size){
     int jy=0;
     for (int node = 0; node < num_nodes; node++)
     {
-        jy = node/size;
+        jy = node/Lx;
         neighbours[4*node + 0] =  node + jy;
         neighbours[4*node + 1] =  node + jy + 1;
-        neighbours[4*node + 2] =  node + jy + size + 1;
-        neighbours[4*node + 3] =  node + jy + size + 2;
+        neighbours[4*node + 2] =  node + jy + Lx + 1;
+        neighbours[4*node + 3] =  node + jy + Lx + 2;
     }
 
     return neighbours;
@@ -141,14 +135,14 @@ void print_data (Laik_Data* d, Laik_Partitioning *p) {
         laik_map_def(d, s, (void**) &base, &count);
         for (uint64_t i = 0; i < count; i++)
         {
-            laik_log(1,"%f\n", base[i]);
+            laik_log(2,"%f\n", base[i]);
         }
         laik_log(1,"\n");
     }
 }
 
 // for testing
-void print_check_sum (Laik_Data* d, Laik_Partitioning *p, Laik_Group* world) {
+double data_check_sum (Laik_Data* d, Laik_Partitioning *p, Laik_Group* world) {
     double *base;
     uint64_t count;
     int nSlices = laik_my_slicecount(p);
@@ -168,10 +162,8 @@ void print_check_sum (Laik_Data* d, Laik_Partitioning *p, Laik_Group* world) {
     *base=sum;
     laik_switchto_new(laik_sum, laik_All, LAIK_DF_CopyIn);
     laik_map_def1(laik_sum, (void**) &base, &count);
-    if (laik_myid(world)==0)
-    {
-        printf("total sum: %f\n", *base);
-    }
+
+    return *base;
 }
 
 int main(int argc, char* argv[])
@@ -190,16 +182,16 @@ int main(int argc, char* argv[])
             int pause = 1;
             while (pause != 0);
         }
-        
+
     #endif
-    
+
     // handling the arguments
     int size = 0;
     int maxIt = 0;
     if (argc > 1) size = atoi(argv[1]);
     if (argc > 2) maxIt = atoi(argv[2]);
 
-    if (size == 0) size = 16;
+    if (size == 0) size = 4;
     if (maxIt == 0) maxIt = 10;
 
     // not all the configurations are supported
@@ -207,11 +199,18 @@ int main(int argc, char* argv[])
     // devisable by the number of tasks
     assert (size > sqrt(laik_size(world)) && size % (int) sqrt(laik_size(world)) == 0);
 
-    int size_nodes = (size+1)*(size+1);
-    int size_elems = size * size;
+    int Rx = 2;
+    int Ry = 2;
+    int Nx = size;
+    int Ny = size;
+    int Lx = Nx*Rx;
+    int Ly = Ny*Ry;
+
+    int size_nodes = (Lx+1)*(Ly+1);
+    int size_elems = Lx*Ly;
 
     // create a list of neighbours for elements
-    int* neighbours = build_element_neighbour_list(size);
+    int* neighbours = build_element_neighbour_list(Lx,Ly);
 
     // 1d arrays for elements
     Laik_Space* element_space = laik_new_space_1d(inst, size_elems);
@@ -245,7 +244,7 @@ int main(int argc, char* argv[])
     int nSlicesElem = laik_my_slicecount(pElements);
     for (int n = 0; n < nSlicesElem; ++n) {
         laik_map_def(element, n, (void**) &baseE, &countE);
-        for (uint64_t i = 0; i < countE; i++) 
+        for (uint64_t i = 0; i < countE; i++)
         {
             baseE[i]=1.0;
         }
@@ -256,10 +255,10 @@ int main(int argc, char* argv[])
     laik_switchto(node, pNodes, LAIK_DF_CopyOut);
     int nSlicesNodes = laik_my_slicecount(pNodes);
 
-    for (int n = 0; n < nSlicesNodes; ++n) 
+    for (int n = 0; n < nSlicesNodes; ++n)
     {
         laik_map_def(node, n, (void**) &baseN, &countN);
-        for (uint64_t i = 0; i < countN; i++) 
+        for (uint64_t i = 0; i < countN; i++)
         {
             baseN[i]=0.0;
         }
@@ -267,7 +266,19 @@ int main(int argc, char* argv[])
     laik_switchto(node, pNodes, LAIK_DF_CopyIn);
 
     // for debug only
+    laik_log(2,"print elements:");
     print_data(element, pElements);
+    laik_log(2,"print nodes:");
+    print_data(node,pNodes);
+    // print check_sum for test
+    double sum1;
+    sum1 = data_check_sum(element,pElements, world);
+    if (laik_myid(world)==0)
+        printf("for elements: %f\n", sum1/(Lx*Ly));
+
+    sum1 = data_check_sum(node,pNodes, world);
+    if (laik_myid(world)==0)
+            printf("for nodes: %f\n", sum1/(Lx*Ly + Lx+Ly-4 +1));
     laik_log(1,"Initialization done.\n");
 
     // propagate the values from elements to the nodes
@@ -331,7 +342,7 @@ int main(int argc, char* argv[])
         // back-propagation
         // update the elements using their neighbours
         // go through all the elements and refere
-        // to their neighbouring nodes and update the 
+        // to their neighbouring nodes and update the
         //elements
         laik_switchto(element, pElements, LAIK_DF_CopyOut);
         for (size_t m = 0; m < nMapsElements; m++)
@@ -372,17 +383,20 @@ int main(int argc, char* argv[])
     }
 
     // for debug only
-    print_data(node, pNodes);
+    laik_log(2,"print elements:");
+    print_data(element, pElements);
+    laik_log(2,"print nodes:");
+    print_data(node,pNodes);
 
     // print check_sum for test
+    double sum;
+    sum = data_check_sum(element,pElements, world);
     if (laik_myid(world)==0)
-        printf("for elements:\n");
-    print_check_sum(element,pElements, world);
+        printf("for elements: %f\n", sum/(Lx*Ly));
+
+    sum = data_check_sum(node,pNodes, world);
     if (laik_myid(world)==0)
-        printf("for nodes:\n");
-    print_check_sum(node,pNodes, world);
-
-
+            printf("for nodes: %f\n", sum/(Lx*Ly + Lx+Ly-4 +1));
 
     free_neighbour_list(neighbours);
     laik_finalize(inst);

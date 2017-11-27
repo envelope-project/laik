@@ -1,0 +1,7 @@
+external/FT-STIM
+external/MQTT
+external/profiling
+external/simple
+include
+include/interface
+include/laik
