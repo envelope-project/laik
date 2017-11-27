@@ -37,7 +37,6 @@ protoc_found = distutils.spawn.find_executable("protoc-c")
 mqtt_enabled = mosq_found and protobuf_found and protoc_found
 if mqtt_enabled:
     print("Mosquitto/Protobuf found. MQTT enabled.")
-    defs += " -DUSE_MQTT"
     subdirs += " external/MQTT"
 else:
     print("MQTT support disabled:")
