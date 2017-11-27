@@ -6,12 +6,8 @@
 # (C) 2017 LRR, Technische Universitaet Muenchen
 #
 
-CC= cc
 PROTOCC= protoc-c
-CXX= c++
-FLAGS= -std=gnu99
-CFLAGS= -fPIC -Wall -g -Wextra -ggdb3
-LDFLAGS= -lprotobuf-c -shared
+LDFLAGS += -lprotobuf-c -shared
 DEBUGFLAGS= -O0 -D DEBUG
 RELEASEFLAGS= -O2 -D NDEBUG -combine -fwhole-program
 PROTOCFLAGS= --c_out=
