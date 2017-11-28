@@ -22,6 +22,15 @@
 void calculate_task_topology(int numRanks, int* Rx, int* Ry){
     *Rx = (int) sqrt(numRanks);
     *Ry = (int) sqrt(numRanks);
+    assert ( (*Rx)*(*Ry) == numRanks );
+}
+
+void calculate_my_coordinate(int numRanks, int rank, int* rx, int* ry){
+    int Rx;
+    int Ry;
+    calculate_task_topology(numRanks, &Rx, &Ry);
+    *rx = rank%Rx;
+    *ry = rank/Rx;
 }
 
 //partitioner handler for the elements
@@ -32,8 +41,8 @@ void runLuleshElementPartitioner(Laik_Partitioner* pr,
     const Laik_Slice* slice = laik_space_getslice(space);
     Laik_Group* group = laik_borderarray_getgroup(ba);
 
-    int N_elems_x = sqrt(slice->to.i[0]+1) ;
-    int N_elems_y = sqrt(slice->to.i[0]+1) ;
+    int N_elems_x = (int) sqrt(slice->to.i[0]+1) ;
+    int N_elems_y = (int) sqrt(slice->to.i[0]+1) ;
 
     int N_tasks_x;
     int N_tasks_y;
@@ -71,12 +80,16 @@ void runLuleshNodePartitioner(Laik_Partitioner* pr,
     Laik_Space* space = laik_borderarray_getspace(ba);
     Laik_Space* otherSpace = laik_borderarray_getspace(otherBA);
     const Laik_Slice* slice = laik_space_getslice(space);
+    Laik_Group* group = laik_borderarray_getgroup(ba);
+
 
     assert(laik_space_getdimensions(space) == laik_space_getdimensions(otherSpace));
     //assert (otherSpace->neighbours != 0);
 
     Laik_Slice slc = *slice;
     int* neighbours = (int*) laik_partitioner_data(pr);
+    int Rx,Ry,rx,ry;
+    calculate_task_topology(laik_size(group), &Rx, &Ry);
 
     // for all the slices in the element partitioner
     // we find the neighbouring nodes and add a slice
@@ -86,11 +99,12 @@ void runLuleshNodePartitioner(Laik_Partitioner* pr,
         Laik_TaskSlice* ts = laik_borderarray_get_tslice(otherBA, i);
         const Laik_Slice* s = laik_taskslice_getslice(ts);
         int task = laik_taskslice_gettask(ts);
-        slc.from.i[0] = neighbours[ 4 * s->from.i[0] + 0 ];
+        calculate_my_coordinate(laik_size(group), task, &rx, &ry);
+        slc.from.i[0] = neighbours[ 4 * s->from.i[0] + 0 ] + 0;
         slc.to.i[0] = neighbours [ 4 * (s->to.i[0] - 1) + 1 ] + 1;
         laik_append_slice(ba, task, &slc, 0, 0);
 
-        slc.from.i[0] = neighbours[ 4 * s->from.i[0] + 2] ;
+        slc.from.i[0] = neighbours[ 4 * s->from.i[0] + 2] + 0;
         slc.to.i[0] = neighbours [ 4 * (s->to.i[0] - 1) + 3 ] + 1;
         laik_append_slice(ba, task, &slc, 0, 0);
     }
@@ -100,6 +114,7 @@ Laik_Partitioner* laik_new_lulesh_node_partitioner(int* neighbours)
 {
     return laik_new_partitioner("node", runLuleshNodePartitioner, neighbours, LAIK_PF_Merge);
 }
+
 
 // create a global list of neighbors of the elements
 int* build_element_neighbour_list(int Lx, int Ly){
@@ -228,12 +243,14 @@ int main(int argc, char* argv[])
     Laik_Data* node = laik_new_data(world, node_space, laik_Double);
 
 
-    Laik_Partitioning *pNodes, *pElements;
+    Laik_Partitioning *pNodes, *pNodesExclusive, *pElements;
 
     pElements = laik_new_partitioning(world, element_space,
         laik_new_lulesh_element_partitioner(), 0);
     pNodes = laik_new_partitioning(world, node_space,
         laik_new_lulesh_node_partitioner(neighbours), pElements);
+    //pNodesExclusive = laik_new_partitioning(world, node_space,
+    //    laik_new_lulesh_node_partitioner_exclusive(neighbours), pElements);
 
     double *baseN, *baseE;
     uint64_t countN, countE;
@@ -253,21 +270,20 @@ int main(int argc, char* argv[])
         laik_map_def(element, n, (void**) &baseE, &countE);
         for (uint64_t i = 0; i < countE; i++)
         {
-            baseE[i]=1.0;
+            baseE[i]=0.0;
         }
     }
     laik_switchto(element, pElements, LAIK_DF_CopyIn);
 
     // distribution of the nodes
-    laik_switchto(node, pNodes, LAIK_DF_CopyOut);
+    laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
     int nSlicesNodes = laik_my_slicecount(pNodes);
-
     for (int n = 0; n < nSlicesNodes; ++n)
     {
         laik_map_def(node, n, (void**) &baseN, &countN);
         for (uint64_t i = 0; i < countN; i++)
         {
-            baseN[i]=0.0;
+            baseN[i]=1.0;
         }
     }
     laik_switchto(node, pNodes, LAIK_DF_CopyIn);
@@ -277,75 +293,29 @@ int main(int argc, char* argv[])
     print_data(element, pElements);
     laik_log(2,"print nodes:");
     print_data(node,pNodes);
+
     // print check_sum for test
     double sum1;
     sum1 = data_check_sum(element,pElements, world);
     if (laik_myid(world)==0)
-        printf("for elements: %f\n", sum1/(Lx*Ly));
+        //printf("for elements: %f\n", sum/(Lx*Ly));
+        printf("for elements: %f\n", sum1);
 
     sum1 = data_check_sum(node,pNodes, world);
     if (laik_myid(world)==0)
-            printf("for nodes: %f\n", sum1/(Lx*Ly + Lx+Ly-4 +1));
+        //printf("for nodes: %f\n", sum/(Lx*Ly + Lx+Ly-4 +1));
+        printf("for nodes: %f\n", sum1);
     laik_log(1,"Initialization done.\n");
 
     // propagate the values from elements to the nodes
     // perform the propagation maxIt times
+    uint64_t gi, gj0, gj1, gj2, gj3, j0, j1, j2, j3;
+    int m0, m1, m2, m3;
+    const Laik_Mapping *map;
+    int nMapsElements;
+    nMapsElements = laik_my_mapcount(pElements);
     for (int i = 0; i < maxIt; i++)
     {
-        laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
-        //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
-
-        int nMapsElements = laik_my_mapcount(pElements);
-
-        uint64_t gi, gj0, gj1, gj2, gj3, j0, j1, j2, j3;
-        int m0, m1, m2, m3;
-        const Laik_Mapping *map;
-
-        // propagation
-        // update the nodes using elements
-        // go through all the elements and refere
-        // to their neighbouring nodes and update them
-        for (size_t m = 0; m < nMapsElements; m++)
-        {
-            laik_map_def(element, m, (void **)&baseE, &countE);
-
-            for (uint64_t i = 0; i < countE; i++)
-            {
-
-                gi = laik_local2global_with_mapnumber_1d(element, m, i);
-
-                gj0 = get_element_neighbour(neighbours, gi, 0);
-                gj1 = get_element_neighbour(neighbours, gi, 1);
-                gj2 = get_element_neighbour(neighbours, gi, 2);
-                gj3 = get_element_neighbour(neighbours, gi, 3);
-
-                map = laik_global2local_1d(node, gj0, &j0);
-                m0 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj1, &j1);
-                m1 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj2, &j2);
-                m2 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj3, &j3);
-                m3 = laik_map_get_mapNo(map);
-
-                //laik_log(2,"slice: %d, element: %d, global index: %d\n", m, i, gi);
-                //laik_log(2,"global indexes for neighbours of element: %d: neighbour0:%d, neighbour1:%d, neighbour2:%d, neighbour3:%d\n"
-                //                , gi, gj0, gj1, gj2, gj3);
-                //laik_log(2,"local indexes for neighbours of element: %d: neighbour0:%d in mapping %d, neighbour1:%d in mapping %d, neighbour2:%d  in mapping %d, neighbour3:%d in mapping %d\n"
-                //                , gi, j0, m0, j1, m1, j2, m2, j3, m3);
-
-                laik_map_def(node, m0, (void **)&baseN, &countN);
-                baseN[j0] += baseE[i] / 4;
-                laik_map_def(node, m1, (void **)&baseN, &countN);
-                baseN[j1] += baseE[i] / 4;
-                laik_map_def(node, m2, (void **)&baseN, &countN);
-                baseN[j2] += baseE[i] / 4;
-                laik_map_def(node, m3, (void **)&baseN, &countN);
-                baseN[j3] += baseE[i] / 4;
-            }
-        }
-        laik_switchto(node, pNodes, LAIK_DF_CopyIn);
-
         // back-propagation
         // update the elements using their neighbours
         // go through all the elements and refere
@@ -376,35 +346,82 @@ int main(int argc, char* argv[])
                 m3 = laik_map_get_mapNo(map);
 
                 laik_map_def(node, m0, (void **)&baseN, &countN);
-                baseE[i] += baseN[j0] / 4;
+                baseE[i] += baseN[j0] ;
                 laik_map_def(node, m1, (void **)&baseN, &countN);
-                baseE[i] += baseN[j1] / 4;
+                baseE[i] += baseN[j1];
                 laik_map_def(node, m2, (void **)&baseN, &countN);
-                baseE[i] += baseN[j2] / 4;
+                baseE[i] += baseN[j2];
                 laik_map_def(node, m3, (void **)&baseN, &countN);
-                baseE[i] += baseN[j3] / 4;
+                baseE[i] += baseN[j3];
 
             }
         }
         laik_switchto(element, pElements, LAIK_DF_CopyIn);
-    }
 
+
+        //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
+        // propagation
+        // update the nodes using elements
+        // go through all the elements and refere
+        // to their neighbouring nodes and update them
+        laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        for (size_t m = 0; m < nMapsElements; m++)
+        {
+            laik_map_def(element, m, (void **)&baseE, &countE);
+
+            for (uint64_t i = 0; i < countE; i++)
+            {
+
+                gi = laik_local2global_with_mapnumber_1d(element, m, i);
+
+                gj0 = get_element_neighbour(neighbours, gi, 0);
+                gj1 = get_element_neighbour(neighbours, gi, 1);
+                gj2 = get_element_neighbour(neighbours, gi, 2);
+                gj3 = get_element_neighbour(neighbours, gi, 3);
+
+                map = laik_global2local_1d(node, gj0, &j0);
+                m0 = laik_map_get_mapNo(map);
+                map = laik_global2local_1d(node, gj1, &j1);
+                m1 = laik_map_get_mapNo(map);
+                map = laik_global2local_1d(node, gj2, &j2);
+                m2 = laik_map_get_mapNo(map);
+                map = laik_global2local_1d(node, gj3, &j3);
+                m3 = laik_map_get_mapNo(map);
+
+                //laik_log(2,"slice: %d, element: %d, global index: %d\n", m, i, gi);
+                //laik_log(2,"global indexes for neighbours of element: %d: neighbour0:%d, neighbour1:%d, neighbour2:%d, neighbour3:%d\n"
+                //                , gi, gj0, gj1, gj2, gj3);
+                //laik_log(2,"local indexes for neighbours of element: %d: neighbour0:%d in mapping %d, neighbour1:%d in mapping %d, neighbour2:%d  in mapping %d, neighbour3:%d in mapping %d\n"
+                //                , gi, j0, m0, j1, m1, j2, m2, j3, m3);
+
+                laik_map_def(node, m0, (void **)&baseN, &countN);
+                baseN[j0] += baseE[i] ;
+                laik_map_def(node, m1, (void **)&baseN, &countN);
+                baseN[j1] += baseE[i] ;
+                laik_map_def(node, m2, (void **)&baseN, &countN);
+                baseN[j2] += baseE[i] ;
+                laik_map_def(node, m3, (void **)&baseN, &countN);
+                baseN[j3] += baseE[i] ;
+            }
+        }
+        laik_switchto(node, pNodes, LAIK_DF_CopyIn);
+    }
     // for debug only
     laik_log(2,"print elements:");
     print_data(element, pElements);
     laik_log(2,"print nodes:");
     print_data(node,pNodes);
-
     // print check_sum for test
     double sum;
     sum = data_check_sum(element,pElements, world);
     if (laik_myid(world)==0)
-        printf("for elements: %f\n", sum/(Lx*Ly));
+        //printf("for elements: %f\n", sum/(Lx*Ly));
+        printf("for elements: %f\n", sum);
 
     sum = data_check_sum(node,pNodes, world);
     if (laik_myid(world)==0)
-            printf("for nodes: %f\n", sum/(Lx*Ly + Lx+Ly-4 +1));
-
+        //printf("for nodes: %f\n", sum/(Lx*Ly + Lx+Ly-4 +1));
+        printf("for nodes: %f\n", sum);
     free_neighbour_list(neighbours);
     laik_finalize(inst);
     return 0;
