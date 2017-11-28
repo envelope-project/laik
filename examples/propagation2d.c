@@ -188,6 +188,44 @@ double data_check_sum (Laik_Data* d, Laik_Partitioning *p, Laik_Group* world) {
     return *base;
 }
 
+void apply_boundary_condition(Laik_Data* node, Laik_Partitioning* pr , int Rx,  int Ry, int rx, int ry, double value)
+{
+    double *baseN;
+    uint64_t countN;
+    int nSlices=laik_my_slicecount(pr);
+    int n,i;
+    if (ry==0){
+        n=0;
+        laik_map_def(node, n, (void**) &baseN, &countN);
+        for (i = 0; i < countN; i++)
+        {
+            baseN[i]=value;
+        }
+    }
+    if (ry==(Ry-1) ){
+        n=nSlices-1;
+        laik_map_def(node, n, (void**) &baseN, &countN);
+        for (i = 0; i < countN; i++)
+        {
+            baseN[i]=value;
+        }
+    }
+    if (rx==0){
+        i=0;
+        for (n = 0; n < nSlices; ++n) {
+            laik_map_def(node, n, (void**) &baseN, &countN);
+            baseN[i]=value;
+        }
+    }
+    if (rx==(Rx-1)){
+        for (n = 0; n < nSlices; ++n) {
+            laik_map_def(node, n, (void**) &baseN, &countN);
+            i=countN-1;
+            baseN[i]=value;
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
 #ifdef USE_MPI
@@ -220,9 +258,11 @@ int main(int argc, char* argv[])
     // number of elements per task should be
     // devisable by the number of tasks
 
-    int Rx;
-    int Ry;
-    calculate_task_topology(laik_size(world),&Rx,&Ry);
+    int id = laik_myid(world);
+    int numRanks = laik_size(world);
+    int Rx, Ry, rx, ry;
+    calculate_task_topology(numRanks,&Rx,&Ry);
+    calculate_my_coordinate(numRanks,id,&rx,&ry);
     int Nx = size;
     int Ny = size;  //at the moment the partitioners only support Ny=Nx
     int Lx = Nx*Rx;
@@ -270,23 +310,27 @@ int main(int argc, char* argv[])
         laik_map_def(element, n, (void**) &baseE, &countE);
         for (uint64_t i = 0; i < countE; i++)
         {
-            baseE[i]=0.0;
+            baseE[i]=1.0;
         }
     }
     laik_switchto(element, pElements, LAIK_DF_CopyIn);
 
     // distribution of the nodes
     laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
     int nSlicesNodes = laik_my_slicecount(pNodes);
     for (int n = 0; n < nSlicesNodes; ++n)
     {
         laik_map_def(node, n, (void**) &baseN, &countN);
         for (uint64_t i = 0; i < countN; i++)
         {
-            baseN[i]=1.0;
+            baseN[i]=0.0;
         }
     }
     laik_switchto(node, pNodes, LAIK_DF_CopyIn);
+    // set the boundary conditions on the nodes
+    apply_boundary_condition(node,pNodes,Rx,Rx,rx,ry,0);
+
 
     // for debug only
     laik_log(2,"print elements:");
@@ -297,14 +341,14 @@ int main(int argc, char* argv[])
     // print check_sum for test
     double sum1;
     sum1 = data_check_sum(element,pElements, world);
-    if (laik_myid(world)==0)
-        //printf("for elements: %f\n", sum/(Lx*Ly));
-        printf("for elements: %f\n", sum1);
+    //if (id==0)
+        //printf("for elements: %f\n", sum1/(Lx*Ly));
+        //printf("for elements: %f\n", sum1/numRanks);
 
-    sum1 = data_check_sum(node,pNodes, world);
-    if (laik_myid(world)==0)
-        //printf("for nodes: %f\n", sum/(Lx*Ly + Lx+Ly-4 +1));
-        printf("for nodes: %f\n", sum1);
+    //sum1 = data_check_sum(node,pNodes, world);
+    //if (id==0)
+        //printf("for nodes: %f\n", sum1/(Lx*Ly + Lx+Ly-4 +1));
+        //printf("for nodes: %f\n", sum1);
     laik_log(1,"Initialization done.\n");
 
     // propagate the values from elements to the nodes
@@ -314,7 +358,7 @@ int main(int argc, char* argv[])
     const Laik_Mapping *map;
     int nMapsElements;
     nMapsElements = laik_my_mapcount(pElements);
-    for (int i = 0; i < maxIt; i++)
+    for (int it = 0; it < maxIt; it++)
     {
         // back-propagation
         // update the elements using their neighbours
@@ -346,13 +390,13 @@ int main(int argc, char* argv[])
                 m3 = laik_map_get_mapNo(map);
 
                 laik_map_def(node, m0, (void **)&baseN, &countN);
-                baseE[i] += baseN[j0] ;
+                baseE[i] += baseN[j0]/4 ;
                 laik_map_def(node, m1, (void **)&baseN, &countN);
-                baseE[i] += baseN[j1];
+                baseE[i] += baseN[j1]/4;
                 laik_map_def(node, m2, (void **)&baseN, &countN);
-                baseE[i] += baseN[j2];
+                baseE[i] += baseN[j2]/4;
                 laik_map_def(node, m3, (void **)&baseN, &countN);
-                baseE[i] += baseN[j3];
+                baseE[i] += baseN[j3]/4;
 
             }
         }
@@ -364,7 +408,7 @@ int main(int argc, char* argv[])
         // update the nodes using elements
         // go through all the elements and refere
         // to their neighbouring nodes and update them
-        laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        laik_switchto(node, pNodes, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
         for (size_t m = 0; m < nMapsElements; m++)
         {
             laik_map_def(element, m, (void **)&baseE, &countE);
@@ -395,16 +439,17 @@ int main(int argc, char* argv[])
                 //                , gi, j0, m0, j1, m1, j2, m2, j3, m3);
 
                 laik_map_def(node, m0, (void **)&baseN, &countN);
-                baseN[j0] += baseE[i] ;
+                baseN[j0] += baseE[i]/4 ;
                 laik_map_def(node, m1, (void **)&baseN, &countN);
-                baseN[j1] += baseE[i] ;
+                baseN[j1] += baseE[i]/4 ;
                 laik_map_def(node, m2, (void **)&baseN, &countN);
-                baseN[j2] += baseE[i] ;
+                baseN[j2] += baseE[i]/4 ;
                 laik_map_def(node, m3, (void **)&baseN, &countN);
-                baseN[j3] += baseE[i] ;
+                baseN[j3] += baseE[i]/4 ;
             }
         }
         laik_switchto(node, pNodes, LAIK_DF_CopyIn);
+        apply_boundary_condition(node,pNodes,Rx,Rx,rx,ry,pow(2,it));
     }
     // for debug only
     laik_log(2,"print elements:");
@@ -414,14 +459,18 @@ int main(int argc, char* argv[])
     // print check_sum for test
     double sum;
     sum = data_check_sum(element,pElements, world);
-    if (laik_myid(world)==0)
-        //printf("for elements: %f\n", sum/(Lx*Ly));
-        printf("for elements: %f\n", sum);
+    if (id==0)
+    {
+        printf("expected : %f\n",1.0);
+        printf("calculated: %f\n", sum/ (Lx*Ly*pow(2,maxIt-1)) ); //(normalized summation)
+        //printf("for elements: %f\n", sum/ (pow(2,maxIt-1)) ); //(normalized summation)
+        //printf("for elements: %f\n", sum/ (Lx*Ly) ); //(normalized summation)
+    }
 
-    sum = data_check_sum(node,pNodes, world);
-    if (laik_myid(world)==0)
+    //sum = data_check_sum(node,pNodes, world);
+    //if (id==0)
         //printf("for nodes: %f\n", sum/(Lx*Ly + Lx+Ly-4 +1));
-        printf("for nodes: %f\n", sum);
+        //printf("for nodes: %f\n", sum);
     free_neighbour_list(neighbours);
     laik_finalize(inst);
     return 0;
