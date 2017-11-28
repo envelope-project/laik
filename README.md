@@ -163,10 +163,11 @@ install an MPI library such as MPICH or OpenMPI. For OpenMPI, you need
 Additionally installing the following packages will allow building with all
 optional features enabled:
 
-    libmosquitto-dev
-    libprotobuf-c-dev
-    libpapi-dev
     g++
+    libmosquitto-dev
+    libpapi-dev
+    libprotobuf-c-dev
+    protobuf-c-compiler
 
 Mosquitto and protobuf will enable external agents, and PAPI allows
 to use performance counters for profiling. C++ is used in some examples.
