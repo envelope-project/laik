@@ -7,7 +7,8 @@ TESTS= \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d \
     test-jac2d-noc test-jac3d-noc \
-    test-markov test-markov2
+    test-markov test-markov2 \
+    test-propagation2d
 
 .PHONY: $(TESTS)
 
@@ -72,6 +73,11 @@ test-markov:
 test-markov2:
 	mpirun -np 4 ../../examples/markov2 40 4 | sort > test-markov2-40-4.out
 	cmp test-markov2-40-4.out test-markov2-40-4.expected
+
+test-propagation2d:
+	mpirun -np 4 ../../examples/propagation2d 10 10 > test-propagation2d-10.out
+	cmp test-propagation2d-10.out test-propagation2d-10.expected
+
 
 clean:
 	rm -rf *.out
