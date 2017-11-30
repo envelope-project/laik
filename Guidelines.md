@@ -1,9 +1,10 @@
 # Guidelines for LAIK
 
+To be used after v0.1
 
 ## Versioning
 
-LAIK versions look like "<major>.<minor>.<bugfix>", with
+LAIK versions look like "major.minor.bugfix", with
 * major: different numbers mean source and/or binary incompatible API changes
 * minor: different minor number with same major means that new features are
   added, but programs compiled with old version of same major number work
@@ -28,17 +29,30 @@ On a release:
 
 ## Contributor Rules
 
+* roles
+  * regular developer
+  * core contributor / maintainer
+
 * implementations of public API functions must be documented in doxygen syntax
   * what is the function about
   * description of input / output parameters
   * error condition
-* each new feature must be developed in a feature branch, named "contributor initials/feature"
-* for each new feature, before it can be merged into "dev"
-  * a test for this feature must exist and succeed in Travis
+  
+* new features
+  * must be developed in a feature branch, named "contributor initials/feature"
+  * only to be merged into "dev" (= development branch for next release)
+  * a test for the feature must exist and be part of the test suite
+  * make sure the test works in Travis (not just on your developer laptop)
+  * generated files (also from test runs) should be excluded via .gitignore, and
+    must be deleted by "make clear"
   * changes must include a description of the new feature in the adequate manual section
+  
 * Reviews are done by using Github PRs
+
 * API changes must be reviewed before merge by at least one core contributor
+
 * before merging, the feature must work on current "dev" top, ie. the feature branch must be rebased to "dev" with Travis suceeding, always resulting in fast-forward merges
+
 * bug fixes must be reviewed, and should include a test which shows that the bug indeed is fixed
 
 * Commit Message
