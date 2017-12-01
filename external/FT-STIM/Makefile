@@ -6,12 +6,13 @@
 # (C) 2017 LRR, Technische Universitaet Muenchen
 #
 
-CC= cc
+include ../../Makefile.common
+
+CFLAGS  += -I '../../include'
+LDFLAGS += -shared
+LDLIBS  += -lprotobuf-c 
+
 PROTOCC= protoc-c
-CXX= c++
-FLAGS= -std=gnu99
-CFLAGS= -fPIC -Wall -g -Wextra -ggdb3
-LDFLAGS= -lprotobuf-c -shared
 DEBUGFLAGS= -O0 -D DEBUG
 RELEASEFLAGS= -O2 -D NDEBUG -combine -fwhole-program
 PROTOCFLAGS= --c_out=
@@ -33,8 +34,8 @@ all: $(TARGET)
 $(PROTOCOLC): $(PROTOS)
 	$(PROTOCC) $(PROTOCFLAGS)$(PROTODIR) $(PROTOS)
 
-$(TARGET):  $(OBJECTS) $(PROTOCOLC)
-	$(CC) $(FLAGS) $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $(TARGET) $(OBJECTS)
+$(TARGET): $(OBJECTS)
+	$(CC) $(LDFLAGS) -o '$@' $+ $(LDLIBS)
 
 clean:
 	rm --force *.d *.o *.pb-c.c *.pb-c.h *.so

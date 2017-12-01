@@ -43,7 +43,9 @@
 #include <cstring>
 
 extern "C"{
+#ifndef USE_MPI
 #define USE_MPI
+#endif
 #include "laik-backend-mpi.h"
 #include "laik-internal.h"
 }

@@ -1,3 +1,5 @@
+include ../Makefile.common
+
 TESTS= \
     test-vsum test-vsum-log test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
@@ -5,8 +7,6 @@ TESTS= \
     test-jac2d test-jac3d \
     test-markov test-markov2 \
     test-propagation2d
-
--include ../Makefile.config
 
 .PHONY: mpi $(TESTS)
 
