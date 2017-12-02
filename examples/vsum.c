@@ -41,7 +41,7 @@
 // for element-wise weighted partitioning: same as index
 double getEW(Laik_Index* i, const void* d)
 {
-    (void) d; /* FIXME: Why have this parameter if it's never used */
+    (void) d; /* suppress compiler warning. d is mandatory in the interface */
 
     return (double) i->i[0];
 }
@@ -114,9 +114,12 @@ int main(int argc, char* argv[])
         printf("My world ID %d, in shrinked group: %d\n",
                laik_myid(world), laik_myid(g2));
         assert(laik_get_dgroup(a) == g2);
-        laik_map_def1(a, (void**) &base, &count);
-        mysum[3] = 0;
-        for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
+	mysum[3] = 0;
+	if (laik_myid(g2) >= 0) {
+	    // I am part of g2 
+            laik_map_def1(a, (void**) &base, &count);
+            for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
+	}
     }
     else
         mysum[3] = mysum[0];
