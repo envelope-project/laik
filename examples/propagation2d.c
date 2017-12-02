@@ -42,6 +42,8 @@ void calculate_my_coordinate(int numRanks, int rank, int* rx, int* ry){
 void runLuleshElementPartitioner(Laik_Partitioner* pr,
                                    Laik_BorderArray* ba, Laik_BorderArray* otherBA)
 {
+    (void) otherBA;
+
     Laik_Space* space = laik_borderarray_getspace(ba);
     const Laik_Slice* slice = laik_space_getslice(space);
     Laik_Group* group = laik_borderarray_getgroup(ba);
@@ -51,7 +53,6 @@ void runLuleshElementPartitioner(Laik_Partitioner* pr,
     int N_tasks_y;
     calculate_task_topology(laik_size(group), &N_tasks_x, &N_tasks_y);
     int N_elems_x = N_local_x * N_tasks_x ;
-    int N_elems_y = N_local_y * N_tasks_y ;
 
     Laik_Slice slc = *slice;
 
@@ -284,7 +285,7 @@ int main(int argc, char* argv[])
     Laik_Data* node = laik_new_data(world, node_space, laik_Double);
 
 
-    Laik_Partitioning *pNodes, *pNodesExclusive, *pElements;
+    Laik_Partitioning *pNodes, *pElements;
 
     pElements = laik_new_partitioning(world, element_space,
         laik_new_lulesh_element_partitioner(&Nx), 0);
@@ -339,8 +340,6 @@ int main(int argc, char* argv[])
     print_data(node,pNodes);
 
     // print check_sum for test
-    double sum1;
-    sum1 = data_check_sum(element,pElements, world);
     //if (id==0)
         //printf("for elements: %f\n", sum1/(Lx*Ly));
         //printf("for elements: %f\n", sum1/numRanks);
