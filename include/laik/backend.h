@@ -34,28 +34,65 @@
 #include "space-internal.h"
 #include "data-internal.h"
 
+// specific to backend driver, result of preparing the execution of a transition
+typedef struct _Laik_TransitionPlan Laik_TransitionPlan;
+
 // LAIK communication back-end
 struct _Laik_Backend {
   char* name;
   void (*finalize)(Laik_Instance*);
 
-  // prepare the execution of a transition: setup reduction groups etc.
-  void (*prepareTransition)(Laik_Data*, Laik_Transition*);
+  // Prepare the repeated asynchronous execution of a transition on data
+  //
+  // can be NULL to state that this communication backend driver does not
+  // support transition plans. This implies that only synchronous transitions
+  // are supported and executed by calling exec.
+  // if NULL, LAIK will never call cleanup/wait/probe (can be NULL, too)
+  //
+  // this function allows the backend driver to
+  // - allocate resources which can be reused when doing the same transition
+  //   multiple times (such as memory space for buffers, reductions, lists
+  //   of outstanding requests, or resources of the communication library).
+  //   For one LAIK data container, only one asynchronous transition can be
+  //   active at any time. Thus, resources can be shared among transition
+  //   plans for one data container.
+  // - prepare an optimized communcation schedule using the pre-allocated
+  //   resources
+  //
+  // TODO:
+  // - how to enable merging of plans for different data doing same transition
+  // - for reserved and pre-allocated mappings (and fixed data layout),
+  //   we could further optimize/specialize our plan:
+  //   => extend by providing from/to mappings (instead of providing in exec)
+  Laik_TransitionPlan* (*prepare)(Laik_Data*, Laik_Transition*);
 
-  // free resources allocated in prepareTransition for given transition
-  void (*cleanupTransition)(Laik_Data*, Laik_Transition*);
+  // free resources allocated for a transition plan
+  void (*cleanup)(Laik_TransitionPlan*);
 
-  // execute a transition from mapping in <from> to <to>
-  void (*execTransition)(Laik_Data*, Laik_Transition*,
-                         Laik_MappingList* from, Laik_MappingList* to);
+  // execute a transition by triggering required communication.
+  // a transition plan can be specified, allowing asynchronous execution.
+  // else, the transition will be executed synchronously (set <p> to 0).
+  // data to send is found in mappings in <from>, to receive in <to>
+  // before executing a transition plan again, call wait (see below)
+  void (*exec)(Laik_Data*, Laik_Transition*, Laik_TransitionPlan*,
+               Laik_MappingList* from, Laik_MappingList* to);
+
+  // wait for outstanding asynchronous communication requests resulting from
+  // a call to exec when using a transition plan.
+  // If a LAIK container uses multiple mappings, you can wait for finished
+  // communication for each mapping separately.
+  // Use -1 for <mapNo> to wait for all.
+  void (*wait)(Laik_TransitionPlan*, int mapNo);
+
+  // similar to wait, but just probe if any communication for a given mapping
+  // already finished (-1 for all)
+  bool (*probe)(Laik_TransitionPlan*, int mapNo);
 
   // update backend specific data for group if needed
   void (*updateGroup)(Laik_Group*);
 
   // sync of key-value store
-  void (*globalSync)(Laik_Instance*);
-
-  // TODO: async interface: start sending / register receiving / probe
+  void (*sync)(Laik_Instance*);
 };
 
 

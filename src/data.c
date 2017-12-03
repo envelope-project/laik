@@ -1104,8 +1104,18 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
             if (inst->profiling->do_profiling)
                 inst->profiling->timer_backend = laik_wtime();
 
-            assert(inst->backend->execTransition);
-            (inst->backend->execTransition)(d, t, fromList, toList);
+            if (inst->backend->prepare) {
+                // backend driver supports asynchronous communication
+                // TODO: do prepare as early as possible
+                Laik_TransitionPlan* p = (inst->backend->prepare)(d, t);
+                (inst->backend->exec)(d, t, p, fromList, toList);
+                // TODO: only wait in laik_map/laik_wait
+                (inst->backend->wait)(p, -1);
+                (inst->backend->cleanup)(p);
+            }
+            else {
+                (inst->backend->exec)(d, t, 0, fromList, toList);
+            }
 
             if (inst->profiling->do_profiling)
                 inst->profiling->time_backend += laik_wtime() - inst->profiling->timer_backend;

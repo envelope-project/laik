@@ -695,6 +695,6 @@ void laik_kv_sync(Laik_Instance* inst)
 {
     Laik_Backend* b = inst->backend;
 
-    assert(b && b->globalSync);
-    (b->globalSync)(inst);
+    assert(b && b->sync);
+    (b->sync)(inst);
 }

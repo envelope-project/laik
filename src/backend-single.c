@@ -12,17 +12,13 @@
 #include <stdio.h>
 
 // forward decl
-void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
-                                Laik_MappingList* fromList, Laik_MappingList* toList);
+void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
+                      Laik_MappingList* fromList, Laik_MappingList* toList);
 
+// C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_single = {
-    .name = "Single Task Backend",
-    .finalize = NULL,
-    .prepareTransition = NULL,
-    .cleanupTransition = NULL,
-    .execTransition = laik_single_execTransition,
-    .updateGroup = NULL,
-    .globalSync = NULL,
+    .name = "Single Process Backend Driver",
+    .exec = laik_single_exec
 };
 
 static Laik_Instance* single_instance = 0;
@@ -57,9 +53,11 @@ Laik_Group* laik_single_world()
     return single_instance->group[0];
 }
 
-void laik_single_execTransition(Laik_Data* d, Laik_Transition* t,
-                                Laik_MappingList* fromList, Laik_MappingList* toList)
+void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
+                      Laik_MappingList* fromList, Laik_MappingList* toList)
 {
+    assert(p == 0); // does not support transition plans
+
     Laik_Instance* inst = d->space->inst;
     if (t->redCount > 0) {
         assert(fromList->count == 1);

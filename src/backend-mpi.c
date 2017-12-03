@@ -38,20 +38,24 @@ void laik_mpi_finalize() {}
 // forward decls, types/structs , global variables
 
 void laik_mpi_finalize();
-void laik_mpi_execTransition(Laik_Data* d, Laik_Transition *t,
-                             Laik_MappingList* fromList,
-                             Laik_MappingList* toList);
-// update backend specific data for group if needed
+Laik_TransitionPlan* laik_mpi_prepare(Laik_Data*, Laik_Transition*);
+void laik_mpi_cleanup(Laik_TransitionPlan*);
+void laik_mpi_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
+                   Laik_MappingList* from, Laik_MappingList* to);
+void laik_mpi_wait(Laik_TransitionPlan*, int mapNo);
+bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo);
 void laik_mpi_updateGroup(Laik_Group*);
 
+// C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
-    .name = "MPI Backend",
-    .finalize = laik_mpi_finalize,
-    .prepareTransition = NULL,
-    .cleanupTransition = NULL,
-    .execTransition = laik_mpi_execTransition,
-    .updateGroup = laik_mpi_updateGroup,
-    .globalSync = NULL,
+    .name        = "MPI Backend Driver (synchronous)",
+    .finalize    = laik_mpi_finalize,
+    .prepare     = laik_mpi_prepare,
+    .cleanup     = laik_mpi_cleanup,
+    .exec        = laik_mpi_exec,
+    .wait        = laik_mpi_wait,
+    .probe       = laik_mpi_probe,
+    .updateGroup = laik_mpi_updateGroup
 };
 
 static Laik_Instance* mpi_instance = 0;
@@ -164,9 +168,10 @@ void laik_mpi_finalize()
         MPI_Finalize();
 }
 
-// calculate MPI communicator for group <g>
+// update backend specific data for group if needed
 void laik_mpi_updateGroup(Laik_Group* g)
 {
+    // calculate MPI communicator for group <g>
     // TODO: only supports shrinking of parent for now
     assert(g->parent);
     assert(g->parent->size > g->size);
@@ -211,9 +216,47 @@ MPI_Datatype getMPIDataType(Laik_Data* d)
     return mpiDataType;
 }
 
-void laik_mpi_execTransition(Laik_Data* d, Laik_Transition* t,
-                             Laik_MappingList* fromList, Laik_MappingList* toList)
+struct _Laik_TransitionPlan {
+    Laik_Data* data;
+    Laik_Transition* transition;
+};
+Laik_TransitionPlan plan = {0,0};
+
+Laik_TransitionPlan* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t)
 {
+    // only one prepared plan allowed in this backend driver (for now)
+    assert(plan.data == 0);
+
+    plan.data = d;
+    plan.transition = t;
+    return &plan;
+}
+
+void laik_mpi_cleanup(Laik_TransitionPlan* p)
+{
+    // the plan object <p> can be reused to prepare another plan
+    p->data = 0;
+}
+
+void laik_mpi_wait(Laik_TransitionPlan* p, int mapNo)
+{
+    // nothing to wait for: this backend driver currently is synchronous
+}
+
+bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo)
+{
+    // all communication finished: this backend driver currently is synchronous
+    return true;
+}
+
+
+void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
+                   Laik_MappingList* fromList, Laik_MappingList* toList)
+{
+    if (p) {
+        assert(d == p->data);
+        assert(t == p->transition);
+    }
     int myid  = d->group->myid;
     int dims = d->space->dims;
     Laik_SwitchStat* ss = d->stat;
