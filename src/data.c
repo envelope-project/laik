@@ -1765,6 +1765,25 @@ Laik_Mapping* laik_global2local_1d(Laik_Data* d, int64_t gidx, uint64_t* lidx)
     return 0;
 }
 
+Laik_Mapping* laik_global2maplocal_1d(Laik_Data* d, int64_t gidx,
+                                      int* mapNo, uint64_t* lidx)
+{
+    assert(d->space->dims == 1);
+    if (!d->activeMappings) return 0;
+    for(int i = 0; i < d->activeMappings->count; i++) {
+        Laik_Mapping* m = &(d->activeMappings->map[i]);
+
+        if (gidx < m->requiredSlice.from.i[0]) continue;
+        if (gidx >= m->requiredSlice.to.i[0]) continue;
+
+        if (lidx) *lidx = gidx - m->requiredSlice.from.i[0];
+        if (mapNo) *mapNo = i;
+        return m;
+    }
+    return 0;
+}
+
+
 int64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
 {
     assert(d->space->dims == 1);

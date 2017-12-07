@@ -207,6 +207,11 @@ Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
 //       if the default layout is used
 Laik_Mapping* laik_global2local_1d(Laik_Data* d, int64_t gidx, uint64_t* lidx);
 
+// 1d global to 1d local within a given mapping
+// if global index <gidx> is locally mapped, return mapping and set local
+Laik_Mapping* laik_global2maplocal_1d(Laik_Data* d, int64_t gidx,
+                                      int* mapNo, uint64_t* lidx);
+
 // local to global: return global index of local offset in a single local mapping
 int64_t laik_local2global_1d(Laik_Data* d, uint64_t off);
 

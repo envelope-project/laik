@@ -368,14 +368,10 @@ int main(int argc, char* argv[])
                 gj2 = get_element_neighbour(neighbours, gi, 2);
                 gj3 = get_element_neighbour(neighbours, gi, 3);
 
-                map = laik_global2local_1d(node, gj0, &j0);
-                m0 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj1, &j1);
-                m1 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj2, &j2);
-                m2 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj3, &j3);
-                m3 = laik_map_get_mapNo(map);
+                laik_global2maplocal_1d(node, gj0, &m0, &j0);
+                laik_global2maplocal_1d(node, gj1, &m1, &j1);
+                laik_global2maplocal_1d(node, gj2, &m2, &j2);
+                laik_global2maplocal_1d(node, gj3, &m3, &j3);
 
                 laik_map_def(node, m0, (void **)&baseN, &countN);
                 baseE[i] += baseN[j0]/4 ;
