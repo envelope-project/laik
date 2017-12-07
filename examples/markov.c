@@ -134,7 +134,8 @@ Laik_Data* runSparse(MGraph* mg, int miter,
     // start reading from data1, writing to data2
     Laik_Data *dRead = data1, *dWrite = data2;
     double *src, *dst;
-    uint64_t srcCount, dstCount, srcFrom, dstFrom, dstTo;
+    uint64_t srcCount, dstCount;
+    int64_t srcFrom, dstFrom, dstTo;
 
     int iter = 0;
     while(1) {
@@ -146,11 +147,12 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         laik_my_slice_1d(pWrite, 0, &dstFrom, &dstTo);
-        assert(dstCount == dstTo - dstFrom);
+        assert(dstFrom < dstTo);
+        assert(dstCount == (uint64_t) (dstTo - dstFrom));
 
         // spread values according to probability distribution
-        for(int i = dstFrom; i < dstTo; i++) {
-            int off = i * (in + 1);
+        for(int64_t i = dstFrom; i < dstTo; i++) {
+            int64_t off = i * (in + 1);
             double v = src[i - srcFrom] * pm[off];
             for(int j = 1; j <= in; j++)
                 v += src[cm[off + j] - srcFrom] * pm[off + j];
@@ -187,7 +189,8 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
     // start reading from data1, writing to data2
     Laik_Data *dRead = data1, *dWrite = data2;
     double *src, *dst;
-    uint64_t srcCount, dstCount, dstFrom, dstTo;
+    uint64_t srcCount, dstCount;
+    int64_t dstFrom, dstTo;
 
     int iter = 0;
     while(1) {
@@ -198,10 +201,11 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         laik_my_slice_1d(pWrite, 0, &dstFrom, &dstTo);
-        assert(dstCount == dstTo - dstFrom);
+        assert(dstFrom < dstTo);
+        assert(dstCount == (uint64_t) (dstTo - dstFrom));
 
         // spread values according to probability distribution
-        for(int i = 0; i < dstCount; i++) {
+        for(uint64_t i = 0; i < dstCount; i++) {
             int off = i * (in + 1);
             int goff = (i + dstFrom) * (in + 1);
             double v = src[iarray[off]] * pm[goff];
@@ -363,7 +367,7 @@ int main(int argc, char* argv[])
     laik_switchto(dRes, pMaster, LAIK_DF_CopyIn);
     laik_map_def1(dRes, (void**) &v, &count);
     if (laik_myid(world) == 0) {
-        assert(count == n);
+        assert((int)count == n);
         double sum = 0.0;
         for(int i=0; i < n; i++)
             sum += v[i];

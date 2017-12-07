@@ -21,7 +21,7 @@ static int part_id = 0;
 
 // helpers
 
-void laik_set_index(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3)
+void laik_set_index(Laik_Index* i, int64_t i1, int64_t i2, int64_t i3)
 {
     i->i[0] = i1;
     i->i[1] = i2;
@@ -76,8 +76,8 @@ bool laik_slice_isEmpty(int dims, Laik_Slice* slc)
 
 // returns false if intersection of ranges is empty
 static
-bool intersectRange(uint64_t from1, uint64_t to1, uint64_t from2, uint64_t to2,
-                    uint64_t* resFrom, uint64_t* resTo)
+bool intersectRange(int64_t from1, int64_t to1, int64_t from2, int64_t to2,
+                    int64_t* resFrom, int64_t* resTo)
 {
     if (from1 >= to2) return false;
     if (from2 >= to1) return false;
@@ -257,7 +257,7 @@ Laik_Space* laik_new_space(Laik_Instance* inst)
 }
 
 // create a new index space object with an initial size
-Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1)
+Laik_Space* laik_new_space_1d(Laik_Instance* i, int64_t s1)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 1;
@@ -273,8 +273,7 @@ Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1)
     return space;
 }
 
-Laik_Space* laik_new_space_2d(Laik_Instance* i,
-                              uint64_t s1, uint64_t s2)
+Laik_Space* laik_new_space_2d(Laik_Instance* i, int64_t s1, int64_t s2)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 2;
@@ -293,7 +292,7 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i,
 }
 
 Laik_Space* laik_new_space_3d(Laik_Instance* i,
-                              uint64_t s1, uint64_t s2, uint64_t s3)
+                              int64_t s1, int64_t s2, int64_t s3)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 3;
@@ -334,7 +333,7 @@ void laik_set_space_name(Laik_Space* s, char* n)
 }
 
 // change the size of an index space, eventually triggering a repartitiong
-void laik_change_space_1d(Laik_Space* s, uint64_t from1, uint64_t to1)
+void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1)
 {
     assert(s->dims == 1);
     if ((s->s.from.i[0] == from1) && (s->s.to.i[0] == to1))
@@ -450,7 +449,7 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
 }
 
 // append 1d single-index slice
-Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a, int task, uint64_t idx)
+Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a, int task, int64_t idx)
 {
     assert(a->space->dims == 1);
 
@@ -670,7 +669,7 @@ void updateBorderArrayOffsetsSI(Laik_BorderArray* ba)
             sizeof(Laik_TaskSlice_Single1d), tss1d_cmp);
 
     // count slices
-    uint64_t idx, idx0;
+    int64_t idx, idx0;
     int task;
     int count = 1;
     task = ba->tss1d[0].task;
@@ -1269,7 +1268,7 @@ Laik_TaskSlice* laik_mymap_slice(Laik_Partitioning* p, int mapNo, int n)
 }
 
 Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
-                                 uint64_t* from, uint64_t* to)
+                                 int64_t* from, int64_t* to)
 {
     assert(p->space->dims == 1);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
@@ -1300,8 +1299,8 @@ Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
 }
 
 Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
-                                 uint64_t* x1, uint64_t* x2,
-                                 uint64_t* y1, uint64_t* y2)
+                                 int64_t* x1, int64_t* x2,
+                                 int64_t* y1, int64_t* y2)
 {
     assert(p->space->dims == 2);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
@@ -1316,9 +1315,9 @@ Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
 }
 
 Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
-                                 uint64_t* x1, uint64_t* x2,
-                                 uint64_t* y1, uint64_t* y2,
-                                 uint64_t* z1, uint64_t* z2)
+                                 int64_t* x1, int64_t* x2,
+                                 int64_t* y1, int64_t* y2,
+                                 int64_t* z1, int64_t* z2)
 {
     assert(p->space->dims == 3);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
@@ -1607,7 +1606,7 @@ static int getTaskGroup(TaskGroup* tg)
 
 // only for 1d
 typedef struct _SliceBorder {
-    uint64_t b;
+    int64_t b;
     int task;
     int sliceNo, mapNo;
     unsigned int isStart :1;
@@ -1624,7 +1623,7 @@ void cleanBorderList()
 }
 
 static
-void appendBorder(uint64_t b, int task, int sliceNo, int mapNo,
+void appendBorder(int64_t b, int task, int sliceNo, int mapNo,
                   bool isStart, bool isInput)
 {
     if (borderListCount == borderListSize) {
@@ -1647,7 +1646,7 @@ void appendBorder(uint64_t b, int task, int sliceNo, int mapNo,
     sb->isInput = isInput ? 1 : 0;
 
 #ifdef DEBUG_REDUCTIONSLICES
-    laik_log(1, "  add border %lu, task %d slice/map %d/%d (%s, %s)",
+    laik_log(1, "  add border %ld, task %d slice/map %d/%d (%s, %s)",
              b, task, sliceNo, mapNo,
              isStart ? "start" : "end", isInput ? "input" : "output");
 #endif
@@ -1977,10 +1976,10 @@ void calcAddReductions(Laik_Group* group,
 
         if ((i < borderListCount - 1) && (borderList[i + 1].b > sb->b)) {
             // about to leave a range with given input/output tasks
-            uint64_t nextBorder = borderList[i + 1].b;
+            int64_t nextBorder = borderList[i + 1].b;
 
 #ifdef DEBUG_REDUCTIONSLICES
-            laik_log(1, "  range (%lu - %lu), act %d",
+            laik_log(1, "  range (%ld - %ld), act %d",
                      sb->b, nextBorder, myActivity);
 #endif
 

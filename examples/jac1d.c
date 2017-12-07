@@ -69,7 +69,8 @@ int main(int argc, char* argv[])
 
 
     double *baseR, *baseW, *sumPtr;
-    uint64_t countR, countW, off, from, to;
+    uint64_t countR, countW, off;
+    int64_t from, to;
 
     // two 1d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_1d(inst, size);
@@ -166,7 +167,7 @@ int main(int argc, char* argv[])
             // using work load in all tasks
             double newValue, diff, res;
             res = 0.0;
-            for(uint64_t i = from; i < to; i++) {
+            for(int64_t i = from; i < to; i++) {
                 newValue = 0.5 * (baseR[i-1] + baseR[i+1]);
                 diff = baseR[i] - newValue;
                 res += diff * diff;
@@ -205,7 +206,7 @@ int main(int argc, char* argv[])
             if (res < .001) break;
         }
         else {
-            for(uint64_t i = from; i < to; i++) {
+            for(int64_t i = from; i < to; i++) {
                 baseW[i] = 0.5 * (baseR[i-1] + baseR[i+1]);
 #if 0
                 printf( "I%d at G%02d / L%02d T%d: %10.6f "

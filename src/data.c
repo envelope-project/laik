@@ -645,14 +645,14 @@ Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type)
     return d;
 }
 
-Laik_Data* laik_new_data_1d(Laik_Group* g, Laik_Type* t, uint64_t s1)
+Laik_Data* laik_new_data_1d(Laik_Group* g, Laik_Type* t, int64_t s1)
 {
     Laik_Space* space = laik_new_space_1d(g->inst, s1);
     return laik_new_data(g, space, t);
 }
 
 Laik_Data* laik_new_data_2d(Laik_Group* g, Laik_Type* t,
-                            uint64_t s1, uint64_t s2)
+                            int64_t s1, int64_t s2)
 {
     Laik_Space* space = laik_new_space_2d(g->inst, s1, s2);
     return laik_new_data(g, space, t);
@@ -953,10 +953,10 @@ void copyMaps(Laik_Transition* t,
         if (ss)
             ss->copiedBytes += ccount * d->elemsize;
 
-        for(uint64_t i3 = 0; i3 < count.i[2]; i3++) {
+        for(int64_t i3 = 0; i3 < count.i[2]; i3++) {
             char *fromPtr2 = fromPtr;
             char *toPtr2 = toPtr;
-            for(uint64_t i2 = 0; i2 < count.i[1]; i2++) {
+            for(int64_t i2 = 0; i2 < count.i[1]; i2++) {
                 memcpy(toPtr2, fromPtr2, count.i[0] * d->elemsize);
                 fromPtr2 += fromMap->layout->stride[1] * d->elemsize;
                 toPtr2   += toMap->layout->stride[1] * d->elemsize;
@@ -1362,7 +1362,7 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m)
 
 // for a local index (1d/2d/3d), return offset into memory mapping
 // e.g. for (0) / (0,0) / (0,0,0) it returns offset 0
-uint64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
+int64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
 {
     assert(l);
 
@@ -1374,7 +1374,7 @@ uint64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
             assert(l->stride[1] <= l->stride[2]);
     }
 
-    uint64_t off = idx->i[0];
+    int64_t off = idx->i[0];
     if (l->dims > 1) {
         off += idx->i[1] * l->stride[1];
         if (l->dims > 2) {
@@ -1413,7 +1413,7 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     uint64_t idxOff = laik_offset(&localIdx, m->layout);
     char* idxPtr = m->base + idxOff * elemsize;
 
-    uint64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
+    int64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
     from0 = s->from.i[0];
     from1 = s->from.i[1];
     to0 = s->to.i[0];
@@ -1431,9 +1431,9 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     count = 0;
 
     // elements to skip after to0 reached
-    uint64_t skip0 = m->layout->stride[1] - (to0 - from0);
+    int64_t skip0 = m->layout->stride[1] - (to0 - from0);
     // elements to skip after to1 reached
-    uint64_t skip1 = m->layout->stride[2] - m->layout->stride[1] * (to1 - from1);
+    int64_t skip1 = m->layout->stride[2] - m->layout->stride[1] * (to1 - from1);
 
     if (laik_log_begin(1)) {
         Laik_Index slcsize, localFrom;
@@ -1534,7 +1534,7 @@ int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     uint64_t idxOff = laik_offset(&localIdx, m->layout);
     char* idxPtr = m->base + idxOff * elemsize;
 
-    uint64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
+    int64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
     from0 = s->from.i[0];
     from1 = s->from.i[1];
     to0 = s->to.i[0];
@@ -1749,7 +1749,7 @@ Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
 }
 
 
-Laik_Mapping* laik_global2local_1d(Laik_Data* d, uint64_t gidx, uint64_t* lidx)
+Laik_Mapping* laik_global2local_1d(Laik_Data* d, int64_t gidx, uint64_t* lidx)
 {
     assert(d->space->dims == 1);
     if (!d->activeMappings) return 0;
@@ -1765,7 +1765,7 @@ Laik_Mapping* laik_global2local_1d(Laik_Data* d, uint64_t gidx, uint64_t* lidx)
     return 0;
 }
 
-uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
+int64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
 {
     assert(d->space->dims == 1);
     assert(d->activeMappings && (d->activeMappings->count == 1));
@@ -1779,7 +1779,7 @@ uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
 }
 
 
-uint64_t laik_local2global_with_mapnumber_1d (Laik_Data* d, uint64_t mapNo, uint64_t li)
+int64_t laik_maplocal2global_1d(Laik_Data* d, int mapNo, uint64_t li)
 {
     assert(d->space->dims == 1);
     assert(d->activeMappings);

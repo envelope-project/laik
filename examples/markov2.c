@@ -134,7 +134,8 @@ Laik_Data* runSparse(MGraph* mg, int miter,
     // start reading from data1, writing to data2
     Laik_Data *dRead = data1, *dWrite = data2;
     double *src, *dst;
-    uint64_t srcCount, dstCount, srcFrom, srcTo, dstFrom;
+    uint64_t srcCount, dstCount;
+    int64_t srcFrom, srcTo, dstFrom;
 
     int iter = 0;
     while(1) {
@@ -144,7 +145,8 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         laik_switchto(dRead,  pRead,  LAIK_DF_CopyIn);
         laik_map_def1(dRead, (void**) &src, &srcCount);
         laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
-        assert(srcCount == srcTo - srcFrom);
+        assert(srcFrom < srcTo);
+        assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto(dWrite, pWrite,
                       LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
@@ -176,7 +178,7 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         if (doPrint) {
             laik_log_begin(2);
             laik_log_append("Src values after after %d:\n", iter);
-            for(int i = srcFrom; i < srcTo; i++)
+            for(int64_t i = srcFrom; i < srcTo; i++)
                 laik_log_append("  %d: %f", i, dst[i - dstFrom]);
             laik_log_flush("\n");
         }
@@ -211,7 +213,8 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
     // start reading from data1, writing to data2
     Laik_Data *dRead = data1, *dWrite = data2;
     double *src, *dst;
-    uint64_t srcCount, dstCount, srcFrom, srcTo;
+    uint64_t srcCount, dstCount;
+    int64_t srcFrom, srcTo;
 
     int iter = 0;
     while(1) {
@@ -221,7 +224,8 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         laik_switchto(dRead,  pRead,  LAIK_DF_CopyIn);
         laik_map_def1(dRead, (void**) &src, &srcCount);
         laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
-        assert(srcCount == srcTo - srcFrom);
+        assert(srcFrom < srcTo);
+        assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto(dWrite, pWrite,
                       LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
@@ -236,7 +240,7 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         }
 
         // spread values according to probability distribution
-        for(int i = 0; i < srcCount; i++) {
+        for(uint64_t i = 0; i < srcCount; i++) {
             int off = i * (out + 1);
             int goff = (i + srcFrom) * (out + 1);
             for(int j = 0; j <= out; j++)
@@ -405,7 +409,7 @@ int main(int argc, char* argv[])
         // set state <phase> to probability 1
         if (laik_global2local_1d(data1, onestate, &off)) {
             // if global index 0 is local, it must be at local index 0
-            assert(off == onestate);
+            assert(off == (uint64_t) onestate);
             v[off] = 1.0;
         }
     }
@@ -435,7 +439,7 @@ int main(int argc, char* argv[])
     laik_set_phase(inst, 4, "Out", 0);
     if (laik_myid(world) == 0) {
 
-        assert(count == n);
+        assert((int)count == n);
 
         if (doPrint) {
             laik_log_begin(2);

@@ -88,8 +88,8 @@ int main(int argc, char* argv[])
     double *baseR, *baseW, *sumPtr;
     uint64_t zsizeR, zstrideR, ysizeR, ystrideR, xsizeR;
     uint64_t zsizeW, zstrideW, ysizeW, ystrideW, xsizeW;
-    uint64_t gx1, gx2, gy1, gy2, gz1, gz2;
-    uint64_t x1, x2, y1, y2, z1, z2;
+    int64_t gx1, gx2, gy1, gy2, gz1, gz2;
+    int64_t x1, x2, y1, y2, z1, z2;
 
     // two 3d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_3d(inst, size, size, size);
@@ -266,9 +266,9 @@ int main(int argc, char* argv[])
             double vNew, vSum, diff, res, coeff;
             res = 0.0;
             coeff = 1.0 / 6.0;
-            for(uint64_t z = z1; z < z2; z++) {
-                for(uint64_t y = y1; y < y2; y++) {
-                    for(uint64_t x = x1; x < x2; x++) {
+            for(int64_t z = z1; z < z2; z++) {
+                for(int64_t y = y1; y < y2; y++) {
+                    for(int64_t x = x1; x < x2; x++) {
                         vSum = baseR[ (z-1) * zstrideR + y * ystrideR + x ] +
                                baseR[ (z+1) * zstrideR + y * ystrideR + x ] +
                                baseR[ z * zstrideR + (y-1) * ystrideR + x ] +
@@ -317,9 +317,9 @@ int main(int argc, char* argv[])
         else {
             double vNew, vSum, coeff;
             coeff = 1.0 / 6.0;
-            for(uint64_t z = z1; z < z2; z++) {
-                for(uint64_t y = y1; y < y2; y++) {
-                    for(uint64_t x = x1; x < x2; x++) {
+            for(int64_t z = z1; z < z2; z++) {
+                for(int64_t y = y1; y < y2; y++) {
+                    for(int64_t x = x1; x < x2; x++) {
                         vSum = baseR[ (z-1) * zstrideR + y * ystrideR + x ] +
                                baseR[ (z+1) * zstrideR + y * ystrideR + x ] +
                                baseR[ z * zstrideR + (y-1) * ystrideR + x ] +

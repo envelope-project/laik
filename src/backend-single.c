@@ -70,15 +70,15 @@ void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
         for(int i=0; i < t->redCount; i++) {
             assert(d->space->dims == 1);
             struct redTOp* op = &(t->red[i]);
-            uint64_t from = op->slc.from.i[0];
-            uint64_t to   = op->slc.to.i[0];
+            int64_t from = op->slc.from.i[0];
+            int64_t to   = op->slc.to.i[0];
             assert(fromBase != 0);
             assert(laik_isInGroup(t, op->outputGroup, inst->myid));
             assert(toBase != 0);
             assert(to > from);
 
             laik_log(1, "Single reduce: "
-                        "from %lu, to %lu, elemsize %d, base from/to %p/%p\n",
+                        "from %ld, to %ld, elemsize %d, base from/to %p/%p\n",
                      from, to, d->elemsize, fromBase, toBase);
 
             memcpy(toBase, fromBase, (to-from) * fromMap->data->elemsize);

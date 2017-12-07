@@ -240,11 +240,19 @@ void laik_mpi_cleanup(Laik_TransitionPlan* p)
 
 void laik_mpi_wait(Laik_TransitionPlan* p, int mapNo)
 {
+    // required due to interface signature
+    (void) p;
+    (void) mapNo;
+
     // nothing to wait for: this backend driver currently is synchronous
 }
 
 bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo)
 {
+    // required due to interface signature
+    (void) p;
+    (void) mapNo;
+
     // all communication finished: this backend driver currently is synchronous
     return true;
 }
@@ -289,8 +297,8 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
 
         for(int i=0; i < t->redCount; i++) {
             struct redTOp* op = &(t->red[i]);
-            uint64_t from = op->slc.from.i[0];
-            uint64_t to   = op->slc.to.i[0];
+            int64_t from = op->slc.from.i[0];
+            int64_t to   = op->slc.to.i[0];
 
             assert(op->myInputMapNo >= 0);
             assert(op->myInputMapNo < fromList->count);
@@ -349,7 +357,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                 // do the manual reduction on smallest rank of output group
                 int reduceTask = t->group[op->outputGroup].task[0];
 
-                laik_log(1, "Manual reduction at T%d: (%lu - %lu) slc/map %d/%d",
+                laik_log(1, "Manual reduction at T%d: (%ld - %ld) slc/map %d/%d",
                          reduceTask, from, to,
                          op->myInputSliceNo, op->myInputMapNo);
 
@@ -371,7 +379,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                             myIdx = i;
 
 #ifdef LOG_DOUBLE_VALUES
-                            for(int i = 0; i < elemCount; i++)
+                            for(uint64_t i = 0; i < elemCount; i++)
                                 laik_log(1, "    have at %d: %f", from + i,
                                          ((double*)fromBase)[i]);
 #endif
@@ -385,7 +393,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                         MPI_Recv(p, elemCount, mpiDataType,
                                  tg->task[i], 1, comm, &status);
 #ifdef LOG_DOUBLE_VALUES
-                        for(int i = 0; i < elemCount; i++)
+                        for(uint64_t i = 0; i < elemCount; i++)
                             laik_log(1, "    got at %d: %f", from + i,
                                      ((double*)p)[i]);
 #endif
@@ -420,7 +428,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                     }
 
 #ifdef LOG_DOUBLE_VALUES
-                    for(int i = 0; i < elemCount; i++)
+                    for(uint64_t i = 0; i < elemCount; i++)
                         laik_log(1, "    sum at %d: %f", from + i,
                                  ((double*)toBase)[i]);
 #endif
@@ -444,7 +452,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                         laik_log(1, "  MPI_Send to T%d", reduceTask);
 
 #ifdef LOG_DOUBLE_VALUES
-                        for(int i = 0; i < elemCount; i++)
+                        for(uint64_t i = 0; i < elemCount; i++)
                             laik_log(1, "    at %d: %f", from + i,
                                      ((double*)fromBase)[i]);
 #endif
@@ -458,7 +466,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                         MPI_Recv(toBase, elemCount, mpiDataType,
                                  reduceTask, 1, comm, &status);
 #ifdef LOG_DOUBLE_VALUES
-                        for(int i = 0; i < elemCount; i++)
+                        for(uint64_t i = 0; i < elemCount; i++)
                             laik_log(1, "    at %d: %f", from + i,
                                      ((double*)toBase)[i]);
 #endif
@@ -491,7 +499,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                         laik_log_append("%d", rootTask);
                     if (fromBase == toBase)
                         laik_log_append(", IN_PLACE");
-                    laik_log_flush("): (%lu - %lu) in %d/%d out %d/%d (slc/map), "
+                    laik_log_flush("): (%ld - %ld) in %d/%d out %d/%d (slc/map), "
                                    "elemsize %d, baseptr from/to %p/%p\n",
                                    from, to,
                                    op->myInputSliceNo, op->myInputMapNo,
@@ -501,7 +509,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
 
 #ifdef LOG_DOUBLE_VALUES
                 if (fromBase)
-                    for(int i = 0; i < elemCount; i++)
+                    for(uint64_t i = 0; i < elemCount; i++)
                         laik_log(1, "    before at %d: %f", from + i,
                                  ((double*)fromBase)[i]);
 #endif
@@ -525,7 +533,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
 
 #ifdef LOG_DOUBLE_VALUES
                 if (toBase)
-                    for(int i = 0; i < elemCount; i++)
+                    for(uint64_t i = 0; i < elemCount; i++)
                         laik_log(1, "    after at %d: %f", from + i,
                                  ((double*)toBase)[i]);
 #endif
@@ -599,11 +607,11 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                 // we directly support 1d data layouts
 
                 // from global to receiver-local indexes
-                uint64_t from = op->slc.from.i[0] - toMap->requiredSlice.from.i[0];
-                uint64_t to   = op->slc.to.i[0] - toMap->requiredSlice.from.i[0];
+                int64_t from = op->slc.from.i[0] - toMap->requiredSlice.from.i[0];
+                int64_t to   = op->slc.to.i[0] - toMap->requiredSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "  direct recv to local [%lu;%lu[, slc/map %d/%d, "
+                laik_log(1, "  direct recv to local [%ld;%ld[, slc/map %d/%d, "
                          "elemsize %d, baseptr %p\n",
                          from, to, op->sliceNo, op->mapNo,
                          d->elemsize, toMap->base);
@@ -689,11 +697,11 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                 // we directly support 1d data layouts
 
                 // from global to sender-local indexes
-                uint64_t from = op->slc.from.i[0] - fromMap->requiredSlice.from.i[0];
-                uint64_t to   = op->slc.to.i[0] - fromMap->requiredSlice.from.i[0];
+                int64_t from = op->slc.from.i[0] - fromMap->requiredSlice.from.i[0];
+                int64_t to   = op->slc.to.i[0] - fromMap->requiredSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "  direct send: from local [%lu;%lu[, slice/map %d/%d, "
+                laik_log(1, "  direct send: from local [%ld;%ld[, slice/map %d/%d, "
                             "elemsize %d, baseptr %p\n",
                          from, to, op->sliceNo, op->mapNo,
                          d->elemsize, fromMap->base);

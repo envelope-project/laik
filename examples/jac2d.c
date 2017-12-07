@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
     double *baseR, *baseW, *sumPtr;
     uint64_t ysizeR, ystrideR, xsizeR;
     uint64_t ysizeW, ystrideW, xsizeW;
-    uint64_t gx1, gx2, gy1, gy2, x1, x2, y1, y2;
+    int64_t gx1, gx2, gy1, gy2, x1, x2, y1, y2;
 
     // two 2d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_2d(inst, size, size);
@@ -227,8 +227,8 @@ int main(int argc, char* argv[])
 
             double newValue, diff, res;
             res = 0.0;
-            for(uint64_t y = y1; y < y2; y++) {
-                for(uint64_t x = x1; x < x2; x++) {
+            for(int64_t y = y1; y < y2; y++) {
+                for(int64_t x = x1; x < x2; x++) {
                     newValue = 0.25 * ( baseR[ (y-1) * ystrideR + x    ] +
                                         baseR[  y    * ystrideR + x - 1] +
                                         baseR[  y    * ystrideR + x + 1] +
@@ -272,8 +272,8 @@ int main(int argc, char* argv[])
         }
         else {
             double newValue;
-            for(uint64_t y = y1; y < y2; y++) {
-                for(uint64_t x = x1; x < x2; x++) {
+            for(int64_t y = y1; y < y2; y++) {
+                for(int64_t x = x1; x < x2; x++) {
                     newValue = 0.25 * ( baseR[ (y-1) * ystrideR + x    ] +
                                         baseR[  y    * ystrideR + x - 1] +
                                         baseR[  y    * ystrideR + x + 1] +

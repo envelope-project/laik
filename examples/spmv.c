@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
 
     double* res;
     uint64_t count;
-    uint64_t fromRow, toRow;
+    int64_t fromRow, toRow;
 
     // do SPMV, first time
 

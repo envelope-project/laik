@@ -27,7 +27,7 @@
 // "laik-internal.h" includes the following. This is just to make IDE happy
 #include "space.h"
 
-void laik_set_index(Laik_Index* i, uint64_t i1, uint64_t i2, uint64_t i3);
+void laik_set_index(Laik_Index* i, int64_t i1, int64_t i2, int64_t i3);
 void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
 void laik_sub_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
 
@@ -92,7 +92,7 @@ typedef struct _Laik_TaskSlice_Gen {
 typedef struct _Laik_TaskSlice_Single1d {
     int type;
     int task;
-    uint64_t idx;
+    int64_t idx;
 } Laik_TaskSlice_Single1d;
 
 struct _Laik_BorderArray {

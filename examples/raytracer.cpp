@@ -311,7 +311,7 @@ int main(int argc, char **argv)
     laik_switchto_new(yval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_switchto_new(zval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
 
-    uint64_t xstart, xend, ystart, yend;
+    int64_t xstart, xend, ystart, yend;
     laik_my_slice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
 
     laik_map_def1(xval, (void**)&xvalues, 0);

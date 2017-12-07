@@ -69,24 +69,24 @@ void laik_log_Space(Laik_Space* spc)
 
 void laik_log_Index(int dims, Laik_Index* idx)
 {
-    uint64_t i1 = idx->i[0];
-    uint64_t i2 = idx->i[1];
-    uint64_t i3 = idx->i[2];
+    int64_t i1 = idx->i[0];
+    int64_t i2 = idx->i[1];
+    int64_t i3 = idx->i[2];
 
     switch(dims) {
     case 1:
-        laik_log_append("%llu", (unsigned long long) i1);
+        laik_log_append("%lld", (long long) i1);
         break;
     case 2:
-        laik_log_append("%llu/%llu",
-                        (unsigned long long) i1,
-                        (unsigned long long) i2);
+        laik_log_append("%lld/%lld",
+                        (long long) i1,
+                        (long long) i2);
         break;
     case 3:
-        laik_log_append("%llu/%llu/%llu",
-                        (unsigned long long) i1,
-                        (unsigned long long) i2,
-                        (unsigned long long) i3);
+        laik_log_append("%lld/%lld/%lld",
+                        (long long) i1,
+                        (long long) i2,
+                        (long long) i3);
         break;
     default: assert(0);
     }

@@ -236,7 +236,8 @@ int main(int argc, char* argv[])
     Laik_Partitioning* allVec = laik_new_partitioning(world, s, laik_All, 0);
 
     double *inp, *res, sum, *sumPtr;
-    uint64_t icount, rcount, i, fromRow, toRow;
+    uint64_t icount, rcount, i;
+    int64_t fromRow, toRow;
 
     // initialize input vector at master, broadcast to all
     laik_switchto_new(inpD, laik_Master, LAIK_DF_CopyOut);
@@ -277,7 +278,7 @@ int main(int argc, char* argv[])
 #ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic,50)
 #endif
-            for(uint64_t r = fromRow; r < toRow; r++) {
+            for(int64_t r = fromRow; r < toRow; r++) {
                 res[r - fromRow] = 0.0;
                 for(int o = m->row[r]; o < m->row[r+1]; o++)
                     res[r - fromRow] += m->val[o] * inp[m->col[o]];

@@ -73,8 +73,8 @@ typedef struct _Laik_Data Laik_Data;
  * use, default to equal-sized owner BLOCK partitioning.
  */
 Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type);
-Laik_Data* laik_new_data_1d(Laik_Group* g, Laik_Type* t, uint64_t s1);
-Laik_Data* laik_new_data_2d(Laik_Group* g, Laik_Type* t, uint64_t s1, uint64_t s2);
+Laik_Data* laik_new_data_1d(Laik_Group* g, Laik_Type* t, int64_t s1);
+Laik_Data* laik_new_data_2d(Laik_Group* g, Laik_Type* t, int64_t s1, int64_t s2);
 
 // set a data name, for debug output
 void laik_data_set_name(Laik_Data* d, char* n);
@@ -123,6 +123,10 @@ void laik_fill_double(Laik_Data* data, double v);
 
 //----------------------------------
 // LAIK data mapped to memory space
+//
+// global indexes can be signed, as index spaces can include negative ranges
+// local indexes are always unsigned, as the index into an address range
+//  starting from a base address
 
 typedef enum _Laik_LayoutType {
     LAIK_LT_Invalid = 0,
@@ -156,7 +160,7 @@ Laik_LayoutType laik_layout_type(Laik_Layout* l);
 Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
 
 // for a local index (1d/2d/3d), return offset into memory mapping
-uint64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
+int64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
 
 // Make own partition available for direct access in local memory.
 // A partition for a task can consist of multiple consecutive ranges
@@ -201,13 +205,14 @@ Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
 //  index <lidx>. Otherwise, return 0
 // Note: the local index matches the offset into the local mapping only
 //       if the default layout is used
-Laik_Mapping* laik_global2local_1d(Laik_Data* d, uint64_t gidx, uint64_t* lidx);
+Laik_Mapping* laik_global2local_1d(Laik_Data* d, int64_t gidx, uint64_t* lidx);
 
-// local to global: return global index of offset in a single local mapping
-uint64_t laik_local2global_1d(Laik_Data* d, uint64_t off);
+// local to global: return global index of local offset in a single local mapping
+int64_t laik_local2global_1d(Laik_Data* d, uint64_t off);
 
-// local to global: return global index of offset in a local mapping with mapping number <mapNo>
-uint64_t laik_local2global_with_mapnumber_1d (Laik_Data* d, uint64_t mapNo, uint64_t li);
+// map-local to global
+// return global index of local offset in mapping with mapping number <mapNo>
+int64_t laik_maplocal2global_1d(Laik_Data* d, int mapNo, uint64_t li);
 
 // return the mapping number of a <map> in the MappingList
 int laik_map_get_mapNo(const Laik_Mapping* map);
@@ -217,15 +222,15 @@ int laik_map_get_mapNo(const Laik_Mapping* map);
 //  (lx/ly) and return mapping, otherwise return false
 // to be able to access the mapping, the local offset has to be calculated
 // from local coordinates (lx/ly), using memory layout information
-Laik_Mapping* laik_global2local_2d(Laik_Data* d, uint64_t gx, uint64_t gy,
-                                   uint64_t* lx, uint64_t* ly);
+Laik_Mapping* laik_global2local_2d(Laik_Data* d, int64_t gx, int64_t gy,
+                                   int64_t* lx, int64_t* ly);
 
 
 // 2d local to 2d global in a single local mapping (thus ...global1).
 // if local coordinate (lx/ly) is in local mapping, set output parameters
 //  (gx/gy) and return true, otherwise return false
-bool laik_local2global1_2d(Laik_Data* d, uint64_t lx, uint64_t ly,
-                           uint64_t* gx, uint64_t* gy);
+bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
+                           int64_t* gx, int64_t* gy);
 
 //----------------------------------
 // Allocator interface

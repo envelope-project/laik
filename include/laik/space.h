@@ -81,7 +81,7 @@ typedef enum _Laik_ReductionOperation {
 // a point in an index space
 typedef struct _Laik_Index Laik_Index;
 struct _Laik_Index {
-    uint64_t i[3]; // at most 3 dimensions
+    int64_t i[3]; // at most 3 dimensions
 };
 
 // a rectangle-shaped slice from an index space [from;to[
@@ -137,11 +137,10 @@ bool laik_do_init(Laik_DataFlow flow);
 Laik_Space* laik_new_space(Laik_Instance* inst);
 
 // create a new index space object with an initial size
-Laik_Space* laik_new_space_1d(Laik_Instance* i, uint64_t s1);
-Laik_Space* laik_new_space_2d(Laik_Instance* i,
-                              uint64_t s1, uint64_t s2);
+Laik_Space* laik_new_space_1d(Laik_Instance* i, int64_t s1);
+Laik_Space* laik_new_space_2d(Laik_Instance* i, int64_t s1, int64_t s2);
 Laik_Space* laik_new_space_3d(Laik_Instance* i,
-                              uint64_t s1, uint64_t s2, uint64_t s3);
+                              int64_t s1, int64_t s2, int64_t s3);
 
 // free a space with all resources depending on it (e.g. paritionings)
 void laik_free_space(Laik_Space* s);
@@ -153,7 +152,7 @@ uint64_t laik_space_size(Laik_Space* s);
 void laik_set_space_name(Laik_Space* s, char* n);
 
 // change the size of an index space, eventually triggering a repartitiong
-void laik_change_space_1d(Laik_Space* s, uint64_t from1, uint64_t to1);
+void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1);
 
 // are the indexes equal?
 bool laik_index_isEqual(int dims, Laik_Index* i1, Laik_Index* i2);
@@ -246,7 +245,7 @@ Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
                                   int tag, void* data);
 // append 1d single-index slice
 Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a,
-                                     int task, uint64_t idx);
+                                     int task, int64_t idx);
 
 Laik_Space* laik_borderarray_getspace(Laik_BorderArray* ba);
 Laik_Group* laik_borderarray_getgroup(Laik_BorderArray* ba);
@@ -368,20 +367,20 @@ Laik_TaskSlice* laik_mymap_slice(Laik_Partitioning* p, int mapNo, int n);
 // get from/to values for 1d slice with number <n> assigned to this task
 // if there is no slice, return 0 and set range to [0;0[ (ie. empty)
 Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
-                                 uint64_t* from, uint64_t* to);
+                                 int64_t* from, int64_t* to);
 
 // get boundaries [x1;x2[ x [y1;y2[ for 2d slice <n> of this task
 // if there is no slice, return 0 and set ranges to [0;0[ (ie. empty)
 Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
-                                 uint64_t* x1, uint64_t* x2,
-                                 uint64_t* y1, uint64_t* y2);
+                                 int64_t* x1, int64_t* x2,
+                                 int64_t* y1, int64_t* y2);
 
 // get boundaries [x1;x2[ x [y1;y2[ x [z1;z2[ for 3d slice <n> of this task
 // if there is no slice, return 0 and set ranges to [0;0[ (ie. empty)
 Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
-                                 uint64_t* x1, uint64_t* x2,
-                                 uint64_t* y1, uint64_t* y2,
-                                 uint64_t* z1, uint64_t* z2);
+                                 int64_t* x1, int64_t* x2,
+                                 int64_t* y1, int64_t* y2,
+                                 int64_t* z1, int64_t* z2);
 
 // applications can attach arbitrary values to a TaskSlice, to be
 // passed from application-specific partitioners to slice processing

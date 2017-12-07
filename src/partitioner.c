@@ -554,7 +554,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
         int to   = oldBA->tslice[sliceNo].s.to.i[0];
 
         if (data->getIdxW) {
-            for(uint64_t i = from; i < to; i++) {
+            for(int64_t i = from; i < to; i++) {
                 idx.i[0] = i;
                 totalWeight += (data->getIdxW)(&idx, data->userData);
             }
@@ -587,11 +587,11 @@ void runReassignPartitioner(Laik_Partitioner* pr,
         }
 
         // re-distribute
-        int from = oldBA->tslice[sliceNo].s.from.i[0];
-        int to = oldBA->tslice[sliceNo].s.to.i[0];
+        int64_t from = oldBA->tslice[sliceNo].s.from.i[0];
+        int64_t to = oldBA->tslice[sliceNo].s.to.i[0];
 
         slc.from.i[0] = from;
-        for(uint64_t i = from; i < to; i++) {
+        for(int64_t i = from; i < to; i++) {
             if (data->getIdxW) {
                 idx.i[0] = i;
                 weight += (data->getIdxW)(&idx, data->userData);
