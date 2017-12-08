@@ -2,7 +2,6 @@ CXX = c++
 EXAMPLES = vsum vsum2 spmv spmv2 \
     jac1d jac2d jac2d-ser jac3d \
     markov-ser markov markov2 \
-    raytracer \
     propagation1d propagation2d
 
 OPT = -g
@@ -42,9 +41,6 @@ markov: markov.o $(LAIKLIB)
 
 markov2: markov2.o $(LAIKLIB)
 	$(CC) $(CFLAGS) markov2.o $(LAIKLIB) -o markov2
-
-raytracer: raytracer.cpp $(LAIKLIB)
-	$(CXX) $(CXXFLAGS) raytracer.cpp $(LAIKLIB) -o raytracer
 
 propagation1d: propagation1d.c $(LAIKLIB)
 	$(CC) $(CFLAGS) propagation1d.c $(LAIKLIB) -o propagation1d -lm

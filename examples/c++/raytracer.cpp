@@ -42,10 +42,8 @@
 #include <cassert>
 #include <cstring>
 
-extern "C"{
-#define USE_MPI
+extern "C" {
 #include "laik-backend-mpi.h"
-#include "laik-internal.h"
 }
 
 typedef struct _programops{

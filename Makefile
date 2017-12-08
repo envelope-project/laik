@@ -21,6 +21,7 @@ DEPS = $(SRCS:.c=.d)
 CFLAGS+=-MMD -MP
 CFLAGS+=$(DEFS)
 
+# MPICC always must be set, even if MPI not found (then use regular C compiler)
 MPICC ?= $(CC)
 LAIKLIB = liblaik.so
 
@@ -44,7 +45,8 @@ $(LAIKLIB): $(OBJS)
 examples: $(LAIKLIB)
 	cd examples && $(MAKE)
 
-
+examples/c++:
+	cd examples/c++ && $(MAKE)
 
 # tests
 test: examples

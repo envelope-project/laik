@@ -2,7 +2,6 @@
 *.txt
 *.csv
 *.out
-*.ppm
 vsum
 vsum2
 spmv
@@ -14,6 +13,5 @@ jac3d
 markov-ser
 markov
 markov2
-raytracer
 propagation1d
 propagation2d
