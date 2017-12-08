@@ -344,7 +344,6 @@ int main(int argc, char* argv[])
     // perform the propagation maxIt times
     uint64_t gi, gj0, gj1, gj2, gj3, j0, j1, j2, j3;
     int m0, m1, m2, m3;
-    const Laik_Mapping *map;
     int nMapsElements;
     nMapsElements = laik_my_mapcount(pElements);
     for (int it = 0; it < maxIt; it++)
@@ -406,14 +405,10 @@ int main(int argc, char* argv[])
                 gj2 = get_element_neighbour(neighbours, gi, 2);
                 gj3 = get_element_neighbour(neighbours, gi, 3);
 
-                map = laik_global2local_1d(node, gj0, &j0);
-                m0 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj1, &j1);
-                m1 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj2, &j2);
-                m2 = laik_map_get_mapNo(map);
-                map = laik_global2local_1d(node, gj3, &j3);
-                m3 = laik_map_get_mapNo(map);
+                laik_global2maplocal_1d(node, gj0, &m0, &j0);
+                laik_global2maplocal_1d(node, gj1, &m1, &j1);
+                laik_global2maplocal_1d(node, gj2, &m2, &j2);
+                laik_global2maplocal_1d(node, gj3, &m3, &j3);
 
                 //laik_log(1,"slice: %d, element: %d, global index: %d\n", m, i, gi);
                 //laik_log(1,"global indexes for neighbours of element: %d: neighbour0:%d, neighbour1:%d, neighbour2:%d, neighbour3:%d\n"
