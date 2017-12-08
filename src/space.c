@@ -1883,6 +1883,7 @@ void calcAddReductions(Laik_Group* group,
     // add slice borders of all tasks
     cleanBorderList();
     int sliceNo, lastTask, lastMapNo;
+    sliceNo = 0;
     lastTask = -1;
     lastMapNo = -1;
     for(int i = 0; i < fromBA->count; i++) {
