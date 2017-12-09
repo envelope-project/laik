@@ -5,33 +5,40 @@
 # A Library for Automatic Data Migration in Parallel Applications
 
 With LAIK, HPC programmers describe their communication needs on
-the level of switching among program phases using different
-partitionings of global index spaces. For example, the phase sequence
-involving two distributed data structure may look like that:
+the level of switching between program phases which have different
+access behavior in regard to used data structures.
+
+An example phase sequence involving two distributed data structures
+is given in the following figure. The arrows specify for each data
+structure, whether values should be preserved between old and
+new phase.
 
 ![phases](doc/figs/phases.png)
 
-Furthermore, a specification of a partitioning, that is, how indexes
-in an abstract index space are assigned to processes, is shown here:
+Instead of explicit communication, for each program phase, a
+partitioning specifies how a data structure should be distributed
+among the parallel processes. Partitionings are defined on
+abstract index spaces instead of offsets into real data.
 
 ![phases](doc/figs/part1.png)
 
-This results in coarse-grained communication triggered at phase
-transitions, consisting of simple communication actions, automatically
-identified by LAIK:
+Communication is triggered by the processes of the application
+asking LAIK to go to the next program phase. LAIK determines
+the required simple communication operations needed to fullfil
+the transition to the next phase.
 
 ![transition](doc/figs/transition1.png)
 
-The application can map the actions on an abstract index space
-to adequate communication operations for used data structures
-itself, or it can ask LAIK to manage memory attached to indexes.
-This way, on a switch between program phases, LAIK executes
-the required data communication itself, e.g. using MPI.
+The application can process the resulting actions defined on the
+abstract index spaces, and map them to adequate communication operations
+for used data structures. Alternatively, LAIK can allocate memory
+for data attached to indexes. This way, on a switch between program
+phases, LAIK can execute the communication operations itself, e.g. using MPI.
 
-Benefits of the LAIK parallel programming model:
+## Benefits of the LAIK Parallel Programming Model
 
 * explicit decoupling of the specification of data decomposition
-  among parallel tasks from application code specifying the computation.
+  among parallel tasks from other application code is enforced.
   This makes it easier to exchange partitioning algorithms or to
   implement dynamic re-partitioning schemes as well as external control.
 
@@ -40,7 +47,7 @@ Benefits of the LAIK parallel programming model:
   by LAIK. This makes it easier to support elasticity, ie. dynamically
   shrinking and expanding parallel applications.
 
-* using LAIK data containers can significantly reduce application code
+* use of LAIK data containers can significantly reduce application code
   required for explicit data communication. This makes maintance easier.
   
 * the declarative style of programming allows LAIK to trigger communication
@@ -56,27 +63,13 @@ operations are cached by LAIK, resulting only in a one-time initial cost
 to pay for the programming abstraction. Typical HPC applications should trigger
 e.g. the exact same MPI calls with LAIK than without, keeping its original
 scalability.
-
-# Elasticity for HPC applications
-
-Parallel HPC applications usually are written in a low-level parallel programming model, such as MPI. If computational demands of the application are dynamic, adaptive load balancing has to be implemented by the programmer explictly. The resulting code often is application-specific and quite complex, making future extensions and maintainability tricky. With components used in future HPC systems to become more heterogenous and with variable computational capacity, HPC applications are expected to require load balancing for high scalability.
-
-When HPC applications use LAIK, the library takes over control of the partitioning of data. LAIK is meant for applications written according to the owner-computes rule, where computational demand depends on the size of data partitions given to the processes/threads running in parallel. By controlling partitioning, LAIK provides dynamic load balancing. Furthermore, LAIK provides elasticity. While an application is running, LAIK can remove work load from nodes, allowing them to be taken down for maintainance (e.g. if predicted to fail soon), and it can make use of new resources added on-the-fly.
-
-# The LAIK Programming Model
-
-Programmers have to give LAIK enough information such that it can redistribute data itself. For best performance, applications should have any data locally available that is needed to do the computation for the partition given by LAIK. To this end, applications are split into data access phases, and programmers explicitly specify data dependencies.
-
-LAIK does not directly partition data, but uses *index spaces* as abstraction of data items to work on. While LAIK controls the partitioning of such abstract index spaces, the programmer defines the shape of the index spaces as well as the mapping from indexes to actual data to work on. This way, a change in a partititioning can be seen as two steps. First, the change in the index space results in transition actions defined on indexes: which indexes stay local, which need to be communicated? From this, changes in the actual memory allocation and required communication can be derived.
-
-LAIK controls partitioning in the sense that it triggers a re-run of a partitioning algorithm when required, such as when weights given as input to the partitioning algorithm change, or when processes are removed or added. The partitioning algorithm itself often is application-specific and needs to be provided by the application. Data dependencies are also specified as so-called *derived* partitioning algorithms: e.g. for Jacobi, to update cells within a region, one must have access to the halo of the region. Calculating such extended regions is the job of an partitioning algorithm given by the programmer.
-
   
 # Example
 
 LAIK uses SPMD (single program multiple data) programming style similar to MPI.
 For the following simple example, a parallel vector sum, LAIK's communication
-funtionality via repartitioning is enough. This example also shows the use of a simple LAIK data container which enables automatic data migration when switching partitioning.
+funtionality via repartitioning is enough. This example shows the use of a
+simple LAIK data container.
 
 ```C
     #include "laik-backend-mpi.h"
@@ -143,27 +136,17 @@ to '/usr/local'. To set the installation path to your home directory, use
 
 ## Installing the dependencies on Debian/Ubuntu
 
-On Debian/Ubuntu, installing the following packages will allow you to configure
-and build LAIK with minimal features enabled:
+Packages required for minimal functionality:
 
-    gcc
-    make
-    python
+    gcc make python
 
-As communication backend, we currently focus on MPI. To enable MPI support,
-install an MPI library such as MPICH or OpenMPI. For OpenMPI, you need
+We currently focus on MPI support. E.g. for OpenMPI, install
 
-    libopenmpi-dev
-    openmpi-bin
+    libopenmpi-dev openmpi-bin
 
-Additionally installing the following packages will allow building with all
-optional features and examples enabled:
+Other packages:
 
-    g++
-    libmosquitto-dev
-    libpapi-dev
-    libprotobuf-c-dev
-    protobuf-c-compiler
+    g++ libmosquitto-dev libpapi-dev libprotobuf-c-dev protobuf-c-compiler
 
 Mosquitto and protobuf will enable external agents, and PAPI allows
 to use performance counters for profiling. C++ is used in some examples.
