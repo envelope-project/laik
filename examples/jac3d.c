@@ -34,6 +34,59 @@ double loColValue = -10.0, hiColValue = 5.0;
 double loPlaneValue = -20.0, hiPlaneValue = 15.0;
 
 
+void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
+{
+    double *baseW;
+    uint64_t zsizeW, zstrideW, ysizeW, ystrideW, xsizeW;
+    int64_t gx1, gx2, gy1, gy2, gz1, gz2;
+
+    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    // default mapping order for 3d:
+    //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
+    //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
+    laik_map_def1_3d(dWrite, (void**) &baseW,
+                     &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
+
+    // set fixed boundary values at the 6 faces
+    if (gz1 == 0) {
+        // front plane
+        for(uint64_t y = 0; y < ysizeW; y++)
+            for(uint64_t x = 0; x < xsizeW; x++)
+                baseW[y * ystrideW + x] = loPlaneValue;
+    }
+    if (gz2 == size) {
+        // back plane
+        for(uint64_t y = 0; y < ysizeW; y++)
+            for(uint64_t x = 0; x < xsizeW; x++)
+                baseW[(zsizeW - 1) * zstrideW + y * ystrideW + x] = hiPlaneValue;
+    }
+    if (gy1 == 0) {
+        // top plane (overwrites global front/back top edge)
+        for(uint64_t z = 0; z < zsizeW; z++)
+            for(uint64_t x = 0; x < xsizeW; x++)
+                baseW[z * zstrideW + x] = loRowValue;
+    }
+    if (gy2 == size) {
+        // bottom plane (overwrites global front/back bottom edge)
+        for(uint64_t z = 0; z < zsizeW; z++)
+            for(uint64_t x = 0; x < xsizeW; x++)
+                baseW[z * zstrideW + (ysizeW - 1) * ystrideW + x] = hiRowValue;
+    }
+    if (gx1 == 0) {
+        // left column, overwrites global left edges
+        for(uint64_t z = 0; z < zsizeW; z++)
+            for(uint64_t y = 0; y < ysizeW; y++)
+                baseW[z * zstrideW + y * ystrideW] = loColValue;
+    }
+    if (gx2 == size) {
+        // right column, overwrites global right edges
+        for(uint64_t z = 0; z < zsizeW; z++)
+            for(uint64_t y = 0; y < ysizeW; y++)
+                baseW[z * zstrideW + y * ystrideW + (xsizeW - 1)] = hiColValue;
+    }
+}
+
+
 int main(int argc, char* argv[])
 {
 #ifdef USE_MPI
@@ -110,6 +163,12 @@ int main(int argc, char* argv[])
                                             laik_new_halo_partitioner(1);
     pRead = laik_new_partitioning(world, space, pr, pWrite);
 
+    // reserve memory: data1/2 will both be switched to pWrite and pRead
+    laik_reserve(data1, pRead);
+    laik_reserve(data1, pWrite);
+    laik_reserve(data2, pRead);
+    laik_reserve(data2, pWrite);
+
     // for global sum, used for residuum
     Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
@@ -133,43 +192,8 @@ int main(int argc, char* argv[])
             for(uint64_t x = 0; x < xsizeW; x++)
                 baseW[z * zstrideW + y * ystrideW + x] =
                         (double) ((gx1 + x + gy1 + y + gz1 + z) & 6);
-    // set fixed boundary values at the 6 faces
-    if (gz1 == 0) {
-        // front plane
-        for(uint64_t y = 0; y < ysizeW; y++)
-            for(uint64_t x = 0; x < xsizeW; x++)
-                baseW[y * ystrideW + x] = loPlaneValue;
-    }
-    if (gz2 == size) {
-        // back plane
-        for(uint64_t y = 0; y < ysizeW; y++)
-            for(uint64_t x = 0; x < xsizeW; x++)
-                baseW[(zsizeW - 1) * zstrideW + y * ystrideW + x] = hiPlaneValue;
-    }
-    if (gy1 == 0) {
-        // top plane (overwrites global front/back top edge)
-        for(uint64_t z = 0; z < zsizeW; z++)
-            for(uint64_t x = 0; x < xsizeW; x++)
-                baseW[z * zstrideW + x] = loRowValue;
-    }
-    if (gy2 == size) {
-        // bottom plane (overwrites global front/back bottom edge)
-        for(uint64_t z = 0; z < zsizeW; z++)
-            for(uint64_t x = 0; x < xsizeW; x++)
-                baseW[z * zstrideW + (ysizeW - 1) * ystrideW + x] = hiRowValue;
-    }
-    if (gx1 == 0) {
-        // left column, overwrites global left edges
-        for(uint64_t z = 0; z < zsizeW; z++)
-            for(uint64_t y = 0; y < ysizeW; y++)
-                baseW[z * zstrideW + y * ystrideW] = loColValue;
-    }
-    if (gx2 == size) {
-        // right column, overwrites global right edges
-        for(uint64_t z = 0; z < zsizeW; z++)
-            for(uint64_t y = 0; y < ysizeW; y++)
-                baseW[z * zstrideW + y * ystrideW + (xsizeW - 1)] = hiColValue;
-    }
+
+    setBoundary(size, pWrite, dWrite);
     laik_log(2, "Init done\n");
 
     // for statistics (with LAIK_LOG=2)
@@ -193,56 +217,16 @@ int main(int argc, char* argv[])
         laik_map_def1_3d(dWrite, (void**) &baseW,
                          &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
 
-        // local range for which to do 3d stencil, without global edges
+        setBoundary(size, pWrite, dWrite);
+
+        // determine local range for which to do 3d stencil, without global edges
         laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
-        z1 = 0;
-        if (gz1 == 0) {
-            // front plane
-            for(uint64_t y = 0; y < ysizeW; y++)
-                for(uint64_t x = 0; x < xsizeW; x++)
-                    baseW[y * ystrideW + x] = loPlaneValue;
-            z1 = 1;
-        }
-        z2 = zsizeW;
-        if (gz2 == size) {
-            // back plane
-            for(uint64_t y = 0; y < ysizeW; y++)
-                for(uint64_t x = 0; x < xsizeW; x++)
-                    baseW[(zsizeW - 1) * zstrideW + y * ystrideW + x] = hiPlaneValue;
-            z2 = zsizeW - 1;
-        }
-        y1 = 0;
-        if (gy1 == 0) {
-            // top plane (overwrites global front/back top edge)
-            for(uint64_t z = 0; z < zsizeW; z++)
-                for(uint64_t x = 0; x < xsizeW; x++)
-                    baseW[z * zstrideW + x] = loRowValue;
-            y1 = 1;
-        }
-        y2 = ysizeW;
-        if (gy2 == size) {
-            // bottom plane (overwrites global front/back bottom edge)
-            for(uint64_t z = 0; z < zsizeW; z++)
-                for(uint64_t x = 0; x < xsizeW; x++)
-                    baseW[z * zstrideW + (ysizeW - 1) * ystrideW + x] = hiRowValue;
-            y2 = ysizeW - 1;
-        }
-        x1 = 0;
-        if (gx1 == 0) {
-            // left column, overwrites global left edges
-            for(uint64_t z = 0; z < zsizeW; z++)
-                for(uint64_t y = 0; y < ysizeW; y++)
-                    baseW[z * zstrideW + y * ystrideW] = loColValue;
-            x1 = 1;
-        }
-        x2 = xsizeW;
-        if (gx2 == size) {
-            // right column, overwrites global right edges
-            for(uint64_t z = 0; z < zsizeW; z++)
-                for(uint64_t y = 0; y < ysizeW; y++)
-                    baseW[z * zstrideW + y * ystrideW + (xsizeW - 1)] = hiColValue;
-            x2 = xsizeW - 1;
-        }
+        z1 = (gz1 == 0)    ? 1 : 0;
+        y1 = (gy1 == 0)    ? 1 : 0;
+        x1 = (gx1 == 0)    ? 1 : 0;
+        z2 = (gz2 == size) ? (zsizeW - 1) : zsizeW;
+        y2 = (gy2 == size) ? (ysizeW - 1) : ysizeW;
+        x2 = (gx2 == size) ? (xsizeW - 1) : xsizeW;
 
         // relocate baseR to be able to use same indexing as with baseW
         if (gx1 > 0) {

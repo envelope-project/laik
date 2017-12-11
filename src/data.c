@@ -1135,6 +1135,14 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
         freeMaps(fromList, d->stat);
 }
 
+void laik_reserve(Laik_Data* d, Laik_Partitioning* p)
+{
+    (void) d;
+    (void) p;
+
+    // TODO
+}
+
 // switch to new borders (new flow is derived from previous flow)
 void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
 {

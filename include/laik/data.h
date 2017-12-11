@@ -94,6 +94,10 @@ Laik_Partitioning* laik_get_active(Laik_Data* d);
 // free resources for a data container
 void laik_free(Laik_Data*);
 
+// ensure that allocation for <d> is large enough such that
+// switching to <p> does not require any further allocation
+void laik_reserve(Laik_Data* d, Laik_Partitioning* p);
+
 // switch to new borders (new flow is derived from previous flow)
 void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA);
 
