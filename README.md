@@ -4,65 +4,31 @@
 
 # A Library for Automatic Data Migration in Parallel Applications
 
-With LAIK, HPC programmers describe their communication needs on
-the level of switching between program phases which have different
-access behavior in regard to used data structures.
+LAIK is a lightweight library that helps HPC programmers to simplify and improve the flexibility of the code parts responsible for communication between parallel processes of an HPC application. LAIK is not meant to replace usage of e.g. MPI, but it allows programmers to replace part of the communication code by calls into LAIK, which ideally triggers the exact same sequence of MPI calls as a pure MPI application would have done. Pure LAIK programs are possible and enable switching among different communcation libraries.
 
-An example phase sequence involving two distributed data structures
-is given in the following figure. The arrows specify for each data
-structure, whether values should be preserved between old and
-new phase.
+The benefit of LAIK is a separation of concerns, by requiring the programmer to think about data and work decomposition as a partitioning of abstract index spaces. Communication required for data structures is specified as transition between access phases to the abstract index spaces. For each access phase, the programmer declares which indexes need to be locally available for  processes of the parallel application to do their computation. Knowning the mapping of indexes to concrete data enables LAIK to execute required communication automatically.
 
-![phases](doc/figs/phases.png)
+For more details, see the [overview](doc/Overview.md) section in the documentation.
 
-Instead of explicit communication, for each program phase, a
-partitioning specifies how a data structure should be distributed
-among the parallel processes. Partitionings are defined on
-abstract index spaces instead of offsets into real data.
 
-![phases](doc/figs/part1.png)
-
-Communication is triggered by the processes of the application
-asking LAIK to go to the next program phase. LAIK determines
-the required simple communication operations needed to fullfil
-the transition to the next phase.
-
-![transition](doc/figs/transition1.png)
-
-The application can process the resulting actions defined on the
-abstract index spaces, and map them to adequate communication operations
-for used data structures. Alternatively, LAIK can allocate memory
-for data attached to indexes. This way, on a switch between program
-phases, LAIK can execute the communication operations itself, e.g. using MPI.
-
-## Benefits of the LAIK Parallel Programming Model
+## Benefits of using LAIK
 
 * explicit decoupling of the specification of data decomposition
-  among parallel tasks from other application code is enforced.
+  among parallel tasks from other application code.
   This makes it easier to exchange partitioning algorithms or to
   implement dynamic re-partitioning schemes as well as external control.
 
-* programming style becomes agnostic to the number of parallel processes:
-  each process works on index ranges as specified in the partitioning
+* programming style becomes agnostic to the number of parallel processes.
+  Each process works on index ranges as specified in the partitioning
   by LAIK. This makes it easier to support elasticity, ie. dynamically
   shrinking and expanding parallel applications.
 
 * use of LAIK data containers can significantly reduce application code
-  required for explicit data communication. This makes maintance easier.
+  required for explicit data communication. This makes maintainance easier.
   
 * the declarative style of programming allows LAIK to trigger communication
   early, enabling it to overlap communication and computation.
 
-While similar parallel programming models exist (Charm++, Legion), LAIK
-is designed to make it easy to integrate LAIK functionality step-by-step
-into existing legacy HPC code written in C/C++/Fortran. At each incremental
-step, the application can be tested for correctness.
-
-If the same phase switches are done repeatedly, the required communication
-operations are cached by LAIK, resulting only in a one-time initial cost
-to pay for the programming abstraction. Typical HPC applications should trigger
-e.g. the exact same MPI calls with LAIK than without, keeping its original
-scalability.
   
 # Example
 
@@ -93,13 +59,14 @@ simple LAIK data container.
         laik_map_def1(a, (void**) &base, &count);
         for (i = 0; i < count; i++) mysum += base[i];
 
-        // for collecting partial sums at master, we can use LAIK's data
-        // aggregation functionality when switching to new partitioning
+        // for adding the partial sums and making the result available at
+        // master, first, everybody gets write access to a LAIK container
         Laik_Data* sum = laik_new_data_1d(world, laik_Double, 1);
         laik_switchto_new(sum, laik_All, LAIK_DF_CopyOut);
         // write partial sum
         laik_fill_double(sum, mysum);
-        // master-only partitioning: add partial values to be read at master
+        // we specify that all values from writers should be added using a
+        // sum reduction, with the result available at master (process 0)
         laik_switchto_new(sum, laik_Master, LAIK_DF_CopyIn | LAIK_DF_Sum);
 
         if (laik_myid(world) == 0) {
@@ -117,6 +84,9 @@ To run this example (could use vectorsum directly for OpenMP backend):
 ```
     mpirun -np 4 ./vectorsum
 ```
+
+For other examples, see the [index](examples/README.md) of provided examples.
+
 
 # Build and Install
 
@@ -150,6 +120,11 @@ Other packages:
 
 Mosquitto and protobuf will enable external agents, and PAPI allows
 to use performance counters for profiling. C++ is used in some examples.
+
+
+# Publications
+
+* Josef Weidendorfer, Dai Yang, and Carsten Trinitis. LAIK: A Library for Fault Tolerant Distribution of Global Data for Parallel Applications. In Proceedings of the 27th PARS Workshop (PARS 2017). Hagen, DE, 2017. [PDF](https://mediatum.ub.tum.de/1375185)
 
 
 # License
