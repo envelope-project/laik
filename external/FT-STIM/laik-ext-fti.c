@@ -116,7 +116,7 @@ performStep(
 ){
     LaikExtMsg msg;
     char buf[64];
-    int i;
+    unsigned int i;
     assert(step);
 
     msg.n_spare_nodes = 0;
