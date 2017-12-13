@@ -81,7 +81,7 @@ else:
 
 cxx = ""
 if "CXX" in os.environ:
-    cxx = os.environ['CC']
+    cxx = os.environ['CXX']
 
 mycxx = cxx
 if not mycxx:
