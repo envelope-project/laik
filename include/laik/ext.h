@@ -21,6 +21,9 @@
 
 #include "interface/agent.h"
 
+// "laik.h" includes the following. This is just to make IDE happy
+#include "core.h"
+
 // LAIK application-external interfaces
 //
 // currently only repartitioning requests are supported

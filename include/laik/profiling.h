@@ -23,6 +23,9 @@
 #error "include laik.h instead"
 #endif
 
+// "laik.h" includes the following. This is just to make IDE happy
+#include "core.h"
+
 //
 // application controlled profiling
 //

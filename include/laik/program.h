@@ -23,6 +23,9 @@
 #error "include laik.h instead"
 #endif
 
+// "laik.h" includes the following. This is just to make IDE happy
+#include "core.h"
+
 // struct for storing program control information
 typedef struct tag_laik_program_control Laik_Program_Control;
 

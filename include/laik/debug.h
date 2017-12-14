@@ -22,6 +22,11 @@
 #error "include laik.h instead"
 #endif
 
+// "laik.h" includes the following. This is just to make IDE happy
+#include "core.h"
+#include "space.h"
+#include "data.h"
+
 #include <stdbool.h>
 
 void laik_log_IntList(int len, int* list);
