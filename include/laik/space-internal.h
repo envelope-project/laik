@@ -43,12 +43,12 @@ struct _Laik_Space {
     Laik_Space* nextSpaceForInstance; // for list of spaces used in instance
 
     // linked list of partitionings for this space
-    Laik_Partitioning* firstPartitioningForSpace;
+    Laik_AccessPhase* firstPartitioningForSpace;
 };
 
 // add/remove partitioning to/from space
-void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p);
-void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p);
+void laik_addPartitioningForSpace(Laik_Space* s, Laik_AccessPhase* p);
+void laik_removePartitioningFromSpace(Laik_Space* s, Laik_AccessPhase* p);
 
 struct _Laik_Partitioner {
     const char* name;
@@ -127,7 +127,7 @@ struct _Laik_Partitioning {
     Laik_Space* space; // space to partition
 
     Laik_Partitioner* partitioner;
-    Laik_Partitioning* base;
+    Laik_AccessPhase* base;
 
     // partition borders (calculated lazy)
     bool bordersValid;
@@ -136,26 +136,26 @@ struct _Laik_Partitioning {
     // head of list of data containers with this paritioning active
     Laik_Data* firstDataForPartitioning;
     // head of list of partitionings using this one as base
-    Laik_Partitioning* firstPartitioningForBase;
+    Laik_AccessPhase* firstPartitioningForBase;
 
      // for list of partitionings using same space
-    Laik_Partitioning* nextPartitioningForSpace;
+    Laik_AccessPhase* nextPartitioningForSpace;
     // for list of partitionings using same group
-    Laik_Partitioning* nextPartitioningForGroup;
+    Laik_AccessPhase* nextPartitioningForGroup;
     // for list of partitionings using this one as base
-    Laik_Partitioning* nextPartitioningForBase;
+    Laik_AccessPhase* nextPartitioningForBase;
 };
 
 // add/remove partitioning to/from list using a given partitioning as base
-void laik_addPartitioningForBase(Laik_Partitioning* base,
-                                 Laik_Partitioning* p);
-void laik_removePartitioningFromBase(Laik_Partitioning* base,
-                                     Laik_Partitioning* p);
+void laik_addPartitioningForBase(Laik_AccessPhase* base,
+                                 Laik_AccessPhase* p);
+void laik_removePartitioningFromBase(Laik_AccessPhase* base,
+                                     Laik_AccessPhase* p);
 
 
 // add/remove data container as user to/from partitioning
-void laik_addDataForPartitioning(Laik_Partitioning* p, Laik_Data* d);
-void laik_removeDataFromPartitioning(Laik_Partitioning* p, Laik_Data* d);
+void laik_addDataForPartitioning(Laik_AccessPhase* p, Laik_Data* d);
+void laik_removeDataFromPartitioning(Laik_AccessPhase* p, Laik_Data* d);
 
 
 //

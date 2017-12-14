@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
 
     if (laik_size(world) > 1) {
         // distribution using task-wise weights: without master
-        Laik_Partitioning* p;
+        Laik_AccessPhase* p;
         p = laik_switchto_new(a,
                               laik_new_block_partitioner_tw1(getTW, 0),
                               LAIK_DF_CopyIn | LAIK_DF_CopyOut);

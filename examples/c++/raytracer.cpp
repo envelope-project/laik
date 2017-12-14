@@ -294,7 +294,7 @@ int main(int argc, char **argv)
     Laik_Data* yval = laik_new_data(world, space, laik_Double);
     Laik_Data* zval = laik_new_data(world, space, laik_Double);
 
-    Laik_Partitioning* pImage = laik_new_partitioning(world, space2d,
+    Laik_AccessPhase* pImage = laik_new_accessphase(world, space2d,
                                   laik_new_bisection_partitioner(), 0);
 
     double *xvalues;
@@ -310,7 +310,7 @@ int main(int argc, char **argv)
     laik_switchto_new(zval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
 
     int64_t xstart, xend, ystart, yend;
-    laik_my_slice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
+    laik_phase_myslice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
 
     laik_map_def1(xval, (void**)&xvalues, 0);
     laik_map_def1(yval, (void**)&yvalues, 0);

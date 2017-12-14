@@ -151,11 +151,11 @@ int get_element_neighbour(int* neighbours, int element, int node_index)
 }
 
 // for the debug
-void print_data(Laik_Data* d, Laik_Partitioning *p)
+void print_data(Laik_Data* d, Laik_AccessPhase *p)
 {
     double *base;
     uint64_t count;
-    int nSlices = laik_my_slicecount(p);
+    int nSlices = laik_phase_my_slicecount(p);
     for (int s = 0; s < nSlices; s++) {
         laik_map_def(d, s, (void**) &base, &count);
         for (uint64_t i = 0; i < count; i++)
@@ -167,10 +167,10 @@ void print_data(Laik_Data* d, Laik_Partitioning *p)
 }
 
 // for testing
-double data_check_sum(Laik_Data* d, Laik_Partitioning *p, Laik_Group* world) {
+double data_check_sum(Laik_Data* d, Laik_AccessPhase *p, Laik_Group* world) {
     double *base;
     uint64_t count;
-    int nSlices = laik_my_slicecount(p);
+    int nSlices = laik_phase_my_slicecount(p);
     double sum=0.0;
     for(int s = 0; s < nSlices; s++) {
         laik_map_def(d, s, (void**) &base, &count);
@@ -190,11 +190,11 @@ double data_check_sum(Laik_Data* d, Laik_Partitioning *p, Laik_Group* world) {
     return *base;
 }
 
-void apply_boundary_condition(Laik_Data* data, Laik_Partitioning* pr , int Rx,  int Ry, int rx, int ry, double value)
+void apply_boundary_condition(Laik_Data* data, Laik_AccessPhase* pr , int Rx,  int Ry, int rx, int ry, double value)
 {
     double *baseN;
     uint64_t countN, i;
-    int nSlices=laik_my_slicecount(pr);
+    int nSlices=laik_phase_my_slicecount(pr);
     int n;
 
     if (rx==0){
@@ -284,11 +284,11 @@ int main(int argc, char* argv[])
     Laik_Data* node = laik_new_data(world, node_space, laik_Double);
 
 
-    Laik_Partitioning *pNodes, *pElements;
+    Laik_AccessPhase *pNodes, *pElements;
 
-    pElements = laik_new_partitioning(world, element_space,
+    pElements = laik_new_accessphase(world, element_space,
         laik_new_lulesh_element_partitioner(&Nx), 0);
-    pNodes = laik_new_partitioning(world, node_space,
+    pNodes = laik_new_accessphase(world, node_space,
         laik_new_lulesh_node_partitioner(neighbours), pElements);
     //pNodesExclusive = laik_new_partitioning(world, node_space,
     //    laik_new_lulesh_node_partitioner_exclusive(neighbours), pElements);
@@ -306,7 +306,7 @@ int main(int argc, char* argv[])
     // for each slide we return the back-end
     // memory address and count to sweep over
     // the memory elements
-    int nSlicesElem = laik_my_slicecount(pElements);
+    int nSlicesElem = laik_phase_my_slicecount(pElements);
     for (int n = 0; n < nSlicesElem; ++n) {
         laik_map_def(element, n, (void**) &baseE, &countE);
         for (uint64_t i = 0; i < countE; i++)
@@ -319,7 +319,7 @@ int main(int argc, char* argv[])
     // distribution of the nodes
     laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
     //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
-    int nSlicesNodes = laik_my_slicecount(pNodes);
+    int nSlicesNodes = laik_phase_my_slicecount(pNodes);
     for (int n = 0; n < nSlicesNodes; ++n)
     {
         laik_map_def(node, n, (void**) &baseN, &countN);
@@ -345,7 +345,7 @@ int main(int argc, char* argv[])
     uint64_t gi, gj0, gj1, gj2, gj3, j0, j1, j2, j3;
     int m0, m1, m2, m3;
     int nMapsElements;
-    nMapsElements = laik_my_mapcount(pElements);
+    nMapsElements = laik_phase_my_mapcount(pElements);
     for (int it = 0; it < maxIt; it++)
     {
         // back-propagation

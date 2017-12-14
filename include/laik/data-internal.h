@@ -73,7 +73,7 @@ struct _Laik_Data {
     Laik_Type* type;
 
     // active partitioning
-    Laik_Partitioning* activePartitioning;
+    Laik_AccessPhase* activePartitioning;
     Laik_DataFlow activeFlow;
     // linked list of data objects with same active partitioning
     Laik_Data* nextPartitioningUser;

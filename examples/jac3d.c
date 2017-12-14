@@ -34,13 +34,13 @@ double loColValue = -10.0, hiColValue = 5.0;
 double loPlaneValue = -20.0, hiPlaneValue = 15.0;
 
 
-void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
+void setBoundary(int size, Laik_AccessPhase *pWrite, Laik_Data* dWrite)
 {
     double *baseW;
     uint64_t zsizeW, zstrideW, ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2, gz1, gz2;
 
-    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    laik_phase_myslice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
@@ -154,20 +154,24 @@ int main(int argc, char* argv[])
     // - pRead : extends pWrite partitions to allow reading neighbor values
     // partitionings are assigned to either data1/data2, exchanged after
     // every iteration
-    Laik_Partitioning *pWrite, *pRead;
-    pWrite = laik_new_partitioning(world, space,
+    Laik_AccessPhase *pWrite, *pRead;
+    pWrite = laik_new_accessphase(world, space,
                                   laik_new_bisection_partitioner(), 0);
     // this extends pWrite partitions at borders by 1 index on inner borders
     // (the coupling is dynamic: any change in pWrite changes pRead)
     Laik_Partitioner* pr = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
                                             laik_new_halo_partitioner(1);
-    pRead = laik_new_partitioning(world, space, pr, pWrite);
+    pRead = laik_new_accessphase(world, space, pr, pWrite);
 
     // reserve memory: data1/2 will both be switched to pWrite and pRead
-    laik_reserve(data1, pRead);
-    laik_reserve(data1, pWrite);
-    laik_reserve(data2, pRead);
-    laik_reserve(data2, pWrite);
+    // run partitioners to get actual partitioning for reservation
+    // order is important, as calculating baRead needs baWrite
+    Laik_BorderArray* baWrite = laik_calc_partitioning(pWrite);
+    Laik_BorderArray* baRead  = laik_calc_partitioning(pRead);
+    laik_reserve(data1, baRead);
+    laik_reserve(data1, baWrite);
+    laik_reserve(data2, baRead);
+    laik_reserve(data2, baWrite);
 
     // for global sum, used for residuum
     Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
@@ -180,7 +184,7 @@ int main(int argc, char* argv[])
 
     // distributed initialization
     laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
-    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    laik_phase_myslice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
@@ -220,7 +224,7 @@ int main(int argc, char* argv[])
         setBoundary(size, pWrite, dWrite);
 
         // determine local range for which to do 3d stencil, without global edges
-        laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+        laik_phase_myslice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
         z1 = (gz1 == 0)    ? 1 : 0;
         y1 = (gy1 == 0)    ? 1 : 0;
         x1 = (gx1 == 0)    ? 1 : 0;

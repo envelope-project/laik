@@ -110,14 +110,14 @@ int main(int argc, char* argv[])
     // - pRead : extends pWrite partitions to allow reading neighbor values
     // partitionings are assigned to either data1/data2, exchanged after
     // every iteration
-    Laik_Partitioning *pWrite, *pRead;
-    pWrite = laik_new_partitioning(world, space,
+    Laik_AccessPhase *pWrite, *pRead;
+    pWrite = laik_new_accessphase(world, space,
                                   laik_new_bisection_partitioner(), 0);
     // this extends pWrite partitions at borders by 1 index on inner borders
     // (the coupling is dynamic: any change in pWrite changes pRead)
     Laik_Partitioner* pr = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
                                             laik_new_halo_partitioner(1);
-    pRead = laik_new_partitioning(world, space, pr, pWrite);
+    pRead = laik_new_accessphase(world, space, pr, pWrite);
 
     // for global sum, used for residuum and value sum at end
     Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
@@ -130,7 +130,7 @@ int main(int argc, char* argv[])
 
     // distributed initialization
     laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
-    laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+    laik_phase_myslice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
     // default mapping order for 2d:
     //   with y in [0;ysize], x in [0;xsize[
     //   base[y][x] is at (base + y * ystride + x)
@@ -181,7 +181,7 @@ int main(int argc, char* argv[])
         laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
         // local range for which to do 2d stencil, without global edges
-        laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+        laik_phase_myslice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
         y1 = 0;
         if (gy1 == 0) {
             // top row

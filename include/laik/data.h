@@ -88,21 +88,21 @@ Laik_Group* laik_get_dgroup(Laik_Data* d);
 // get instance managing data
 Laik_Instance* laik_get_dinst(Laik_Data* d);
 
-// get active partitioning of data container
-Laik_Partitioning* laik_get_active(Laik_Data* d);
+// get active access phase of data container
+Laik_AccessPhase* laik_get_active(Laik_Data* d);
 
 // free resources for a data container
 void laik_free(Laik_Data*);
 
 // ensure that allocation for <d> is large enough such that
-// switching to <p> does not require any further allocation
-void laik_reserve(Laik_Data* d, Laik_Partitioning* p);
+// switching to <ba> does not require any further allocation
+void laik_reserve(Laik_Data* d, Laik_BorderArray* ba);
 
 // switch to new borders (new flow is derived from previous flow)
 void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA);
 
 // switch from active to another partitioning
-void laik_switchto(Laik_Data*, Laik_Partitioning* toP, Laik_DataFlow toFlow);
+void laik_switchto(Laik_Data*, Laik_AccessPhase* toP, Laik_DataFlow toFlow);
 
 // switch to another data flow, keep partitioning
 void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow);
@@ -118,7 +118,7 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 // convenience functions
 
 // switch from active to a newly created partitioning, and return it
-Laik_Partitioning* laik_switchto_new(Laik_Data*,
+Laik_AccessPhase* laik_switchto_new(Laik_Data*,
                                      Laik_Partitioner* pr, Laik_DataFlow flow);
 
 void laik_fill_double(Laik_Data* data, double v);

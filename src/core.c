@@ -197,21 +197,21 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     return g;
 }
 
-void laik_addPartitioningForGroup(Laik_Group* g, Laik_Partitioning* p)
+void laik_addPartitioningForGroup(Laik_Group* g, Laik_AccessPhase* p)
 {
     assert(p->nextPartitioningForGroup == 0);
     p->nextPartitioningForGroup = g->firstPartitioningForGroup;
     g->firstPartitioningForGroup = p;
 }
 
-void laik_removePartitioningFromGroup(Laik_Group* g, Laik_Partitioning* p)
+void laik_removePartitioningFromGroup(Laik_Group* g, Laik_AccessPhase* p)
 {
     if (g->firstPartitioningForGroup == p) {
         g->firstPartitioningForGroup = p->nextPartitioningForGroup;
     }
     else {
         // search for previous item
-        Laik_Partitioning* pp = g->firstPartitioningForGroup;
+        Laik_AccessPhase* pp = g->firstPartitioningForGroup;
         while(pp->nextPartitioningForGroup != p)
             pp = pp->nextPartitioningForGroup;
         assert(pp != 0); // not found, should not happen

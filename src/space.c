@@ -347,21 +347,21 @@ void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1)
 
 
 
-void laik_addPartitioningForSpace(Laik_Space* s, Laik_Partitioning* p)
+void laik_addPartitioningForSpace(Laik_Space* s, Laik_AccessPhase* p)
 {
     assert(p->nextPartitioningForSpace == 0);
     p->nextPartitioningForSpace = s->firstPartitioningForSpace;
     s->firstPartitioningForSpace = p;
 }
 
-void laik_removePartitioningFromSpace(Laik_Space* s, Laik_Partitioning* p)
+void laik_removePartitioningFromSpace(Laik_Space* s, Laik_AccessPhase* p)
 {
     if (s->firstPartitioningForSpace == p) {
         s->firstPartitioningForSpace = p->nextPartitioningForSpace;
     }
     else {
         // search for previous item
-        Laik_Partitioning* pp = s->firstPartitioningForSpace;
+        Laik_AccessPhase* pp = s->firstPartitioningForSpace;
         while(pp->nextPartitioningForSpace != p)
             pp = pp->nextPartitioningForSpace;
         assert(pp != 0); // not found, should not happen
@@ -1013,12 +1013,12 @@ bool laik_border_isEqual(Laik_BorderArray* b1, Laik_BorderArray* b2)
 
 
 // create a new partitioning on a space
-Laik_Partitioning*
-laik_new_partitioning(Laik_Group* group, Laik_Space* space,
-                      Laik_Partitioner* pr, Laik_Partitioning *base)
+Laik_AccessPhase*
+laik_new_accessphase(Laik_Group* group, Laik_Space* space,
+                      Laik_Partitioner* pr, Laik_AccessPhase *base)
 {
-    Laik_Partitioning* p;
-    p = malloc(sizeof(Laik_Partitioning));
+    Laik_AccessPhase* p;
+    p = malloc(sizeof(Laik_AccessPhase));
     if (!p) {
         laik_panic("Out of memory allocating Laik_Partitioning object");
         exit(1); // not actually needed, laik_panic never returns
@@ -1066,23 +1066,23 @@ laik_new_partitioning(Laik_Group* group, Laik_Space* space,
     return p;
 }
 
-void laik_addPartitioningForBase(Laik_Partitioning* base,
-                                 Laik_Partitioning* p)
+void laik_addPartitioningForBase(Laik_AccessPhase* base,
+                                 Laik_AccessPhase* p)
 {
     assert(p->nextPartitioningForBase == 0);
     p->nextPartitioningForBase = base->firstPartitioningForBase;
     base->firstPartitioningForBase = p;
 }
 
-void laik_removePartitioningFromBase(Laik_Partitioning* base,
-                                     Laik_Partitioning* p)
+void laik_removePartitioningFromBase(Laik_AccessPhase* base,
+                                     Laik_AccessPhase* p)
 {
     if (base->firstPartitioningForBase == p) {
         base->firstPartitioningForBase = p->nextPartitioningForBase;
     }
     else {
         // search for previous item
-        Laik_Partitioning* pp = base->firstPartitioningForBase;
+        Laik_AccessPhase* pp = base->firstPartitioningForBase;
         while(pp->nextPartitioningForBase != p)
             pp = pp->nextPartitioningForBase;
         assert(pp != 0); // not found, should not happen
@@ -1092,14 +1092,14 @@ void laik_removePartitioningFromBase(Laik_Partitioning* base,
 }
 
 
-void laik_addDataForPartitioning(Laik_Partitioning* p, Laik_Data* d)
+void laik_addDataForPartitioning(Laik_AccessPhase* p, Laik_Data* d)
 {
     assert(d->nextPartitioningUser == 0);
     d->nextPartitioningUser = p->firstDataForPartitioning;
     p->firstDataForPartitioning = d;
 }
 
-void laik_removeDataFromPartitioning(Laik_Partitioning* p, Laik_Data* d)
+void laik_removeDataFromPartitioning(Laik_AccessPhase* p, Laik_Data* d)
 {
     if (p->firstDataForPartitioning == d) {
         p->firstDataForPartitioning = d->nextPartitioningUser;
@@ -1116,30 +1116,30 @@ void laik_removeDataFromPartitioning(Laik_Partitioning* p, Laik_Data* d)
 }
 
 
-void laik_set_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr)
+void laik_set_partitioner(Laik_AccessPhase* p, Laik_Partitioner* pr)
 {
     assert(pr->run != 0);
     p->partitioner = pr;
 }
 
-Laik_Partitioner* laik_get_partitioner(Laik_Partitioning* p)
+Laik_Partitioner* laik_get_partitioner(Laik_AccessPhase* p)
 {
     return p->partitioner;
 }
 
-Laik_Space* laik_get_pspace(Laik_Partitioning* p)
+Laik_Space* laik_get_apspace(Laik_AccessPhase* p)
 {
     return p->space;
 }
 
-Laik_Group* laik_get_pgroup(Laik_Partitioning* p)
+Laik_Group* laik_get_apgroup(Laik_AccessPhase* p)
 {
     return p->group;
 }
 
 
 // free a partitioning with related resources
-void laik_free_partitioning(Laik_Partitioning* p)
+void laik_free_accessphase(Laik_AccessPhase* p)
 {
     // FIXME: needs some kind of reference counting
     return;
@@ -1154,7 +1154,7 @@ void laik_free_partitioning(Laik_Partitioning* p)
 }
 
 // get number of slices of this task
-int laik_my_slicecount(Laik_Partitioning* p)
+int laik_phase_my_slicecount(Laik_AccessPhase* p)
 {
     if (!p->bordersValid)
         laik_calc_partitioning(p);
@@ -1166,7 +1166,7 @@ int laik_my_slicecount(Laik_Partitioning* p)
 }
 
 // get number of mappings of this task
-int laik_my_mapcount(Laik_Partitioning* p)
+int laik_phase_my_mapcount(Laik_AccessPhase* p)
 {
     if (!p->bordersValid)
         laik_calc_partitioning(p);
@@ -1181,7 +1181,7 @@ int laik_my_mapcount(Laik_Partitioning* p)
     return p->borders->tslice[p->borders->off[myid+1] - 1].mapNo + 1;
 }
 
-int laik_mymap_slicecount(Laik_Partitioning* p, int mapNo)
+int laik_phase_my_mapslicecount(Laik_AccessPhase* p, int mapNo)
 {
     if (!p->bordersValid)
         laik_calc_partitioning(p);
@@ -1225,7 +1225,7 @@ Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice* ts)
 }
 
 // get slice number <n> from the slices of this task
-Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
+Laik_TaskSlice* laik_phase_my_slice(Laik_AccessPhase* p, int n)
 {
     if (!p->bordersValid)
         laik_calc_partitioning(p);
@@ -1241,7 +1241,7 @@ Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
     return (Laik_TaskSlice*) &(p->borders->tslice[o]);
 }
 
-Laik_TaskSlice* laik_mymap_slice(Laik_Partitioning* p, int mapNo, int n)
+Laik_TaskSlice* laik_phase_my_mapslice(Laik_AccessPhase* p, int mapNo, int n)
 {
     if (!p->bordersValid)
         laik_calc_partitioning(p);
@@ -1267,11 +1267,11 @@ Laik_TaskSlice* laik_mymap_slice(Laik_Partitioning* p, int mapNo, int n)
     return (Laik_TaskSlice*) &(ba->tslice[o]);
 }
 
-Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
+Laik_TaskSlice* laik_phase_myslice_1d(Laik_AccessPhase* p, int n,
                                  int64_t* from, int64_t* to)
 {
     assert(p->space->dims == 1);
-    Laik_TaskSlice* ts = laik_my_slice(p, n);
+    Laik_TaskSlice* ts = laik_phase_my_slice(p, n);
     if (ts == 0) {
         if (from) *from = 0;
         if (to) *to = 0;
@@ -1298,12 +1298,12 @@ Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
     return ts;
 }
 
-Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
+Laik_TaskSlice* laik_phase_myslice_2d(Laik_AccessPhase* p, int n,
                                  int64_t* x1, int64_t* x2,
                                  int64_t* y1, int64_t* y2)
 {
     assert(p->space->dims == 2);
-    Laik_TaskSlice* ts = laik_my_slice(p, n);
+    Laik_TaskSlice* ts = laik_phase_my_slice(p, n);
     assert((ts == 0) || (ts->type == TS_Generic));
     Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
     if (x1) *x1 = ts ? tsg->s.from.i[0] : 0;
@@ -1314,13 +1314,13 @@ Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
     return ts;
 }
 
-Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
+Laik_TaskSlice* laik_phase_myslice_3d(Laik_AccessPhase* p, int n,
                                  int64_t* x1, int64_t* x2,
                                  int64_t* y1, int64_t* y2,
                                  int64_t* z1, int64_t* z2)
 {
     assert(p->space->dims == 3);
-    Laik_TaskSlice* ts = laik_my_slice(p, n);
+    Laik_TaskSlice* ts = laik_phase_my_slice(p, n);
     assert((ts == 0) || (ts->type == TS_Generic));
     Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
     if (x1) *x1 = ts ? tsg->s.from.i[0] : 0;
@@ -1352,7 +1352,7 @@ void laik_set_slice_data(Laik_TaskSlice* ts, void* data)
 
 
 // give a partitioning a name, for debug output
-void laik_set_partitioning_name(Laik_Partitioning* p, char* n)
+void laik_set_accessphase_name(Laik_AccessPhase* p, char* n)
 {
     p->name = strdup(n);
 }
@@ -1417,7 +1417,7 @@ Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
 
 
 // set new partitioning borders
-void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
+void laik_set_borders(Laik_AccessPhase* p, Laik_BorderArray* ba)
 {
     assert(p->group == ba->group);
     assert(p->space == ba->space);
@@ -1436,7 +1436,7 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
 
     // visit all users of this partitioning:
     // first, all partitionings coupled to this as base
-    Laik_Partitioning* pdep = p->firstPartitioningForBase;
+    Laik_AccessPhase* pdep = p->firstPartitioningForBase;
     while(pdep) {
         assert(pdep->base == p);
         assert(pdep->partitioner);
@@ -1461,7 +1461,7 @@ void laik_set_borders(Laik_Partitioning* p, Laik_BorderArray* ba)
 }
 
 // return currently set borders in partitioning
-Laik_BorderArray* laik_get_borders(Laik_Partitioning* p)
+Laik_BorderArray* laik_get_borders(Laik_AccessPhase* p)
 {
     if (p->bordersValid) {
         assert(p->borders);
@@ -1471,7 +1471,7 @@ Laik_BorderArray* laik_get_borders(Laik_Partitioning* p)
 }
 
 // calculate partition borders, overwriting old
-void laik_calc_partitioning(Laik_Partitioning* p)
+Laik_BorderArray* laik_calc_partitioning(Laik_AccessPhase* p)
 {
     Laik_BorderArray* ba;
 
@@ -1485,6 +1485,8 @@ void laik_calc_partitioning(Laik_Partitioning* p)
                               p->base ? p->base->borders : 0);
 
     laik_set_borders(p, ba);
+
+    return ba;
 }
 
 
@@ -1504,7 +1506,7 @@ bool laik_index_global2local(Laik_BorderArray* ba,
 
 // append a partitioning to a partioning group whose consistency should
 // be enforced at the same point in time
-void laik_append_partitioning(Laik_PartGroup* g, Laik_Partitioning* p)
+void laik_append_partitioning(Laik_PartGroup* g, Laik_AccessPhase* p)
 {
     (void) g; /* FIXME: Why have this parameter if it's never used */
     (void) p; /* FIXME: Why have this parameter if it's never used */
@@ -2434,7 +2436,7 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg)
 
 // migrate a partitioning defined on one task group to another group
 // (no repartitioning: only works if partitions of removed tasks are empty)
-bool laik_migrate_partitioning(Laik_Partitioning* p,
+bool laik_migrate_partitioning(Laik_AccessPhase* p,
                                Laik_Group* newg)
 {
     Laik_Group* oldg = p->group;
@@ -2465,7 +2467,7 @@ bool laik_migrate_partitioning(Laik_Partitioning* p,
 // or the given one. In the latter case, the partitioner is run
 // on old group and is expected to produce no partitions for tasks
 // to be removed
-void laik_migrate_and_repartition(Laik_Partitioning* p, Laik_Group* newg,
+void laik_migrate_and_repartition(Laik_AccessPhase* p, Laik_Group* newg,
                                   Laik_Partitioner* pr)
 {
     if (!p) return;

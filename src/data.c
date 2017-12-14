@@ -685,7 +685,7 @@ Laik_Instance* laik_get_dinst(Laik_Data* d)
 }
 
 // get active partitioning of data container
-Laik_Partitioning* laik_get_active(Laik_Data* d)
+Laik_AccessPhase* laik_get_active(Laik_Data* d)
 {
     return d->activePartitioning;
 }
@@ -1135,10 +1135,10 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
         freeMaps(fromList, d->stat);
 }
 
-void laik_reserve(Laik_Data* d, Laik_Partitioning* p)
+void laik_reserve(Laik_Data* d, Laik_BorderArray* ba)
 {
     (void) d;
-    (void) p;
+    (void) ba;
 
     // TODO
 }
@@ -1148,7 +1148,7 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
 {
     // calculate actions to be done for switching
     Laik_BorderArray *fromBA = 0;
-    Laik_Partitioning* part = d->activePartitioning;
+    Laik_AccessPhase* part = d->activePartitioning;
     if (part) {
         // active partitioning must have borders set
         assert(part->bordersValid);
@@ -1199,7 +1199,7 @@ void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
 
 // switch from active to another partitioning
 void laik_switchto(Laik_Data* d,
-                   Laik_Partitioning* toP, Laik_DataFlow toFlow)
+                   Laik_AccessPhase* toP, Laik_DataFlow toFlow)
 {
     if (d->space->inst->profiling->do_profiling)
         d->space->inst->profiling->timer_total = laik_wtime();
@@ -1210,7 +1210,7 @@ void laik_switchto(Laik_Data* d,
 
     // calculate actions to be done for switching
     Laik_BorderArray *fromBA = 0, *toBA = 0;
-    Laik_Partitioning* fromP = d->activePartitioning;
+    Laik_AccessPhase* fromP = d->activePartitioning;
     if (fromP) {
         // active partitioning must have borders set
         assert(fromP->bordersValid);
@@ -1252,7 +1252,7 @@ void laik_switchto(Laik_Data* d,
 
     if (d->activePartitioning) {
         laik_removeDataFromPartitioning(d->activePartitioning, d);
-        laik_free_partitioning(d->activePartitioning);
+        laik_free_accessphase(d->activePartitioning);
     }
 
     // set new mapping/partitioning active
@@ -1282,15 +1282,15 @@ void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow)
 Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n)
 {
     if (d->activePartitioning == 0) return 0;
-    return laik_my_slice(d->activePartitioning, n);
+    return laik_phase_my_slice(d->activePartitioning, n);
 }
 
-Laik_Partitioning* laik_switchto_new(Laik_Data* d,
+Laik_AccessPhase* laik_switchto_new(Laik_Data* d,
                                      Laik_Partitioner* pr,
                                      Laik_DataFlow flow)
 {
-    Laik_Partitioning* p;
-    p = laik_new_partitioning(d->group, d->space, pr, 0);
+    Laik_AccessPhase* p;
+    p = laik_new_accessphase(d->group, d->space, pr, 0);
 
     laik_log(1, "switch data '%s' to new partitioning '%s'",
              d->name, p->name);
@@ -1323,7 +1323,7 @@ void laik_fill_double(Laik_Data* d, double v)
 
     laik_map_def1(d, (void**) &base, &count);
     // TODO: partitioning can have multiple slices
-    assert(laik_my_slicecount(d->activePartitioning) == 1);
+    assert(laik_phase_my_slicecount(d->activePartitioning) == 1);
     for (i = 0; i < count; i++)
         base[i] = v;
 }
@@ -1649,7 +1649,7 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
     // we must be an active partitioning
     assert(d->activePartitioning);
 
-    Laik_Partitioning* p = d->activePartitioning;
+    Laik_AccessPhase* p = d->activePartitioning;
 
     if (!d->activeMappings) {
         // lazy allocation
@@ -1685,7 +1685,7 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
 {
     Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
     Laik_Mapping* m = laik_map(d, 0, l);
-    int n = laik_my_mapcount(d->activePartitioning);
+    int n = laik_phase_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Panic, "Request for one continuous mapping, "
                                 "but partition with %d slices!\n", n);
@@ -1706,7 +1706,7 @@ Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
         return 0;
     }
 
-    int n = laik_my_mapcount(d->activePartitioning);
+    int n = laik_phase_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
                                 "but partition with %d slices!", n);
@@ -1736,7 +1736,7 @@ Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
         return 0;
     }
 
-    int n = laik_my_mapcount(d->activePartitioning);
+    int n = laik_phase_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
                                 "but partition with %d slices!", n);

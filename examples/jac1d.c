@@ -82,12 +82,12 @@ int main(int argc, char* argv[])
     // - pRead : extends pWrite partitions to allow reading neighbor values
     // partitionings are assigned to either data1/data2, exchanged after
     // every iteration
-    Laik_Partitioning *pWrite, *pRead;
-    pWrite = laik_new_partitioning(world, space,
+    Laik_AccessPhase *pWrite, *pRead;
+    pWrite = laik_new_accessphase(world, space,
                                   laik_new_block_partitioner1(), 0);
     // this extends pWrite partitions at borders by 1 index on inner borders
     // (the coupling is dynamic: any change in pWrite changes pRead)
-    pRead = laik_new_partitioning(world, space,
+    pRead = laik_new_accessphase(world, space,
                                   laik_new_cornerhalo_partitioner(1), pWrite);
 
     // for global sum, used for residuum and value sum at end

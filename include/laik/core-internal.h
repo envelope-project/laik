@@ -45,12 +45,12 @@ struct _Laik_Group {
     int* toParent;   // mapping local task IDs to parent task IDs
     int* fromParent; // mapping parent task IDs to local task IDs
 
-    Laik_Partitioning* firstPartitioningForGroup; // linked list head
+    Laik_AccessPhase* firstPartitioningForGroup; // linked list head
 };
 
 // add/remove partitioning to/from group
-void laik_addPartitioningForGroup(Laik_Group* g, Laik_Partitioning* p);
-void laik_removePartitioningFromGroup(Laik_Group* g, Laik_Partitioning* p);
+void laik_addPartitioningForGroup(Laik_Group* g, Laik_AccessPhase* p);
+void laik_removePartitioningFromGroup(Laik_Group* g, Laik_AccessPhase* p);
 
 struct _Laik_Instance {
     int size;

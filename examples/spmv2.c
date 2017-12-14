@@ -228,12 +228,12 @@ int main(int argc, char* argv[])
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner(0, 1, getEW, 0, m);
     laik_set_index_weight(pr, getEW, m);
-    Laik_Partitioning* p = laik_new_partitioning(world, s, pr, 0);
+    Laik_AccessPhase* p = laik_new_accessphase(world, s, pr, 0);
     // nothing to preserve between iterations (assume at least one iter)
     laik_switchto(resD, p, LAIK_DF_None);
 
     // partitionings for all task taking part in calculation
-    Laik_Partitioning* allVec = laik_new_partitioning(world, s, laik_All, 0);
+    Laik_AccessPhase* allVec = laik_new_accessphase(world, s, laik_All, 0);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i;
@@ -270,7 +270,7 @@ int main(int argc, char* argv[])
 
         // loop over all local slices
         for(int sNo = 0; ; sNo++) {
-            if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
+            if (!laik_phase_myslice_1d(p, sNo, &fromRow, &toRow)) break;
 
             // my partition slice of result vector (local indexing, from 0)
             laik_map_def(resD, sNo, (void**) &res, &rcount);
@@ -319,7 +319,7 @@ int main(int argc, char* argv[])
 
             // loop over all local slices of result vector
             for(int sNo = 0; ; sNo++) {
-                if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
+                if (!laik_phase_myslice_1d(p, sNo, &fromRow, &toRow)) break;
 
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
                 for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
@@ -329,7 +329,7 @@ int main(int argc, char* argv[])
             // variant 2: broadcast written input values directly
             laik_switchto(inpD, p, LAIK_DF_CopyOut);
             // loop over all local slices of result and input vector
-            for(int sNo = 0; laik_my_slice(p, sNo) != 0; sNo++) {
+            for(int sNo = 0; laik_phase_my_slice(p, sNo) != 0; sNo++) {
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
                 laik_map_def(inpD, sNo, (void**) &inp, 0);
                 for(i = 0; i < rcount; i++) inp[i] = res[i] / sum;
@@ -338,7 +338,7 @@ int main(int argc, char* argv[])
 
         // test task shrinking
         // remove task <removeTask> from all used partitionings
-        Laik_Group* g = laik_get_pgroup(p);
+        Laik_Group* g = laik_get_apgroup(p);
         if ((iter == nextshrink) &&
             (laik_size(g) > 1) && (laik_size(g) >= removeTask)) {
             int removeList[1] = {removeTask};

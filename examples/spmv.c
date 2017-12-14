@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
     // block partitioning according to elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner1();
     laik_set_index_weight(pr, getEW, m);
-    Laik_Partitioning* p = laik_new_partitioning(world, s, pr, 0);
+    Laik_AccessPhase* p = laik_new_accessphase(world, s, pr, 0);
     laik_switchto(resD, p, LAIK_DF_CopyOut);
 
     double* res;
@@ -113,7 +113,7 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < count; i++)
         res[i] = 0.0;
     // SPMV on my part of matrix rows
-    laik_my_slice_1d(p, 0, &fromRow, &toRow);
+    laik_phase_myslice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
             res[r - fromRow] += m->val[o] * v[m->col[o]];
@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
     laik_switchto_new(resD, laik_All,
                       LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_map_def1(resD, (void**) &res, &count);
-    laik_my_slice_1d(p, 0, &fromRow, &toRow);
+    laik_phase_myslice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
             res[r] += m->val[o] * v[m->col[o]];

@@ -66,11 +66,11 @@ int main(int argc, char* argv[])
     Laik_Space* element_space = laik_new_space_1d(inst, size_elems);
     Laik_Data* element = laik_new_data(world, element_space, laik_Double);
 
-    Laik_Partitioning *pNodes, *pElements;
+    Laik_AccessPhase *pNodes, *pElements;
 
-    pElements = laik_new_partitioning(world, element_space,
+    pElements = laik_new_accessphase(world, element_space,
                                    laik_new_block_partitioner1(), 0);
-    pNodes = laik_new_partitioning(world, node_space,
+    pNodes = laik_new_accessphase(world, node_space,
                                    laik_new_lulesh_partitioner_1d(), pElements);
 
     double *base;
