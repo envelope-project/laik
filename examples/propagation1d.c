@@ -14,7 +14,7 @@
 #define SIZE 8
 
 void runLuleshPartitioner1d(Laik_Partitioner* pr,
-                            Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+                            Laik_Partitioning* ba, Laik_Partitioning* otherBA)
 {
     (void) pr; /* FIXME: Why have this parameter if it's never used */
 

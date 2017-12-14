@@ -109,7 +109,7 @@ typedef struct _Laik_PartGroup Laik_PartGroup;
 typedef struct _Laik_TaskSlice Laik_TaskSlice;
 
 // calculated partitioning borders, final result of a partitioner run
-typedef struct _Laik_BorderArray Laik_BorderArray;
+typedef struct _Laik_BorderArray Laik_Partitioning;
 
 // communication requirements when switching partitioning groups
 typedef struct _Laik_Transition Laik_Transition;
@@ -230,7 +230,7 @@ typedef enum _Laik_PartitionerFlag {
 // partitioner algorithms
 typedef void
 (*laik_run_partitioner_t)(Laik_Partitioner*,
-                          Laik_BorderArray*, Laik_BorderArray*);
+                          Laik_Partitioning*, Laik_Partitioning*);
 
 // create application-specific partitioner
 Laik_Partitioner* laik_new_partitioner(const char* name,
@@ -244,16 +244,16 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 // the <data> pointer is an arbitrary value which can be passed from
 //  application-specific partitioners to the code processing slices.
 //  LAIK provided partitioners set <data> to 0.
-Laik_TaskSlice* laik_append_slice(Laik_BorderArray* a, int task, Laik_Slice* s,
+Laik_TaskSlice* laik_append_slice(Laik_Partitioning* a, int task, Laik_Slice* s,
                                   int tag, void* data);
 // append 1d single-index slice
-Laik_TaskSlice* laik_append_index_1d(Laik_BorderArray* a,
+Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* a,
                                      int task, int64_t idx);
 
-Laik_Space* laik_borderarray_getspace(Laik_BorderArray* ba);
-Laik_Group* laik_borderarray_getgroup(Laik_BorderArray* ba);
-int laik_borderarray_getcount(Laik_BorderArray* ba);
-Laik_TaskSlice* laik_borderarray_get_tslice(Laik_BorderArray* ba, int n);
+Laik_Space* laik_borderarray_getspace(Laik_Partitioning* ba);
+Laik_Group* laik_borderarray_getgroup(Laik_Partitioning* ba);
+int laik_borderarray_getcount(Laik_Partitioning* ba);
+Laik_TaskSlice* laik_borderarray_get_tslice(Laik_Partitioning* ba, int n);
 const Laik_Slice* laik_taskslice_getslice(Laik_TaskSlice* ts);
 int laik_taskslice_gettask(Laik_TaskSlice* ts);
 
@@ -408,21 +408,21 @@ void laik_set_accessphase_name(Laik_AccessPhase* p, char* n);
 
 // run a partitioner, returning newly calculated borders
 // the partitioner may use old borders from <oldBA>
-Laik_BorderArray* laik_run_partitioner(Laik_Partitioner* pr,
+Laik_Partitioning* laik_run_partitioner(Laik_Partitioner* pr,
                                        Laik_Group* g, Laik_Space* space,
-                                       Laik_BorderArray* otherBA);
+                                       Laik_Partitioning* otherBA);
 
 // set new partitioning borders
-void laik_set_borders(Laik_AccessPhase* p, Laik_BorderArray* ba);
+void laik_set_borders(Laik_AccessPhase* p, Laik_Partitioning* ba);
 
 // return currently set borders in partitioning
-Laik_BorderArray* laik_get_borders(Laik_AccessPhase* p);
+Laik_Partitioning* laik_get_borders(Laik_AccessPhase* p);
 
 // calculate partition borders
-Laik_BorderArray* laik_calc_partitioning(Laik_AccessPhase* p);
+Laik_Partitioning* laik_calc_partitioning(Laik_AccessPhase* p);
 
 // get local index from global one. return false if not local
-bool laik_index_global2local(Laik_BorderArray*,
+bool laik_index_global2local(Laik_Partitioning*,
                              Laik_Index* global, Laik_Index* local);
 
 
@@ -434,8 +434,8 @@ void laik_append_partitioning(Laik_PartGroup* g, Laik_AccessPhase* p);
 // calculated borders of partitionings
 Laik_Transition*
 laik_calc_transition(Laik_Group* group, Laik_Space* space,
-                     Laik_BorderArray* fromBA, Laik_DataFlow fromFlow,
-                     Laik_BorderArray* toBA, Laik_DataFlow toFlow);
+                     Laik_Partitioning* fromBA, Laik_DataFlow fromFlow,
+                     Laik_Partitioning* toBA, Laik_DataFlow toFlow);
 
 // Calculate communication for transitioning between partitioning groups
 Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
@@ -452,7 +452,7 @@ void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
 // migrate borders to new group without changing borders
 // - added tasks get empty partitions
 // - removed tasks must have empty partitiongs
-void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg);
+void laik_migrate_borders(Laik_Partitioning* ba, Laik_Group* newg);
 
 // migrate a partitioning defined on one task group to another group
 // if borders are set, this only is successful if partitions of

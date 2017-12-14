@@ -692,7 +692,7 @@ Laik_AccessPhase* laik_get_active(Laik_Data* d)
 
 
 static
-Laik_MappingList* prepareMaps(Laik_Data* d, Laik_BorderArray* ba,
+Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* ba,
                               Laik_Layout* l)
 {
     if (!ba) return 0; // without borders, no mappings
@@ -1135,7 +1135,7 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
         freeMaps(fromList, d->stat);
 }
 
-void laik_reserve(Laik_Data* d, Laik_BorderArray* ba)
+void laik_reserve(Laik_Data* d, Laik_Partitioning* ba)
 {
     (void) d;
     (void) ba;
@@ -1144,10 +1144,10 @@ void laik_reserve(Laik_Data* d, Laik_BorderArray* ba)
 }
 
 // switch to new borders (new flow is derived from previous flow)
-void laik_switchto_borders(Laik_Data* d, Laik_BorderArray* toBA)
+void laik_switchto_borders(Laik_Data* d, Laik_Partitioning* toBA)
 {
     // calculate actions to be done for switching
-    Laik_BorderArray *fromBA = 0;
+    Laik_Partitioning *fromBA = 0;
     Laik_AccessPhase* part = d->activeAccessPhase;
     if (part) {
         // active partitioning must have borders set
@@ -1209,7 +1209,7 @@ void laik_switchto(Laik_Data* d,
         laik_calc_partitioning(toP);
 
     // calculate actions to be done for switching
-    Laik_BorderArray *fromBA = 0, *toBA = 0;
+    Laik_Partitioning *fromBA = 0, *toBA = 0;
     Laik_AccessPhase* fromP = d->activeAccessPhase;
     if (fromP) {
         // active partitioning must have borders set

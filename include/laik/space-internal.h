@@ -110,9 +110,9 @@ struct _Laik_BorderArray {
     Laik_TaskSlice_Single1d* tss1d;
 };
 
-Laik_BorderArray* laik_allocBorders(Laik_Group* g, Laik_Space* s, bool useSingle1d);
-void laik_clearBorderArray(Laik_BorderArray* a);
-void laik_freeBorderArray(Laik_BorderArray* a);
+Laik_Partitioning* laik_allocBorders(Laik_Group* g, Laik_Space* s, bool useSingle1d);
+void laik_clearBorderArray(Laik_Partitioning* a);
+void laik_freeBorderArray(Laik_Partitioning* a);
 
 
 //
@@ -131,7 +131,7 @@ struct _Laik_AccessPhase {
 
     // partitioning borders currently used (calculated lazy)
     bool bordersValid;
-    Laik_BorderArray* borders;
+    Laik_Partitioning* borders;
 
     // head of list of data containers with this access phase active
     Laik_Data* firstDataForAccessPhase;

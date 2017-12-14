@@ -166,12 +166,12 @@ int main(int argc, char* argv[])
     // reserve memory: data1/2 will both be switched to pWrite and pRead
     // run partitioners to get actual partitioning for reservation
     // order is important, as calculating baRead needs baWrite
-    Laik_BorderArray* baWrite = laik_calc_partitioning(pWrite);
-    Laik_BorderArray* baRead  = laik_calc_partitioning(pRead);
-    laik_reserve(data1, baRead);
-    laik_reserve(data1, baWrite);
-    laik_reserve(data2, baRead);
-    laik_reserve(data2, baWrite);
+    Laik_Partitioning* paWrite = laik_calc_partitioning(pWrite);
+    Laik_Partitioning* paRead  = laik_calc_partitioning(pRead);
+    laik_reserve(data1, paRead);
+    laik_reserve(data1, paWrite);
+    laik_reserve(data2, paRead);
+    laik_reserve(data2, paWrite);
 
     // for global sum, used for residuum
     Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);

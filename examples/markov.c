@@ -96,7 +96,7 @@ void print(MGraph* mg)
 
 
 void run_markovPartitioner(Laik_Partitioner* pr,
-                           Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+                           Laik_Partitioning* ba, Laik_Partitioning* otherBA)
 {
     MGraph* mg = laik_partitioner_data(pr);
     int in = mg->in;

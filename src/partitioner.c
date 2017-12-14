@@ -50,7 +50,7 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 // all-partitioner: all tasks have access to all indexes
 
 void runAllPartitioner(Laik_Partitioner* pr,
-                       Laik_BorderArray* ba, Laik_BorderArray* oldBA)
+                       Laik_Partitioning* ba, Laik_Partitioning* oldBA)
 {
     (void) pr;    /* FIXME: Why have this parameter if it's never used */
     (void) oldBA; /* FIXME: Why have this parameter if it's never used */
@@ -71,7 +71,7 @@ Laik_Partitioner* laik_new_all_partitioner()
 // master-partitioner: only task 0 has access to all indexes
 
 void runMasterPartitioner(Laik_Partitioner* pr,
-                          Laik_BorderArray* ba, Laik_BorderArray* oldBA)
+                          Laik_Partitioning* ba, Laik_Partitioning* oldBA)
 {
     (void) pr;    /* FIXME: Why have this parameter if it's never used */
     (void) oldBA; /* FIXME: Why have this parameter if it's never used */
@@ -97,7 +97,7 @@ struct _Laik_CopyPartitionerData {
 };
 
 void runCopyPartitioner(Laik_Partitioner* pr,
-                        Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+                        Laik_Partitioning* ba, Laik_Partitioning* otherBA)
 {
     Laik_CopyPartitionerData* data = (Laik_CopyPartitionerData*) pr->data;
     assert(data);
@@ -137,7 +137,7 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
 // corner-halo partitioner: extend borders of other partitioning
 //  including corners - e.g. for 9-point 2d stencil
 void runCornerHaloPartitioner(Laik_Partitioner* pr,
-                              Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+                              Laik_Partitioning* ba, Laik_Partitioning* otherBA)
 {
     assert(otherBA->group == ba->group); // must use same task group
     assert(otherBA->space == ba->space);
@@ -189,7 +189,7 @@ Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth)
 // this creates multiple slices for each original slice, and uses tags
 // to mark the halos of a slice to go into same mapping
 void runHaloPartitioner(Laik_Partitioner* pr,
-                        Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+                        Laik_Partitioning* ba, Laik_Partitioning* otherBA)
 {
     assert(otherBA->group == ba->group); // must use same task group
     assert(otherBA->space == ba->space);
@@ -265,7 +265,7 @@ Laik_Partitioner* laik_new_halo_partitioner(int depth)
 // bisection partitioner
 
 // recursive helper: distribute slice <s> to tasks in range [fromTask;toTask[
-static void doBisection(Laik_BorderArray* ba,
+static void doBisection(Laik_Partitioning* ba,
                         Laik_Slice* s, int fromTask, int toTask)
 {
     assert(toTask > fromTask);
@@ -309,7 +309,7 @@ static void doBisection(Laik_BorderArray* ba,
 }
 
 void runBisectionPartitioner(Laik_Partitioner* pr,
-                             Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+                             Laik_Partitioning* ba, Laik_Partitioning* otherBA)
 {
     (void) pr;      /* FIXME: Why have this parameter if it's never used */
     (void) otherBA; /* FIXME: Why have this parameter if it's never used */
@@ -347,7 +347,7 @@ struct _Laik_BlockPartitionerData {
 };
 
 void runBlockPartitioner(Laik_Partitioner* pr,
-                         Laik_BorderArray* ba, Laik_BorderArray* oldBA)
+                         Laik_Partitioning* ba, Laik_Partitioning* oldBA)
 {
     (void) oldBA; /* FIXME: Why have this parameter if it's never used */
 
@@ -530,7 +530,7 @@ typedef struct {
 
 
 void runReassignPartitioner(Laik_Partitioner* pr,
-                            Laik_BorderArray* ba, Laik_BorderArray* oldBA)
+                            Laik_Partitioning* ba, Laik_Partitioning* oldBA)
 {
     ReassignData* data = (ReassignData*) pr->data;
     Laik_Group* newg = data->newg;

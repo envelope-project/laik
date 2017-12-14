@@ -40,7 +40,7 @@ void calculate_my_coordinate(int numRanks, int rank, int* rx, int* ry){
 
 //partitioner handler for the elements
 void runLuleshElementPartitioner(Laik_Partitioner* pr,
-                                 Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+                                 Laik_Partitioning* ba, Laik_Partitioning* otherBA)
 {
     (void) otherBA; // required due to interface signature
 
@@ -78,7 +78,7 @@ Laik_Partitioner* laik_new_lulesh_element_partitioner(int *size)
 
 //partitioner handler for the nodes
 void runLuleshNodePartitioner(Laik_Partitioner* pr,
-                                Laik_BorderArray* ba, Laik_BorderArray* otherBA)
+                                Laik_Partitioning* ba, Laik_Partitioning* otherBA)
 {
     Laik_Space* space = laik_borderarray_getspace(ba);
     Laik_Space* otherSpace = laik_borderarray_getspace(otherBA);

@@ -225,7 +225,7 @@ void laik_log_Transition(Laik_Transition* t)
     }
 }
 
-void laik_log_BorderArray(Laik_BorderArray* ba)
+void laik_log_BorderArray(Laik_Partitioning* ba)
 {
     if (!ba) {
         laik_log_append("(no borders)");

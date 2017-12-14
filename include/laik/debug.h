@@ -37,7 +37,7 @@ void laik_log_Slice(int dims, Laik_Slice* slc);
 void laik_log_Reduction(Laik_ReductionOperation op);
 void laik_log_DataFlow(Laik_DataFlow flow);
 void laik_log_Transition(Laik_Transition* t);
-void laik_log_BorderArray(Laik_BorderArray* ba);
+void laik_log_BorderArray(Laik_Partitioning* ba);
 void laik_log_SwitchStat(Laik_SwitchStat* ss);
 
 #endif // _LAIK_DEBUG_H_
