@@ -42,13 +42,13 @@ struct _Laik_Space {
     Laik_Instance* inst;
     Laik_Space* nextSpaceForInstance; // for list of spaces used in instance
 
-    // linked list of partitionings for this space
-    Laik_AccessPhase* firstPartitioningForSpace;
+    // linked list of access phases for this space
+    Laik_AccessPhase* firstAccessPhaseForSpace;
 };
 
-// add/remove partitioning to/from space
-void laik_addPartitioningForSpace(Laik_Space* s, Laik_AccessPhase* p);
-void laik_removePartitioningFromSpace(Laik_Space* s, Laik_AccessPhase* p);
+// add/remove access phase to/from space
+void laik_addAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p);
+void laik_removeAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p);
 
 struct _Laik_Partitioner {
     const char* name;
@@ -116,10 +116,10 @@ void laik_freeBorderArray(Laik_BorderArray* a);
 
 
 //
-// Laik_Partitioning
+// Laik_AccessPhase
 //
 
-struct _Laik_Partitioning {
+struct _Laik_AccessPhase {
     char* name; // for debugging
     int id;     // for debugging
 
@@ -129,33 +129,33 @@ struct _Laik_Partitioning {
     Laik_Partitioner* partitioner;
     Laik_AccessPhase* base;
 
-    // partition borders (calculated lazy)
+    // partitioning borders currently used (calculated lazy)
     bool bordersValid;
     Laik_BorderArray* borders;
 
-    // head of list of data containers with this paritioning active
-    Laik_Data* firstDataForPartitioning;
-    // head of list of partitionings using this one as base
-    Laik_AccessPhase* firstPartitioningForBase;
+    // head of list of data containers with this access phase active
+    Laik_Data* firstDataForAccessPhase;
+    // head of list of access phases using this one as base
+    Laik_AccessPhase* firstAccessPhaseForBase;
 
-     // for list of partitionings using same space
-    Laik_AccessPhase* nextPartitioningForSpace;
-    // for list of partitionings using same group
-    Laik_AccessPhase* nextPartitioningForGroup;
-    // for list of partitionings using this one as base
-    Laik_AccessPhase* nextPartitioningForBase;
+     // for list of access phases using same space
+    Laik_AccessPhase* nextAccessPhaseForSpace;
+    // for list of access phases using same group
+    Laik_AccessPhase* nextAccessPhaseForGroup;
+    // for list of access phases using this one as base
+    Laik_AccessPhase* nextAccessPhaseForBase;
 };
 
-// add/remove partitioning to/from list using a given partitioning as base
-void laik_addPartitioningForBase(Laik_AccessPhase* base,
-                                 Laik_AccessPhase* p);
-void laik_removePartitioningFromBase(Laik_AccessPhase* base,
-                                     Laik_AccessPhase* p);
+// add/remove access phase to/from list using a given access phase as base
+void laik_addAccessPhaseForBase(Laik_AccessPhase* base,
+                                Laik_AccessPhase* p);
+void laik_removeAccessPhaseForBase(Laik_AccessPhase* base,
+                                   Laik_AccessPhase* p);
 
 
-// add/remove data container as user to/from partitioning
-void laik_addDataForPartitioning(Laik_AccessPhase* p, Laik_Data* d);
-void laik_removeDataFromPartitioning(Laik_AccessPhase* p, Laik_Data* d);
+// add/remove data container as user to/from access phase
+void laik_addDataForAccessPhase(Laik_AccessPhase* p, Laik_Data* d);
+void laik_removeDataFromAccessPhase(Laik_AccessPhase* p, Laik_Data* d);
 
 
 //

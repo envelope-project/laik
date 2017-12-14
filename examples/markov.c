@@ -300,11 +300,11 @@ int main(int argc, char* argv[])
     Laik_Data* data1 = laik_new_data(world, space, laik_Double);
     Laik_Data* data2 = laik_new_data(world, space, laik_Double);
 
-    // partitionings:
+    // access phase types:
     // - pWrite: distributes the state values to update
     // - pRead : provides access to values of incoming states
     // - pMaster: all data at master, for checksum
-    // pWrite/pRead partitionings are assigned to either data1/data2,
+    // pWrite/pRead are assigned to either data1/data2,
     // exchanged after every iteration
     Laik_AccessPhase *pWrite, *pRead, *pMaster;
     Laik_Partitioner* pr;

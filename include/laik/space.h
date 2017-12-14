@@ -97,7 +97,7 @@ typedef struct _Laik_Task Laik_Task;
 typedef struct _Laik_Space Laik_Space;
 
 // a partitioning of an index space with same access behavior
-typedef struct _Laik_Partitioning Laik_AccessPhase;
+typedef struct _Laik_AccessPhase Laik_AccessPhase;
 
 // set of partitionings to make consistent at the same time
 typedef struct _Laik_PartGroup Laik_PartGroup;
@@ -455,7 +455,7 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg);
 // if borders are set, this only is successful if partitions of
 // tasks which are not in the new group are empty.
 // return true if migration was successful.
-bool laik_migrate_partitioning(Laik_AccessPhase* p, Laik_Group* newg);
+bool laik_migrate_phase(Laik_AccessPhase* p, Laik_Group* newg);
 
 // migrate a partitioning defined on one task group to another group
 // for the required repartitioning, use the default partitioner

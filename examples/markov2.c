@@ -349,11 +349,11 @@ int main(int argc, char* argv[])
     if (doProfiling)
         laik_enable_profiling_file(inst, "markov2_profiling.txt");
 
-    // partitionings:
+    // access phase types:
     // - pRead  : distributes the states owned by tasks, propagating from
     // - pWrite : provides access to out-going states to propagate values to
     // - pMaster: all data at master, for checksum
-    // pRead/pWrite partitionings are assigned to either data1/data2,
+    // pRead/pWrite are assigned to either data1/data2,
     // exchanged after every iteration
     Laik_AccessPhase *pRead, *pWrite, *pMaster;
     Laik_Partitioner* pr;

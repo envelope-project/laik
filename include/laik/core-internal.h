@@ -45,12 +45,12 @@ struct _Laik_Group {
     int* toParent;   // mapping local task IDs to parent task IDs
     int* fromParent; // mapping parent task IDs to local task IDs
 
-    Laik_AccessPhase* firstPartitioningForGroup; // linked list head
+    Laik_AccessPhase* firstAccessPhaseForGroup; // linked list head
 };
 
-// add/remove partitioning to/from group
-void laik_addPartitioningForGroup(Laik_Group* g, Laik_AccessPhase* p);
-void laik_removePartitioningFromGroup(Laik_Group* g, Laik_AccessPhase* p);
+// add/remove access phase to/from group
+void laik_addAcessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p);
+void laik_removeAccessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p);
 
 struct _Laik_Instance {
     int size;
@@ -118,7 +118,7 @@ typedef enum _Laik_KVType {
 
     // LAIK objects
     LAIK_KV_Space, LAIK_KV_Data,
-    LAIK_KV_Partitioning, LAIK_KV_ArrayBorders,
+    LAIK_KV_Partitioning, LAIK_KV_AccessPhase,
 
     // Custom
     LAIK_KV_CUSTOM = 100

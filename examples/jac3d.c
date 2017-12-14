@@ -149,10 +149,10 @@ int main(int argc, char* argv[])
     Laik_Data* data1 = laik_new_data(world, space, laik_Double);
     Laik_Data* data2 = laik_new_data(world, space, laik_Double);
 
-    // two partitionings:
+    // two types of access phases into data1 and data2:
     // - pWrite: distributes the cells to update
     // - pRead : extends pWrite partitions to allow reading neighbor values
-    // partitionings are assigned to either data1/data2, exchanged after
+    // data1/2 are alternativly accessed using pRead/pWrite, exchanged after
     // every iteration
     Laik_AccessPhase *pWrite, *pRead;
     pWrite = laik_new_accessphase(world, space,

@@ -187,7 +187,7 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     g->size = 0; // yet invalid
     g->backend_data = 0;
     g->parent = 0;
-    g->firstPartitioningForGroup = 0;
+    g->firstAccessPhaseForGroup = 0;
 
     // space after struct
     g->toParent   = (int*) (((char*)g) + sizeof(Laik_Group));
@@ -197,27 +197,27 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     return g;
 }
 
-void laik_addPartitioningForGroup(Laik_Group* g, Laik_AccessPhase* p)
+void laik_addAcessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p)
 {
-    assert(p->nextPartitioningForGroup == 0);
-    p->nextPartitioningForGroup = g->firstPartitioningForGroup;
-    g->firstPartitioningForGroup = p;
+    assert(p->nextAccessPhaseForGroup == 0);
+    p->nextAccessPhaseForGroup = g->firstAccessPhaseForGroup;
+    g->firstAccessPhaseForGroup = p;
 }
 
-void laik_removePartitioningFromGroup(Laik_Group* g, Laik_AccessPhase* p)
+void laik_removeAccessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p)
 {
-    if (g->firstPartitioningForGroup == p) {
-        g->firstPartitioningForGroup = p->nextPartitioningForGroup;
+    if (g->firstAccessPhaseForGroup == p) {
+        g->firstAccessPhaseForGroup = p->nextAccessPhaseForGroup;
     }
     else {
         // search for previous item
-        Laik_AccessPhase* pp = g->firstPartitioningForGroup;
-        while(pp->nextPartitioningForGroup != p)
-            pp = pp->nextPartitioningForGroup;
+        Laik_AccessPhase* pp = g->firstAccessPhaseForGroup;
+        while(pp->nextAccessPhaseForGroup != p)
+            pp = pp->nextAccessPhaseForGroup;
         assert(pp != 0); // not found, should not happen
-        pp->nextPartitioningForGroup = p->nextPartitioningForGroup;
+        pp->nextAccessPhaseForGroup = p->nextAccessPhaseForGroup;
     }
-    p->nextPartitioningForGroup = 0;
+    p->nextAccessPhaseForGroup = 0;
 }
 
 Laik_Group* laik_world(Laik_Instance* i)
@@ -246,7 +246,7 @@ Laik_Group* laik_clone_group(Laik_Group* g)
         g2->fromParent[i] = i;
     }
 
-    assert(g2->firstPartitioningForGroup == 0); // still empty
+    assert(g2->firstAccessPhaseForGroup == 0); // still empty
 
     return g2;
 }

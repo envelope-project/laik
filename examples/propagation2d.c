@@ -290,8 +290,6 @@ int main(int argc, char* argv[])
         laik_new_lulesh_element_partitioner(&Nx), 0);
     pNodes = laik_new_accessphase(world, node_space,
         laik_new_lulesh_node_partitioner(neighbours), pElements);
-    //pNodesExclusive = laik_new_partitioning(world, node_space,
-    //    laik_new_lulesh_node_partitioner_exclusive(neighbours), pElements);
 
     double *baseN, *baseE;
     uint64_t countN, countE;

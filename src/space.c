@@ -247,7 +247,7 @@ Laik_Space* laik_new_space(Laik_Instance* inst)
 
     space->inst = inst;
     space->dims = 0; // invalid
-    space->firstPartitioningForSpace = 0;
+    space->firstAccessPhaseForSpace = 0;
     space->nextSpaceForInstance = 0;
 
     // append this space to list of spaces used by LAIK instance
@@ -347,27 +347,27 @@ void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1)
 
 
 
-void laik_addPartitioningForSpace(Laik_Space* s, Laik_AccessPhase* p)
+void laik_addAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p)
 {
-    assert(p->nextPartitioningForSpace == 0);
-    p->nextPartitioningForSpace = s->firstPartitioningForSpace;
-    s->firstPartitioningForSpace = p;
+    assert(p->nextAccessPhaseForSpace == 0);
+    p->nextAccessPhaseForSpace = s->firstAccessPhaseForSpace;
+    s->firstAccessPhaseForSpace = p;
 }
 
-void laik_removePartitioningFromSpace(Laik_Space* s, Laik_AccessPhase* p)
+void laik_removeAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p)
 {
-    if (s->firstPartitioningForSpace == p) {
-        s->firstPartitioningForSpace = p->nextPartitioningForSpace;
+    if (s->firstAccessPhaseForSpace == p) {
+        s->firstAccessPhaseForSpace = p->nextAccessPhaseForSpace;
     }
     else {
         // search for previous item
-        Laik_AccessPhase* pp = s->firstPartitioningForSpace;
-        while(pp->nextPartitioningForSpace != p)
-            pp = pp->nextPartitioningForSpace;
+        Laik_AccessPhase* pp = s->firstAccessPhaseForSpace;
+        while(pp->nextAccessPhaseForSpace != p)
+            pp = pp->nextAccessPhaseForSpace;
         assert(pp != 0); // not found, should not happen
-        pp->nextPartitioningForSpace = p->nextPartitioningForSpace;
+        pp->nextAccessPhaseForSpace = p->nextAccessPhaseForSpace;
     }
-    p->nextPartitioningForSpace = 0;
+    p->nextAccessPhaseForSpace = 0;
 }
 
 
@@ -1038,18 +1038,18 @@ laik_new_accessphase(Laik_Group* group, Laik_Space* space,
     p->bordersValid = false;
     p->borders = 0;
 
-    p->nextPartitioningForSpace = 0;
-    p->nextPartitioningForGroup = 0;
-    p->nextPartitioningForBase  = 0;
-    p->firstDataForPartitioning = 0;
-    p->firstPartitioningForBase = 0;
+    p->nextAccessPhaseForSpace = 0;
+    p->nextAccessPhaseForGroup = 0;
+    p->nextAccessPhaseForBase  = 0;
+    p->firstDataForAccessPhase = 0;
+    p->firstAccessPhaseForBase = 0;
 
-    laik_addPartitioningForSpace(space, p);
-    laik_addPartitioningForGroup(p->group, p);
+    laik_addAccessPhaseForSpace(space, p);
+    laik_addAcessPhaseForGroup(p->group, p);
 
     if (base) {
         assert(base->group == group);
-        laik_addPartitioningForBase(base, p);
+        laik_addAccessPhaseForBase(base, p);
     }
 
     if (laik_log_begin(1)) {
@@ -1066,53 +1066,53 @@ laik_new_accessphase(Laik_Group* group, Laik_Space* space,
     return p;
 }
 
-void laik_addPartitioningForBase(Laik_AccessPhase* base,
+void laik_addAccessPhaseForBase(Laik_AccessPhase* base,
                                  Laik_AccessPhase* p)
 {
-    assert(p->nextPartitioningForBase == 0);
-    p->nextPartitioningForBase = base->firstPartitioningForBase;
-    base->firstPartitioningForBase = p;
+    assert(p->nextAccessPhaseForBase == 0);
+    p->nextAccessPhaseForBase = base->firstAccessPhaseForBase;
+    base->firstAccessPhaseForBase = p;
 }
 
-void laik_removePartitioningFromBase(Laik_AccessPhase* base,
+void laik_removeAccessPhaseForBase(Laik_AccessPhase* base,
                                      Laik_AccessPhase* p)
 {
-    if (base->firstPartitioningForBase == p) {
-        base->firstPartitioningForBase = p->nextPartitioningForBase;
+    if (base->firstAccessPhaseForBase == p) {
+        base->firstAccessPhaseForBase = p->nextAccessPhaseForBase;
     }
     else {
         // search for previous item
-        Laik_AccessPhase* pp = base->firstPartitioningForBase;
-        while(pp->nextPartitioningForBase != p)
-            pp = pp->nextPartitioningForBase;
+        Laik_AccessPhase* pp = base->firstAccessPhaseForBase;
+        while(pp->nextAccessPhaseForBase != p)
+            pp = pp->nextAccessPhaseForBase;
         assert(pp != 0); // not found, should not happen
-        pp->nextPartitioningForBase = p->nextPartitioningForBase;
+        pp->nextAccessPhaseForBase = p->nextAccessPhaseForBase;
     }
-    p->nextPartitioningForBase = 0;
+    p->nextAccessPhaseForBase = 0;
 }
 
 
-void laik_addDataForPartitioning(Laik_AccessPhase* p, Laik_Data* d)
+void laik_addDataForAccessPhase(Laik_AccessPhase* p, Laik_Data* d)
 {
-    assert(d->nextPartitioningUser == 0);
-    d->nextPartitioningUser = p->firstDataForPartitioning;
-    p->firstDataForPartitioning = d;
+    assert(d->nextAccessPhaseUser == 0);
+    d->nextAccessPhaseUser = p->firstDataForAccessPhase;
+    p->firstDataForAccessPhase = d;
 }
 
-void laik_removeDataFromPartitioning(Laik_AccessPhase* p, Laik_Data* d)
+void laik_removeDataFromAccessPhase(Laik_AccessPhase* p, Laik_Data* d)
 {
-    if (p->firstDataForPartitioning == d) {
-        p->firstDataForPartitioning = d->nextPartitioningUser;
+    if (p->firstDataForAccessPhase == d) {
+        p->firstDataForAccessPhase = d->nextAccessPhaseUser;
     }
     else {
         // search for previous item
-        Laik_Data* dd = p->firstDataForPartitioning;
-        while(dd->nextPartitioningUser != d)
-            dd = dd->nextPartitioningUser;
+        Laik_Data* dd = p->firstDataForAccessPhase;
+        while(dd->nextAccessPhaseUser != d)
+            dd = dd->nextAccessPhaseUser;
         assert(dd != 0); // not found, should not happen
-        dd->nextPartitioningUser = d->nextPartitioningUser;
+        dd->nextAccessPhaseUser = d->nextAccessPhaseUser;
     }
-    d->nextPartitioningUser = 0;
+    d->nextAccessPhaseUser = 0;
 }
 
 
@@ -1143,11 +1143,11 @@ void laik_free_accessphase(Laik_AccessPhase* p)
 {
     // FIXME: needs some kind of reference counting
     return;
-    if (p->firstDataForPartitioning == 0) {
-        laik_removePartitioningFromGroup(p->group, p);
-        laik_removePartitioningFromSpace(p->space, p);
+    if (p->firstDataForAccessPhase == 0) {
+        laik_removeAccessPhaseForGroup(p->group, p);
+        laik_removeAccessPhaseForSpace(p->space, p);
         if (p->base)
-            laik_removePartitioningFromBase(p->base, p);
+            laik_removeAccessPhaseForBase(p->base, p);
         free(p->name);
         free(p->borders);
     }
@@ -1436,7 +1436,7 @@ void laik_set_borders(Laik_AccessPhase* p, Laik_BorderArray* ba)
 
     // visit all users of this partitioning:
     // first, all partitionings coupled to this as base
-    Laik_AccessPhase* pdep = p->firstPartitioningForBase;
+    Laik_AccessPhase* pdep = p->firstAccessPhaseForBase;
     while(pdep) {
         assert(pdep->base == p);
         assert(pdep->partitioner);
@@ -1445,13 +1445,13 @@ void laik_set_borders(Laik_AccessPhase* p, Laik_BorderArray* ba)
                                      pdep->group, pdep->space, ba);
 
         laik_set_borders(pdep, badep);
-        pdep = pdep->nextPartitioningForBase;
+        pdep = pdep->nextAccessPhaseForBase;
     }
     // second, all data containers using this partitioning
-    Laik_Data* d = p->firstDataForPartitioning;
+    Laik_Data* d = p->firstDataForAccessPhase;
     while(d) {
         laik_switchto_borders(d, ba);
-        d = d->nextPartitioningUser;
+        d = d->nextAccessPhaseUser;
     }
 
     if (p->borders)
@@ -2436,7 +2436,7 @@ void laik_migrate_borders(Laik_BorderArray* ba, Laik_Group* newg)
 
 // migrate a partitioning defined on one task group to another group
 // (no repartitioning: only works if partitions of removed tasks are empty)
-bool laik_migrate_partitioning(Laik_AccessPhase* p,
+bool laik_migrate_phase(Laik_AccessPhase* p,
                                Laik_Group* newg)
 {
     Laik_Group* oldg = p->group;
@@ -2447,16 +2447,16 @@ bool laik_migrate_partitioning(Laik_AccessPhase* p,
         laik_migrate_borders(p->borders, newg);
     }
 
-    laik_removePartitioningFromGroup(oldg, p);
-    laik_addPartitioningForGroup(newg, p);
+    laik_removeAccessPhaseForGroup(oldg, p);
+    laik_addAcessPhaseForGroup(newg, p);
     p->group = newg;
 
     // make partitioning users (data containers) migrate to new group
-    Laik_Data* d = p->firstDataForPartitioning;
+    Laik_Data* d = p->firstDataForAccessPhase;
     while(d) {
         assert(d->group == oldg);
         d->group = newg;
-        d = d->nextPartitioningUser;
+        d = d->nextAccessPhaseUser;
     }
 
     return true;
@@ -2482,7 +2482,7 @@ void laik_migrate_and_repartition(Laik_AccessPhase* p, Laik_Group* newg,
         laik_migrate_borders(ba, p->group);
     }
     laik_set_borders(p, ba);
-    bool res = laik_migrate_partitioning(p, newg);
+    bool res = laik_migrate_phase(p, newg);
     assert(res);
 }
 
