@@ -1,5 +1,5 @@
 TESTS= \
-    test-vsum test-vsum-log test-vsum2 \
+    test-vsum test-vsum-log test-vsum2 test-vsum3 \
     test-spmv test-spmv2 test-spmv2r \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d \
@@ -26,6 +26,10 @@ test-vsum-log:
 test-vsum2:
 	../examples/vsum2 > test-vsum2.out
 	cmp test-vsum2.out test-vsum.expected
+
+test-vsum3:
+	../examples/vsum > test-vsum3.out
+	cmp test-vsum3.out test-vsum.expected
 
 test-spmv:
 	../examples/spmv 4000 > test-spmv.out

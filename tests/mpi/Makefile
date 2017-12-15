@@ -1,7 +1,7 @@
 # often same tests as in tests/, but using 4 MPI tasks
 
 TESTS= \
-    test-vsum test-vsum2 \
+    test-vsum test-vsum2 test-vsum3 \
     test-spmv test-spmv2 test-spmv2r \
     test-spmv2-shrink test-spmv2-shrink-inc \
     test-jac1d test-jac1d-repart \
@@ -21,6 +21,10 @@ test-vsum:
 test-vsum2:
 	mpirun -np 4 ../../examples/vsum2 | sort > test-vsum2.out
 	cmp test-vsum2.out test-vsum2.expected
+
+test-vsum3:
+	mpirun -np 4 ../../examples/vsum3 | sort > test-vsum3.out
+	cmp test-vsum3.out test-vsum.expected
 
 test-spmv:
 	mpirun -np 4 ../../examples/spmv 4000 | sort > test-spmv.out

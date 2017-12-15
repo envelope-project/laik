@@ -12,6 +12,7 @@
 ../doc/tutorial-jacobi2d.md
 ../doc/design/Mapping.md
 
+../examples/vsum3.c
 ../src/backend.c
 ../src/backend-mpi.c
 ../src/backend-single.c
