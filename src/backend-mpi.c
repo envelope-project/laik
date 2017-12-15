@@ -33,7 +33,7 @@ void laik_mpi_finalize() {}
 #include <mpi.h>
 
 // print out values received/sent
-#define LOG_DOUBLE_VALUES 1
+//#define LOG_DOUBLE_VALUES 1
 
 // forward decls, types/structs , global variables
 
@@ -379,9 +379,16 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                             myIdx = i;
 
 #ifdef LOG_DOUBLE_VALUES
+                            assert(d->elemsize == 8);
                             for(uint64_t i = 0; i < elemCount; i++)
                                 laik_log(1, "    have at %d: %f", from + i,
                                          ((double*)fromBase)[i]);
+#endif
+#ifdef LOG_FLOAT_VALUES
+                            assert(d->elemsize == 4);
+                            for(uint64_t i = 0; i < elemCount; i++)
+                                laik_log(1, "    have at %d: %f", from + i,
+                                         (double) ((float*)fromBase)[i] );
 #endif
                             continue;
                         }
@@ -393,6 +400,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                         MPI_Recv(p, elemCount, mpiDataType,
                                  tg->task[i], 1, comm, &status);
 #ifdef LOG_DOUBLE_VALUES
+                        assert(d->elemsize == 8);
                         for(uint64_t i = 0; i < elemCount; i++)
                             laik_log(1, "    got at %d: %f", from + i,
                                      ((double*)p)[i]);
@@ -428,6 +436,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                     }
 
 #ifdef LOG_DOUBLE_VALUES
+                    assert(d->elemsize == 8);
                     for(uint64_t i = 0; i < elemCount; i++)
                         laik_log(1, "    sum at %d: %f", from + i,
                                  ((double*)toBase)[i]);
@@ -452,6 +461,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                         laik_log(1, "  MPI_Send to T%d", reduceTask);
 
 #ifdef LOG_DOUBLE_VALUES
+                        assert(d->elemsize == 8);
                         for(uint64_t i = 0; i < elemCount; i++)
                             laik_log(1, "    at %d: %f", from + i,
                                      ((double*)fromBase)[i]);
@@ -466,6 +476,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                         MPI_Recv(toBase, elemCount, mpiDataType,
                                  reduceTask, 1, comm, &status);
 #ifdef LOG_DOUBLE_VALUES
+                        assert(d->elemsize == 8);
                         for(uint64_t i = 0; i < elemCount; i++)
                             laik_log(1, "    at %d: %f", from + i,
                                      ((double*)toBase)[i]);
@@ -508,10 +519,12 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                 }
 
 #ifdef LOG_DOUBLE_VALUES
-                if (fromBase)
+                if (fromBase) {
+                    assert(d->elemsize == 8);
                     for(uint64_t i = 0; i < elemCount; i++)
                         laik_log(1, "    before at %d: %f", from + i,
                                  ((double*)fromBase)[i]);
+                }
 #endif
 
                 if (rootTask == -1) {
@@ -532,10 +545,12 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                 }
 
 #ifdef LOG_DOUBLE_VALUES
-                if (toBase)
+                if (toBase) {
+                    assert(d->elemsize == 8);
                     for(uint64_t i = 0; i < elemCount; i++)
                         laik_log(1, "    after at %d: %f", from + i,
                                  ((double*)toBase)[i]);
+                }
 #endif
 
             }
