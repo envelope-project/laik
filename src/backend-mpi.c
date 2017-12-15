@@ -346,7 +346,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
             MPI_Datatype mpiDataType = getMPIDataType(d);
 
             // all-groups never should be specified explicitly
-            if (op->outputGroup < 0)
+            if (op->outputGroup >= 0)
                 assert(t->group[op->outputGroup].count < d->group->size);
             if (op->inputGroup >= 0)
                 assert(t->group[op->inputGroup].count < d->group->size);
