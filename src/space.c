@@ -2195,8 +2195,10 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
                 else {
                     outputGroup = getTaskGroupSingle(task);
                     if (taskCount == 1) {
-                        assert(task == 0);
-                        outputGroup = -1; // with only 1 task: all-group
+                        // the process group only consists of 1 process:
+                        // one output process is equivalent to all
+                        assert(task == 0); // must have rank/id 0
+                        outputGroup = -1;
                     }
                     fromAllto1OrAll = true;
                 }
