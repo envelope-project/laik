@@ -205,6 +205,8 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 // - removed tasks must have empty partitiongs
 void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
 
+// how many mappings does the partitioning for this process ask for?
+int laik_my_mapcount(Laik_Partitioning* p);
 
 // Partitioner API:
 // applications can write their own partitioner algorithms

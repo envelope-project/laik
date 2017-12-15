@@ -1660,14 +1660,12 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
                  "(may crash now if returned address is dereferenced)",
                  d->name, d->group->gid);
     }
-    // we must be an active partitioning
-    assert(d->activeAccessPhase);
-
-    Laik_AccessPhase* p = d->activeAccessPhase;
+    // we must have an active partitioning
+    assert(d->activePartitioning);
 
     if (!d->activeMappings) {
         // lazy allocation
-        d->activeMappings = prepareMaps(d, p->partitioning, layout);
+        d->activeMappings = prepareMaps(d, d->activePartitioning, layout);
         if (d->activeMappings == 0)
             return 0;
     }
@@ -1699,7 +1697,7 @@ Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
 {
     Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
     Laik_Mapping* m = laik_map(d, 0, l);
-    int n = laik_phase_my_mapcount(d->activeAccessPhase);
+    int n = laik_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Panic, "Request for one continuous mapping, "
                                 "but partition with %d slices!\n", n);

@@ -787,7 +787,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
     return p;
 }
 
-// migrate borders to new group without changing borders
+// migrate partitioning borders to new group without changing borders
 // - added tasks get empty partitions
 // - removed tasks must have empty partitiongs
 void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
@@ -835,4 +835,17 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
     p->group = newg;
     sortSlices(p);
     updatePartitioningOffsets(p);
+}
+
+// get number of mappings of this task
+int laik_my_mapcount(Laik_Partitioning* p)
+{
+    int myid = p->group->myid;
+    if (myid < 0) return 0; // this process is not part of the process group
+    assert(myid < p->group->size);
+    int sCount = p->off[myid+1] - p->off[myid];
+    if (sCount == 0) return 0;
+
+    // map number of my last slice, incremented by one to get count
+    return p->tslice[p->off[myid+1] - 1].mapNo + 1;
 }

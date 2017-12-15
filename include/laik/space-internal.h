@@ -96,7 +96,7 @@ typedef struct _Laik_TaskSlice_Single1d {
 } Laik_TaskSlice_Single1d;
 
 struct _Laik_Partitioning {
-    Laik_Group* group; // task IDs used belong to this group
+    Laik_Group* group; // process group used in this partitioning
     Laik_Space* space; // slices cover this space
     int capacity;  // slices allocated
     int count;     // slices used
