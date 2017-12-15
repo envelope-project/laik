@@ -132,7 +132,7 @@ bool laik_do_copyout(Laik_DataFlow flow);
 bool laik_do_init(Laik_DataFlow flow);
 
 
-//
+//--------------------------------------------------------------------------
 // LAIK spaces, indexes, slices
 //
 
@@ -187,12 +187,28 @@ const Laik_Slice* laik_space_asslice(Laik_Space* space);
 // get the number of dimensions if this is a regular space
 int laik_space_getdimensions(Laik_Space* space);
 
-//
-// LAIK partitioners
+
+//--------------------------------------------------------------------------
+// LAIK partitionings and partitioner algorithms
 //
 
-// Flags for partitioners
+// create a new partitioning by running an offline partitioner algorithm.
+// the partitioner may be derived from another partitioning which is
+// forwarded to the partitioner algorithm
+Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
+                                         Laik_Group* g, Laik_Space* space,
+                                         Laik_Partitioning* otherP);
 
+// migrate partitioning to new group without changing borders
+// - added tasks get empty partitions
+// - removed tasks must have empty partitiongs
+void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
+
+
+// Partitioner API:
+// applications can write their own partitioner algorithms
+
+// Flags for partitioners, to be specified with "laik_new_partitioner()"
 typedef enum _Laik_PartitionerFlag {
     LAIK_PF_None = 0,
 
@@ -220,10 +236,9 @@ typedef enum _Laik_PartitionerFlag {
 
 } Laik_PartitionerFlag;
 
-
 // Signature for a partitioner algorithm
 //
-// we are given a new border object without any slices yet (2st par),
+// we are given a new partitioning object without any slices yet (2st par),
 // which has to be populated with slices (calling laik_append_slice).
 // The border object specifies the group and space to run the partitioner on.
 // If 3rd par is not null, it provides partitioning borders the generated
@@ -238,7 +253,7 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
                                        laik_run_partitioner_t run, void* d,
                                        Laik_PartitionerFlag flags);
 
-// to be used by implementations of partitioners
+// functions to be used in own implementation of a partitioner algorithm
 
 // the <tag> is a hint for the data layer: if >0, slices with same tag go
 //  into same mapping.
@@ -261,13 +276,22 @@ int laik_taskslice_get_task(Laik_TaskSlice* ts);
 // get a custom data pointer from the partitioner
 void* laik_partitioner_data(Laik_Partitioner* partitioner);
 
-// Partitioners provided by LAIK
+
+// check for assumptions an application may have about a partitioning
+bool laik_partitioning_isAll(Laik_Partitioning* p);
+int  laik_partitioning_isSingle(Laik_Partitioning* p);
+bool laik_partitioning_coversSpace(Laik_Partitioning* p);
+bool laik_partitioning_isEqual(Laik_Partitioning* p1, Laik_Partitioning* p2);
+
+
+
+// partitioners provided by LAIK
 
 // simple partitioners are available as singletons
 extern Laik_Partitioner *laik_Master;
 extern Laik_Partitioner *laik_All;
 
-// create a built-in partitioner
+// factory methods to create built-in simple partitioners
 Laik_Partitioner* laik_new_all_partitioner();
 Laik_Partitioner* laik_new_master_partitioner();
 Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim);
@@ -275,9 +299,7 @@ Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth);
 Laik_Partitioner* laik_new_halo_partitioner(int depth);
 Laik_Partitioner* laik_new_bisection_partitioner();
 
-
-// Block partitioner
-
+// block partitioner
 typedef double (*Laik_GetIdxWeight_t)(Laik_Index*, const void* userData);
 typedef double (*Laik_GetTaskWeight_t)(int rank, const void* userData);
 Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
@@ -319,7 +341,7 @@ laik_new_reassign_partitioner(Laik_Group* newg,
                               const void* userData);
 
 
-//
+//--------------------------------------------------------------------------
 // LAIK access phase
 //
 
@@ -408,11 +430,6 @@ Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice*);
 // give an access phase a name, for debug output
 void laik_set_accessphase_name(Laik_AccessPhase* ap, char* n);
 
-// run a partitioner, returning newly calculated borders
-// the partitioner may use old borders from <oldBA>
-Laik_Partitioning* laik_run_partitioner(Laik_Partitioner* pr,
-                                       Laik_Group* g, Laik_Space* space,
-                                       Laik_Partitioning* otherP);
 
 // set new partitioning borders
 void laik_phase_set_partitioning(Laik_AccessPhase* p, Laik_Partitioning* ba);
@@ -452,10 +469,6 @@ void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g);
 // one partition of calling task in outer space is mapped to inner space
 void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
 
-// migrate partitioning to new group without changing borders
-// - added tasks get empty partitions
-// - removed tasks must have empty partitiongs
-void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
 
 // migrate a access phase defined on one task group to another group
 // if partitioning is set, this only is successful if partitions of

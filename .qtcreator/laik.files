@@ -20,6 +20,7 @@
 ../src/debug.c
 ../src/external.c
 ../src/partitioner.c
+../src/partitioning.c
 ../src/profiling.c
 ../src/program.c
 ../src/space.c
