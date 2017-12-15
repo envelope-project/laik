@@ -129,7 +129,7 @@ int main(int argc, char* argv[])
     Laik_Data* dRead = data2;
 
     // distributed initialization
-    laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
+    laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
     laik_phase_myslice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
     // default mapping order for 2d:
     //   with y in [0;ysize], x in [0;xsize[
@@ -175,8 +175,8 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto(dRead,  pRead,  LAIK_DF_CopyIn);
-        laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
+        laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn);
+        laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
         laik_map_def1_2d(dRead,  (void**) &baseR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
 

@@ -176,7 +176,7 @@ uint64_t laik_slice_size(int dims, Laik_Slice* s)
 }
 
 // get the index slice covered by the space
-const Laik_Slice* laik_space_getslice(Laik_Space* space)
+const Laik_Slice* laik_space_asslice(Laik_Space* space)
 {
     return &(space->s);
 }
@@ -373,69 +373,69 @@ void laik_removeAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p)
 
 
 //-----------------------
-// Laik_BorderArray
+// Laik_Partitioning
 
-Laik_Partitioning* laik_allocBorders(Laik_Group* g, Laik_Space* s,
-                                    bool useSingle1d)
+Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
+                                         bool useSingle1d)
 {
-    Laik_Partitioning* a;
+    Laik_Partitioning* p;
 
-    a = malloc(sizeof(Laik_Partitioning));
-    a->off = malloc(sizeof(int) * (g->size + 1));
-    if ((a == 0) || (a->off == 0)) {
-        laik_panic("Out of memory allocating Laik_BorderArray object");
+    p = malloc(sizeof(Laik_Partitioning));
+    p->off = malloc(sizeof(int) * (g->size + 1));
+    if ((p == 0) || (p->off == 0)) {
+        laik_panic("Out of memory allocating Laik_Partitioning object");
         exit(1); // not actually needed, laik_panic never returns
     }
 
     // number of maps still unknown
-    a->myMapOff = 0;
-    a->myMapCount = -1;
+    p->myMapOff = 0;
+    p->myMapCount = -1;
 
-    a->tslice = 0;
-    a->tss1d = 0;
+    p->tslice = 0;
+    p->tss1d = 0;
 
-    a->group = g;
-    a->space = s;
-    a->count = 0;
-    a->capacity = 4;
+    p->group = g;
+    p->space = s;
+    p->count = 0;
+    p->capacity = 4;
 
-    void* p;
+    void* tsp;
     if (useSingle1d) {
-        a->tss1d = malloc(sizeof(Laik_TaskSlice_Single1d) * a->capacity);
-        p = a->tss1d;
+        p->tss1d = malloc(sizeof(Laik_TaskSlice_Single1d) * p->capacity);
+        tsp = p->tss1d;
     }
     else {
-        a->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * a->capacity);
-        p = a->tslice;
+        p->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * p->capacity);
+        tsp = p->tslice;
     }
-    if (!p) {
-        laik_panic("Out of memory allocating memory for Laik_BorderArray");
+    if (!tsp) {
+        laik_panic("Out of memory allocating memory for Laik_Partitioning");
         exit(1); // not actually needed, laik_panic never returns
     }
 
-    return a;
+    return p;
 }
 
 // called by partitioners
-Laik_TaskSlice* laik_append_slice(Laik_Partitioning* a, int task, Laik_Slice* s,
+Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
                                   int tag, void* data)
 {
-    if (a->count == a->capacity) {
-        assert(a->tss1d == 0);
-        a->capacity = a->capacity * 2;
-        a->tslice = realloc(a->tslice,
-                            sizeof(Laik_TaskSlice_Gen) * a->capacity);
-        if (!a->tslice) {
-            laik_panic("Out of memory allocating memory for Laik_BorderArray");
+    if (p->count == p->capacity) {
+        assert(p->tss1d == 0);
+        p->capacity = p->capacity * 2;
+        p->tslice = realloc(p->tslice,
+                            sizeof(Laik_TaskSlice_Gen) * p->capacity);
+        if (!p->tslice) {
+            laik_panic("Out of memory allocating memory for Laik_Partitioning");
             exit(1); // not actually needed, laik_panic never returns
         }
     }
-    assert((task >= 0) && (task < a->group->size));
-    assert(laik_slice_within_space(s, a->space));
-    assert(a->tslice);
+    assert((task >= 0) && (task < p->group->size));
+    assert(laik_slice_within_space(s, p->space));
+    assert(p->tslice);
 
-    Laik_TaskSlice_Gen* ts = &(a->tslice[a->count]);
-    a->count++;
+    Laik_TaskSlice_Gen* ts = &(p->tslice[p->count]);
+    p->count++;
 
     ts->type = TS_Generic;
     ts->task = task;
@@ -449,34 +449,34 @@ Laik_TaskSlice* laik_append_slice(Laik_Partitioning* a, int task, Laik_Slice* s,
 }
 
 // append 1d single-index slice
-Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* a, int task, int64_t idx)
+Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx)
 {
-    assert(a->space->dims == 1);
+    assert(p->space->dims == 1);
 
-    if (a->tslice) {
+    if (p->tslice) {
         // append as generic slice
         Laik_Slice slc;
         slc.from.i[0] = idx;
         slc.to.i[0] = idx + 1;
-        return laik_append_slice(a, task, &slc, 1, 0);
+        return laik_append_slice(p, task, &slc, 1, 0);
     }
 
-    if (a->count == a->capacity) {
-        assert(a->tslice == 0);
-        a->capacity = a->capacity *2;
-        a->tss1d = realloc(a->tss1d,
-                           sizeof(Laik_TaskSlice_Single1d) * a->capacity);
-        if (!a->tss1d) {
-            laik_panic("Out of memory allocating memory for Laik_BorderArray");
+    if (p->count == p->capacity) {
+        assert(p->tslice == 0);
+        p->capacity = p->capacity *2;
+        p->tss1d = realloc(p->tss1d,
+                           sizeof(Laik_TaskSlice_Single1d) * p->capacity);
+        if (!p->tss1d) {
+            laik_panic("Out of memory allocating memory for Laik_Partitioning");
             exit(1); // not actually needed, laik_panic never returns
         }
     }
-    assert((task >= 0) && (task < a->group->size));
-    assert((idx >= a->space->s.from.i[0]) && (idx < a->space->s.to.i[0]));
-    assert(a->tss1d);
+    assert((task >= 0) && (task < p->group->size));
+    assert((idx >= p->space->s.from.i[0]) && (idx < p->space->s.to.i[0]));
+    assert(p->tss1d);
 
-    Laik_TaskSlice_Single1d* ts = &(a->tss1d[a->count]);
-    a->count++;
+    Laik_TaskSlice_Single1d* ts = &(p->tss1d[p->count]);
+    p->count++;
 
     ts->type = TS_Single1d;
     ts->task = task;
@@ -485,22 +485,22 @@ Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* a, int task, int64_t idx
     return (Laik_TaskSlice*) ts;
 }
 
-Laik_Space* laik_borderarray_getspace(Laik_Partitioning* ba)
+Laik_Space* laik_partitioning_get_space(Laik_Partitioning* ba)
 {
     return ba->space;
 }
 
-Laik_Group* laik_borderarray_getgroup(Laik_Partitioning* ba)
+Laik_Group* laik_partitioning_get_group(Laik_Partitioning* ba)
 {
     return ba->group;
 }
 
-int laik_borderarray_getcount(Laik_Partitioning* ba)
+int laik_partitioning_slicecount(Laik_Partitioning* ba)
 {
     return ba->count;
 }
 
-Laik_TaskSlice* laik_borderarray_get_tslice(Laik_Partitioning* ba, int n)
+Laik_TaskSlice* laik_partitioning_get_tslice(Laik_Partitioning* ba, int n)
 {
     assert(n < ba->count);
     if (ba->tslice)
@@ -511,7 +511,7 @@ Laik_TaskSlice* laik_borderarray_get_tslice(Laik_Partitioning* ba, int n)
     return 0;
 }
 
-const Laik_Slice* laik_taskslice_getslice(Laik_TaskSlice* ts)
+const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts)
 {
     static Laik_Slice slc;
 
@@ -529,7 +529,7 @@ const Laik_Slice* laik_taskslice_getslice(Laik_TaskSlice* ts)
     return 0;
 }
 
-int laik_taskslice_gettask(Laik_TaskSlice* ts)
+int laik_taskslice_get_task(Laik_TaskSlice* ts)
 {
     return ts->task;
 }
@@ -615,23 +615,24 @@ void mergeSortedSlices(Laik_Partitioning* ba)
     ba->count = dstOff + 1;
 }
 
-// (1) update offset array from slices, (2) calculate map numbers from tags
+// (1) update offset array from slices,
+// (2) calculate map numbers from tags
 static
-void updateBorderArrayOffsets(Laik_Partitioning* ba)
+void updatePartitioningOffsets(Laik_Partitioning* p)
 {
-    assert(ba->tslice);
+    assert(p->tslice);
 
     // we assume that the slices where sorted with sortSlices()
 
     int task, mapNo, lastTag, off, compactStart;
     off = 0;
     compactStart = 0;
-    for(task = 0; task < ba->group->size; task++) {
-        ba->off[task] = off;
+    for(task = 0; task < p->group->size; task++) {
+        p->off[task] = off;
         mapNo = -1; // for numbering of mappings according to tags
         lastTag = -1;
-        while(off < ba->count) {
-            Laik_TaskSlice_Gen* ts = &(ba->tslice[off]);
+        while(off < p->count) {
+            Laik_TaskSlice_Gen* ts = &(p->tslice[off]);
             if (ts->task > task) break;
             assert(ts->task == task);
             if ((ts->tag == 0) || (ts->tag != lastTag)) {
@@ -641,68 +642,68 @@ void updateBorderArrayOffsets(Laik_Partitioning* ba)
             }
             ts->mapNo = mapNo;
             ts->compactStart = compactStart;
-            compactStart += laik_slice_size(ba->space->dims, &(ts->s));
+            compactStart += laik_slice_size(p->space->dims, &(ts->s));
             off++;
         }
     }
-    ba->off[task] = off;
-    assert(off == ba->count);
+    p->off[task] = off;
+    assert(off == p->count);
 
     // there was a new partitioner run, which may change my mappings
-    if (ba->myMapCount >= 0) {
-        free(ba->myMapOff);
-        ba->myMapOff = 0;
-        ba->myMapCount = -1;
+    if (p->myMapCount >= 0) {
+        free(p->myMapOff);
+        p->myMapOff = 0;
+        p->myMapCount = -1;
     }
 }
 
 // update offset array from slices, single index format
 // also, convert to generic format
 static
-void updateBorderArrayOffsetsSI(Laik_Partitioning* ba)
+void updatePartitioningOffsetsSI(Laik_Partitioning* p)
 {
-    assert(ba->tss1d);
-    assert(ba->count > 0);
+    assert(p->tss1d);
+    assert(p->count > 0);
 
     // make sure slices are sorted according by task IDs
-    qsort( &(ba->tss1d[0]), ba->count,
+    qsort( &(p->tss1d[0]), p->count,
             sizeof(Laik_TaskSlice_Single1d), tss1d_cmp);
 
     // count slices
     int64_t idx, idx0;
     int task;
     int count = 1;
-    task = ba->tss1d[0].task;
-    idx = ba->tss1d[0].idx;
-    for(int i = 1; i < ba->count; i++) {
-        if (ba->tss1d[i].task == task) {
-            if (ba->tss1d[i].idx == idx) continue;
-            if (ba->tss1d[i].idx == idx + 1) {
+    task = p->tss1d[0].task;
+    idx = p->tss1d[0].idx;
+    for(int i = 1; i < p->count; i++) {
+        if (p->tss1d[i].task == task) {
+            if (p->tss1d[i].idx == idx) continue;
+            if (p->tss1d[i].idx == idx + 1) {
                 idx++;
                 continue;
             }
         }
-        task = ba->tss1d[i].task;
-        idx = ba->tss1d[i].idx;
+        task = p->tss1d[i].task;
+        idx = p->tss1d[i].idx;
         count++;
     }
     laik_log(1, "Merging single indexes: %d original, %d merged",
-             ba->count, count);
+             p->count, count);
 
-    ba->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * count);
-    if (!ba->tslice) {
-        laik_panic("Out of memory allocating memory for Laik_BorderArray");
+    p->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * count);
+    if (!p->tslice) {
+        laik_panic("Out of memory allocating memory for Laik_Partitioning");
         exit(1); // not actually needed, laik_panic never returns
     }
 
     // convert into generic slices (already sorted)
     int off = 0, j = 0;
-    task = ba->tss1d[0].task;
-    idx0 = idx = ba->tss1d[0].idx;
-    for(int i = 1; i <= ba->count; i++) {
-        if ((i < ba->count) && (ba->tss1d[i].task == task)) {
-            if (ba->tss1d[i].idx == idx) continue;
-            if (ba->tss1d[i].idx == idx + 1) {
+    task = p->tss1d[0].task;
+    idx0 = idx = p->tss1d[0].idx;
+    for(int i = 1; i <= p->count; i++) {
+        if ((i < p->count) && (p->tss1d[i].task == task)) {
+            if (p->tss1d[i].idx == idx) continue;
+            if (p->tss1d[i].idx == idx + 1) {
                 idx++;
                 continue;
             }
@@ -710,7 +711,7 @@ void updateBorderArrayOffsetsSI(Laik_Partitioning* ba)
         laik_log(1, "  adding slice for offsets %d - %d: task %d, [%lu;%lu[",
                  j, i-1, task, idx0, idx +1);
 
-        Laik_TaskSlice_Gen* ts = &(ba->tslice[off]);
+        Laik_TaskSlice_Gen* ts = &(p->tslice[off]);
         ts->type = TS_Generic;
         ts->task = task;
         ts->tag = 0;
@@ -719,35 +720,35 @@ void updateBorderArrayOffsetsSI(Laik_Partitioning* ba)
         ts->s.from.i[0] = idx0;
         ts->s.to.i[0] = idx + 1;
         off++;
-        if (i == ba->count) break;
+        if (i == p->count) break;
 
-        task = ba->tss1d[i].task;
-        idx0 = idx = ba->tss1d[i].idx;
+        task = p->tss1d[i].task;
+        idx0 = idx = p->tss1d[i].idx;
         j = i;
     }
     assert(count == off);
-    ba->count = count;
-    free(ba->tss1d);
+    p->count = count;
+    free(p->tss1d);
 
     // update offsets
     off = 0;
-    for(task = 0; task < ba->group->size; task++) {
-        ba->off[task] = off;
-        while(off < ba->count) {
-            Laik_TaskSlice_Gen* ts = &(ba->tslice[off]);
+    for(task = 0; task < p->group->size; task++) {
+        p->off[task] = off;
+        while(off < p->count) {
+            Laik_TaskSlice_Gen* ts = &(p->tslice[off]);
             if (ts->task > task) break;
             assert(ts->task == task);
             off++;
         }
     }
-    ba->off[task] = off;
-    assert(off == ba->count);
+    p->off[task] = off;
+    assert(off == p->count);
 
     // there was a new partitioner run, which may change my mappings
-    if (ba->myMapCount >= 0) {
-        free(ba->myMapOff);
-        ba->myMapOff = 0;
-        ba->myMapCount = -1;
+    if (p->myMapCount >= 0) {
+        free(p->myMapOff);
+        p->myMapOff = 0;
+        p->myMapCount = -1;
     }
 }
 
@@ -794,31 +795,31 @@ void updateMyMapOffsets(Laik_Partitioning* ba)
 }
 
 
-void laik_clearBorderArray(Laik_Partitioning* ba)
+void laik_clear_partitioning(Laik_Partitioning* p)
 {
     // to remove all entries, it's enough to set count to 0
-    ba->count = 0;
+    p->count = 0;
 }
 
-void laik_freeBorderArray(Laik_Partitioning* ba)
+void laik_free_partitioning(Laik_Partitioning* p)
 {
-    free(ba->off);
-    free(ba->myMapOff);
-    free(ba->tslice);
-    free(ba->tss1d);
-    free(ba);
+    free(p->off);
+    free(p->myMapOff);
+    free(p->tslice);
+    free(p->tss1d);
+    free(p);
 }
 
 // do borders cover complete space in all tasks?
 // assumption: task slices sorted according to task ID
 static
-bool bordersIsAll(Laik_Partitioning* ba)
+bool partitioningIsAll(Laik_Partitioning* p)
 {
-    if (ba->count != ba->group->size) return false;
-    for(int i = 0; i < ba->count; i++) {
-        if (ba->tslice[i].task != i) return false;
-        if (!laik_slice_isEqual(ba->space->dims,
-                                &(ba->tslice[i].s), &(ba->space->s)))
+    if (p->count != p->group->size) return false;
+    for(int i = 0; i < p->count; i++) {
+        if (p->tslice[i].task != i) return false;
+        if (!laik_slice_isEqual(p->space->dims,
+                                &(p->tslice[i].s), &(p->space->s)))
             return false;
     }
     return true;
@@ -827,22 +828,22 @@ bool bordersIsAll(Laik_Partitioning* ba)
 // do borders cover complete space exactly in one task?
 // return -1 if no, else task ID
 static
-int bordersIsSingle(Laik_Partitioning* ba)
+int partitioningIsSingle(Laik_Partitioning* p)
 {
-    if (ba->count != 1) return -1;
-    if (!laik_slice_isEqual(ba->space->dims,
-                            &(ba->tslice[0].s), &(ba->space->s)))
+    if (p->count != 1) return -1;
+    if (!laik_slice_isEqual(p->space->dims,
+                            &(p->tslice[0].s), &(p->space->s)))
         return -1;
 
-    return ba->tslice[0].task;
+    return p->tslice[0].task;
 }
 
-// Check if slices in border array cover full space;
+// Check if slices in partitioning cover full space;
 // works for 1d/2d/3d spaces
 //
 // we maintain a list of slices not yet covered,
 // starting with the one slice equal to full space, and then
-// subtract the slices from the border array step-by-step
+// subtract the slices from the partitioning step-by-step
 // from each of the not-yet-covered slices, creating a
 // new list of not-yet-covered slices.
 //
@@ -909,7 +910,7 @@ bool coversSpace(Laik_Partitioning* ba)
     memcpy(list, ba->tslice, ba->count * sizeof(Laik_TaskSlice_Gen));
     qsort(list, ba->count, sizeof(Laik_TaskSlice_Gen), tsgen_cmpfrom);
 
-    // remove each slice in border array
+    // remove each slice in partitioning
     for(int i = 0; i < ba->count; i++) {
         Laik_Slice* toRemove = &(list[i].s);
 
@@ -983,24 +984,24 @@ bool coversSpace(Laik_Partitioning* ba)
 
 // are borders equal?
 static
-bool laik_border_isEqual(Laik_Partitioning* b1, Laik_Partitioning* b2)
+bool laik_partitioning_isEqual(Laik_Partitioning* p1, Laik_Partitioning* p2)
 {
-    assert(b1);
-    assert(b2);
-    if (b1->group != b2->group) return false;
-    if (b1->space != b2->space) return false;
-    if (b1->count != b2->count) return false;
+    assert(p1);
+    assert(p2);
+    if (p1->group != p2->group) return false;
+    if (p1->space != p2->space) return false;
+    if (p1->count != p2->count) return false;
 
-    for(int i = 0; i < b1->group->size; i++)
-        if (b1->off[i] != b2->off[i]) return false;
+    for(int i = 0; i < p1->group->size; i++)
+        if (p1->off[i] != p2->off[i]) return false;
 
-    for(int i = 0; i < b1->count; i++) {
+    for(int i = 0; i < p1->count; i++) {
         // tasks must match, as offset array matched
-        assert(b1->tslice[i].task == b2->tslice[i].task);
+        assert(p1->tslice[i].task == p2->tslice[i].task);
 
-        if (!laik_slice_isEqual(b1->space->dims,
-                                &(b1->tslice[i].s),
-                                &(b2->tslice[i].s))) return false;
+        if (!laik_slice_isEqual(p1->space->dims,
+                                &(p1->tslice[i].s),
+                                &(p2->tslice[i].s))) return false;
     }
     return true;
 }
@@ -1009,13 +1010,13 @@ bool laik_border_isEqual(Laik_Partitioning* b1, Laik_Partitioning* b2)
 
 
 //-----------------------
-// Laik_Partitioning
+// Laik_AccessPhase
 
 
 // create a new partitioning on a space
 Laik_AccessPhase*
 laik_new_accessphase(Laik_Group* group, Laik_Space* space,
-                      Laik_Partitioner* pr, Laik_AccessPhase *base)
+                     Laik_Partitioner* pr, Laik_AccessPhase *base)
 {
     Laik_AccessPhase* p;
     p = malloc(sizeof(Laik_AccessPhase));
@@ -1035,8 +1036,8 @@ laik_new_accessphase(Laik_Group* group, Laik_Space* space,
     p->partitioner = pr;
     p->base = base;
 
-    p->bordersValid = false;
-    p->borders = 0;
+    p->hasValidPartitioning = false;
+    p->partitioning = 0;
 
     p->nextAccessPhaseForSpace = 0;
     p->nextAccessPhaseForGroup = 0;
@@ -1067,7 +1068,7 @@ laik_new_accessphase(Laik_Group* group, Laik_Space* space,
 }
 
 void laik_addAccessPhaseForBase(Laik_AccessPhase* base,
-                                 Laik_AccessPhase* p)
+                                Laik_AccessPhase* p)
 {
     assert(p->nextAccessPhaseForBase == 0);
     p->nextAccessPhaseForBase = base->firstAccessPhaseForBase;
@@ -1075,7 +1076,7 @@ void laik_addAccessPhaseForBase(Laik_AccessPhase* base,
 }
 
 void laik_removeAccessPhaseForBase(Laik_AccessPhase* base,
-                                     Laik_AccessPhase* p)
+                                   Laik_AccessPhase* p)
 {
     if (base->firstAccessPhaseForBase == p) {
         base->firstAccessPhaseForBase = p->nextAccessPhaseForBase;
@@ -1149,48 +1150,48 @@ void laik_free_accessphase(Laik_AccessPhase* p)
         if (p->base)
             laik_removeAccessPhaseForBase(p->base, p);
         free(p->name);
-        free(p->borders);
+        free(p->partitioning);
     }
 }
 
 // get number of slices of this task
 int laik_phase_my_slicecount(Laik_AccessPhase* p)
 {
-    if (!p->bordersValid)
+    if (!p->hasValidPartitioning)
         laik_calc_partitioning(p);
 
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
     assert(myid < p->group->size);
-    return p->borders->off[myid+1] - p->borders->off[myid];
+    return p->partitioning->off[myid+1] - p->partitioning->off[myid];
 }
 
 // get number of mappings of this task
 int laik_phase_my_mapcount(Laik_AccessPhase* p)
 {
-    if (!p->bordersValid)
+    if (!p->hasValidPartitioning)
         laik_calc_partitioning(p);
 
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
     assert(myid < p->group->size);
-    int sCount = p->borders->off[myid+1] - p->borders->off[myid];
+    int sCount = p->partitioning->off[myid+1] - p->partitioning->off[myid];
     if (sCount == 0) return 0;
 
     // map number of my last slice, incremented by one to get count
-    return p->borders->tslice[p->borders->off[myid+1] - 1].mapNo + 1;
+    return p->partitioning->tslice[p->partitioning->off[myid+1] - 1].mapNo + 1;
 }
 
 int laik_phase_my_mapslicecount(Laik_AccessPhase* p, int mapNo)
 {
-    if (!p->bordersValid)
+    if (!p->hasValidPartitioning)
         laik_calc_partitioning(p);
 
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
 
     // lazily calculate my map offsets
-    Laik_Partitioning* ba = p->borders;
+    Laik_Partitioning* ba = p->partitioning;
     if (ba->myMapCount < 0)
         updateMyMapOffsets(ba);
 
@@ -1227,30 +1228,30 @@ Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice* ts)
 // get slice number <n> from the slices of this task
 Laik_TaskSlice* laik_phase_my_slice(Laik_AccessPhase* p, int n)
 {
-    if (!p->bordersValid)
+    if (!p->hasValidPartitioning)
         laik_calc_partitioning(p);
 
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
-    int o = p->borders->off[myid] + n;
-    if (o >= p->borders->off[myid+1]) {
+    int o = p->partitioning->off[myid] + n;
+    if (o >= p->partitioning->off[myid+1]) {
         // slice <n> is invalid
         return 0;
     }
-    assert(p->borders->tslice[o].task == myid);
-    return (Laik_TaskSlice*) &(p->borders->tslice[o]);
+    assert(p->partitioning->tslice[o].task == myid);
+    return (Laik_TaskSlice*) &(p->partitioning->tslice[o]);
 }
 
 Laik_TaskSlice* laik_phase_my_mapslice(Laik_AccessPhase* p, int mapNo, int n)
 {
-    if (!p->bordersValid)
+    if (!p->hasValidPartitioning)
         laik_calc_partitioning(p);
 
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
 
     // lazily calculate my map offsets
-    Laik_Partitioning* ba = p->borders;
+    Laik_Partitioning* ba = p->partitioning;
     if (ba->myMapCount < 0)
         updateMyMapOffsets(ba);
 
@@ -1368,7 +1369,7 @@ Laik_Partitioning* laik_run_partitioner(Laik_Partitioner* pr,
     Laik_Partitioning* ba;
     bool useSingleIndex = (pr->flags & LAIK_PF_SingleIndex) > 0;
 
-    ba = laik_allocBorders(g, space, useSingleIndex);
+    ba = laik_new_partitioning(g, space, useSingleIndex);
 
     if (otherBA) {
         assert(otherBA->group == g);
@@ -1380,7 +1381,7 @@ Laik_Partitioning* laik_run_partitioner(Laik_Partitioner* pr,
 
     if (useSingleIndex) {
         // merge and convert to generic
-        updateBorderArrayOffsetsSI(ba);
+        updatePartitioningOffsetsSI(ba);
     }
     else {
         sortSlices(ba);
@@ -1389,16 +1390,16 @@ Laik_Partitioning* laik_run_partitioner(Laik_Partitioner* pr,
         if ((pr->flags & LAIK_PF_Merge) > 0)
             mergeSortedSlices(ba);
 
-        updateBorderArrayOffsets(ba);
+        updatePartitioningOffsets(ba);
     }
 
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
                         pr->name, g->gid, g->myid, space->name);
         laik_log_append("\n  other: ");
-        laik_log_BorderArray(otherBA);
+        laik_log_Partitioning(otherBA);
         laik_log_append("\n  new  : ");
-        laik_log_BorderArray(ba);
+        laik_log_Partitioning(ba);
         laik_log_flush(0);
     }
     else
@@ -1417,55 +1418,55 @@ Laik_Partitioning* laik_run_partitioner(Laik_Partitioner* pr,
 
 
 // set new partitioning borders
-void laik_set_borders(Laik_AccessPhase* p, Laik_Partitioning* ba)
+void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p)
 {
-    assert(p->group == ba->group);
-    assert(p->space == ba->space);
+    assert(ap->group == p->group);
+    assert(ap->space == p->space);
 
     if (laik_log_begin(1)) {
         laik_log_append("setting borders for part '%s' (group %d, myid %d):\n  ",
-                        p->name, ba->group->gid, ba->group->myid);
-        laik_log_BorderArray(ba);
+                        ap->name, p->group->gid, p->group->myid);
+        laik_log_Partitioning(p);
         laik_log_flush(0);
     }
 
-    if (p->bordersValid && laik_border_isEqual(p->borders, ba)) {
+    if (ap->hasValidPartitioning && laik_partitioning_isEqual(ap->partitioning, p)) {
         laik_log(1, "borders equal to original, nothing to do");
         return;
     }
 
     // visit all users of this partitioning:
     // first, all partitionings coupled to this as base
-    Laik_AccessPhase* pdep = p->firstAccessPhaseForBase;
+    Laik_AccessPhase* pdep = ap->firstAccessPhaseForBase;
     while(pdep) {
-        assert(pdep->base == p);
+        assert(pdep->base == ap);
         assert(pdep->partitioner);
         Laik_Partitioning* badep;
         badep = laik_run_partitioner(pdep->partitioner,
-                                     pdep->group, pdep->space, ba);
+                                     pdep->group, pdep->space, p);
 
-        laik_set_borders(pdep, badep);
+        laik_phase_set_partitioning(pdep, badep);
         pdep = pdep->nextAccessPhaseForBase;
     }
     // second, all data containers using this partitioning
-    Laik_Data* d = p->firstDataForAccessPhase;
+    Laik_Data* d = ap->firstDataForAccessPhase;
     while(d) {
-        laik_switchto_borders(d, ba);
+        laik_switchto_partitioning(d, p);
         d = d->nextAccessPhaseUser;
     }
 
-    if (p->borders)
-        laik_freeBorderArray(p->borders);
-    p->borders = ba;
-    p->bordersValid = true;
+    if (ap->partitioning)
+        laik_free_partitioning(ap->partitioning);
+    ap->partitioning = p;
+    ap->hasValidPartitioning = true;
 }
 
 // return currently set borders in partitioning
-Laik_Partitioning* laik_get_borders(Laik_AccessPhase* p)
+Laik_Partitioning* laik_get_partitioning(Laik_AccessPhase* p)
 {
-    if (p->bordersValid) {
-        assert(p->borders);
-        return p->borders;
+    if (p->hasValidPartitioning) {
+        assert(p->partitioning);
+        return p->partitioning;
     }
     return 0;
 }
@@ -1476,15 +1477,15 @@ Laik_Partitioning* laik_calc_partitioning(Laik_AccessPhase* p)
     Laik_Partitioning* ba;
 
     if (p->base) {
-        assert(p->base->bordersValid);
+        assert(p->base->hasValidPartitioning);
     }
 
     assert(p->partitioner);
     ba = laik_run_partitioner(p->partitioner,
                               p->group, p->space,
-                              p->base ? p->base->borders : 0);
+                              p->base ? p->base->partitioning : 0);
 
-    laik_set_borders(p, ba);
+    laik_phase_set_partitioning(p, ba);
 
     return ba;
 }
@@ -1506,7 +1507,7 @@ bool laik_index_global2local(Laik_Partitioning* ba,
 
 // append a partitioning to a partioning group whose consistency should
 // be enforced at the same point in time
-void laik_append_partitioning(Laik_PartGroup* g, Laik_AccessPhase* p)
+void laik_append_phase(Laik_PartGroup* g, Laik_AccessPhase* p)
 {
     (void) g; /* FIXME: Why have this parameter if it's never used */
     (void) p; /* FIXME: Why have this parameter if it's never used */
@@ -2180,12 +2181,12 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
             //               result to one or all?
             bool fromAllto1OrAll = false;
             int outputGroup = -2;
-            if (bordersIsAll(fromBA)) {
+            if (partitioningIsAll(fromBA)) {
                 // reduction result either goes to all or master
-                int task = bordersIsSingle(toBA);
+                int task = partitioningIsSingle(toBA);
                 if (task < 0) {
                     // output is not a single task
-                    if (bordersIsAll(toBA)) {
+                    if (partitioningIsAll(toBA)) {
                         // output -1 is group ALL
                         outputGroup = -1;
                         fromAllto1OrAll = true;
@@ -2387,7 +2388,7 @@ void laik_couple_nested(Laik_Space* outer, Laik_Space* inner)
 // migrate borders to new group without changing borders
 // - added tasks get empty partitions
 // - removed tasks must have empty partitiongs
-void laik_migrate_borders(Laik_Partitioning* ba, Laik_Group* newg)
+void laik_partitioning_migrate(Laik_Partitioning* ba, Laik_Group* newg)
 {
     Laik_Group* oldg = ba->group;
     int* fromOld; // mapping of IDs from old group to new group
@@ -2425,34 +2426,33 @@ void laik_migrate_borders(Laik_Partitioning* ba, Laik_Group* newg)
         free(ba->off);
         ba->off = malloc((newg->size +1) * sizeof(int));
         if (!ba->off) {
-            laik_panic("Out of memory allocating memory for Laik_BorderArray");
+            laik_panic("Out of memory allocating memory for Laik_Partitioning");
             exit(1); // not actually needed, laik_panic never returns
         }
     }
     ba->group = newg;
     sortSlices(ba);
-    updateBorderArrayOffsets(ba);
+    updatePartitioningOffsets(ba);
 }
 
 // migrate a partitioning defined on one task group to another group
 // (no repartitioning: only works if partitions of removed tasks are empty)
-bool laik_migrate_phase(Laik_AccessPhase* p,
-                               Laik_Group* newg)
+bool laik_migrate_phase(Laik_AccessPhase* ap, Laik_Group* newg)
 {
-    Laik_Group* oldg = p->group;
+    Laik_Group* oldg = ap->group;
     assert(oldg != newg);
 
-    if (p->bordersValid) {
-        assert(p->borders && (p->borders->group == oldg));
-        laik_migrate_borders(p->borders, newg);
+    if (ap->hasValidPartitioning) {
+        assert(ap->partitioning && (ap->partitioning->group == oldg));
+        laik_partitioning_migrate(ap->partitioning, newg);
     }
 
-    laik_removeAccessPhaseForGroup(oldg, p);
-    laik_addAcessPhaseForGroup(newg, p);
-    p->group = newg;
+    laik_removeAccessPhaseForGroup(oldg, ap);
+    laik_addAcessPhaseForGroup(newg, ap);
+    ap->group = newg;
 
     // make partitioning users (data containers) migrate to new group
-    Laik_Data* d = p->firstDataForAccessPhase;
+    Laik_Data* d = ap->firstDataForAccessPhase;
     while(d) {
         assert(d->group == oldg);
         d->group = newg;
@@ -2475,13 +2475,13 @@ void laik_migrate_and_repartition(Laik_AccessPhase* p, Laik_Group* newg,
     Laik_Partitioning* ba;
     if (pr) {
         ba = laik_run_partitioner(pr, p->group, p->space,
-                                  p->bordersValid ? p->borders : 0);
+                                  p->hasValidPartitioning ? p->partitioning : 0);
     }
     else {
         ba = laik_run_partitioner(p->partitioner, newg, p->space, 0);
-        laik_migrate_borders(ba, p->group);
+        laik_partitioning_migrate(ba, p->group);
     }
-    laik_set_borders(p, ba);
+    laik_phase_set_partitioning(p, ba);
     bool res = laik_migrate_phase(p, newg);
     assert(res);
 }

@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
     Laik_Partitioner* pr = laik_new_block_partitioner1();
     laik_set_index_weight(pr, getEW, m);
     Laik_AccessPhase* p = laik_new_accessphase(world, s, pr, 0);
-    laik_switchto(resD, p, LAIK_DF_CopyOut);
+    laik_switchto_phase(resD, p, LAIK_DF_CopyOut);
 
     double* res;
     uint64_t count;

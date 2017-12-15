@@ -60,9 +60,9 @@ struct _Laik_Partitioner {
 
 
 
-// the output of a partitioner is a Laik_BorderArray
+// the output of a partitioner is a Laik_Partitioning
 
-// A TaskSlice is used in BorderArray to map a slice to a task.
+// A TaskSlice is used in partitioning to map a slice to a task.
 
 // different internal types are used to save memory
 enum { TS_Generic = 1, TS_Single1d };
@@ -95,24 +95,24 @@ typedef struct _Laik_TaskSlice_Single1d {
     int64_t idx;
 } Laik_TaskSlice_Single1d;
 
-struct _Laik_BorderArray {
+struct _Laik_Partitioning {
     Laik_Group* group; // task IDs used belong to this group
     Laik_Space* space; // slices cover this space
     int capacity;  // slices allocated
     int count;     // slices used
-    int* off;      // offsets from task IDs into border array
+    int* off;      // offsets from task IDs into slice array
 
     int myMapCount; // number of maps in slices of this task
-    int* myMapOff; // offsets from local map IDs into border array
-
+    int* myMapOff; // offsets from local map IDs into slice array
 
     Laik_TaskSlice_Gen* tslice; // slice borders, may be multiple per task
     Laik_TaskSlice_Single1d* tss1d;
 };
 
-Laik_Partitioning* laik_allocBorders(Laik_Group* g, Laik_Space* s, bool useSingle1d);
-void laik_clearBorderArray(Laik_Partitioning* a);
-void laik_freeBorderArray(Laik_Partitioning* a);
+Laik_Partitioning* laik_new_partitioning(Laik_Group* g, Laik_Space* s,
+                                         bool useSingle1d);
+void laik_clear_partitioning(Laik_Partitioning* p);
+void laik_free_partitioning(Laik_Partitioning* p);
 
 
 //
@@ -130,8 +130,8 @@ struct _Laik_AccessPhase {
     Laik_AccessPhase* base;
 
     // partitioning borders currently used (calculated lazy)
-    bool bordersValid;
-    Laik_Partitioning* borders;
+    bool hasValidPartitioning;
+    Laik_Partitioning* partitioning;
 
     // head of list of data containers with this access phase active
     Laik_Data* firstDataForAccessPhase;

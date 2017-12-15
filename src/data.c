@@ -1144,15 +1144,15 @@ void laik_reserve(Laik_Data* d, Laik_Partitioning* ba)
 }
 
 // switch to new borders (new flow is derived from previous flow)
-void laik_switchto_borders(Laik_Data* d, Laik_Partitioning* toBA)
+void laik_switchto_partitioning(Laik_Data* d, Laik_Partitioning* toP)
 {
     // calculate actions to be done for switching
-    Laik_Partitioning *fromBA = 0;
-    Laik_AccessPhase* part = d->activeAccessPhase;
-    if (part) {
+    Laik_Partitioning *fromP = 0;
+    Laik_AccessPhase* ap = d->activeAccessPhase;
+    if (ap) {
         // active partitioning must have borders set
-        assert(part->bordersValid);
-        fromBA = part->borders;
+        assert(ap->hasValidPartitioning);
+        fromP = ap->partitioning;
     }
 
     Laik_DataFlow toFlow;
@@ -1161,22 +1161,22 @@ void laik_switchto_borders(Laik_Data* d, Laik_Partitioning* toBA)
     else
         toFlow = LAIK_DF_None;
 
-    Laik_MappingList* toList = prepareMaps(d, toBA, 0);
+    Laik_MappingList* toList = prepareMaps(d, toP, 0);
     Laik_Transition* t = laik_calc_transition(d->group, d->space,
-                                              fromBA, d->activeFlow,
-                                              toBA, toFlow);
+                                              fromP, d->activeFlow,
+                                              toP, toFlow);
 
     if (laik_log_begin(1)) {
         laik_log_append("transition (data '%s', partition '%s'):\n",
-                        d->name, part ? part->name : "(none)");
+                        d->name, ap ? ap->name : "(none)");
         laik_log_append("  from ");
         laik_log_DataFlow(d->activeFlow);
         laik_log_append(", ");
-        laik_log_BorderArray(fromBA);
+        laik_log_Partitioning(fromP);
         laik_log_append("\n  to ");
         laik_log_DataFlow(toFlow);
         laik_log_append(", ");
-        laik_log_BorderArray(toBA);
+        laik_log_Partitioning(toP);
         laik_log_append(": ");
         laik_log_Transition(t);
         laik_log_flush(0);
@@ -1198,42 +1198,42 @@ void laik_switchto_borders(Laik_Data* d, Laik_Partitioning* toBA)
 }
 
 // switch from active to another partitioning
-void laik_switchto(Laik_Data* d,
-                   Laik_AccessPhase* toP, Laik_DataFlow toFlow)
+void laik_switchto_phase(Laik_Data* d,
+                   Laik_AccessPhase* toAP, Laik_DataFlow toFlow)
 {
     if (d->space->inst->profiling->do_profiling)
         d->space->inst->profiling->timer_total = laik_wtime();
 
     // calculate borders with configured partitioner if borders not set
-    if (toP && (!toP->bordersValid))
-        laik_calc_partitioning(toP);
+    if (toAP && (!toAP->hasValidPartitioning))
+        laik_calc_partitioning(toAP);
 
     // calculate actions to be done for switching
-    Laik_Partitioning *fromBA = 0, *toBA = 0;
-    Laik_AccessPhase* fromP = d->activeAccessPhase;
-    if (fromP) {
+    Laik_Partitioning *fromP = 0, *toP = 0;
+    Laik_AccessPhase* fromAP = d->activeAccessPhase;
+    if (fromAP) {
         // active partitioning must have borders set
-        assert(fromP->bordersValid);
-        fromBA = fromP->borders;
+        assert(fromAP->hasValidPartitioning);
+        fromP = fromAP->partitioning;
     }
-    if (toP) {
+    if (toAP) {
         // new partitioning needs to be defined over same LAIK task group
-        assert(toP->group == d->group);
-        assert(toP->bordersValid);
-        toBA = toP->borders;
+        assert(toAP->group == d->group);
+        assert(toAP->hasValidPartitioning);
+        toP = toAP->partitioning;
     }
 
-    Laik_MappingList* toList = prepareMaps(d, toBA, 0);
+    Laik_MappingList* toList = prepareMaps(d, toP, 0);
     Laik_Transition* t = laik_calc_transition(d->group, d->space,
-                                              fromBA, d->activeFlow,
-                                              toBA, toFlow);
+                                              fromP, d->activeFlow,
+                                              toP, toFlow);
 
     if (laik_log_begin(1)) {
         laik_log_append("switch partitionings for data '%s':\n"
                         "  %s/",
-                        d->name, fromP ? fromP->name : "(none)");
+                        d->name, fromAP ? fromAP->name : "(none)");
         laik_log_DataFlow(d->activeFlow);
-        laik_log_append(" => %s/", toP ? toP->name : "(none)");
+        laik_log_append(" => %s/", toAP ? toAP->name : "(none)");
         laik_log_DataFlow(toFlow);
         laik_log_append(": ");
         laik_log_Transition(t);
@@ -1256,11 +1256,11 @@ void laik_switchto(Laik_Data* d,
     }
 
     // set new mapping/partitioning active
-    d->activeAccessPhase = toP;
+    d->activeAccessPhase = toAP;
     d->activeFlow = toFlow;
     d->activeMappings = toList;
-    if (toP)
-        laik_addDataForAccessPhase(toP, d);
+    if (toAP)
+        laik_addDataForAccessPhase(toAP, d);
 
     if (d->space->inst->profiling->do_profiling)
         d->space->inst->profiling->time_total += laik_wtime() -
@@ -1274,7 +1274,7 @@ void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow)
         // makes no sense without partitioning
         laik_panic("laik_switch_flow without active partitioning!");
     }
-    laik_switchto(d, d->activeAccessPhase, toFlow);
+    laik_switchto_phase(d, d->activeAccessPhase, toFlow);
 }
 
 
@@ -1295,7 +1295,7 @@ Laik_AccessPhase* laik_switchto_new(Laik_Data* d,
     laik_log(1, "switch data '%s' to new partitioning '%s'",
              d->name, p->name);
 
-    laik_switchto(d, p, flow);
+    laik_switchto_phase(d, p, flow);
     return p;
 }
 
@@ -1310,7 +1310,7 @@ void laik_migrate_data(Laik_Data* d, Laik_Group* g)
              d->name, g->gid, g->size, g->myid);
 
     // switch to invalid partitioning
-    laik_switchto(d, 0, LAIK_DF_None);
+    laik_switchto_phase(d, 0, LAIK_DF_None);
 
     // FIXME: new user of group !
     d->group = g;
@@ -1653,7 +1653,7 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 
     if (!d->activeMappings) {
         // lazy allocation
-        d->activeMappings = prepareMaps(d, p->borders, layout);
+        d->activeMappings = prepareMaps(d, p->partitioning, layout);
         if (d->activeMappings == 0)
             return 0;
     }

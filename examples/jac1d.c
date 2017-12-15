@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
     Laik_Data* dRead = data2;
 
     // distributed initialization
-    laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
+    laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
     laik_map_def1(dWrite, (void**) &baseW, &countW);
     // arbitrary non-zero values based on global indexes to detect bugs
     uint64_t glbase = laik_local2global_1d(dWrite, 0);
@@ -132,8 +132,8 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto(dRead,  pRead,  LAIK_DF_CopyIn);
-        laik_switchto(dWrite, pWrite, LAIK_DF_CopyOut);
+        laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn);
+        laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
         laik_map_def1(dRead,  (void**) &baseR, &countR);
         laik_map_def1(dWrite, (void**) &baseW, &countW);
 

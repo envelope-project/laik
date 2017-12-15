@@ -102,13 +102,14 @@ void laik_free(Laik_Data*);
 // switching to <ba> does not require any further allocation
 void laik_reserve(Laik_Data* d, Laik_Partitioning* ba);
 
-// switch to new borders (new flow is derived from previous flow)
-void laik_switchto_borders(Laik_Data* d, Laik_Partitioning* toBA);
+// switch to new partitioning (new flow is derived from previous flow)
+void laik_switchto_partitioning(Laik_Data* d, Laik_Partitioning* toP);
 
-// switch from active to another partitioning
-void laik_switchto(Laik_Data*, Laik_AccessPhase* toP, Laik_DataFlow toFlow);
+// switch from active to another access phase
+void laik_switchto_phase(Laik_Data* d, Laik_AccessPhase* toAp,
+                         Laik_DataFlow toFlow);
 
-// switch to another data flow, keep partitioning
+// switch to use another data flow, keep access phase/partitioning
 void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow);
 
 // migrate data container to use another group
@@ -121,9 +122,10 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 
 // convenience functions
 
-// switch from active to a newly created partitioning, and return it
+// switch from active to a newly created access phase using a given
+// partitioner algorithm, and return it
 Laik_AccessPhase* laik_switchto_new(Laik_Data*,
-                                     Laik_Partitioner* pr, Laik_DataFlow flow);
+                                    Laik_Partitioner* pr, Laik_DataFlow flow);
 
 void laik_fill_double(Laik_Data* data, double v);
 

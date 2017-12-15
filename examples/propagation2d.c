@@ -40,13 +40,13 @@ void calculate_my_coordinate(int numRanks, int rank, int* rx, int* ry){
 
 //partitioner handler for the elements
 void runLuleshElementPartitioner(Laik_Partitioner* pr,
-                                 Laik_Partitioning* ba, Laik_Partitioning* otherBA)
+                                 Laik_Partitioning* pa, Laik_Partitioning* o)
 {
-    (void) otherBA; // required due to interface signature
+    (void) o; // required due to interface signature
 
-    Laik_Space* space = laik_borderarray_getspace(ba);
-    const Laik_Slice* slice = laik_space_getslice(space);
-    Laik_Group* group = laik_borderarray_getgroup(ba);
+    Laik_Space* space = laik_partitioning_get_space(pa);
+    const Laik_Slice* slice = laik_space_asslice(space);
+    Laik_Group* group = laik_partitioning_get_group(pa);
     int N_local_x = *((int*) laik_partitioner_data(pr));
     int N_local_y = N_local_x; // only squre subdomain are supported!
     int N_tasks_x;
@@ -65,7 +65,7 @@ void runLuleshElementPartitioner(Laik_Partitioner* pr,
                               jy* N_elems_x + N_local_x;
 
                 //laik_log(1, "from: %d, to: %d, task: %d \n", slc.from.i[0], slc.to.i[0], ix+iy*N_tasks_x);
-                laik_append_slice(ba, ix+iy*N_tasks_x, &slc, 0, 0);
+                laik_append_slice(pa, ix+iy*N_tasks_x, &slc, 0, 0);
             }
         }
     }
@@ -73,20 +73,22 @@ void runLuleshElementPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_lulesh_element_partitioner(int *size)
 {
-    return laik_new_partitioner("element", runLuleshElementPartitioner, (void*) size, LAIK_PF_Merge);
+    return laik_new_partitioner("element", runLuleshElementPartitioner,
+                                (void*) size, LAIK_PF_Merge);
 }
 
 //partitioner handler for the nodes
 void runLuleshNodePartitioner(Laik_Partitioner* pr,
-                                Laik_Partitioning* ba, Laik_Partitioning* otherBA)
+                              Laik_Partitioning* p, Laik_Partitioning* baseP)
 {
-    Laik_Space* space = laik_borderarray_getspace(ba);
-    Laik_Space* otherSpace = laik_borderarray_getspace(otherBA);
-    const Laik_Slice* slice = laik_space_getslice(space);
-    Laik_Group* group = laik_borderarray_getgroup(ba);
+    Laik_Space* space = laik_partitioning_get_space(p);
+    Laik_Space* baseSpace = laik_partitioning_get_space(baseP);
+    const Laik_Slice* slice = laik_space_asslice(space);
+    Laik_Group* group = laik_partitioning_get_group(p);
 
 
-    assert(laik_space_getdimensions(space) == laik_space_getdimensions(otherSpace));
+    assert(laik_space_getdimensions(space) ==
+           laik_space_getdimensions(baseSpace));
     //assert (otherSpace->neighbours != 0);
 
     Laik_Slice slc = *slice;
@@ -97,25 +99,26 @@ void runLuleshNodePartitioner(Laik_Partitioner* pr,
     // for all the slices in the element partitioner
     // we find the neighbouring nodes and add a slice
     // to the new partioning
-    int sliccountE = laik_borderarray_getcount(otherBA);
+    int sliccountE = laik_partitioning_slicecount(baseP);
     for(int i = 0; i < sliccountE; i++) {
-        Laik_TaskSlice* ts = laik_borderarray_get_tslice(otherBA, i);
-        const Laik_Slice* s = laik_taskslice_getslice(ts);
-        int task = laik_taskslice_gettask(ts);
+        Laik_TaskSlice* ts = laik_partitioning_get_tslice(baseP, i);
+        const Laik_Slice* s = laik_taskslice_get_slice(ts);
+        int task = laik_taskslice_get_task(ts);
         calculate_my_coordinate(laik_size(group), task, &rx, &ry);
         slc.from.i[0] = neighbours[ 4 * s->from.i[0] + 0 ] + 0;
         slc.to.i[0] = neighbours [ 4 * (s->to.i[0] - 1) + 1 ] + 1;
-        laik_append_slice(ba, task, &slc, 0, 0);
+        laik_append_slice(p, task, &slc, 0, 0);
 
         slc.from.i[0] = neighbours[ 4 * s->from.i[0] + 2] + 0;
         slc.to.i[0] = neighbours [ 4 * (s->to.i[0] - 1) + 3 ] + 1;
-        laik_append_slice(ba, task, &slc, 0, 0);
+        laik_append_slice(p, task, &slc, 0, 0);
     }
 }
 
 Laik_Partitioner* laik_new_lulesh_node_partitioner(int* neighbours)
 {
-    return laik_new_partitioner("node", runLuleshNodePartitioner, neighbours, LAIK_PF_Merge);
+    return laik_new_partitioner("node", runLuleshNodePartitioner,
+                                neighbours, LAIK_PF_Merge);
 }
 
 
@@ -167,7 +170,8 @@ void print_data(Laik_Data* d, Laik_AccessPhase *p)
 }
 
 // for testing
-double data_check_sum(Laik_Data* d, Laik_AccessPhase *p, Laik_Group* world) {
+double data_check_sum(Laik_Data* d, Laik_AccessPhase *p, Laik_Group* world)
+{
     double *base;
     uint64_t count;
     int nSlices = laik_phase_my_slicecount(p);
@@ -190,11 +194,12 @@ double data_check_sum(Laik_Data* d, Laik_AccessPhase *p, Laik_Group* world) {
     return *base;
 }
 
-void apply_boundary_condition(Laik_Data* data, Laik_AccessPhase* pr , int Rx,  int Ry, int rx, int ry, double value)
+void apply_boundary_condition(Laik_Data* data, Laik_AccessPhase* ap,
+                              int Rx, int Ry, int rx, int ry, double value)
 {
     double *baseN;
     uint64_t countN, i;
-    int nSlices=laik_phase_my_slicecount(pr);
+    int nSlices=laik_phase_my_slicecount(ap);
     int n;
 
     if (rx==0){
@@ -296,7 +301,7 @@ int main(int argc, char* argv[])
 
     // initialization phase
     // distribution of the elements
-    laik_switchto(element, pElements, LAIK_DF_CopyOut);
+    laik_switchto_phase(element, pElements, LAIK_DF_CopyOut);
 
     // map the partitioning to the memory
     // first the number of slices in the
@@ -312,10 +317,10 @@ int main(int argc, char* argv[])
             baseE[i]=1.0;
         }
     }
-    laik_switchto(element, pElements, LAIK_DF_CopyIn);
+    laik_switchto_phase(element, pElements, LAIK_DF_CopyIn);
 
     // distribution of the nodes
-    laik_switchto(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_phase(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
     //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
     int nSlicesNodes = laik_phase_my_slicecount(pNodes);
     for (int n = 0; n < nSlicesNodes; ++n)
@@ -326,7 +331,7 @@ int main(int argc, char* argv[])
             baseN[i]=0.0;
         }
     }
-    laik_switchto(node, pNodes, LAIK_DF_CopyIn);
+    laik_switchto_phase(node, pNodes, LAIK_DF_CopyIn);
     // set the boundary conditions on the nodes
     apply_boundary_condition(node,pNodes,Rx,Ry,rx,ry,0);
 
@@ -351,7 +356,7 @@ int main(int argc, char* argv[])
         // go through all the elements and refere
         // to their neighbouring nodes and update the
         //elements
-        laik_switchto(element, pElements, LAIK_DF_CopyOut);
+        laik_switchto_phase(element, pElements, LAIK_DF_CopyOut);
         for (int m = 0; m < nMapsElements; m++) {
             laik_map_def(element, m, (void **)&baseE, &countE);
 
@@ -381,7 +386,7 @@ int main(int argc, char* argv[])
 
             }
         }
-        laik_switchto(element, pElements, LAIK_DF_CopyIn);
+        laik_switchto_phase(element, pElements, LAIK_DF_CopyIn);
 
 
         //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
@@ -389,7 +394,7 @@ int main(int argc, char* argv[])
         // update the nodes using elements
         // go through all the elements and refere
         // to their neighbouring nodes and update them
-        laik_switchto(node, pNodes, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        laik_switchto_phase(node, pNodes, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
         for(int m = 0; m < nMapsElements; m++) {
             laik_map_def(element, m, (void **)&baseE, &countE);
 
@@ -424,7 +429,7 @@ int main(int argc, char* argv[])
                 baseN[j3] += baseE[i]/4 ;
             }
         }
-        laik_switchto(node, pNodes, LAIK_DF_CopyIn);
+        laik_switchto_phase(node, pNodes, LAIK_DF_CopyIn);
         apply_boundary_condition(node,pNodes,Rx,Ry,rx,ry,pow(2,it));
     }
     // for debug only

@@ -77,11 +77,11 @@ int main(int argc, char* argv[])
     uint64_t count;
 
     // distribution of the elements
-    laik_switchto(element, pElements, LAIK_DF_CopyOut);
+    laik_switchto_phase(element, pElements, LAIK_DF_CopyOut);
     laik_map_def1(element, (void**) &base, &count);
 
     // distribution of the nodes
-    laik_switchto(node, pNodes, LAIK_DF_CopyOut);
+    laik_switchto_phase(node, pNodes, LAIK_DF_CopyOut);
     laik_map_def1(node, (void**) &base, &count);
 
     laik_finalize(inst);

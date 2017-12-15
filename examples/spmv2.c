@@ -230,7 +230,7 @@ int main(int argc, char* argv[])
     laik_set_index_weight(pr, getEW, m);
     Laik_AccessPhase* p = laik_new_accessphase(world, s, pr, 0);
     // nothing to preserve between iterations (assume at least one iter)
-    laik_switchto(resD, p, LAIK_DF_None);
+    laik_switchto_phase(resD, p, LAIK_DF_None);
 
     // partitionings for all task taking part in calculation
     Laik_AccessPhase* allVec = laik_new_accessphase(world, s, laik_All, 0);
@@ -256,10 +256,10 @@ int main(int argc, char* argv[])
 
         // flow for result: only at last iteration, copy out
         if (iter + 1 == maxiter)
-            laik_switchto(resD, p, LAIK_DF_CopyOut);
+            laik_switchto_phase(resD, p, LAIK_DF_CopyOut);
 
         // access to complete input vector (local indexing = global indexing)
-        laik_switchto(inpD, allVec, LAIK_DF_CopyIn);
+        laik_switchto_phase(inpD, allVec, LAIK_DF_CopyIn);
         laik_map_def1(inpD, (void**) &inp, 0);
 
         // SpMV operation, for my range of rows
@@ -313,7 +313,7 @@ int main(int argc, char* argv[])
         if (useReduction) {
             // varian 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
-            laik_switchto(inpD, allVec,
+            laik_switchto_phase(inpD, allVec,
                           LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
             laik_map_def1(inpD, (void**) &inp, 0);
 
@@ -327,7 +327,7 @@ int main(int argc, char* argv[])
         }
         else {
             // variant 2: broadcast written input values directly
-            laik_switchto(inpD, p, LAIK_DF_CopyOut);
+            laik_switchto_phase(inpD, p, LAIK_DF_CopyOut);
             // loop over all local slices of result and input vector
             for(int sNo = 0; laik_phase_my_slice(p, sNo) != 0; sNo++) {
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
