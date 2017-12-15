@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
         laik_set_iteration(inst, r-fromRow);
     }
     // push result to master
-    laik_switchto_new(resD, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(resD, laik_Master, LAIK_DF_CopyIn);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;
@@ -135,7 +135,7 @@ int main(int argc, char* argv[])
     // do SPMV, second time
 
     // other way to push results to master: use sum reduction
-    laik_switchto_new(resD, laik_All,
+    laik_switchto_new_phase(resD, laik_All,
                       LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_map_def1(resD, (void**) &res, &count);
     laik_phase_myslice_1d(p, 0, &fromRow, &toRow);
@@ -144,7 +144,7 @@ int main(int argc, char* argv[])
             res[r] += m->val[o] * v[m->col[o]];
         laik_set_iteration(inst, r-fromRow);
     }
-    laik_switchto_new(resD, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(resD, laik_Master, LAIK_DF_CopyIn);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;

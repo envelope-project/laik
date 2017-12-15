@@ -763,7 +763,7 @@ void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p)
     // second, all data containers using this partitioning
     Laik_Data* d = ap->firstDataForAccessPhase;
     while(d) {
-        laik_switchto_partitioning(d, p);
+        laik_switchto_partitioning(d, p, LAIK_DF_Previous);
         d = d->nextAccessPhaseUser;
     }
 
@@ -774,7 +774,7 @@ void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p)
 }
 
 // return currently set borders in partitioning
-Laik_Partitioning* laik_get_partitioning(Laik_AccessPhase* p)
+Laik_Partitioning* laik_phase_get_partitioning(Laik_AccessPhase* p)
 {
     if (p->hasValidPartitioning) {
         assert(p->partitioning);

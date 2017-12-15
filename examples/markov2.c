@@ -139,7 +139,7 @@ Laik_Data* runSparse(MGraph* mg, int miter,
 
     int iter = 0;
     while(1) {
-        laik_set_iteration(laik_get_dinst(data1), iter+1);
+        laik_set_iteration(laik_data_get_inst(data1), iter+1);
 
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn);
@@ -218,7 +218,7 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
 
     int iter = 0;
     while(1) {
-        laik_set_iteration(laik_get_dinst(data1), iter+1);
+        laik_set_iteration(laik_data_get_inst(data1), iter+1);
 
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn);

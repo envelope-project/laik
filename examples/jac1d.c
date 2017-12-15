@@ -93,7 +93,7 @@ int main(int argc, char* argv[])
     // for global sum, used for residuum and value sum at end
     Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new(sumD, laik_All, LAIK_DF_None);
+    laik_switchto_new_phase(sumD, laik_All, LAIK_DF_None);
 
     // start with writing (= initialization) data1
     Laik_Data* dWrite = data1;
@@ -199,7 +199,7 @@ int main(int argc, char* argv[])
                 t2 = t;
             }
 
-            if (laik_myid(laik_get_dgroup(sumD)) == 0) {
+            if (laik_myid(laik_data_get_group(sumD)) == 0) {
                 printf("Residuum after %2d iters: %f\n", iter+1, res);
             }
 
@@ -259,7 +259,7 @@ int main(int argc, char* argv[])
                  gUpdates * diter * 24 / dt);
     }
 
-    if (laik_myid(laik_get_dgroup(sumD)) == 0) {
+    if (laik_myid(laik_data_get_group(sumD)) == 0) {
         printf("Global value sum after %d iterations: %f\n",
                iter, sum);
     }

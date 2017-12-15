@@ -305,9 +305,9 @@ int main(int argc, char **argv)
     double fov = 30, aspectratio = width / double(height); 
     double angle = tan(M_PI * 0.5 * fov / 180.); 
 
-    laik_switchto_new(xval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
-    laik_switchto_new(yval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
-    laik_switchto_new(zval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_new_phase(xval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_new_phase(yval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_new_phase(zval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
 
     int64_t xstart, xend, ystart, yend;
     laik_phase_myslice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
@@ -331,9 +331,9 @@ int main(int argc, char **argv)
         } 
     } 
 
-    laik_switchto_new(xval, laik_Master, LAIK_DF_CopyIn);
-    laik_switchto_new(yval, laik_Master, LAIK_DF_CopyIn);
-    laik_switchto_new(zval, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(xval, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(yval, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(zval, laik_Master, LAIK_DF_CopyIn);
 
     //TODO: need reduction!
     //laik_switchto_new(image, laik_Master, LAIK_DF_CopyIn);

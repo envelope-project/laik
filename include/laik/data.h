@@ -84,16 +84,19 @@ Laik_Data* laik_new_data_2d(Laik_Group* g, Laik_Type* t, int64_t s1, int64_t s2)
 void laik_data_set_name(Laik_Data* d, char* n);
 
 // get space used for data
-Laik_Space* laik_get_dspace(Laik_Data*);
+Laik_Space* laik_data_get_space(Laik_Data*);
 
 // get task group used for data
-Laik_Group* laik_get_dgroup(Laik_Data* d);
+Laik_Group* laik_data_get_group(Laik_Data* d);
 
 // get instance managing data
-Laik_Instance* laik_get_dinst(Laik_Data* d);
+Laik_Instance* laik_data_get_inst(Laik_Data* d);
+
+// get active partitioning of data container
+Laik_Partitioning* laik_data_get_partitioning(Laik_Data* d);
 
 // get active access phase of data container
-Laik_AccessPhase* laik_get_active(Laik_Data* d);
+Laik_AccessPhase* laik_data_get_accessphase(Laik_Data* d);
 
 // free resources for a data container
 void laik_free(Laik_Data*);
@@ -103,7 +106,8 @@ void laik_free(Laik_Data*);
 void laik_reserve(Laik_Data* d, Laik_Partitioning* ba);
 
 // switch to new partitioning (new flow is derived from previous flow)
-void laik_switchto_partitioning(Laik_Data* d, Laik_Partitioning* toP);
+void laik_switchto_partitioning(Laik_Data* d,
+                                Laik_Partitioning* toP, Laik_DataFlow toFlow);
 
 // switch from active to another access phase
 void laik_switchto_phase(Laik_Data* d, Laik_AccessPhase* toAp,
@@ -124,7 +128,7 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 
 // switch from active to a newly created access phase using a given
 // partitioner algorithm, and return it
-Laik_AccessPhase* laik_switchto_new(Laik_Data*,
+Laik_AccessPhase* laik_switchto_new_phase(Laik_Data*,
                                     Laik_Partitioner* pr, Laik_DataFlow flow);
 
 void laik_fill_double(Laik_Data* data, double v);

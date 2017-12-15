@@ -72,10 +72,13 @@ struct _Laik_Data {
     Laik_Group* group;
     Laik_Type* type;
 
-    // currently active access phase
-    Laik_AccessPhase* activeAccessPhase;
+    // currently used partitioning and data flow
+    Laik_Partitioning* activePartitioning;
     Laik_DataFlow activeFlow;
-    // linked list of data objects with same active partitioning
+
+    // if access phase is set, it must be consistent with active partitioning
+    Laik_AccessPhase* activeAccessPhase;
+    // linked list of data objects with same active access phase
     Laik_Data* nextAccessPhaseUser;
 
     // active mappings (multiple possible, one per slice)

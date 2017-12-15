@@ -69,6 +69,7 @@ typedef enum _Laik_DataFlow {
     LAIK_DF_ReduceOut  = 8,     // output aggregated, needs reduction operation
 
     LAIK_DF_Sharable   = 16,    // tasks can share memory
+    LAIK_DF_Previous   = 32,    // derive from previously set flow
 
     LAIK_DF_Sum        = 1<<16  // sum reduction (for Init/ReduceOut)
 } Laik_DataFlow;
@@ -435,7 +436,7 @@ void laik_set_accessphase_name(Laik_AccessPhase* ap, char* n);
 void laik_phase_set_partitioning(Laik_AccessPhase* p, Laik_Partitioning* ba);
 
 // return currently set partitioning borders in access phase
-Laik_Partitioning* laik_get_partitioning(Laik_AccessPhase* p);
+Laik_Partitioning* laik_phase_get_partitioning(Laik_AccessPhase* p);
 
 // trigger calculation of  new partitioning borders, overwriting old ones
 Laik_Partitioning* laik_calc_partitioning(Laik_AccessPhase* ap);

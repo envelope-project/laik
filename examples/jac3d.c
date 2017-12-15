@@ -176,7 +176,7 @@ int main(int argc, char* argv[])
     // for global sum, used for residuum
     Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new(sumD, laik_All, LAIK_DF_None);
+    laik_switchto_new_phase(sumD, laik_All, LAIK_DF_None);
 
     // start with writing (= initialization) data1
     Laik_Data* dWrite = data1;
@@ -296,7 +296,7 @@ int main(int argc, char* argv[])
                 t2 = t;
             }
 
-            if (laik_myid(laik_get_dgroup(sumD)) == 0) {
+            if (laik_myid(laik_data_get_group(sumD)) == 0) {
                 printf("Residuum after %2d iters: %f\n", iter+1, res);
             }
 
@@ -342,9 +342,9 @@ int main(int argc, char* argv[])
 
     if (do_sum) {
         // for check at end: sum up all just written values
-        laik_switchto_new(dWrite,  laik_Master,  LAIK_DF_CopyIn);
+        laik_switchto_new_phase(dWrite,  laik_Master,  LAIK_DF_CopyIn);
 
-        if (laik_myid(laik_get_dgroup(dWrite)) == 0) {
+        if (laik_myid(laik_data_get_group(dWrite)) == 0) {
             double sum = 0.0;
             laik_map_def1_3d(dWrite, (void**) &baseW,
                              &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);

@@ -627,8 +627,9 @@ Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type)
     d->elemsize = type->size; // TODO: other than POD types
 
     d->backend_data = 0;
-    d->activeAccessPhase = 0;
+    d->activePartitioning = 0;
     d->activeFlow = LAIK_DF_None;
+    d->activeAccessPhase = 0;
     d->nextAccessPhaseUser = 0;
     d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free
@@ -667,25 +668,31 @@ void laik_data_set_name(Laik_Data* d, char* n)
 }
 
 // get space used for data
-Laik_Space* laik_get_dspace(Laik_Data* d)
+Laik_Space* laik_data_get_space(Laik_Data* d)
 {
     return d->space;
 }
 
 // get task group used for data
-Laik_Group* laik_get_dgroup(Laik_Data* d)
+Laik_Group* laik_data_get_group(Laik_Data* d)
 {
     return d->group;
 }
 
 // get instance managing data
-Laik_Instance* laik_get_dinst(Laik_Data* d)
+Laik_Instance* laik_data_get_inst(Laik_Data* d)
 {
     return d->group->inst;
 }
 
 // get active partitioning of data container
-Laik_AccessPhase* laik_get_active(Laik_Data* d)
+Laik_Partitioning* laik_data_get_partitioning(Laik_Data* d)
+{
+    return d->activePartitioning;
+}
+
+// get active access phase of data container
+Laik_AccessPhase* laik_data_get_accessphase(Laik_Data* d)
 {
     return d->activeAccessPhase;
 }
@@ -1143,27 +1150,32 @@ void laik_reserve(Laik_Data* d, Laik_Partitioning* ba)
     // TODO
 }
 
-// switch to new borders (new flow is derived from previous flow)
-void laik_switchto_partitioning(Laik_Data* d, Laik_Partitioning* toP)
+// switch to new partitioning borders
+// new flow is derived from previous flow when set to LAIK_DF_Previous
+void laik_switchto_partitioning(Laik_Data* d,
+                                Laik_Partitioning* toP, Laik_DataFlow toFlow)
 {
     // calculate actions to be done for switching
-    Laik_Partitioning *fromP = 0;
+
+    // if data is in an access phase, it must be consistent with partitioning
     Laik_AccessPhase* ap = d->activeAccessPhase;
     if (ap) {
         // active partitioning must have borders set
         assert(ap->hasValidPartitioning);
-        fromP = ap->partitioning;
+        assert(d->activePartitioning == ap->partitioning);
     }
 
-    Laik_DataFlow toFlow;
-    if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeFlow))
-        toFlow = LAIK_DF_CopyIn | LAIK_DF_CopyOut;
-    else
-        toFlow = LAIK_DF_None;
+    if (toFlow == LAIK_DF_Previous) {
+        if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeFlow))
+            toFlow = LAIK_DF_CopyIn | LAIK_DF_CopyOut;
+        else
+            toFlow = LAIK_DF_None;
+    }
 
     Laik_MappingList* toList = prepareMaps(d, toP, 0);
     Laik_Transition* t = laik_calc_transition(d->group, d->space,
-                                              fromP, d->activeFlow,
+                                              d->activePartitioning,
+                                              d->activeFlow,
                                               toP, toFlow);
 
     if (laik_log_begin(1)) {
@@ -1172,7 +1184,7 @@ void laik_switchto_partitioning(Laik_Data* d, Laik_Partitioning* toP)
         laik_log_append("  from ");
         laik_log_DataFlow(d->activeFlow);
         laik_log_append(", ");
-        laik_log_Partitioning(fromP);
+        laik_log_Partitioning(d->activePartitioning);
         laik_log_append("\n  to ");
         laik_log_DataFlow(toFlow);
         laik_log_append(", ");
@@ -1193,13 +1205,14 @@ void laik_switchto_partitioning(Laik_Data* d, Laik_Partitioning* toP)
     doTransition(d, t, d->activeMappings, toList);
 
     // set new mapping/partitioning active
+    d->activePartitioning = toP;
     d->activeFlow = toFlow;
     d->activeMappings = toList;
 }
 
 // switch from active to another partitioning
 void laik_switchto_phase(Laik_Data* d,
-                   Laik_AccessPhase* toAP, Laik_DataFlow toFlow)
+                         Laik_AccessPhase* toAP, Laik_DataFlow toFlow)
 {
     if (d->space->inst->profiling->do_profiling)
         d->space->inst->profiling->timer_total = laik_wtime();
@@ -1257,6 +1270,7 @@ void laik_switchto_phase(Laik_Data* d,
 
     // set new mapping/partitioning active
     d->activeAccessPhase = toAP;
+    d->activePartitioning = toP;
     d->activeFlow = toFlow;
     d->activeMappings = toList;
     if (toAP)
@@ -1285,9 +1299,9 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n)
     return laik_phase_my_slice(d->activeAccessPhase, n);
 }
 
-Laik_AccessPhase* laik_switchto_new(Laik_Data* d,
-                                     Laik_Partitioner* pr,
-                                     Laik_DataFlow flow)
+Laik_AccessPhase* laik_switchto_new_phase(Laik_Data* d,
+                                          Laik_Partitioner* pr,
+                                          Laik_DataFlow flow)
 {
     Laik_AccessPhase* p;
     p = laik_new_accessphase(d->group, d->space, pr, 0);

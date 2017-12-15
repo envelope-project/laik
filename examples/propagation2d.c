@@ -185,10 +185,10 @@ double data_check_sum(Laik_Data* d, Laik_AccessPhase *p, Laik_Group* world)
     }
 
     Laik_Data* laik_sum = laik_new_data_1d(world, laik_Double, 1);
-    laik_switchto_new(laik_sum, laik_All, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_new_phase(laik_sum, laik_All, LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_map_def1(laik_sum, (void**) &base, &count);
     *base=sum;
-    laik_switchto_new(laik_sum, laik_All, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(laik_sum, laik_All, LAIK_DF_CopyIn);
     laik_map_def1(laik_sum, (void**) &base, &count);
 
     return *base;
