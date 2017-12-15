@@ -148,14 +148,14 @@ struct _Laik_AccessPhase {
 
 // add/remove access phase to/from list using a given access phase as base
 void laik_addAccessPhaseForBase(Laik_AccessPhase* base,
-                                Laik_AccessPhase* p);
+                                Laik_AccessPhase* ap);
 void laik_removeAccessPhaseForBase(Laik_AccessPhase* base,
-                                   Laik_AccessPhase* p);
+                                   Laik_AccessPhase* ap);
 
 
 // add/remove data container as user to/from access phase
-void laik_addDataForAccessPhase(Laik_AccessPhase* p, Laik_Data* d);
-void laik_removeDataFromAccessPhase(Laik_AccessPhase* p, Laik_Data* d);
+void laik_addDataForAccessPhase(Laik_AccessPhase* ap, Laik_Data* d);
+void laik_removeDataFromAccessPhase(Laik_AccessPhase* ap, Laik_Data* d);
 
 
 //

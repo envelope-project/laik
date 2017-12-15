@@ -228,7 +228,7 @@ void laik_log_Transition(Laik_Transition* t)
 void laik_log_Partitioning(Laik_Partitioning* p)
 {
     if (!p) {
-        laik_log_append("(no borders)");
+        laik_log_append("(no partitioning)");
         return;
     }
 
