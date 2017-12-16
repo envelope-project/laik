@@ -72,7 +72,7 @@ int main(int argc, char* argv[])
 
     // define global 1d double array with 1 mio entries
     space = laik_new_space_1d(inst, 1000000);
-    array = laik_new_data(world, space, laik_Double);
+    array = laik_new_data(space, laik_Double);
 
     // allocate and initialize at master (others have empty partition)
     part1 = laik_new_partitioning(laik_Master, world, space, 0);
@@ -147,7 +147,7 @@ int main(int argc, char* argv[])
     Laik_Data* sumdata;
     Laik_Partitioning* sumpart1, *sumpart2;
     sumspace = laik_new_space_1d(inst, 4);
-    sumdata  = laik_new_data(world, sumspace, laik_Double);
+    sumdata  = laik_new_data(sumspace, laik_Double);
     sumpart1 = laik_new_partitioning(laik_All, world, sumspace, 0);
     laik_switchto_partitioning(sumdata, sumpart1,
                                LAIK_DF_ReduceOut | LAIK_DF_Sum);

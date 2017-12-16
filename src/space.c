@@ -17,7 +17,7 @@
 static int space_id = 0;
 
 // counter for partitioning ID, just for debugging
-static int part_id = 0;
+static int aphase_id = 0;
 
 // helpers
 
@@ -379,7 +379,7 @@ void laik_removeAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p)
 // Laik_AccessPhase
 
 
-// create a new partitioning on a space
+// create a new access phase on a space
 Laik_AccessPhase*
 laik_new_accessphase(Laik_Group* group, Laik_Space* space,
                      Laik_Partitioner* pr, Laik_AccessPhase *base)
@@ -387,13 +387,13 @@ laik_new_accessphase(Laik_Group* group, Laik_Space* space,
     Laik_AccessPhase* ap;
     ap = malloc(sizeof(Laik_AccessPhase));
     if (!ap) {
-        laik_panic("Out of memory allocating Laik_Partitioning object");
+        laik_panic("Out of memory allocating Laik_AccessPhase object");
         exit(1); // not actually needed, laik_panic never returns
     }
 
-    ap->id = part_id++;
-    ap->name = strdup("partng-0     ");
-    sprintf(ap->name, "partng-%d", ap->id);
+    ap->id = aphase_id++;
+    ap->name = strdup("aphase-0     ");
+    sprintf(ap->name, "aphase-%d", ap->id);
 
     assert(group->inst == space->inst);
     ap->group = group;
@@ -420,7 +420,7 @@ laik_new_accessphase(Laik_Group* group, Laik_Space* space,
     }
 
     if (laik_log_begin(1)) {
-        laik_log_append("new partitioning '%s':\n  space '%s', "
+        laik_log_append("new access phase '%s':\n  space '%s', "
                         "group %d (size %d, myid %d), partitioner '%s'",
                         ap->name, space->name,
                         ap->group->gid, ap->group->size, ap->group->myid,
@@ -1404,33 +1404,32 @@ void calcAddReductions(Laik_Group* group,
 
 // Calculate communication required for transitioning between partitionings
 Laik_Transition*
-laik_calc_transition(Laik_Group* group, Laik_Space* space,
+laik_calc_transition(Laik_Space* space,
                      Laik_Partitioning* fromP, Laik_DataFlow fromFlow,
                      Laik_Partitioning* toP, Laik_DataFlow toFlow)
 {
-    // no action if not part of the group
-    if (group->myid == -1)
-        return 0;
-
     Laik_Slice* slc;
 
     cleanTOpBufs(false);
     cleanGroupList();
 
     // make sure requested operation is consistent
+    Laik_Group* group = 0;
     if (fromP == 0) {
         // start: we come from nothing, go to initial partitioning
         assert(toP != 0);
         assert(!laik_do_copyin(toFlow));
-        assert(toP->group == group);
         assert(toP->space == space);
+
+        group = toP->group;
     }
     else if (toP == 0) {
         // end: go to nothing
         assert(fromP != 0);
         assert(!laik_do_copyout(fromFlow));
-        assert(fromP->group == group);
         assert(fromP->space == space);
+
+        group = fromP->group;
     }
     else {
         // to and from set
@@ -1439,14 +1438,19 @@ laik_calc_transition(Laik_Group* group, Laik_Space* space,
             assert(laik_do_copyout(fromFlow) ||
                    laik_is_reduction(fromFlow));
         }
-        assert(fromP->group == group);
         assert(fromP->space == space);
-        assert(toP->group == group);
         assert(toP->space == space);
+
+        group = fromP->group;
+        assert(toP->group == group);
     }
+    assert(group != 0);
+
+    // no action if not part of the group
+    int myid = group->myid;
+    if (myid == -1) return 0;
 
     int dims = space->dims;
-    int myid = group->myid;
     int taskCount = group->size;
 
     // init values as next phase does a reduction?
@@ -1717,10 +1721,13 @@ bool laik_migrate_phase(Laik_AccessPhase* ap, Laik_Group* newg)
     // make partitioning users (data containers) migrate to new group
     Laik_Data* d = ap->firstDataForAccessPhase;
     while(d) {
-        assert(d->group == oldg);
-        d->group = newg;
+        if (d->activePartitioning) {
+            if (d->activePartitioning->group == oldg)
+                laik_partitioning_migrate(d->activePartitioning, newg);
+        }
         d = d->nextAccessPhaseUser;
     }
+
 
     return true;
 }

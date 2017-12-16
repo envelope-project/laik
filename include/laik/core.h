@@ -56,6 +56,9 @@ Laik_Group* laik_create_group(Laik_Instance*);
 //! get default group with all tasks within this LAIK instance
 Laik_Group* laik_world(Laik_Instance* i);
 
+//! get instance the group is coming from
+Laik_Instance* laik_inst(Laik_Group*);
+
 //! return number of LAIK tasks available (within this instance)
 int laik_size(Laik_Group*);
 

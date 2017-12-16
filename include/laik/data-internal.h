@@ -69,7 +69,6 @@ struct _Laik_Data {
 
     int elemsize;
     Laik_Space* space; // index space of this container
-    Laik_Group* group;
     Laik_Type* type;
 
     // currently used partitioning and data flow

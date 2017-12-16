@@ -265,14 +265,15 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
         assert(d == p->data);
         assert(t == p->transition);
     }
-    int myid  = d->group->myid;
+    Laik_Group* g = d->activePartitioning->group;
+    int myid  = g->myid;
     int dims = d->space->dims;
     Laik_SwitchStat* ss = d->stat;
 
     laik_log(1, "MPI backend execute transition:\n"
              "  data '%s', group %d (size %d, myid %d)\n"
              "  actions: %d reductions, %d sends, %d recvs",
-             d->name, d->group->gid, d->group->size, myid,
+             d->name, g->gid, g->size, myid,
              t->redCount, t->sendCount, t->recvCount);
 
     if (myid < 0) {
@@ -280,7 +281,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
         return;
     }
 
-    MPIGroupData* gd = mpiGroupData(d->group);
+    MPIGroupData* gd = mpiGroupData(g);
     assert(gd); // must have been updated by laik_mpi_updateGroup()
     MPI_Comm comm = gd->comm;
     MPI_Status status;
@@ -347,9 +348,9 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
 
             // all-groups never should be specified explicitly
             if (op->outputGroup >= 0)
-                assert(t->group[op->outputGroup].count < d->group->size);
+                assert(t->group[op->outputGroup].count < g->size);
             if (op->inputGroup >= 0)
-                assert(t->group[op->inputGroup].count < d->group->size);
+                assert(t->group[op->inputGroup].count < g->size);
 
             // if neither input nor output are all-groups: manual reduction
             if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
@@ -577,7 +578,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
     //
     // TODO: prepare communication schedule with sorted transitions actions!
 
-    int count = d->group->size;
+    int count = g->size;
     for(int phase = 0; phase < 2*count; phase++) {
         int task = (phase < count) ? phase : (2*count-phase-1);
         bool sendToHigher   = (phase < count);

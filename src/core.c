@@ -220,6 +220,11 @@ void laik_removeAccessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p)
     p->nextAccessPhaseForGroup = 0;
 }
 
+Laik_Instance* laik_inst(Laik_Group* g)
+{
+    return g->inst;
+}
+
 Laik_Group* laik_world(Laik_Instance* i)
 {
     // world must have been added by backend

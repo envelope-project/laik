@@ -456,7 +456,7 @@ void laik_append_phase(Laik_PartGroup* g, Laik_AccessPhase* ap);
 // Calculate communication required for transitioning between
 // partitioning borders
 Laik_Transition*
-laik_calc_transition(Laik_Group* group, Laik_Space* space,
+laik_calc_transition(Laik_Space* space,
                      Laik_Partitioning* fromP, Laik_DataFlow fromFlow,
                      Laik_Partitioning* toP, Laik_DataFlow toFlow);
 

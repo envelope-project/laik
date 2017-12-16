@@ -606,10 +606,8 @@ void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src)
 
 static int data_id = 0;
 
-Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type)
+Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
 {
-    assert(group->inst == space->inst);
-
     Laik_Data* d = malloc(sizeof(Laik_Data));
     if (!d) {
         laik_panic("Out of memory allocating Laik_Data object");
@@ -620,7 +618,6 @@ Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type)
     d->name = strdup("data-0     ");
     sprintf(d->name, "data-%d", d->id);
 
-    d->group = group;
     d->space = space;
     d->type = type;
     assert(type && (type->size > 0));
@@ -646,17 +643,17 @@ Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type)
     return d;
 }
 
-Laik_Data* laik_new_data_1d(Laik_Group* g, Laik_Type* t, int64_t s1)
+Laik_Data* laik_new_data_1d(Laik_Instance* i, Laik_Type* t, int64_t s1)
 {
-    Laik_Space* space = laik_new_space_1d(g->inst, s1);
-    return laik_new_data(g, space, t);
+    Laik_Space* space = laik_new_space_1d(i, s1);
+    return laik_new_data(space, t);
 }
 
-Laik_Data* laik_new_data_2d(Laik_Group* g, Laik_Type* t,
+Laik_Data* laik_new_data_2d(Laik_Instance* i, Laik_Type* t,
                             int64_t s1, int64_t s2)
 {
-    Laik_Space* space = laik_new_space_2d(g->inst, s1, s2);
-    return laik_new_data(g, space, t);
+    Laik_Space* space = laik_new_space_2d(i, s1, s2);
+    return laik_new_data(space, t);
 }
 
 // set a data name, for debug output
@@ -673,16 +670,18 @@ Laik_Space* laik_data_get_space(Laik_Data* d)
     return d->space;
 }
 
-// get task group used for data
+//  get process group among data currently is distributed
 Laik_Group* laik_data_get_group(Laik_Data* d)
 {
-    return d->group;
+    if (d->activePartitioning)
+        return d->activePartitioning->group;
+    return 0;
 }
 
 // get instance managing data
 Laik_Instance* laik_data_get_inst(Laik_Data* d)
 {
-    return d->group->inst;
+    return d->space->inst;
 }
 
 // get active partitioning of data container
@@ -699,23 +698,22 @@ Laik_AccessPhase* laik_data_get_accessphase(Laik_Data* d)
 
 
 static
-Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* ba,
+Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
                               Laik_Layout* l)
 {
-    if (!ba) return 0; // without borders, no mappings
+    if (!p) return 0; // without partitioning borders there are no mappings
 
-    assert(ba->group == d->group);
-    int myid = laik_myid(ba->group);
+    int myid = laik_myid(p->group);
     if (myid == -1) return 0; // this task is not part of the task group
-    assert(myid < ba->group->size);
+    assert(myid < p->group->size);
     int dims = d->space->dims;
 
     // number of local slices
-    int sn = ba->off[myid+1] - ba->off[myid];
+    int sn = p->off[myid+1] - p->off[myid];
     if (sn == 0) return 0;
 
     // number of maps
-    int n = ba->tslice[ba->off[myid+1] - 1].mapNo + 1;
+    int n = p->tslice[p->off[myid+1] - 1].mapNo + 1;
     assert(n > 0);
 
     Laik_MappingList* ml;
@@ -727,19 +725,19 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* ba,
     ml->count = n;
 
     int mapNo = 0;
-    for(int o = ba->off[myid]; o < ba->off[myid+1]; o++, mapNo++) {
-        assert(mapNo == ba->tslice[o].mapNo);
+    for(int o = p->off[myid]; o < p->off[myid+1]; o++, mapNo++) {
+        assert(mapNo == p->tslice[o].mapNo);
         Laik_Mapping* m = &(ml->map[mapNo]);
         m->data = d;
         m->mapNo = mapNo;
         m->reusedFor = -1;
 
         // required space
-        Laik_Slice slc = ba->tslice[o].s;
+        Laik_Slice slc = p->tslice[o].s;
         m->firstOff = o;
-        while((o+1 < ba->off[myid+1]) && (ba->tslice[o+1].mapNo == mapNo)) {
+        while((o+1 < p->off[myid+1]) && (p->tslice[o+1].mapNo == mapNo)) {
             o++;
-            laik_slice_expand(dims, &slc, &(ba->tslice[o].s));
+            laik_slice_expand(dims, &slc, &(p->tslice[o].s));
         }
         m->lastOff = o;
         m->requiredSlice = slc;
@@ -1157,6 +1155,20 @@ void laik_switchto_partitioning(Laik_Data* d,
 {
     // calculate actions to be done for switching
 
+    Laik_Group* g;
+    if (d->activePartitioning) {
+        g = d->activePartitioning->group;
+        if (toP)
+            assert(g == toP->group);
+    }
+    else {
+        if (!toP) {
+            // nothing to switch from/to
+            return;
+        }
+        g = toP->group;
+    }
+
     // if data is in an access phase, it must be consistent with partitioning
     Laik_AccessPhase* ap = d->activeAccessPhase;
     if (ap) {
@@ -1173,7 +1185,7 @@ void laik_switchto_partitioning(Laik_Data* d,
     }
 
     Laik_MappingList* toList = prepareMaps(d, toP, 0);
-    Laik_Transition* t = laik_calc_transition(d->group, d->space,
+    Laik_Transition* t = laik_calc_transition(d->space,
                                               d->activePartitioning,
                                               d->activeFlow,
                                               toP, toFlow);
@@ -1231,13 +1243,12 @@ void laik_switchto_phase(Laik_Data* d,
     }
     if (toAP) {
         // new partitioning needs to be defined over same LAIK task group
-        assert(toAP->group == d->group);
         assert(toAP->hasValidPartitioning);
         toP = toAP->partitioning;
     }
 
     Laik_MappingList* toList = prepareMaps(d, toP, 0);
-    Laik_Transition* t = laik_calc_transition(d->group, d->space,
+    Laik_Transition* t = laik_calc_transition(d->space,
                                               fromP, d->activeFlow,
                                               toP, toFlow);
 
@@ -1299,18 +1310,20 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n)
     return laik_phase_my_slice(d->activeAccessPhase, n);
 }
 
-Laik_AccessPhase* laik_switchto_new_phase(Laik_Data* d,
+Laik_AccessPhase* laik_switchto_new_phase(Laik_Data* d, Laik_Group* g,
                                           Laik_Partitioner* pr,
                                           Laik_DataFlow flow)
 {
-    Laik_AccessPhase* p;
-    p = laik_new_accessphase(d->group, d->space, pr, 0);
+    if (laik_myid(g) < 0) return 0;
 
-    laik_log(1, "switch data '%s' to new partitioning '%s'",
-             d->name, p->name);
+    Laik_AccessPhase* ap;
+    ap = laik_new_accessphase(g, d->space, pr, 0);
 
-    laik_switchto_phase(d, p, flow);
-    return p;
+    laik_log(1, "switch data '%s' to new access phase '%s'",
+             d->name, ap->name);
+
+    laik_switchto_phase(d, ap, flow);
+    return ap;
 }
 
 // migrate data container to use another group
@@ -1325,9 +1338,6 @@ void laik_migrate_data(Laik_Data* d, Laik_Group* g)
 
     // switch to invalid partitioning
     laik_switchto_phase(d, 0, LAIK_DF_None);
-
-    // FIXME: new user of group !
-    d->group = g;
 }
 
 void laik_fill_double(Laik_Data* d, double v)
@@ -1653,15 +1663,16 @@ int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
 // make own partition available for direct access in local memory
 Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 {
-    if (d->group->myid == -1) {
-        laik_log(LAIK_LL_Error,
-                 "laik_map called for data '%s' defined on task group %d.\n"
-                 "This task is NOT part of the group. Fix your application!\n"
-                 "(may crash now if returned address is dereferenced)",
-                 d->name, d->group->gid);
-    }
     // we must have an active partitioning
     assert(d->activePartitioning);
+    Laik_Group* g = d->activePartitioning->group;
+    if (g->myid == -1) {
+        laik_log(LAIK_LL_Error,
+                 "laik_map called for data '%s' defined on process group %d.\n"
+                 "This task is NOT part of the group. Fix your application!\n"
+                 "(may crash now if returned address is dereferenced)",
+                 d->name, g->gid);
+    }
 
     if (!d->activeMappings) {
         // lazy allocation

@@ -60,11 +60,11 @@ int main(int argc, char* argv[])
 
     // 1d arrays for nodes
     Laik_Space* node_space = laik_new_space_1d(inst, size_nodes);
-    Laik_Data* node = laik_new_data(world, node_space, laik_Double);
+    Laik_Data* node = laik_new_data(node_space, laik_Double);
 
     // 1d arrays for elements
     Laik_Space* element_space = laik_new_space_1d(inst, size_elems);
-    Laik_Data* element = laik_new_data(world, element_space, laik_Double);
+    Laik_Data* element = laik_new_data(element_space, laik_Double);
 
     Laik_AccessPhase *pNodes, *pElements;
 

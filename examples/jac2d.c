@@ -102,8 +102,8 @@ int main(int argc, char* argv[])
 
     // two 2d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_2d(inst, size, size);
-    Laik_Data* data1 = laik_new_data(world, space, laik_Double);
-    Laik_Data* data2 = laik_new_data(world, space, laik_Double);
+    Laik_Data* data1 = laik_new_data(space, laik_Double);
+    Laik_Data* data2 = laik_new_data(space, laik_Double);
 
     // two types of access phases into data1 and data2:
     // - pWrite: distributes the cells to update
@@ -120,9 +120,9 @@ int main(int argc, char* argv[])
     pRead = laik_new_accessphase(world, space, pr, pWrite);
 
     // for global sum, used for residuum and value sum at end
-    Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
+    Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new_phase(sumD, laik_All, LAIK_DF_None);
+    laik_switchto_new_phase(sumD, world, laik_All, LAIK_DF_None);
 
     // start with writing (= initialization) data1
     Laik_Data* dWrite = data1;
@@ -303,7 +303,8 @@ int main(int argc, char* argv[])
 
     if (do_sum) {
         // for check at end: sum up all just written values
-        laik_switchto_new_phase(dWrite,  laik_Master,  LAIK_DF_CopyIn);
+        laik_switchto_new_phase(dWrite, laik_data_get_group(dWrite),
+                                laik_Master, LAIK_DF_CopyIn);
 
         if (laik_myid(laik_data_get_group(dWrite)) == 0) {
             double sum = 0.0;

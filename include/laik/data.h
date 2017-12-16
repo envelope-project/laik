@@ -76,9 +76,9 @@ typedef struct _Laik_Data Laik_Data;
  * If no partitioning is set (via laik_setPartition) before
  * use, default to equal-sized owner BLOCK partitioning.
  */
-Laik_Data* laik_new_data(Laik_Group* group, Laik_Space* space, Laik_Type* type);
-Laik_Data* laik_new_data_1d(Laik_Group* g, Laik_Type* t, int64_t s1);
-Laik_Data* laik_new_data_2d(Laik_Group* g, Laik_Type* t, int64_t s1, int64_t s2);
+Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type);
+Laik_Data* laik_new_data_1d(Laik_Instance* i, Laik_Type* t, int64_t s1);
+Laik_Data* laik_new_data_2d(Laik_Instance* i, Laik_Type* t, int64_t s1, int64_t s2);
 
 // set a data name, for debug output
 void laik_data_set_name(Laik_Data* d, char* n);
@@ -86,7 +86,7 @@ void laik_data_set_name(Laik_Data* d, char* n);
 // get space used for data
 Laik_Space* laik_data_get_space(Laik_Data*);
 
-// get task group used for data
+//  get process group among data currently is distributed
 Laik_Group* laik_data_get_group(Laik_Data* d);
 
 // get instance managing data
@@ -128,7 +128,7 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 
 // switch from active to a newly created access phase using a given
 // partitioner algorithm, and return it
-Laik_AccessPhase* laik_switchto_new_phase(Laik_Data*,
+Laik_AccessPhase* laik_switchto_new_phase(Laik_Data*, Laik_Group* g,
                                     Laik_Partitioner* pr, Laik_DataFlow flow);
 
 void laik_fill_double(Laik_Data* data, double v);

@@ -297,8 +297,8 @@ int main(int argc, char* argv[])
 
     // two 1d arrays, using same space
     Laik_Space* space = laik_new_space_1d(inst, n);
-    Laik_Data* data1 = laik_new_data(world, space, laik_Double);
-    Laik_Data* data2 = laik_new_data(world, space, laik_Double);
+    Laik_Data* data1 = laik_new_data(space, laik_Double);
+    Laik_Data* data2 = laik_new_data(space, laik_Double);
 
     // access phase types:
     // - pWrite: distributes the state values to update
@@ -320,7 +320,7 @@ int main(int argc, char* argv[])
 
     // for indirection, we store local indexes in a LAIK container
     Laik_Type* itype = laik_register_type("l-indexes", (in + 1) * sizeof(int));
-    Laik_Data* idata = laik_new_data(world, space, itype);
+    Laik_Data* idata = laik_new_data(space, itype);
 
     if (doIndirection) {
         // register initialization function for global-to-local index data

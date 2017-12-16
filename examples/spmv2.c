@@ -215,15 +215,15 @@ int main(int argc, char* argv[])
     // 1d space to partition matrix rows and result vector
     Laik_Space* s = laik_new_space_1d(inst, size);
     // LAIK container for result vector
-    Laik_Data* resD = laik_new_data(world, s, laik_Double);
+    Laik_Data* resD = laik_new_data(s, laik_Double);
     laik_data_set_name(resD, "result");
     // LAIK container for input vector
-    Laik_Data* inpD = laik_new_data(world, s, laik_Double);
+    Laik_Data* inpD = laik_new_data(s, laik_Double);
     laik_data_set_name(inpD, "input");
     // for global normalization, to broadcast a vector sum to all
-    Laik_Data* sumD = laik_new_data_1d(world, laik_Double, 1);
+    Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new_phase(sumD, laik_All, LAIK_DF_None);
+    laik_switchto_new_phase(sumD, world, laik_All, LAIK_DF_None);
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner(0, 1, getEW, 0, m);
@@ -240,7 +240,7 @@ int main(int argc, char* argv[])
     int64_t fromRow, toRow;
 
     // initialize input vector at master, broadcast to all
-    laik_switchto_new_phase(inpD, laik_Master, LAIK_DF_CopyOut);
+    laik_switchto_new_phase(inpD, world, laik_Master, LAIK_DF_CopyOut);
     laik_map_def1(inpD, (void**) &inp, &icount);
     for(i = 0; i < icount; i++) inp[i] = 1.0;
 
@@ -365,8 +365,11 @@ int main(int argc, char* argv[])
     laik_set_phase(inst, 2, "post-proc", NULL);
 
     // push result to master
-    laik_switchto_new_phase(inpD, laik_Master, LAIK_DF_CopyIn);
-    laik_switchto_new_phase(resD, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(inpD, laik_data_get_group(inpD),
+                            laik_Master, LAIK_DF_CopyIn);
+    //if (laik_myid(laik_data_get_group(resD)) >= 0)
+        laik_switchto_new_phase(resD, laik_data_get_group(resD),
+                                laik_Master, LAIK_DF_CopyIn);
     if (laik_myid(laik_data_get_group(inpD)) == 0) {
         double sum = 0.0;
         laik_map_def1(resD, (void**) &res, &rcount);

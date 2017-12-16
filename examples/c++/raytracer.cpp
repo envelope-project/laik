@@ -290,9 +290,9 @@ int main(int argc, char **argv)
 
     Laik_Space* space = laik_new_space_1d(inst, sz_image);
     Laik_Space* space2d = laik_new_space_2d(inst, width, height);
-    Laik_Data* xval = laik_new_data(world, space, laik_Double);
-    Laik_Data* yval = laik_new_data(world, space, laik_Double);
-    Laik_Data* zval = laik_new_data(world, space, laik_Double);
+    Laik_Data* xval = laik_new_data(space, laik_Double);
+    Laik_Data* yval = laik_new_data(space, laik_Double);
+    Laik_Data* zval = laik_new_data(space, laik_Double);
 
     Laik_AccessPhase* pImage = laik_new_accessphase(world, space2d,
                                   laik_new_bisection_partitioner(), 0);
@@ -305,9 +305,9 @@ int main(int argc, char **argv)
     double fov = 30, aspectratio = width / double(height); 
     double angle = tan(M_PI * 0.5 * fov / 180.); 
 
-    laik_switchto_new_phase(xval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
-    laik_switchto_new_phase(yval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
-    laik_switchto_new_phase(zval, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_new_phase(xval, world, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_new_phase(yval, world, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_new_phase(zval, world, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
 
     int64_t xstart, xend, ystart, yend;
     laik_phase_myslice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
@@ -331,9 +331,9 @@ int main(int argc, char **argv)
         } 
     } 
 
-    laik_switchto_new_phase(xval, laik_Master, LAIK_DF_CopyIn);
-    laik_switchto_new_phase(yval, laik_Master, LAIK_DF_CopyIn);
-    laik_switchto_new_phase(zval, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(xval, world, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(yval, world, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(zval, world, laik_Master, LAIK_DF_CopyIn);
 
     //TODO: need reduction!
     //laik_switchto_new(image, laik_Master, LAIK_DF_CopyIn);

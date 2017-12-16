@@ -184,11 +184,13 @@ double data_check_sum(Laik_Data* d, Laik_AccessPhase *p, Laik_Group* world)
         }
     }
 
-    Laik_Data* laik_sum = laik_new_data_1d(world, laik_Double, 1);
-    laik_switchto_new_phase(laik_sum, laik_All, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    Laik_Data* laik_sum = laik_new_data_1d(laik_inst(world), laik_Double, 1);
+    laik_switchto_new_phase(laik_sum, world, laik_All,
+                            LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_map_def1(laik_sum, (void**) &base, &count);
     *base=sum;
-    laik_switchto_new_phase(laik_sum, laik_All, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(laik_sum, world, laik_All,
+                            LAIK_DF_CopyIn);
     laik_map_def1(laik_sum, (void**) &base, &count);
 
     return *base;
@@ -282,11 +284,11 @@ int main(int argc, char* argv[])
 
     // 1d arrays for elements
     Laik_Space* element_space = laik_new_space_1d(inst, size_elems);
-    Laik_Data* element = laik_new_data(world, element_space, laik_Double);
+    Laik_Data* element = laik_new_data(element_space, laik_Double);
 
     // 1d arrays for nodes
     Laik_Space* node_space = laik_new_space_1d(inst, size_nodes);
-    Laik_Data* node = laik_new_data(world, node_space, laik_Double);
+    Laik_Data* node = laik_new_data(node_space, laik_Double);
 
 
     Laik_AccessPhase *pNodes, *pElements;

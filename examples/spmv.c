@@ -93,7 +93,7 @@ int main(int argc, char* argv[])
     // 1d space for matrix rows and vector <res>
     Laik_Space* s = laik_new_space_1d(inst, size);
     // result vector
-    Laik_Data* resD = laik_new_data(world, s, laik_Double);
+    Laik_Data* resD = laik_new_data(s, laik_Double);
 
     // block partitioning according to elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner1();
@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
         laik_set_iteration(inst, r-fromRow);
     }
     // push result to master
-    laik_switchto_new_phase(resD, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(resD, world, laik_Master, LAIK_DF_CopyIn);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;
@@ -135,8 +135,8 @@ int main(int argc, char* argv[])
     // do SPMV, second time
 
     // other way to push results to master: use sum reduction
-    laik_switchto_new_phase(resD, laik_All,
-                      LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_new_phase(resD, world, laik_All,
+                            LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
     laik_map_def1(resD, (void**) &res, &count);
     laik_phase_myslice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
@@ -144,7 +144,7 @@ int main(int argc, char* argv[])
             res[r] += m->val[o] * v[m->col[o]];
         laik_set_iteration(inst, r-fromRow);
     }
-    laik_switchto_new_phase(resD, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(resD, world, laik_Master, LAIK_DF_CopyIn);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;
