@@ -101,9 +101,12 @@ Laik_AccessPhase* laik_data_get_accessphase(Laik_Data* d);
 // free resources for a data container
 void laik_free(Laik_Data*);
 
-// ensure that allocation for <d> is large enough such that
-// switching to <ba> does not require any further allocation
+// enlarge the reservation for <d> such that after laik_allocate(),
+// switching to <ba> does not require any further dynamic re-allocation
 void laik_reserve(Laik_Data* d, Laik_Partitioning* ba);
+
+// allocate memory for <d> taking into account any reservations done
+void laik_allocate(Laik_Data* d);
 
 // switch to new partitioning (new flow is derived from previous flow)
 void laik_switchto_partitioning(Laik_Data* d,

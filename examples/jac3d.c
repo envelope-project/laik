@@ -163,15 +163,26 @@ int main(int argc, char* argv[])
                                             laik_new_halo_partitioner(1);
     pRead = laik_new_accessphase(world, space, pr, pWrite);
 
-    // reserve memory: data1/2 will both be switched to pWrite and pRead
-    // run partitioners to get actual partitioning for reservation
-    // order is important, as calculating baRead needs baWrite
+    // reserve and pre-allocate memory for data1/2
+    // this is purely optional, and the application still works when we
+    // switch to a partitioning not reserved and allocatedd for.
+    // However, this makes sure that no allocation happens in the main
+    // iteration, and reservation/allocation should be done again on
+    // re-partitioning.
+    //
+    // notes:
+    // - both data will be switched to pWrite and pRead
+    // - now run partitioners to get actual partitioning for reservation
+    // - order is important, as calculating baRead needs baWrite
     Laik_Partitioning* paWrite = laik_calc_partitioning(pWrite);
     Laik_Partitioning* paRead  = laik_calc_partitioning(pRead);
     laik_reserve(data1, paRead);
     laik_reserve(data1, paWrite);
     laik_reserve(data2, paRead);
     laik_reserve(data2, paWrite);
+    // now do memory allocation for reserved partition sizes
+    laik_allocate(data1);
+    laik_allocate(data2);
 
     // for global sum, used for residuum
     Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);

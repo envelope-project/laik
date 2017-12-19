@@ -1148,6 +1148,13 @@ void laik_reserve(Laik_Data* d, Laik_Partitioning* ba)
     // TODO
 }
 
+void laik_allocate(Laik_Data* d)
+{
+    (void) d;
+
+    // TODO
+}
+
 // switch to new partitioning borders
 // new flow is derived from previous flow when set to LAIK_DF_Previous
 void laik_switchto_partitioning(Laik_Data* d,
