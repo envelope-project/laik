@@ -303,12 +303,12 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
 
             assert(op->myInputMapNo >= 0);
             assert(op->myInputMapNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[op->myInputMapNo]);
+            Laik_Mapping* fromMap = fromList->map[op->myInputMapNo];
 
             Laik_Mapping* toMap = 0;
             if (toList && (op->myOutputMapNo >= 0)) {
                 assert(op->myOutputMapNo < toList->count);
-                toMap = &(toList->map[op->myOutputMapNo]);
+                toMap = toList->map[op->myOutputMapNo];
 
                 if (toMap->base == 0) {
                     // we may reuse previous mapping
@@ -564,7 +564,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
         for(int i = 0; i < 100; i++) {
             // do not free memory of reused maps
             if (reuse[i] > -1)
-                fromList->map[reuse[i]].base = 0;
+                fromList->map[reuse[i]]->base = 0;
         }
     }
 
@@ -602,7 +602,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
             assert(myid != op->fromTask);
 
             assert(op->mapNo < toList->count);
-            Laik_Mapping* toMap = &(toList->map[op->mapNo]);
+            Laik_Mapping* toMap = toList->map[op->mapNo];
             assert(toMap != 0);
             if (toMap->base == 0) {
                 // space not yet allocated
@@ -693,7 +693,7 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
             assert(myid != op->toTask);
 
             assert(op->mapNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[op->mapNo]);
+            Laik_Mapping* fromMap = fromList->map[op->mapNo];
             // data to send must exist in local memory
             assert(fromMap);
             if (!fromMap->base) {

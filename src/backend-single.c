@@ -62,8 +62,8 @@ void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
     if (t->redCount > 0) {
         assert(fromList->count == 1);
         assert(toList->count == 1);
-        Laik_Mapping* fromMap = &(fromList->map[0]);
-        Laik_Mapping* toMap = &(toList->map[0]);
+        Laik_Mapping* fromMap = fromList->map[0];
+        Laik_Mapping* toMap = toList->map[0];
         char* fromBase = fromMap ? fromMap->base : 0;
         char* toBase = toMap ? toMap->base : 0;
 

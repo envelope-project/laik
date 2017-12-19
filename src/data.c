@@ -717,17 +717,22 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
     assert(n > 0);
 
     Laik_MappingList* ml;
-    ml = malloc(sizeof(Laik_MappingList) + (n-1) * sizeof(Laik_Mapping));
+    int mlSize = sizeof(Laik_MappingList) + (n-1) * sizeof(Laik_Mapping*);
+    // also allocate n Laik_Mapping structs
+    ml = malloc(mlSize + n * sizeof(Laik_Mapping));
     if (!ml) {
         laik_panic("Out of memory allocating Laik_Mapping object");
         exit(1); // not actually needed, laik_panic never returns
     }
     ml->count = n;
+    // set pointers to space allocated after MappingList
+    for(int i = 0; i < n; i++)
+        ml->map[i] = &( ((Laik_Mapping*) (((char*)ml) + mlSize))[i] );
 
     int mapNo = 0;
     for(int o = p->off[myid]; o < p->off[myid+1]; o++, mapNo++) {
         assert(mapNo == p->tslice[o].mapNo);
-        Laik_Mapping* m = &(ml->map[mapNo]);
+        Laik_Mapping* m = ml->map[mapNo];
         m->data = d;
         m->mapNo = mapNo;
         m->reusedFor = -1;
@@ -772,7 +777,7 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
     if (ml == 0) return;
 
     for(int i = 0; i < ml->count; i++) {
-        Laik_Mapping* m = &(ml->map[i]);
+        Laik_Mapping* m = ml->map[i];
         assert(m != 0);
 
         Laik_Data* d = m->data;
@@ -876,9 +881,9 @@ void copyMaps(Laik_Transition* t,
     for(int i = 0; i < t->localCount; i++) {
         struct localTOp* op = &(t->local[i]);
         assert(op->fromMapNo < fromList->count);
-        Laik_Mapping* fromMap = &(fromList->map[op->fromMapNo]);
+        Laik_Mapping* fromMap = fromList->map[op->fromMapNo];
         assert(op->toMapNo < toList->count);
-        Laik_Mapping* toMap = &(toList->map[op->toMapNo]);
+        Laik_Mapping* toMap = toList->map[op->toMapNo];
 
         assert(toMap->data == fromMap->data);
         int dims = fromMap->data->space->dims;
@@ -982,13 +987,13 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
     // reuse only possible if old mappings exist
     if (!fromList) return;
     if ((toList == 0) || (toList->count ==0)) return;
-    Laik_Data* d = toList->map[0].data;
+    Laik_Data* d = toList->map[0]->data;
     int dims = d->space->dims;
 
     for(int i = 0; i < toList->count; i++) {
-        Laik_Mapping* toMap = &(toList->map[i]);
+        Laik_Mapping* toMap = toList->map[i];
         for(int sNo = 0; sNo < fromList->count; sNo++) {
-            Laik_Mapping* fromMap = &(fromList->map[sNo]);
+            Laik_Mapping* fromMap = fromList->map[sNo];
             if (fromMap->base == 0) continue;
             if (fromMap->reusedFor >= 0) continue; // only reuse once
 
@@ -1041,7 +1046,7 @@ void initMaps(Laik_Transition* t,
     for(int i = 0; i < t->initCount; i++) {
         struct initTOp* op = &(t->init[i]);
         assert(op->mapNo < toList->count);
-        Laik_Mapping* toMap = &(toList->map[op->mapNo]);
+        Laik_Mapping* toMap = toList->map[op->mapNo];
 
         if (toMap->count == 0) {
             // no elements to initialize
@@ -1710,7 +1715,7 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
     if (n >= d->activeMappings->count)
         return 0;
 
-    Laik_Mapping* m = &(d->activeMappings->map[n]);
+    Laik_Mapping* m = d->activeMappings->map[n];
     // ensure the mapping is backed by real memory
     laik_allocateMap(m, d->stat);
 
@@ -1811,7 +1816,7 @@ Laik_Mapping* laik_global2local_1d(Laik_Data* d, int64_t gidx, uint64_t* lidx)
     assert(d->space->dims == 1);
     if (!d->activeMappings) return 0;
     for(int i = 0; i < d->activeMappings->count; i++) {
-        Laik_Mapping* m = &(d->activeMappings->map[i]);
+        Laik_Mapping* m = d->activeMappings->map[i];
 
         if (gidx < m->requiredSlice.from.i[0]) continue;
         if (gidx >= m->requiredSlice.to.i[0]) continue;
@@ -1828,7 +1833,7 @@ Laik_Mapping* laik_global2maplocal_1d(Laik_Data* d, int64_t gidx,
     assert(d->space->dims == 1);
     if (!d->activeMappings) return 0;
     for(int i = 0; i < d->activeMappings->count; i++) {
-        Laik_Mapping* m = &(d->activeMappings->map[i]);
+        Laik_Mapping* m = d->activeMappings->map[i];
 
         if (gidx < m->requiredSlice.from.i[0]) continue;
         if (gidx >= m->requiredSlice.to.i[0]) continue;
@@ -1847,7 +1852,7 @@ int64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
     assert(d->activeMappings && (d->activeMappings->count == 1));
 
     // TODO: check all mappings, not just map 0
-    Laik_Mapping* m = &(d->activeMappings->map[0]);
+    Laik_Mapping* m = d->activeMappings->map[0];
     assert(off < m->count);
 
     // TODO: take layout into account
@@ -1861,7 +1866,7 @@ int64_t laik_maplocal2global_1d(Laik_Data* d, int mapNo, uint64_t li)
     assert(d->activeMappings);
 
     // TODO: check all mappings, not just map 0
-    Laik_Mapping* m = &(d->activeMappings->map[mapNo]);
+    Laik_Mapping* m = d->activeMappings->map[mapNo];
     assert(li < m->count);
 
     // TODO: take layout into account

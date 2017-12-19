@@ -136,7 +136,7 @@ struct _Laik_Mapping {
 
 struct _Laik_MappingList {
     int count;
-    Laik_Mapping map[1];
+    Laik_Mapping* map[1];
 };
 
 // initialize the LAIK data module, called from laik_new_instance
