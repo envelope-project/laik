@@ -1140,10 +1140,29 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
         freeMaps(fromList, d->stat);
 }
 
-void laik_reserve(Laik_Data* d, Laik_Partitioning* ba)
+// forget any previous reservations done for <d>.
+// this does not change current allocation, but influences the next
+void laik_clear_reservation(Laik_Data* d)
 {
     (void) d;
-    (void) ba;
+
+    // TODO
+}
+
+// enlarge the reservation for <d> to include partition sizes of <p>.
+// this does not change current allocation, but influences the next
+void laik_extend_reservation(Laik_Data* d, Laik_Partitioning* p)
+{
+    (void) d;
+    (void) p;
+
+    // TODO
+}
+
+void laik_reserve(Laik_Data* d, Laik_AccessPhase* ap)
+{
+    (void) d;
+    (void) ap;
 
     // TODO
 }

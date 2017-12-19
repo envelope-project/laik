@@ -101,9 +101,21 @@ Laik_AccessPhase* laik_data_get_accessphase(Laik_Data* d);
 // free resources for a data container
 void laik_free(Laik_Data*);
 
-// enlarge the reservation for <d> such that after laik_allocate(),
-// switching to <ba> does not require any further dynamic re-allocation
-void laik_reserve(Laik_Data* d, Laik_Partitioning* ba);
+// forget any previous reservations done for <d>.
+// this does not change current allocation, but influences the next
+void laik_clear_reservation(Laik_Data* d);
+
+// enlarge the reservation for <d> to include partition sizes of <p>.
+// this does not change current allocation, but influences the next
+void laik_extend_reservation(Laik_Data* d, Laik_Partitioning* p);
+
+// high-level: declare that for allocations done for <d>, we always should
+// take into account the size of partitionings used in access phase <ap>,
+// such that switching to <ap> does not require dynamic re-allocation.
+//
+// If a partitioning for <ap> changes, also does the reservation. However,
+// this only has influence on the next allocation
+void laik_reserve(Laik_Data* d, Laik_AccessPhase* ap);
 
 // allocate memory for <d> taking into account any reservations done
 void laik_allocate(Laik_Data* d);
