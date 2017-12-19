@@ -258,8 +258,15 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 
 // functions to be used in own implementation of a partitioner algorithm
 
-// the <tag> is a hint for the data layer: if >0, slices with same tag go
-//  into same mapping.
+// add a slice which should be owned by a given process
+//
+// the <tag> is a hint for the data layer (if >0):
+// - slices with same tag go into same mapping
+// - when switching between partitionings, mappings are reused when they are
+//   given the same tag >0. For re-use of mappings, if tag 0 is specified,
+//   a heuristic is used which checks for highest overlap of indexes.
+//   This is also important for reservation semantics
+//
 // the <data> pointer is an arbitrary value which can be passed from
 //  application-specific partitioners to the code processing slices.
 //  LAIK provided partitioners set <data> to 0.
