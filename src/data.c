@@ -729,22 +729,22 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
     for(int i = 0; i < n; i++)
         ml->map[i] = &( ((Laik_Mapping*) (((char*)ml) + mlSize))[i] );
 
+    int firstOff, lastOff;
     int mapNo = 0;
     for(int o = p->off[myid]; o < p->off[myid+1]; o++, mapNo++) {
         assert(mapNo == p->tslice[o].mapNo);
         Laik_Mapping* m = ml->map[mapNo];
         m->data = d;
-        m->mapNo = mapNo;
         m->reusedFor = -1;
 
         // required space
         Laik_Slice slc = p->tslice[o].s;
-        m->firstOff = o;
+        firstOff = o;
         while((o+1 < p->off[myid+1]) && (p->tslice[o+1].mapNo == mapNo)) {
             o++;
             laik_slice_expand(dims, &slc, &(p->tslice[o].s));
         }
-        m->lastOff = o;
+        lastOff = o;
         m->requiredSlice = slc;
         m->count = laik_slice_size(dims, &slc);
         m->size[0] = slc.to.i[0] - slc.from.i[0];
@@ -763,7 +763,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
                             d->name, mapNo);
             laik_log_Slice(dims, &slc);
             laik_log_flush(" (off %d - %d, count %d, elemsize %d)\n",
-                           m->firstOff, m->lastOff, m->count, d->elemsize);
+                           firstOff, lastOff, m->count, d->elemsize);
         }
     }
     assert(n == mapNo);

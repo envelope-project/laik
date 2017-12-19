@@ -121,7 +121,6 @@ struct _Laik_Layout {
 struct _Laik_Mapping {
     Laik_Data* data;
     int mapNo; // index of this map in local mapping list
-    int firstOff, lastOff; // offsets into slice array covered by this mapping
     Laik_Layout* layout; // memory layout used
     Laik_Slice allocatedSlice; // slice (global) covered by this mapping
     Laik_Slice requiredSlice; // sub-slice (global) containing used slices
