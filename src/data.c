@@ -1322,6 +1322,7 @@ void laik_allocate(Laik_Data* d)
         }
     }
     assert(mapNo == mCount);
+    free(glist);
 
     // check that MappingList's are fully set
     for(int r = 0; r < d->resCount; r++) {
