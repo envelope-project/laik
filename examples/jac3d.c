@@ -101,18 +101,21 @@ int main(int argc, char* argv[])
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
     bool do_sum = false;
+    bool do_reservation = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'n') use_cornerhalo = false;
         if (argv[arg][1] == 'p') do_profiling = true;
         if (argv[arg][1] == 's') do_sum = true;
+        if (argv[arg][1] == 'r') do_reservation = true;
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac3d_profiling.txt'\n"
                    " -s : print value sum at end (warning: sum done at master)\n"
+                   " -r : do space reservation before iteration loop\n"
                    " -h : print this help text and exit\n",
                    argv[0]);
             exit(1);
@@ -163,26 +166,28 @@ int main(int argc, char* argv[])
                                             laik_new_halo_partitioner(1);
     pRead = laik_new_accessphase(world, space, pr, pWrite);
 
-    // reserve and pre-allocate memory for data1/2
-    // this is purely optional, and the application still works when we
-    // switch to a partitioning not reserved and allocatedd for.
-    // However, this makes sure that no allocation happens in the main
-    // iteration, and reservation/allocation should be done again on
-    // re-partitioning.
-    //
-    // notes:
-    // - both data will be switched to pWrite and pRead
-    // - now run partitioners to get actual partitioning for reservation
-    // - order is important, as calculating baRead needs baWrite
-    Laik_Partitioning* paWrite = laik_calc_partitioning(pWrite);
-    Laik_Partitioning* paRead  = laik_calc_partitioning(pRead);
-    laik_extend_reservation(data1, paRead);
-    laik_extend_reservation(data1, paWrite);
-    laik_extend_reservation(data2, paRead);
-    laik_extend_reservation(data2, paWrite);
-    // now do memory allocation for reserved partition sizes
-    laik_allocate(data1);
-    laik_allocate(data2);
+    if (do_reservation) {
+        // reserve and pre-allocate memory for data1/2
+        // this is purely optional, and the application still works when we
+        // switch to a partitioning not reserved and allocatedd for.
+        // However, this makes sure that no allocation happens in the main
+        // iteration, and reservation/allocation should be done again on
+        // re-partitioning.
+        //
+        // notes:
+        // - both data will be switched to pWrite and pRead
+        // - now run partitioners to get actual partitioning for reservation
+        // - order is important, as calculating baRead needs baWrite
+        Laik_Partitioning* paWrite = laik_calc_partitioning(pWrite);
+        Laik_Partitioning* paRead  = laik_calc_partitioning(pRead);
+        laik_extend_reservation(data1, paRead);
+        laik_extend_reservation(data1, paWrite);
+        laik_extend_reservation(data2, paRead);
+        laik_extend_reservation(data2, paWrite);
+        // now do memory allocation for reserved partition sizes
+        laik_allocate(data1);
+        laik_allocate(data2);
+    }
 
     // for global sum, used for residuum
     Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);
