@@ -741,6 +741,10 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         if ((d->res[r].p == p) && (d->res[r].mList != 0))
             return d->res[r].mList;
 
+    // with reservations, we never should get to this point:
+    // clear the reservation before switching to a new partitioning!
+    assert(d->resCount == 0);
+
     // number of local slices
     int sn = p->off[myid+1] - p->off[myid];
     if (sn == 0) return 0;
@@ -1245,21 +1249,30 @@ void laik_allocate(Laik_Data* d)
 
     // number of my slice groups in all reserved partitionings
     int groupCount = 0;
-    for(int r = 0; r < d->resCount; r++)
-        groupCount += d->res[r].p->myMapCount;
+    for(int r = 0; r < d->resCount; r++) {
+        Laik_Partitioning* p = d->res[r].p;
+        // this process must be part of all partitionings to reserve for
+        assert(p->group->myid >= 0);
+        laik_updateMyMapOffsets(p); // could be done always, not just lazy
+        assert(p->myMapCount >= 0);
+        assert(p->myMapOff != 0);
+        groupCount += p->myMapCount;
+    }
 
     struct mygroup *glist = malloc(groupCount * sizeof(struct mygroup));
     int gOff = 0;
     for(int r = 0; r < d->resCount; r++) {
         Laik_Partitioning* p = d->res[r].p;
-        for(int o = 0; o < p->myMapCount; o++) {
-            int off = p->myMapOff[o];
+        for(int map = 0; map < p->myMapCount; map++) {
+            int off = p->myMapOff[map];
             int tag = p->tslice[off].tag;
             // for reservation, tag >0 to specify partitioning relations
             // TODO: tag == 0 means to use heuristic, but not implemented yet
-            assert(tag > 0);
+            //       but we are fine with just one slice group and tag 0
+            if (p->myMapCount > 1)
+                assert(tag > 0);
             glist[gOff].resIndex = r;
-            glist[gOff].mapNo = o;
+            glist[gOff].mapNo = map;
             glist[gOff].tag = tag;
             gOff++;
         }
@@ -1292,9 +1305,14 @@ void laik_allocate(Laik_Data* d)
 
     // determine required space for each mapping
     int dims = d->space->dims;
-    int mapNo = 0; // global mapNo over all partitionings to reserve for
+    int mapNo = -1; // global mapNo over all partitionings to reserve for
     lastTag = -1;
     for(int i = 0; i < groupCount; i++) {
+        // increase mapNo whenever we detect a new tag
+        if (glist[i].tag != lastTag) {
+            lastTag = glist[i].tag;
+            mapNo++;
+        }
         int r = glist[i].resIndex;
         Laik_MappingList* ml = d->res[r].mList;
         Laik_Mapping* m = &(mList[mapNo]);
@@ -1315,13 +1333,8 @@ void laik_allocate(Laik_Data* d)
             else
                 laik_slice_expand(dims, &(m->requiredSlice), &(p->tslice[o].s));
         }
-
-        if (glist[i].tag != lastTag) {
-            lastTag = glist[i].tag;
-            mapNo++;
-        }
     }
-    assert(mapNo == mCount);
+    assert(mapNo + 1 == mCount);
     free(glist);
 
     // check that MappingList's are fully set
