@@ -28,6 +28,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 
 /**
  * A partitioning is a set of slices (= consecutive ranges) into a space,
@@ -62,6 +63,7 @@
  * and applications can provide their own partitioner implementations.
  */
 
+static int partitioning_id = 0;
 
 /**
  * Internal:
@@ -81,6 +83,10 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
         laik_panic("Out of memory allocating Laik_Partitioning object");
         exit(1); // not actually needed, laik_panic never returns
     }
+
+    p->id = partitioning_id++;
+    p->name = strdup("part-0     ");
+    sprintf(p->name, "part-%d", p->id);
 
     // number of maps still unknown
     p->myMapOff = 0;

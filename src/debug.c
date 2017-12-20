@@ -233,8 +233,8 @@ void laik_log_Partitioning(Laik_Partitioning* p)
     }
 
     assert(p->tslice); // only show generic slices
-    laik_log_append("%d slices in %d tasks on ",
-                    p->count, p->group->size);
+    laik_log_append("partitioning '%s': %d slices in %d tasks on ",
+                    p->name, p->count, p->group->size);
     laik_log_Space(p->space);
     laik_log_append(": (task:slice:tag/mapNo/start)\n    ");
     for(int i = 0; i < p->count; i++) {

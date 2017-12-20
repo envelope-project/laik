@@ -96,6 +96,9 @@ typedef struct _Laik_TaskSlice_Single1d {
 } Laik_TaskSlice_Single1d;
 
 struct _Laik_Partitioning {
+    int id;
+    char* name;
+
     Laik_Group* group; // process group used in this partitioning
     Laik_Space* space; // slices cover this space
     int capacity;  // slices allocated
