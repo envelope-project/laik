@@ -7,15 +7,15 @@ SUBDIRS=examples
 # settings from 'configure', may overwrite defaults
 -include Makefile.config
 
-CFLAGS=$(OPT) $(WARN) $(DEFS) -std=gnu99 -Iinclude -fPIC
+CFLAGS=$(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)include -fPIC
 LDFLAGS=$(OPT)
 
-SRCS = $(wildcard src/*.c)
-HEADERS = $(wildcard include/*.h include/laik/*.h)
-OBJS = $(SRCS:.c=.o)
+SRCS = $(wildcard $(SDIR)src/*.c)
+HEADERS = $(wildcard $(SDIR)include/*.h $(SDIR)include/laik/*.h)
+OBJS = $(SRCS:$(SDIR)%.c=%.o)
 
 # instruct GCC to produce dependency files
-DEPS = $(SRCS:.c=.d)
+DEPS = $(SRCS:$(SDIR)%.c=%.d)
 CFLAGS+=-MMD -MP
 
 # MPICC always must be set, even if MPI not found (then use regular C compiler)
@@ -33,8 +33,11 @@ external/MQTT: $(LAIKLIB)
 external/simple: $(LAIKLIB)
 	cd external/simple && $(MAKE)
 
-src/backend-mpi.o: src/backend-mpi.c
-	$(MPICC) $(CFLAGS) -c -o src/backend-mpi.o src/backend-mpi.c
+src/%.o: $(SDIR)src/%.c
+	$(CC) -c $(CFLAGS) -c $< -o $@
+
+src/backend-mpi.o: $(SDIR)src/backend-mpi.c
+	$(MPICC) $(CFLAGS) -c -o src/backend-mpi.o $(SDIR)src/backend-mpi.c
 
 $(LAIKLIB): $(OBJS)
 	$(MPICC) $(CFLAGS) -shared -o $(LAIKLIB) $(OBJS) -ldl
@@ -75,11 +78,11 @@ $(SUBDIRS_CLEAN): clean_%:
 install: install_laik
 
 install_laik: $(LAIKLIB) $(HEADERS)
-	cp $(wildcard include/*.h) $(PREFIX)/include
+	cp $(wildcard $(SDIR)include/*.h) $(PREFIX)/include
 	mkdir -p $(PREFIX)/include/laik
-	cp $(wildcard include/laik/*.h) $(PREFIX)/include/laik
-	mkdir -p $(PREFIX)/include/interface
-	cp $(wildcard include/interface/*.h) $(PREFIX)/include/interface
+	cp $(wildcard $(SDIR)include/laik/*.h) $(PREFIX)/include/laik
+	#mkdir -p $(PREFIX)/include/interface
+	#cp $(wildcard $(SDIR)include/interface/*.h) $(PREFIX)/include/interface
 	mkdir -p $(PREFIX)/lib
 	cp $(LAIKLIB) $(PREFIX)/lib
 

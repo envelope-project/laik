@@ -6,13 +6,13 @@ OPT = -g
 
 EXAMPLES = raytracer
 
-CXXFLAGS = $(OPT) $(WARN) $(DEFS) -I../../include
+CXXFLAGS = $(OPT) $(WARN) $(DEFS) -I$(SDIR)../../include
 LAIKLIB = $(abspath ../../liblaik.so)
 
 all: $(EXAMPLES)
 
-raytracer: raytracer.cpp $(LAIKLIB)
-	$(CXX) $(CXXFLAGS) raytracer.cpp $(LAIKLIB) -o raytracer
+raytracer: $(SDIR)raytracer.cpp $(LAIKLIB)
+	$(CXX) $(CXXFLAGS) $< $(LAIKLIB) -o $@
 
 clean:
 	rm -f *.o *~ *.ppm $(EXAMPLES)

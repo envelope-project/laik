@@ -12,7 +12,7 @@ OPT=-g
 # pull in global config: CC, OPT, DEFS
 -include ../../Makefile.config
 
-CFLAGS = -std=gnu99 -I../../include -fPIC -Wall -Wextra
+CFLAGS = -std=gnu99 -I$(SDIR)../../include -fPIC -Wall -Wextra
 CFLAGS += $(OPT) $(DEFS) -MMD -MP
 
 #PROTOCC= protoc-c
@@ -24,9 +24,9 @@ RELEASEFLAGS= -O3 -D NDEBUG -combine -fwhole-program
 
 #PROTOS = $(wildcard *.proto)
 TARGET  = libmqttagent.so
-SOURCES = mqttclient.c mqttagent.c
+SOURCES = $(SDIR)mqttclient.c $(SDIR)mqttagent.c
 HEADERS = $(wildcard *.h)
-OBJECTS = $(SOURCES:.c=.o)
+OBJECTS = $(SOURCES:$(SDIR)%.c=%.o)
 #PROTOCOLC = $(PROTOS:.proto=.pb-c.c)
 #PROTOCOLH = $(PROTOS:.proto=.pb-c.h)
 
@@ -39,6 +39,9 @@ all: $(TARGET)
 
 #$(PROTOCOLC): $(PROTOS)
 #	$(PROTOCC) $(PROTOCFLAGS)$(PROTODIR) $(PROTOS)
+
+%.o: $(SDIR)%.c
+	$(CC) -c $(CFLAGS) -c $< -o $@
 
 $(TARGET):  $(OBJECTS)
 	$(CC) $(FLAGS) $(CFLAGS) $(DEBUGFLAGS) $(LDFLAGS) -o $(TARGET) $(OBJECTS) 

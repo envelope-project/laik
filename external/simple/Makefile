@@ -12,7 +12,7 @@ OPT=-g
 # pull in global config: CC, OPT, DEFS
 -include ../../Makefile.config
 
-CFLAGS = -std=gnu99 -I../../include -fPIC -Wall -Wextra
+CFLAGS = -std=gnu99 -I$(SDIR)../../include -fPIC -Wall -Wextra
 CFLAGS += $(OPT) $(DEFS) -MMD -MP
 
 LDFLAGS= -shared
@@ -21,14 +21,17 @@ RELEASEFLAGS= -O3 -D NDEBUG -combine -fwhole-program
 
 
 TARGET  = libsimpleagent.so
-SOURCES = $(wildcard *.c)
-HEADERS = $(wildcard *.h)
-OBJECTS = $(SOURCES:.c=.o)
+SOURCES = $(wildcard $(SDIR)*.c)
+HEADERS = $(wildcard $(SDIR)*.h)
+OBJECTS = $(SOURCES:$(SDIR)%.c=%.o)
 
 PREFIX = $(DESTDIR)/usr/local
 BINDIR = $(PREFIX)/bin
 
 all:  $(TARGET)
+
+%.o: $(SDIR)%.c
+	$(CC) -c $(CFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(DEBUGFLAGS) $(INC) -o $(TARGET) $(OBJECTS)

@@ -9,10 +9,13 @@ EXAMPLES = vsum vsum2 vsum3 spmv spmv2 \
     markov-ser markov markov2 \
     propagation1d propagation2d
 
-CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I../include
+CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../include
 LAIKLIB = $(abspath ../liblaik.so)
 
 all: $(EXAMPLES)
+
+%.o: $(SDIR)%.c
+	$(CC) -c $(CFLAGS) -c $< -o $@
 
 vsum: vsum.o $(LAIKLIB)
 
@@ -22,29 +25,24 @@ vsum3: vsum3.o $(LAIKLIB)
 
 spmv: spmv.o $(LAIKLIB)
 
-spmv2: spmv2.c $(LAIKLIB)
-	$(CC) $(CFLAGS) $(OMP_FLAGS) spmv2.c $(LAIKLIB) -o spmv2
+spmv2: $(SDIR)spmv2.c $(LAIKLIB)
+	$(CC) $(CFLAGS) $(OMP_FLAGS) $< $(LAIKLIB) -o $@
 
-jac1d: jac1d.c $(LAIKLIB)
-	$(CC) $(CFLAGS) $(OMP_FLAGS) jac1d.c $(LAIKLIB) -o jac1d
+jac1d: jac1d.o $(LAIKLIB)
 
-jac2d: jac2d.c $(LAIKLIB)
-	$(CC) $(CFLAGS) $(OMP_FLAGS) jac2d.c $(LAIKLIB) -o jac2d
+jac2d: jac2d.o $(LAIKLIB)
 
-jac3d: jac3d.c $(LAIKLIB)
-	$(CC) $(CFLAGS) $(OMP_FLAGS) jac3d.c $(LAIKLIB) -o jac3d
+jac3d: jac3d.o $(LAIKLIB)
 
 markov: markov.o $(LAIKLIB)
-	$(CC) $(CFLAGS) markov.o $(LAIKLIB) -o markov
 
 markov2: markov2.o $(LAIKLIB)
-	$(CC) $(CFLAGS) markov2.o $(LAIKLIB) -o markov2
 
-propagation1d: propagation1d.c $(LAIKLIB)
-	$(CC) $(CFLAGS) propagation1d.c $(LAIKLIB) -o propagation1d -lm
+propagation1d: $(SDIR)propagation1d.c $(LAIKLIB)
+	$(CC) $(CFLAGS) $< $(LAIKLIB) -o $@ -lm
 
-propagation2d: propagation2d.c $(LAIKLIB)
-	$(CC) $(CFLAGS) propagation2d.c $(LAIKLIB)  -o propagation2d -lm
+propagation2d: $(SDIR)propagation2d.c $(LAIKLIB)
+	$(CC) $(CFLAGS) $< $(LAIKLIB) -o $@ -lm
 
 clean:
 	rm -f *.o *~ *.ppm $(EXAMPLES)
