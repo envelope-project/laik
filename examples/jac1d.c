@@ -225,7 +225,7 @@ int main(int argc, char* argv[])
             userData = iter / repart;
             Laik_Partitioner* pr = laik_get_partitioner(pWrite);
             laik_set_task_weight(pr, getTW, (void*) &userData);
-            laik_calc_partitioning(pWrite);
+            laik_phase_run_partitioner(pWrite);
         }
 
         // TODO: allow repartitioning

@@ -392,8 +392,8 @@ laik_new_accessphase(Laik_Group* group, Laik_Space* space,
     }
 
     ap->id = aphase_id++;
-    ap->name = strdup("aphase-0     ");
-    sprintf(ap->name, "aphase-%d", ap->id);
+    ap->name = strdup("phase-0     ");
+    sprintf(ap->name, "phase-%d", ap->id);
 
     assert(group->inst == space->inst);
     ap->group = group;
@@ -524,7 +524,7 @@ void laik_free_accessphase(Laik_AccessPhase* ap)
 int laik_phase_my_slicecount(Laik_AccessPhase* ap)
 {
     if (!ap->hasValidPartitioning)
-        laik_calc_partitioning(ap);
+        laik_phase_run_partitioner(ap);
 
     int myid = ap->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
@@ -536,7 +536,7 @@ int laik_phase_my_slicecount(Laik_AccessPhase* ap)
 int laik_phase_my_mapcount(Laik_AccessPhase* ap)
 {
     if (!ap->hasValidPartitioning)
-        laik_calc_partitioning(ap);
+        laik_phase_run_partitioner(ap);
 
     int myid = ap->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
@@ -551,7 +551,7 @@ int laik_phase_my_mapcount(Laik_AccessPhase* ap)
 int laik_phase_my_mapslicecount(Laik_AccessPhase* ap, int mapNo)
 {
     if (!ap->hasValidPartitioning)
-        laik_calc_partitioning(ap);
+        laik_phase_run_partitioner(ap);
 
     int myid = ap->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
@@ -595,7 +595,7 @@ Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice* ts)
 Laik_TaskSlice* laik_phase_my_slice(Laik_AccessPhase* ap, int n)
 {
     if (!ap->hasValidPartitioning)
-        laik_calc_partitioning(ap);
+        laik_phase_run_partitioner(ap);
 
     int myid = ap->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
@@ -611,7 +611,7 @@ Laik_TaskSlice* laik_phase_my_slice(Laik_AccessPhase* ap, int n)
 Laik_TaskSlice* laik_phase_my_mapslice(Laik_AccessPhase* ap, int mapNo, int n)
 {
     if (!ap->hasValidPartitioning)
-        laik_calc_partitioning(ap);
+        laik_phase_run_partitioner(ap);
 
     int myid = ap->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
@@ -773,7 +773,9 @@ void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p)
     ap->hasValidPartitioning = true;
 }
 
-// return currently set borders in partitioning
+// Return currently used partitioning of given access phase.
+//
+// Return 0 if no partitioning is calculated yet (even if partitioner is set).
 Laik_Partitioning* laik_phase_get_partitioning(Laik_AccessPhase* p)
 {
     if (p->hasValidPartitioning) {
@@ -783,8 +785,15 @@ Laik_Partitioning* laik_phase_get_partitioning(Laik_AccessPhase* p)
     return 0;
 }
 
-// trigger calculation of  new partitioning borders, overwriting old ones
-Laik_Partitioning* laik_calc_partitioning(Laik_AccessPhase* ap)
+// Force re-run of the configured partitioner for given access phase.
+//
+// If the partitioning is configured to depend on the partitioning of
+// another access phase (ie. is derived from it), this base partitioning
+// must exist.
+// If you want to also trigger a new calculation of the base partitioning,
+// call this function for the base access phase, which automatically will
+// trigger a re-run for every derived partitioning.
+Laik_Partitioning* laik_phase_run_partitioner(Laik_AccessPhase* ap)
 {
     Laik_Partitioning* p;
 

@@ -441,14 +441,14 @@ Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice*);
 void laik_set_accessphase_name(Laik_AccessPhase* ap, char* n);
 
 
-// set new partitioning borders
-void laik_phase_set_partitioning(Laik_AccessPhase* p, Laik_Partitioning* ba);
+// set new partitioning for given access phase
+void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p);
 
-// return currently set partitioning borders in access phase
+// return currently used partitioning of given access phase
 Laik_Partitioning* laik_phase_get_partitioning(Laik_AccessPhase* p);
 
-// trigger calculation of  new partitioning borders, overwriting old ones
-Laik_Partitioning* laik_calc_partitioning(Laik_AccessPhase* ap);
+// force re-run of the configured partitioner for given access phase
+Laik_Partitioning* laik_phase_run_partitioner(Laik_AccessPhase* ap);
 
 // get local index from global one. return false if not local
 bool laik_index_global2local(Laik_Partitioning*,

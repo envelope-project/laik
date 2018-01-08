@@ -1442,7 +1442,7 @@ void laik_switchto_phase(Laik_Data* d,
 
     // calculate borders with configured partitioner if borders not set
     if (toAP && (!toAP->hasValidPartitioning))
-        laik_calc_partitioning(toAP);
+        laik_phase_run_partitioner(toAP);
 
     // calculate actions to be done for switching
     Laik_Partitioning *fromP = 0, *toP = 0;

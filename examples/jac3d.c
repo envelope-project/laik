@@ -178,8 +178,8 @@ int main(int argc, char* argv[])
         // - both data will be switched to pWrite and pRead
         // - now run partitioners to get actual partitioning for reservation
         // - order is important, as calculating baRead needs baWrite
-        Laik_Partitioning* paWrite = laik_calc_partitioning(pWrite);
-        Laik_Partitioning* paRead  = laik_calc_partitioning(pRead);
+        Laik_Partitioning* paWrite = laik_phase_run_partitioner(pWrite);
+        Laik_Partitioning* paRead  = laik_phase_get_partitioning(pRead);
         laik_extend_reservation(data1, paRead);
         laik_extend_reservation(data1, paWrite);
         laik_extend_reservation(data2, paRead);
