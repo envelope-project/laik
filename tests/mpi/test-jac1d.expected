@@ -1,0 +1,7 @@
+[1,0]<stdout>:100 k cells (mem 1.6 MB), running 50 iterations with 4 tasks
+[1,0]<stdout>:Residuum after  1 iters: 299983.250000
+[1,0]<stdout>:Residuum after 11 iters: 195.693770
+[1,0]<stdout>:Residuum after 21 iters: 0.299484
+[1,0]<stdout>:Residuum after 31 iters: 0.056941
+[1,0]<stdout>:Residuum after 41 iters: 0.036303
+[1,0]<stdout>:Global value sum after 50 iterations: 299993.830104

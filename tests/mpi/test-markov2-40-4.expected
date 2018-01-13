@@ -1,4 +1,0 @@
-Init Markov chain with 40 states, max fan-out 4.
-Running 10 iterations.
-All initial values set to 0.025000.
-Result probs: p0 = 0.031746, p1 = 0.0209382, p2 = 0.0270423, Sum: 1.000000
