@@ -1,5 +1,4 @@
 *.dSYM
-*.txt
 *.csv
 *.out
 vsum
