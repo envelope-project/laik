@@ -41,6 +41,9 @@ int main(int argc, char* argv[])
 #ifdef USE_MPI
     Laik_Instance* inst = laik_init_mpi(&argc, &argv);
 #else
+    (void) argc;
+    (void) argv;
+
     Laik_Instance* inst = laik_init_single();
 #endif
     Laik_Group* world = laik_world(inst);
