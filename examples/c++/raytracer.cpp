@@ -43,7 +43,11 @@
 #include <cstring>
 
 extern "C" {
+#ifdef USE_MPI
 #include "laik-backend-mpi.h"
+#else
+#include "laik-backend-single.h"
+#endif
 }
 
 typedef struct _programops{
@@ -260,8 +264,11 @@ Vec3f trace(
 
 int main(int argc, char **argv) 
 { 
-
+#ifdef USE_MPI
     Laik_Instance* inst = laik_init_mpi(&argc, &argv);
+#else
+    Laik_Instance* inst = laik_init_single();
+#endif
     Laik_Group* world = laik_world(inst);
     laik_enable_profiling(inst);
     
