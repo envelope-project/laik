@@ -1,5 +1,5 @@
 *.dSYM
-*.txt
+*profiling.txt
 *.csv
 *.out
 vsum
