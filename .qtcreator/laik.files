@@ -25,6 +25,7 @@
 ../src/profiling.c
 ../src/program.c
 ../src/space.c
+../src/type.c
 
 ../include/laik.h
 ../include/laik-internal.h

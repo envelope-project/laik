@@ -1,0 +1,572 @@
+/*
+ * This file is part of the LAIK parallel container library.
+ * Copyright (c) 2017 - 2018 LRR-TUM
+ *               2017 - 2018 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+ *
+ * LAIK is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, version 3.
+ *
+ * LAIK is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "laik-internal.h"
+
+#include <assert.h>
+#include <string.h>
+#include <stdio.h>
+
+/**
+ * LAIK data types
+ */
+
+
+// Provided types
+
+Laik_Type *laik_Char;
+Laik_Type *laik_Int32;
+Laik_Type *laik_Int64;
+Laik_Type *laik_UChar;
+Laik_Type *laik_UInt32;
+Laik_Type *laik_UInt64;
+Laik_Type *laik_Float;
+Laik_Type *laik_Double;
+
+static int type_id = 0;
+
+// laik_Char
+
+void laik_char_init(void* base, int count, Laik_ReductionOperation o)
+{
+    unsigned char* p = base;
+    unsigned char v;
+    switch(o) {
+    case LAIK_RO_Sum:
+    case LAIK_RO_Or:   v = 0; break;
+    case LAIK_RO_Prod: v = 1; break;
+    case LAIK_RO_And:  v = 255; break;
+    default:
+        assert(0);
+    }
+    for(int i = 0; i < count; i++)
+        p[i] = v;
+}
+
+void laik_char_reduce(void* out, void* in1, void* in2,
+                      int count, Laik_ReductionOperation o)
+{
+    assert(out);
+    if (!in1 || ! in2) {
+        if (in1)
+            memcpy(out, in1, count);
+        else if (in2)
+            memcpy(out, in2, count);
+        else
+            laik_char_init(out, count, o);
+    }
+
+    signed char* pin1 = in1;
+    signed char* pin2 = in2;
+    signed char* pout = out;
+    switch(o) {
+    case LAIK_RO_Sum:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] + pin2[i];
+        break;
+
+    case LAIK_RO_Prod:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] * pin2[i];
+        break;
+
+    case LAIK_RO_Or:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] | pin2[i];
+        break;
+
+    case LAIK_RO_And:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] & pin2[i];
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+
+// laik_Char
+
+void laik_uchar_init(void* base, int count, Laik_ReductionOperation o)
+{
+    unsigned char* p = base;
+    unsigned char v;
+    switch(o) {
+    case LAIK_RO_Sum:
+    case LAIK_RO_Or:   v = 0; break;
+    case LAIK_RO_Prod: v = 1; break;
+    case LAIK_RO_And:  v = 255; break;
+    default:
+        assert(0);
+    }
+    for(int i = 0; i < count; i++)
+        p[i] = v;
+}
+
+void laik_uchar_reduce(void* out, void* in1, void* in2,
+                       int count, Laik_ReductionOperation o)
+{
+    assert(out);
+    if (!in1 || ! in2) {
+        if (in1)
+            memcpy(out, in1, count);
+        else if (in2)
+            memcpy(out, in2, count);
+        else
+            laik_char_init(out, count, o);
+    }
+
+    unsigned char* pin1 = in1;
+    unsigned char* pin2 = in2;
+    unsigned char* pout = out;
+    switch(o) {
+    case LAIK_RO_Sum:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] + pin2[i];
+        break;
+
+    case LAIK_RO_Prod:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] * pin2[i];
+        break;
+
+    case LAIK_RO_Or:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] | pin2[i];
+        break;
+
+    case LAIK_RO_And:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] & pin2[i];
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+
+// laik_Int32
+
+void laik_int32_init(void* base, int count, Laik_ReductionOperation o)
+{
+    int32_t* p = base;
+    int32_t v;
+    switch(o) {
+    case LAIK_RO_Sum:
+    case LAIK_RO_Or:   v = 0; break;
+    case LAIK_RO_Prod: v = 1; break;
+    case LAIK_RO_And:  v = ~0; break;
+    default:
+        assert(0);
+    }
+    for(int i = 0; i < count; i++)
+        p[i] = v;
+}
+
+void laik_int32_reduce(void* out, void* in1, void* in2,
+                       int count, Laik_ReductionOperation o)
+{
+    assert(out);
+    if (!in1 || ! in2) {
+        if (in1)
+            memcpy(out, in1, count);
+        else if (in2)
+            memcpy(out, in2, count);
+        else
+            laik_char_init(out, count, o);
+    }
+
+    int32_t* pin1 = in1;
+    int32_t* pin2 = in2;
+    int32_t* pout = out;
+    switch(o) {
+    case LAIK_RO_Sum:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] + pin2[i];
+        break;
+
+    case LAIK_RO_Prod:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] * pin2[i];
+        break;
+
+    case LAIK_RO_Or:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] | pin2[i];
+        break;
+
+    case LAIK_RO_And:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] & pin2[i];
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+
+// laik_UInt32
+
+void laik_uint32_init(void* base, int count, Laik_ReductionOperation o)
+{
+    uint32_t* p = base;
+    uint32_t v;
+    switch(o) {
+    case LAIK_RO_Sum:
+    case LAIK_RO_Or:   v = 0; break;
+    case LAIK_RO_Prod: v = 1; break;
+    case LAIK_RO_And:  v = ~0; break;
+    default:
+        assert(0);
+    }
+    for(int i = 0; i < count; i++)
+        p[i] = v;
+}
+
+void laik_uint32_reduce(void* out, void* in1, void* in2,
+                        int count, Laik_ReductionOperation o)
+{
+    assert(out);
+    if (!in1 || ! in2) {
+        if (in1)
+            memcpy(out, in1, count);
+        else if (in2)
+            memcpy(out, in2, count);
+        else
+            laik_char_init(out, count, o);
+    }
+
+    uint32_t* pin1 = in1;
+    uint32_t* pin2 = in2;
+    uint32_t* pout = out;
+    switch(o) {
+    case LAIK_RO_Sum:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] + pin2[i];
+        break;
+
+    case LAIK_RO_Prod:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] * pin2[i];
+        break;
+
+    case LAIK_RO_Or:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] | pin2[i];
+        break;
+
+    case LAIK_RO_And:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] & pin2[i];
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+
+// laik_Int64
+
+void laik_int64_init(void* base, int count, Laik_ReductionOperation o)
+{
+    int64_t* p = base;
+    int64_t v;
+    switch(o) {
+    case LAIK_RO_Sum:
+    case LAIK_RO_Or:   v = 0l; break;
+    case LAIK_RO_Prod: v = 1l; break;
+    case LAIK_RO_And:  v = ~0l; break;
+    default:
+        assert(0);
+    }
+    for(int i = 0; i < count; i++)
+        p[i] = v;
+}
+
+void laik_int64_reduce(void* out, void* in1, void* in2,
+                       int count, Laik_ReductionOperation o)
+{
+    assert(out);
+    if (!in1 || ! in2) {
+        if (in1)
+            memcpy(out, in1, count);
+        else if (in2)
+            memcpy(out, in2, count);
+        else
+            laik_char_init(out, count, o);
+    }
+
+    int64_t* pin1 = in1;
+    int64_t* pin2 = in2;
+    int64_t* pout = out;
+    switch(o) {
+    case LAIK_RO_Sum:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] + pin2[i];
+        break;
+
+    case LAIK_RO_Prod:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] * pin2[i];
+        break;
+
+    case LAIK_RO_Or:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] | pin2[i];
+        break;
+
+    case LAIK_RO_And:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] & pin2[i];
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+
+// laik_UInt64
+
+void laik_uint64_init(void* base, int count, Laik_ReductionOperation o)
+{
+    uint64_t* p = base;
+    uint64_t v;
+    switch(o) {
+    case LAIK_RO_Sum:
+    case LAIK_RO_Or:   v = 0l; break;
+    case LAIK_RO_Prod: v = 1l; break;
+    case LAIK_RO_And:  v = ~0l; break;
+    default:
+        assert(0);
+    }
+    for(int i = 0; i < count; i++)
+        p[i] = v;
+}
+
+void laik_uint64_reduce(void* out, void* in1, void* in2,
+                        int count, Laik_ReductionOperation o)
+{
+    assert(out);
+    if (!in1 || ! in2) {
+        if (in1)
+            memcpy(out, in1, count);
+        else if (in2)
+            memcpy(out, in2, count);
+        else
+            laik_char_init(out, count, o);
+    }
+
+    uint64_t* pin1 = in1;
+    uint64_t* pin2 = in2;
+    uint64_t* pout = out;
+    switch(o) {
+    case LAIK_RO_Sum:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] + pin2[i];
+        break;
+
+    case LAIK_RO_Prod:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] * pin2[i];
+        break;
+
+    case LAIK_RO_Or:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] | pin2[i];
+        break;
+
+    case LAIK_RO_And:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] & pin2[i];
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+
+// laik_Double
+
+void laik_double_init(void* base, int count, Laik_ReductionOperation o)
+{
+    double* p = base;
+    double v;
+    switch(o) {
+    case LAIK_RO_Sum:  v = 0.0; break;
+    case LAIK_RO_Prod: v = 1.0; break;
+    default:
+        assert(0);
+    }
+    for(int i = 0; i < count; i++)
+        p[i] = v;
+}
+
+void laik_double_reduce(void* out, void* in1, void* in2,
+                        int count, Laik_ReductionOperation o)
+{
+    assert(out);
+    if (!in1 || ! in2) {
+        if (in1)
+            memcpy(out, in1, count);
+        else if (in2)
+            memcpy(out, in2, count);
+        else
+            laik_double_init(out, count, o);
+    }
+
+    double* pin1 = in1;
+    double* pin2 = in2;
+    double* pout = out;
+    switch(o) {
+    case LAIK_RO_Sum:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] + pin2[i];
+        break;
+
+    case LAIK_RO_Prod:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] * pin2[i];
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+
+// laik_Float
+
+void laik_float_init(void* base, int count, Laik_ReductionOperation o)
+{
+    float* p = base;
+    float v;
+    switch(o) {
+    case LAIK_RO_Sum:  v = 0.0; break;
+    case LAIK_RO_Prod: v = 1.0; break;
+    default:
+        assert(0);
+    }
+    for(int i = 0; i < count; i++)
+        p[i] = v;
+}
+
+void laik_float_reduce(void* out, void* in1, void* in2,
+                       int count, Laik_ReductionOperation o)
+{
+    assert(out);
+    if (!in1 || ! in2) {
+        if (in1)
+            memcpy(out, in1, count);
+        else if (in2)
+            memcpy(out, in2, count);
+        else
+            laik_float_init(out, count, o);
+    }
+
+    float* pin1 = in1;
+    float* pin2 = in2;
+    float* pout = out;
+    switch(o) {
+    case LAIK_RO_Sum:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] + pin2[i];
+        break;
+
+    case LAIK_RO_Prod:
+        for(int i = 0; i < count; i++)
+            pout[i] = pin1[i] * pin2[i];
+        break;
+
+    default:
+        assert(0);
+    }
+}
+
+
+
+Laik_Type* laik_new_type(char* name, Laik_TypeKind kind, int size,
+                         laik_init_t init, laik_reduce_t reduce)
+{
+    Laik_Type* t = malloc(sizeof(Laik_Type));
+    if (!t) {
+        laik_panic("Out of memory allocating Laik_Type object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
+    t->id = type_id++;
+    if (name)
+        t->name = name;
+    else {
+        t->name = strdup("type-0     ");
+        sprintf(t->name, "type-%d", t->id);
+    }
+
+    t->kind = kind;
+    t->size = size;
+    t->init = init;    // if 0: reductions not supported
+    t->reduce = reduce;
+    t->getLength = 0; // not needed for POD type
+    t->convert = 0;
+
+    return t;
+}
+
+Laik_Type* laik_register_type(char* name, int size)
+{
+    return laik_new_type(name, LAIK_TK_POD, size, 0, 0);
+}
+
+void laik_type_set_init(Laik_Type* type, laik_init_t init)
+{
+    type->init = init;
+}
+
+void laik_type_set_reduce(Laik_Type* type, laik_reduce_t reduce)
+{
+    type->reduce = reduce;
+}
+
+
+void laik_data_init()
+{
+    if (type_id > 0) return;
+
+    laik_Char   = laik_new_type("char",  LAIK_TK_POD, 1,
+                                laik_char_init, laik_char_reduce);
+    laik_Int32  = laik_new_type("int32", LAIK_TK_POD, 4,
+                                laik_int32_init, laik_int32_reduce);
+    laik_Int64  = laik_new_type("int64", LAIK_TK_POD, 8,
+                                laik_int64_init, laik_int64_reduce);
+    laik_UChar   = laik_new_type("uchar",  LAIK_TK_POD, 1,
+                                 laik_uchar_init, laik_uchar_reduce);
+    laik_UInt32  = laik_new_type("uint32", LAIK_TK_POD, 4,
+                                 laik_uint32_init, laik_uint32_reduce);
+    laik_UInt64  = laik_new_type("uint64", LAIK_TK_POD, 8,
+                                 laik_uint64_init, laik_uint64_reduce);
+    laik_Float  = laik_new_type("float", LAIK_TK_POD, 4,
+                                laik_float_init, laik_float_reduce);
+    laik_Double = laik_new_type("double", LAIK_TK_POD, 8,
+                                laik_double_init, laik_double_reduce);
+}
+
