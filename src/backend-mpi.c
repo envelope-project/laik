@@ -288,12 +288,6 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
 
     if (t->redCount > 0) {
         assert(dims == 1);
-
-        // TODO: pull reuse check into data.c
-        assert(!toList || (toList->count < 100));
-        int reuse[100]; // for toMap index, remember which map we used
-        for(int i = 0; i < 100; i++) reuse[i] = -1;
-
         assert(fromList);
 
         for(int i=0; i < t->redCount; i++) {
@@ -311,18 +305,9 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                 toMap = toList->map[op->myOutputMapNo];
 
                 if (toMap->base == 0) {
-                    // we may reuse previous mapping
-                    // only possible if it has the same size (FIXME: includes old!)
-                    if (toMap->count == fromMap->count) {
-                        // we can do IN_PLACE reduction
-                        toMap->base = fromMap->base;
-                        assert(op->myOutputMapNo < toList->count);
-                        reuse[op->myOutputMapNo] = op->myInputMapNo;
-                    }
-                    else
-                        laik_allocateMap(toMap, ss);
+                    laik_allocateMap(toMap, ss);
+                    assert(toMap->base != 0);
                 }
-                assert(toMap->base != 0);
             }
 
             char* fromBase = fromMap ? fromMap->base : 0;
@@ -560,11 +545,6 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                 ss->reduceCount++;
                 ss->reducedBytes += (to - from) * d->elemsize;
             }
-        }
-        for(int i = 0; i < 100; i++) {
-            // do not free memory of reused maps
-            if (reuse[i] > -1)
-                fromList->map[reuse[i]]->base = 0;
         }
     }
 
