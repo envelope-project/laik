@@ -820,6 +820,12 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
                      d->name, m->mapNo,
                      (unsigned long long) m->capacity, m->base, m->start);
 
+            // concrete, fixed layouts are only used once: free
+            if (m->layout && m->layout->isFixed) {
+                free(m->layout);
+                m->layout = 0;
+            }
+
             if (ss) {
                 ss->freeCount++;
                 ss->freedBytes += m->capacity;
@@ -841,6 +847,53 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
 
     free(ml);
 }
+
+// always the same layout
+static
+Laik_Layout* laik_new_layout_def_1d()
+{
+    static Laik_Layout* l = 0;
+    if (!l) {
+        l = laik_new_layout(LAIK_LT_Default);
+        l->dims = 1;
+        l->stride[0] = 1;
+        l->stride[1] = 0;
+        l->stride[2] = 0;
+        l->isFixed = false; // this prohibits free() on layout
+    }
+    return l;
+}
+
+static
+Laik_Layout* laik_new_layout_def_2d(uint64_t stride)
+{
+    Laik_Layout* l = laik_new_layout(LAIK_LT_Default);
+    l->dims = 2;
+    l->stride[0] = 1;
+    l->stride[1] = stride;
+    l->stride[2] = 0;
+    l->isFixed = true;
+    l->pack = laik_pack_def;
+    l->unpack = laik_unpack_def;
+
+    return l;
+}
+
+static
+Laik_Layout* laik_new_layout_def_3d(uint64_t stride1, uint64_t stride2)
+{
+    Laik_Layout* l = laik_new_layout(LAIK_LT_Default);
+    l->dims = 3;
+    l->stride[0] = 1;
+    l->stride[1] = stride1;
+    l->stride[2] = stride1 * stride2;
+    l->isFixed = true;
+    l->pack = laik_pack_def;
+    l->unpack = laik_unpack_def;
+
+    return l;
+}
+
 
 void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
 {
@@ -874,33 +927,34 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     m->allocatedSlice = m->requiredSlice;
     m->allocCount = m->count;
 
-    // set layout
-    if (!m->layout)
-         m->layout = laik_new_layout(LAIK_LT_Default);
-    Laik_Layout* l = m->layout;
-    l->dims = d->space->dims;
-    // TODO: assume that default layout was requested:
-    // default is: elements on dim0 consecutive, then dim1, then dim2
-    l->stride[0] = 1;
-    if (l->dims > 1)
-        l->stride[1] = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
-    else
-        l->stride[1] = 0; // not used
-    if (l->dims > 2) {
-        l->stride[2] = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
-        l->stride[2] *= l->stride[1];
+    // if a layout is given, it must be a layout hint: not fixed
+    if (m->layout) assert(m->layout->isFixed == false);
+
+    // TODO: for now, we always set a new, concrete layout
+    switch(d->space->dims) {
+    case 1:
+        m->layout = laik_new_layout_def_1d();
+        break;
+    case 2: {
+        uint64_t s = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
+        m->layout = laik_new_layout_def_2d(s);
+        break;
     }
-    else
-        l->stride[2] = 0; // not used
-    l->isFixed = true;
-    l->pack = laik_pack_def;
-    l->unpack = laik_unpack_def;
+    case 3:  {
+        uint64_t s1 = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
+        uint64_t s2 = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
+        m->layout = laik_new_layout_def_3d(s1, s2);
+        break;
+    }
+    default: assert(0);
+    }
 
     laik_log(1, "allocated memory for '%s'/%d: %d x %d (%llu B) at %p"
              "\n  layout: %dd, strides (%lu/%lu/%lu)",
              d->name, m->mapNo, m->count, d->elemsize,
              (unsigned long long) m->capacity, m->base,
-             l->dims, l->stride[0], l->stride[1], l->stride[2]);
+             m->layout->dims, m->layout->stride[0],
+             m->layout->stride[1], m->layout->stride[2]);
 }
 
 static
@@ -1905,8 +1959,11 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 // similar to laik_map, but force a default mapping
 Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count)
 {
-    Laik_Layout* l = laik_new_layout(LAIK_LT_Default);
-    Laik_Mapping* m = laik_map(d, n, l);
+    static Laik_Layout* def_layout = 0;
+    if (!def_layout)
+        def_layout = laik_new_layout(LAIK_LT_Default);
+
+    Laik_Mapping* m = laik_map(d, n, def_layout);
 
     if (base) *base = m ? m->base : 0;
     if (count) *count = m ? m->count : 0;
@@ -1917,8 +1974,11 @@ Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count)
 // similar to laik_map, but force a default mapping with only 1 slice
 Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
 {
-    Laik_Layout* l = laik_new_layout(LAIK_LT_Default1Slice);
-    Laik_Mapping* m = laik_map(d, 0, l);
+    static Laik_Layout* def_layout = 0;
+    if (!def_layout)
+        def_layout = laik_new_layout(LAIK_LT_Default1Slice);
+
+    Laik_Mapping* m = laik_map(d, 0, def_layout);
     int n = laik_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Panic, "Request for one continuous mapping, "
