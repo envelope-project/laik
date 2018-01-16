@@ -53,7 +53,7 @@ extern Laik_Type *laik_Float;
 extern Laik_Type *laik_Double;
 
 // simple type. To support reductions, need to set callbacks init/reduce
-Laik_Type* laik_register_type(char* name, int size);
+Laik_Type* laik_type_register(char* name, int size);
 
 typedef void (*laik_init_t)(void* base, int count, Laik_ReductionOperation o);
 typedef void (*laik_reduce_t)(void* out, void* in1, void* in2,
@@ -64,6 +64,7 @@ void laik_type_set_init(Laik_Type* type, laik_init_t init);
 
 // provide a reduction function for this type
 void laik_type_set_reduce(Laik_Type* type, laik_reduce_t reduce);
+
 
 //----------------------------------
 // LAIK data container

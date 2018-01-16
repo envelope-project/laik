@@ -96,7 +96,8 @@ Laik_Instance* laik_new_instance(Laik_Backend* b,
     instance->mapping_count = 0;
 
     laik_space_init();
-    laik_data_init();
+    laik_data_init(); // initialize the data module
+
     instance->control = laik_program_control_init();
     instance->profiling = laik_init_profiling();
 

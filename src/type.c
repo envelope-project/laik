@@ -24,11 +24,19 @@
 
 /**
  * LAIK data types
+ *
+ * This provides the implementation of LAIK-provided types.
+ *
+ * You can register your own custom data types with laik_type_register().
+ * To allow reductions to be done on such types at switch time, you need
+ * to also provide your own
+ * - reduction function for various reduction operations
+ * - initialization function with neutral element of a reduction operations
+ * using laik_type_set_reduce/laik_type_set_init.
  */
 
 
-// Provided types
-
+// Provided types, directly usable in LAIK applications after laik_init_*()
 Laik_Type *laik_Char;
 Laik_Type *laik_Int32;
 Laik_Type *laik_Int64;
@@ -505,7 +513,7 @@ void laik_float_reduce(void* out, void* in1, void* in2,
 
 
 
-Laik_Type* laik_new_type(char* name, Laik_TypeKind kind, int size,
+Laik_Type* laik_type_new(char* name, Laik_TypeKind kind, int size,
                          laik_init_t init, laik_reduce_t reduce)
 {
     Laik_Type* t = malloc(sizeof(Laik_Type));
@@ -532,9 +540,9 @@ Laik_Type* laik_new_type(char* name, Laik_TypeKind kind, int size,
     return t;
 }
 
-Laik_Type* laik_register_type(char* name, int size)
+Laik_Type* laik_type_register(char* name, int size)
 {
-    return laik_new_type(name, LAIK_TK_POD, size, 0, 0);
+    return laik_type_new(name, LAIK_TK_POD, size, 0, 0);
 }
 
 void laik_type_set_init(Laik_Type* type, laik_init_t init)
@@ -548,25 +556,25 @@ void laik_type_set_reduce(Laik_Type* type, laik_reduce_t reduce)
 }
 
 
-void laik_data_init()
+void laik_type_init()
 {
     if (type_id > 0) return;
 
-    laik_Char   = laik_new_type("char",  LAIK_TK_POD, 1,
+    laik_Char   = laik_type_new("char",  LAIK_TK_POD, 1,
                                 laik_char_init, laik_char_reduce);
-    laik_Int32  = laik_new_type("int32", LAIK_TK_POD, 4,
+    laik_Int32  = laik_type_new("int32", LAIK_TK_POD, 4,
                                 laik_int32_init, laik_int32_reduce);
-    laik_Int64  = laik_new_type("int64", LAIK_TK_POD, 8,
+    laik_Int64  = laik_type_new("int64", LAIK_TK_POD, 8,
                                 laik_int64_init, laik_int64_reduce);
-    laik_UChar   = laik_new_type("uchar",  LAIK_TK_POD, 1,
+    laik_UChar   = laik_type_new("uchar",  LAIK_TK_POD, 1,
                                  laik_uchar_init, laik_uchar_reduce);
-    laik_UInt32  = laik_new_type("uint32", LAIK_TK_POD, 4,
+    laik_UInt32  = laik_type_new("uint32", LAIK_TK_POD, 4,
                                  laik_uint32_init, laik_uint32_reduce);
-    laik_UInt64  = laik_new_type("uint64", LAIK_TK_POD, 8,
+    laik_UInt64  = laik_type_new("uint64", LAIK_TK_POD, 8,
                                  laik_uint64_init, laik_uint64_reduce);
-    laik_Float  = laik_new_type("float", LAIK_TK_POD, 4,
+    laik_Float  = laik_type_new("float", LAIK_TK_POD, 4,
                                 laik_float_init, laik_float_reduce);
-    laik_Double = laik_new_type("double", LAIK_TK_POD, 8,
+    laik_Double = laik_type_new("double", LAIK_TK_POD, 8,
                                 laik_double_init, laik_double_reduce);
 }
 

@@ -319,7 +319,7 @@ int main(int argc, char* argv[])
 
 
     // for indirection, we store local indexes in a LAIK container
-    Laik_Type* itype = laik_register_type("l-indexes", (in + 1) * sizeof(int));
+    Laik_Type* itype = laik_type_register("l-indexes", (in + 1) * sizeof(int));
     Laik_Data* idata = laik_new_data(space, itype);
 
     if (doIndirection) {

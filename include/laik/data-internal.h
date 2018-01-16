@@ -50,6 +50,9 @@ struct _Laik_Type {
     bool (*convert)(Laik_Data*,Laik_Slice*, void*);
 };
 
+Laik_Type* laik_type_new(char* name, Laik_TypeKind kind, int size,
+                         laik_init_t init, laik_reduce_t reduce);
+
 // statistics for switching
 struct _Laik_SwitchStat
 {
@@ -154,6 +157,10 @@ struct _Laik_MappingList {
 
 // initialize the LAIK data module, called from laik_new_instance
 void laik_data_init();
+
+// create the types pre-provided by LAIK, to be called at data module init
+void laik_type_init();
+
 
 // ensure that the mapping is backed by memory (called by backends)
 void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat *ss);

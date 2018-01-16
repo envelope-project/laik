@@ -16,6 +16,11 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
 int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
                   char* buf, int size);
 
+// initialize the LAIK data module, called from laik_new_instance
+void laik_data_init()
+{
+    laik_type_init();
+}
 
 
 Laik_SwitchStat* laik_newSwitchStat()
