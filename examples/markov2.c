@@ -165,11 +165,12 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         for(int i = srcFrom; i < srcTo; i++) {
             int off = i * (out + 1);
             for(int j = 0; j <= out; j++) {
-                laik_log(2,
-                         "  adding %f from state %d to state %d: before %f, after %f",
-                         src[i - srcFrom] * pm[off + j], i, cm[off + j],
-                        dst[cm[off + j] - dstFrom],
-                        dst[cm[off + j] - dstFrom] + src[i - srcFrom] * pm[off + j]);
+                if (doPrint)
+                    laik_log(2,
+                             "  adding %f from state %d to state %d: before %f, after %f",
+                             src[i - srcFrom] * pm[off + j], i, cm[off + j],
+                            dst[cm[off + j] - dstFrom],
+                            dst[cm[off + j] - dstFrom] + src[i - srcFrom] * pm[off + j]);
 
                 dst[cm[off + j] - dstFrom] += src[i - srcFrom] * pm[off + j];
             }
