@@ -7,9 +7,6 @@ ARG PKG="gcc g++"
 ARG CC="gcc"
 ARG CXX="g++"
 
-# Set up LC_ALL so the sort order is as expected in the tests
-ENV LC_ALL="en_US.UTF8"
-
 # Update the package lists
 RUN apt-get update
 
@@ -19,7 +16,6 @@ RUN env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
     "libopenmpi-dev" \
     "libpapi-dev" \
     "libprotobuf-c-dev" \
-    "locales-all" \
     "make" \
     "openmpi-bin" \
     "openssh-client" \
