@@ -3,34 +3,19 @@
  * Copyright (c) 2017 Josef Weidendorfer
  */
 
+#ifdef USE_MPI
+
 #include "laik-internal.h"
 #include "laik-backend-mpi.h"
 
 #include <assert.h>
 #include <stdlib.h>
+#include <mpi.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
-
-
-#ifndef USE_MPI
-
-Laik_Instance* laik_init_mpi(int* argc, char*** argv)
-{
-    (void) argc; /* Dummy method, argument not required */
-    (void) argv; /* Dummy method, argument not required */
-
-    printf("ERROR: LAIK is not compiled with MPI backend.");
-    exit(1);
-}
-
-void laik_mpi_finalize() {}
-
-#else // USE_MPI
-
-#include <mpi.h>
 
 // print out values received/sent
 //#define LOG_DOUBLE_VALUES 1
