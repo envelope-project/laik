@@ -1,8 +1,4 @@
-#ifdef USE_MPI
-#include "laik-backend-mpi.h"
-#else
-#include "laik-backend-single.h"
-#endif
+#include <laik.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -38,14 +34,7 @@ Laik_Partitioner* laik_new_lulesh_partitioner_1d()
 
 int main(int argc, char* argv[])
 {
-#ifdef USE_MPI
-    Laik_Instance* inst = laik_init_mpi(&argc, &argv);
-#else
-    (void) argc;
-    (void) argv;
-
-    Laik_Instance* inst = laik_init_single();
-#endif
+    Laik_Instance* inst = laik_init (&argc, &argv);
     Laik_Group* world = laik_world(inst);
 
     #ifdef DBG
