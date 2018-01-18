@@ -159,5 +159,8 @@ void laik_log_append(const char* msg, ...);
 // finalize the log message build with laik_log_begin/append and print it
 void laik_log_flush(const char* msg, ...);
 
+// Provide a generic LAIK initialization function for programs which don't care
+// which backend LAIK actually uses (e.g. the examples).
+Laik_Instance* laik_init (int* argc, char*** argv);
 
 #endif // _LAIK_CORE_H_
