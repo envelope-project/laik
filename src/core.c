@@ -3,7 +3,9 @@
  * Copyright (c) 2017 Josef Weidendorfer
  */
 
-#include "laik-internal.h"
+#include <laik-internal.h>
+#include <laik-backend-mpi.h>
+#include <laik-backend-single.h>
 
 #include <assert.h>
 #include <stdio.h>
@@ -703,4 +705,15 @@ void laik_kv_sync(Laik_Instance* inst)
 
     assert(b && b->sync);
     (b->sync)(inst);
+}
+
+// generic LAIK init function
+Laik_Instance* laik_init (int* argc, char*** argv) {
+    #ifdef USE_MPI
+    return laik_init_mpi (argc, argv);
+    #else
+    (void) argc;
+    (void) argv;
+    return laik_init_single ();
+    #endif
 }
