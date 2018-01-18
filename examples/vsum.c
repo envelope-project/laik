@@ -26,17 +26,10 @@
  * distribute the data when switching between partitionings.
  */
 
-#include "laik.h"
-
-#ifdef USE_MPI
-#include "laik-backend-mpi.h"
-#else
-#include "laik-backend-single.h"
-#endif
+#include <laik.h>
 
 #include <stdio.h>
 #include <assert.h>
-
 
 // for element-wise weighted partitioning: same as index
 double getEW(Laik_Index* i, const void* d)
@@ -51,14 +44,7 @@ double getTW(int r, const void* d) { return ((long int)d == r) ? 0.0 : 1.0; }
 
 int main(int argc, char* argv[])
 {
-#ifdef USE_MPI
-    Laik_Instance* inst = laik_init_mpi(&argc, &argv);
-#else
-    (void) argc;
-    (void) argv;
-
-    Laik_Instance* inst = laik_init_single();
-#endif
+    Laik_Instance* inst = laik_init (&argc, &argv);
     Laik_Group* world = laik_world(inst);
 
     laik_set_phase(inst, 0, "init", NULL);

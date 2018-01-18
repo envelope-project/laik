@@ -18,13 +18,7 @@
  * SPMV example.
  */
 
-#include "laik.h"
-
-#ifdef USE_MPI
-#include "laik-backend-mpi.h"
-#else
-#include "laik-backend-single.h"
-#endif
+#include <laik.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -118,11 +112,7 @@ void help(char* err)
 
 int main(int argc, char* argv[])
 {
-#ifdef USE_MPI
-    Laik_Instance* inst = laik_init_mpi(&argc, &argv);
-#else
-    Laik_Instance* inst = laik_init_single();
-#endif
+    Laik_Instance* inst = laik_init (&argc, &argv);
     Laik_Group* world = laik_world(inst);
 
 #ifdef USE_EXT_INTF
