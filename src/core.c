@@ -716,11 +716,25 @@ void laik_kv_sync(Laik_Instance* inst)
 
 // generic LAIK init function
 Laik_Instance* laik_init (int* argc, char*** argv) {
+    const char* override = getenv ("LAIK_BACKEND");
+
     #ifdef USE_MPI
-    return laik_init_mpi (argc, argv);
-    #else
-    (void) argc;
-    (void) argv;
-    return laik_init_single ();
+    if (!override || strcmp (override, "mpi") == 0) {
+        return laik_init_mpi (argc, argv);
+    }
     #endif
+
+    if (!override || strcmp (override, "single") == 0) {
+        (void) argc;
+        (void) argv;
+        return laik_init_single ();
+    }
+
+    if (override) {
+        laik_log (LAIK_LL_Panic, "LAIK was compiled without the %s backend requested by LAIK_BACKEND", override);
+    } else {
+        laik_log (LAIK_LL_Panic, "LAIK was compiled without any backends");
+    }
+
+    exit (1);
 }
