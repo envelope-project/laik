@@ -137,7 +137,7 @@ typedef enum _Laik_LogLevel {
 } Laik_LogLevel;
 
 // log a message, similar to printf
-void laik_log(Laik_LogLevel l, const char* msg, ...);
+void laik_log(Laik_LogLevel l, const char* msg, ...) __attribute__ ((format (printf, 2, 3)));
 
 // panic: terminate application
 void laik_panic(const char* msg);
