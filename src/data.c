@@ -6,6 +6,7 @@
 #include "laik-internal.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -382,8 +383,8 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     if (!m->base) {
         laik_log(LAIK_LL_Panic,
                  "Out of memory allocating memory for mapping "
-                 "(data '%s', mapNo %s, size %llu)",
-                 m->data->name, m->mapNo, m->capacity);
+                 "(data '%s', mapNo %d, size %llu)",
+                 m->data->name, m->mapNo, (unsigned long long int) m->capacity);
         exit(1); // not actually needed, laik_log never returns
     }
 
@@ -414,9 +415,9 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     default: assert(0);
     }
 
-    laik_log(1, "allocated memory for '%s'/%d: %d x %d (%llu B) at %p"
+    laik_log(1, "allocated memory for '%s'/%d: %llu x %d (%llu B) at %p"
              "\n  layout: %dd, strides (%lu/%lu/%lu)",
-             d->name, m->mapNo, m->count, d->elemsize,
+             d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
              (unsigned long long) m->capacity, m->base,
              m->layout->dims, m->layout->stride[0],
              m->layout->stride[1], m->layout->stride[2]);
@@ -634,7 +635,7 @@ void initMaps(Laik_Transition* t,
             assert(0);
         }
 
-        laik_log(1, "init map for '%s' slc/map %d/%d: %d entries in [%lu;%lu[ from %p\n",
+        laik_log(1, "init map for '%s' slc/map %d/%d: %d entries in [%d;%d[ from %p\n",
                  d->name, op->sliceNo, op->mapNo, elemCount, from, to, toBase);
     }
 }
