@@ -6,6 +6,7 @@
 #include "laik-internal.h"
 
 #include <assert.h>
+#include <stdint.h>
 
 //----------------------------------
 // Built-in partitioners
@@ -577,10 +578,10 @@ void runReassignPartitioner(Laik_Partitioner* pr,
         if (newg->fromParent[origTask] >= 0) {
             // move over to new borders
             laik_log(1, "reassign: take over slice %d of task %d "
-                     "(new task %d, indexes [%d;%d[)",
+                     "(new task %d, indexes [%lld;%lld[)",
                      sliceNo, origTask, newg->fromParent[origTask],
-                     oldP->tslice[sliceNo].s.from.i[0],
-                     oldP->tslice[sliceNo].s.to.i[0]);
+                     (long long int) oldP->tslice[sliceNo].s.from.i[0],
+                     (long long int) oldP->tslice[sliceNo].s.to.i[0]);
 
             laik_append_slice(p, origTask, &(oldP->tslice[sliceNo].s), 0, 0);
             continue;
@@ -604,9 +605,10 @@ void runReassignPartitioner(Laik_Partitioner* pr,
                 slc.to.i[0] = i + 1;
                 laik_append_slice(p, newg->toParent[curTask], &slc, 0, 0);
 
-                laik_log(1, "reassign: re-distribute [%d;%d[ "
+                laik_log(1, "reassign: re-distribute [%lld;%lld[ "
                          "of slice %d to task %d (new task %d)",
-                         slc.from.i[0], slc.to.i[0], sliceNo,
+                         (long long int) slc.from.i[0],
+                         (long long int) slc.to.i[0], sliceNo,
                          newg->toParent[curTask], curTask);
 
                 // start new slice
@@ -623,9 +625,10 @@ void runReassignPartitioner(Laik_Partitioner* pr,
             slc.to.i[0] = to;
             laik_append_slice(p, newg->toParent[curTask], &slc, 0, 0);
 
-            laik_log(1, "reassign: re-distribute remaining [%d;%d[ "
+            laik_log(1, "reassign: re-distribute remaining [%lld;%lld[ "
                      "of slice %d to task %d (new task %d)",
-                     slc.from.i[0], slc.to.i[0], sliceNo,
+                     (long long int) slc.from.i[0],
+                     (long long int) slc.to.i[0], sliceNo,
                      newg->toParent[curTask], curTask);
         }
     }

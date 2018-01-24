@@ -13,6 +13,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
@@ -363,8 +364,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                             continue;
                         }
 
-                        laik_log(1, "  MPI_Recv from T%d (buf off %d)",
-                                 tg->task[i], p - packbuf);
+                        laik_log(1, "  MPI_Recv from T%d (buf off %lld)",
+                                 tg->task[i], (long long int) (p - packbuf));
 
                         ptr[i] = p;
                         MPI_Recv(p, elemCount, mpiDataType,
