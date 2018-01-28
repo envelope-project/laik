@@ -61,7 +61,7 @@ struct _Laik_Instance {
     // to synchronize internal data among tasks
     Laik_KVNode* kvstore;
 
-    Laik_Backend* backend;
+    const Laik_Backend* backend;
     void* backend_data;
 
     Laik_Space* firstSpaceForInstance;
