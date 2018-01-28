@@ -47,7 +47,7 @@ static laik_agent_init probfunc(
     *((void**) (&result)) = dlsym (handle, name);
     if(!result){
         dlclose(handle);
-        laik_log(LAIK_LL_Error, dlerror());
+        laik_log(LAIK_LL_Error, "%s", dlerror());
         exit(1);
     }
     return result;
@@ -110,7 +110,7 @@ void laik_ext_load_agent_from_file (
 
     handle = dlopen(path, RTLD_LAZY);
     if(!handle){
-        laik_log(LAIK_LL_Error, dlerror());
+        laik_log(LAIK_LL_Error, "%s", dlerror());
         exit(1);
     }
     init = probfunc(handle, "agent_init");
