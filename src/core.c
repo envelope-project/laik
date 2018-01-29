@@ -73,7 +73,7 @@ char* laik_mylocation(Laik_Instance* inst)
 }
 
 // allocate space for a new LAIK instance
-Laik_Instance* laik_new_instance(Laik_Backend* b,
+Laik_Instance* laik_new_instance(const Laik_Backend* b,
                                  int size, int myid,
                                  char* location, void* data)
 {
@@ -701,7 +701,7 @@ bool laik_kv_remove(Laik_KVNode* n, char* path)
 // synchronize KV store
 void laik_kv_sync(Laik_Instance* inst)
 {
-    Laik_Backend* b = inst->backend;
+    const Laik_Backend* b = inst->backend;
 
     assert(b && b->sync);
     (b->sync)(inst);
