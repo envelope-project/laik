@@ -43,25 +43,25 @@ void laik_log_Space(Laik_Space* spc)
 {
     switch(spc->dims) {
     case 1:
-        laik_log_append("[%llu;%llu[",
-                        (unsigned long long) spc->s.from.i[0],
-                        (unsigned long long) spc->s.to.i[0] );
+        laik_log_append("[%lld;%lld[",
+                        (long long) spc->s.from.i[0],
+                        (long long) spc->s.to.i[0] );
         break;
     case 2:
-        laik_log_append("[%llu;%llu[ x [%llu;%llu[",
-                        (unsigned long long) spc->s.from.i[0],
-                        (unsigned long long) spc->s.to.i[0],
-                        (unsigned long long) spc->s.from.i[1],
-                        (unsigned long long) spc->s.to.i[1] );
+        laik_log_append("[%lld;%lld[ x [%lld;%lld[",
+                        (long long) spc->s.from.i[0],
+                        (long long) spc->s.to.i[0],
+                        (long long) spc->s.from.i[1],
+                        (long long) spc->s.to.i[1] );
         break;
     case 3:
-        laik_log_append("[%llu;%llu[ x [%llu;%llu[ x [%llu;%llu[",
-                        (unsigned long long) spc->s.from.i[0],
-                        (unsigned long long) spc->s.to.i[0],
-                        (unsigned long long) spc->s.from.i[1],
-                        (unsigned long long) spc->s.to.i[1],
-                        (unsigned long long) spc->s.from.i[2],
-                        (unsigned long long) spc->s.to.i[2] );
+        laik_log_append("[%lld;%lld[ x [%lld;%lld[ x [%lld;%lld[",
+                        (long long) spc->s.from.i[0],
+                        (long long) spc->s.to.i[0],
+                        (long long) spc->s.from.i[1],
+                        (long long) spc->s.to.i[1],
+                        (long long) spc->s.from.i[2],
+                        (long long) spc->s.to.i[2] );
         break;
     default: assert(0);
     }
