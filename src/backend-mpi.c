@@ -596,7 +596,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 laik_log(1, "  direct recv to local [%ld;%ld[, slc/map %d/%d, "
                          "elemsize %d, baseptr %p\n",
                          from, to, op->sliceNo, op->mapNo,
-                         d->elemsize, toMap->base);
+                         d->elemsize, (void*) toMap->base);
 
                 if (mpi_bug > 0) {
                     // intentional bug: ignore small amounts of data received
@@ -686,7 +686,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 laik_log(1, "  direct send: from local [%ld;%ld[, slice/map %d/%d, "
                             "elemsize %d, baseptr %p\n",
                          from, to, op->sliceNo, op->mapNo,
-                         d->elemsize, fromMap->base);
+                         d->elemsize, (void*) fromMap->base);
 
                 // TODO: tag 1 may conflict with application
                 MPI_Send(fromMap->base + from * d->elemsize, count,

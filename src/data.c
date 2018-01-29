@@ -284,7 +284,7 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
         if (m->reusedFor == -1) {
             laik_log(1, "free map for '%s'/%d (capacity %llu, base %p, start %p)\n",
                      d->name, m->mapNo,
-                     (unsigned long long) m->capacity, m->base, m->start);
+                     (unsigned long long) m->capacity, (void*) m->base, (void*) m->start);
 
             // concrete, fixed layouts are only used once: free
             if (m->layout && m->layout->isFixed) {
@@ -418,7 +418,7 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     laik_log(1, "allocated memory for '%s'/%d: %llu x %d (%llu B) at %p"
              "\n  layout: %dd, strides (%lu/%lu/%lu)",
              d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
-             (unsigned long long) m->capacity, m->base,
+             (unsigned long long) m->capacity, (void*) m->base,
              m->layout->dims, m->layout->stride[0],
              m->layout->stride[1], m->layout->stride[2]);
 }
@@ -636,7 +636,7 @@ void initMaps(Laik_Transition* t,
         }
 
         laik_log(1, "init map for '%s' slc/map %d/%d: %d entries in [%d;%d[ from %p\n",
-                 d->name, op->sliceNo, op->mapNo, elemCount, from, to, toBase);
+                 d->name, op->sliceNo, op->mapNo, elemCount, from, to, (void*) toBase);
     }
 }
 

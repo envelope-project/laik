@@ -79,7 +79,7 @@ void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
 
             laik_log(1, "Single reduce: "
                         "from %ld, to %ld, elemsize %d, base from/to %p/%p\n",
-                     from, to, d->elemsize, fromBase, toBase);
+                     from, to, d->elemsize, (void*) fromBase, (void*) toBase);
 
             memcpy(toBase, fromBase, (to-from) * fromMap->data->elemsize);
         }
