@@ -185,9 +185,8 @@ static void laik_mpi_updateGroup(Laik_Group* g)
     laik_log(1, "MPI Comm_split: old myid %d => new myid %d",
              g->parent->myid, g->fromParent[g->parent->myid]);
 
-    MPI_Comm_split(gdParent->comm,
-                   (g->fromParent[g->parent->myid] < 0) ? MPI_UNDEFINED : 0,
-                   g->parent->myid, &(gd->comm));
+    MPI_Comm_split(gdParent->comm, g->myid < 0 ? MPI_UNDEFINED : 0, g->myid,
+        &(gd->comm));
 }
 
 static
