@@ -31,13 +31,6 @@ Laik_Instance* laik_init_single()
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_single, 1, 0, "local", 0);
 
-    // group world
-    Laik_Group* g = laik_create_group(inst);
-    g->inst = inst;
-    g->gid = 0;
-    g->size = 1;
-    g->myid = 0;
-
     laik_log(1, "Single backend initialized\n");
 
     single_instance = inst;

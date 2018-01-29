@@ -100,22 +100,6 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
     sprintf(inst->guid, "%d", rank);
 
-    // group world
-
-    MPIGroupData* gd = malloc(sizeof(MPIGroupData));
-    if (!gd) {
-        laik_panic("Out of memory allocating MPIGroupData object");
-        exit(1); // not actually needed, laik_panic never returns
-    }
-    gd->comm = MPI_COMM_WORLD;
-
-    Laik_Group* g = laik_create_group(inst);
-    g->inst = inst;
-    g->gid = 0;
-    g->size = inst->size;
-    g->myid = inst->myid;
-    g->backend_data = gd;
-
     laik_log(1, "MPI backend initialized (location '%s', pid %d)\n",
              inst->mylocation, (int) getpid());
 

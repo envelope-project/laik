@@ -136,6 +136,13 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
         stdout = laik_logfile;
     }
 
+    // Create a group in this instance with same parameters as the instance.
+    // Since it's the first group, this is what laik_world() will return.
+    Laik_Group* first_group = laik_create_group (instance);
+    first_group->size         = size;
+    first_group->myid         = myid;
+    first_group->backend_data = data;
+
     return instance;
 }
 
