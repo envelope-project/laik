@@ -325,6 +325,8 @@ Laik_Layout* laik_new_layout_def_1d()
         l->stride[1] = 0;
         l->stride[2] = 0;
         l->isFixed = false; // this prohibits free() on layout
+        l->pack = laik_pack_def;
+        l->unpack = laik_unpack_def;
     }
     return l;
 }
