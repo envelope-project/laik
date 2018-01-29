@@ -1,96 +1,14 @@
-language:           c
-sudo:               true
-dist:               trusty
+sudo: required
 
-matrix:
-  include:
-    - compiler:     gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-4.9
-      env:
-          - COMPILERCXX=g++-4.9
-          - COMPILERC=gcc-4.9
-    - compiler:     gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-5
-      env:
-          - COMPILERCXX=g++-5
-          - COMPILERC=gcc-5
-    - compiler:     gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6
-      env:
-          - COMPILERCXX=g++-6
-          - COMPILERC=gcc-6
-    - compiler:     clang
-      env:
-          - COMPILERC=clang
-          - COMPILERCXX=clang++
-          - CLANGV=3.8.1
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6
-    - compiler:     clang
-      env:
-          - COMPILERC=clang
-          - COMPILERCXX=clang++
-          - CLANGV=3.9.1
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6
-    - compiler:     clang
-      env:
-          - COMPILERC=clang
-          - COMPILERCXX=clang++
-          - CLANGV=4.0.1
-          - RUNCLANGTIDY=TRUE
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6
+services:
+ - docker
 
-
-before_install:
-  - sudo add-apt-repository ppa:mosquitto-dev/mosquitto-ppa -y
-  - sudo apt-get -qq update
-  - sudo apt-get install -y openmpi-bin libopenmpi-dev libmosquitto-dev libprotobuf-c0-dev protobuf-c-compiler libiomp5
-  - sudo ln --symbolic /usr/lib/libiomp5.so.5 /usr/lib/libomp.so
-  - mkdir $HOME/clang+llvm
-  - export PATH=$HOME/clang+llvm/bin:$PATH
-  - if [ -n "$CLANGV" ]; then wget http://llvm.org/releases/$CLANGV/clang+llvm-$CLANGV-x86_64-linux-gnu-debian8.tar.xz -O $HOME/clang+llvm.tar.xz; fi
-  - if [ -n "$CLANGV" ]; then tar xf $HOME/clang+llvm.tar.xz -C $HOME/clang+llvm --strip-components 1; fi
-  # install Bear 2.3.5 (higher is buggy) for clang-tidy
-  - if [ -n "$RUNCLANGTIDY" ]; then git clone https://github.com/rizsotto/Bear.git; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then cd Bear && git checkout 2.3.5; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then cmake .; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then make all; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then sudo make install; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then cd ..; fi
+env:
+ - IMG="debian:stretch" PKG="clang-3.9 libomp-dev" CC="clang-3.9" CXX="clang++-3.9"
+ - IMG="debian:stretch" PKG="gcc-6 g++-6"          CC="gcc-6"     CXX="g++-6"
+ - IMG="ubuntu:xenial"  PKG="clang-4.0 libomp-dev" CC="clang-4.0" CXX="clang++-4.0"
+ - IMG="ubuntu:xenial"  PKG="gcc-4.7 g++-4.7"      CC="gcc-4.7"   CXX="g++-4.7"
+ - IMG="ubuntu:xenial"  PKG="gcc-5 g++-5"          CC="gcc-5"     CXX="g++-5"
 
 script:
-  - CC=$COMPILERC ./configure
-  - OMPI_CC=$COMPILERC make
-  - make test
-  - if [ -n "$RUNCLANGTIDY" ]; then make clean; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then CC=$COMPILERC OMPI_CC=$COMPILERC bear make test || true; fi
-  - if [ -n "$RUNCLANGTIDY" ]; then git ls-files '*.c' | xargs -P 1 -I{} clang-tidy {}; fi
+ - docker build --build-arg "IMG=${IMG}" --build-arg "PKG=${PKG}" --build-arg "CC=${CC}" --build-arg "CXX=${CXX}" "."
