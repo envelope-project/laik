@@ -27,7 +27,6 @@
 #include <string.h>
 
 
-
 // to be used with buffered log API
 
 void laik_log_IntList(int len, int* list)
