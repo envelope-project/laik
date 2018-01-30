@@ -66,7 +66,7 @@ void laik_log_Space(Laik_Space* spc)
     }
 }
 
-void laik_log_Index(int dims, Laik_Index* idx)
+void laik_log_Index(int dims, const Laik_Index* idx)
 {
     int64_t i1 = idx->i[0];
     int64_t i2 = idx->i[1];
