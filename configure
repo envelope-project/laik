@@ -65,7 +65,7 @@ if not mpicc:
 mpi_found = distutils.spawn.find_executable(mpicc)
 
 if not mpi_found:
-    print("LAIK MPI backend driver disabled ('"+ mympicc +"' not found).")
+    print("LAIK MPI backend driver disabled ('"+ mpicc +"' not found).")
     print("  Set MPICC to specify the MPI C compiler wrapper, or install MPI.")
     print("  On Ubuntu, install e.g. 'libopenmpi-dev'.")
     mpicc = ""
