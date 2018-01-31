@@ -219,18 +219,20 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
     int n = p->tslice[p->off[myid+1] - 1].mapNo + 1;
     assert(n > 0);
 
-    Laik_MappingList* ml;
-    int mlSize = sizeof(Laik_MappingList) + (n-1) * sizeof(Laik_Mapping*);
-    // also allocate n Laik_Mapping structs
-    ml = malloc(mlSize + n * sizeof(Laik_Mapping));
-    if (!ml) {
-        laik_panic("Out of memory allocating Laik_Mapping object");
-        exit(1); // not actually needed, laik_panic never returns
-    }
+    // Allocate memory for the Laik_MappingList itself
+    Laik_MappingList* ml = malloc (sizeof(Laik_MappingList));
+    assert (ml);
+
+    // Set up the count field
     ml->count = n;
-    // set pointers to space allocated after MappingList
-    for(int i = 0; i < n; i++)
-        ml->map[i] = &( ((Laik_Mapping*) (((char*)ml) + mlSize))[i] );
+
+    // Set up the map field
+    ml->map = malloc (n * sizeof (Laik_Mapping*));
+    assert (ml->map);
+    for (int i = 0; i < n; i++) {
+        ml->map[i] = malloc (sizeof (Laik_Mapping));
+        assert (ml->map[i]);
+    }
 
     int firstOff, lastOff;
     int mapNo = 0;
@@ -305,12 +307,15 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
 
             m->base = 0;
             m->start = 0;
+
+            free (m);
         }
         else
             laik_log(1, "free map for '%s'/%d: nothing to do (reused for %d)\n",
                      d->name, m->mapNo, m->reusedFor);
     }
 
+    free(ml->map);
     free(ml);
 }
 
