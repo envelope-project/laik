@@ -220,7 +220,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
     assert(n > 0);
 
     Laik_MappingList* ml;
-    int mlSize = sizeof(Laik_MappingList) + (n-1) * sizeof(Laik_Mapping*);
+    int mlSize = sizeof(Laik_MappingList) + n * sizeof(Laik_Mapping*);
     // also allocate n Laik_Mapping structs
     ml = malloc(mlSize + n * sizeof(Laik_Mapping));
     if (!ml) {
