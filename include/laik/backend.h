@@ -33,6 +33,7 @@
 #include "space.h"
 #include "space-internal.h"
 #include "data-internal.h"
+#include <stdbool.h>
 
 // specific to backend driver, result of preparing the execution of a transition
 typedef struct _Laik_TransitionPlan Laik_TransitionPlan;
