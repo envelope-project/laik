@@ -27,7 +27,6 @@
 #include "space.h"
 #include "data.h"
 
-#include <stdbool.h>
 #include <stdint.h>
 
 void laik_log_IntList(int len, int* list);
