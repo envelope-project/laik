@@ -26,6 +26,7 @@
 #include "core.h"
 #include "space.h"
 
+#include <stdbool.h>
 #include <stdint.h>  // uint64_t
 #include <stdlib.h>  // size_t
 

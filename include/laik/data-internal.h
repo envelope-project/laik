@@ -25,6 +25,8 @@
 // already included - this is just for an IDE to know about LAIK types
 #include "laik-internal.h"
 
+#include <stdbool.h>
+
 // kinds of data types supported by Laik
 typedef enum _Laik_TypeKind {
     LAIK_TK_None = 0,

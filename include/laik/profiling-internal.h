@@ -24,6 +24,7 @@
 
 #include "definitions.h"
 
+#include <stdbool.h>
 
 struct _Laik_Profiling_Controller
 {
