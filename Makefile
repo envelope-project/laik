@@ -40,7 +40,7 @@ src/backend-mpi.o: $(SDIR)src/backend-mpi.c
 	$(MPICC) $(CFLAGS) -c -o src/backend-mpi.o $(SDIR)src/backend-mpi.c
 
 $(LAIKLIB): $(OBJS)
-	$(MPICC) $(CFLAGS) -shared -o $(LAIKLIB) $(OBJS) -ldl
+	$(MPICC) $(CFLAGS) -shared -o $(abspath $(LAIKLIB)) $(OBJS) -ldl
 
 examples: $(LAIKLIB)
 	cd examples && $(MAKE)
