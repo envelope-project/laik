@@ -75,15 +75,6 @@ double laik_realtime(){
     return tv.tv_sec+1e-6*tv.tv_usec;
 }
 
-// NOTE: See Discussion
-// https://stackoverflow.com/questions/6498972/faster-equivalent-of-gettimeofday
-// The CLOCK_MONOTONIC_COARSE is way faster but delivers a significant lower precision 
-double laik_fast_realtime(){
-    struct timespec tv;
-    clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
-    return (double)tv.tv_sec+(double)1e-9*tv.tv_nsec;
-}
-
 double laik_cputime(){
     clock_t clk = clock();
     return (double)clk/CLOCKS_PER_SEC;
