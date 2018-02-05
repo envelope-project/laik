@@ -1,8 +1,8 @@
 1000 k cells (mem 16.0 MB), running 50 iterations with 4 tasks
-Global value sum after 50 iterations: 2999993.830104
-Residuum after 11 iters: 1953.506270
+  with repartitioning every 10 iterations
 Residuum after  1 iters: 2999983.250000
+Residuum after 11 iters: 1953.506270
 Residuum after 21 iters: 2.016098
 Residuum after 31 iters: 0.058618
 Residuum after 41 iters: 0.036305
-  with repartitioning every 10 iterations
+Global value sum after 50 iterations: 2999993.830104

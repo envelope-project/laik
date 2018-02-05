@@ -47,35 +47,35 @@ test-spmv2-shrink-inc:
 	cmp test-spmv2si.out $(SDIR)test-spmv2.expected
 
 test-jac1d:
-	mpirun -np 4 ../../examples/jac1d 100 | sort > test-jac1d-100.out
+	mpirun -np 4 ../../examples/jac1d 100 > test-jac1d-100.out
 	cmp test-jac1d-100.out $(SDIR)test-jac1d-100.expected
 
 test-jac1d-repart:
-	mpirun -np 4 ../../examples/jac1d 1000 50 10 | sort > test-jac1d-1000-repart.out
+	mpirun -np 4 ../../examples/jac1d 1000 50 10 > test-jac1d-1000-repart.out
 	cmp test-jac1d-1000-repart.out $(SDIR)test-jac1d-1000-repart.expected
 
 test-jac2d:
-	mpirun -np 4 ../../examples/jac2d -s 1000 | sort > test-jac2d-1000.out
+	mpirun -np 4 ../../examples/jac2d -s 1000 > test-jac2d-1000.out
 	cmp test-jac2d-1000.out $(SDIR)test-jac2d-1000.expected
 
 test-jac2d-noc:
-	mpirun -np 4 ../../examples/jac2d -s -n 1000 | sort > test-jac2dn-1000.out
+	mpirun -np 4 ../../examples/jac2d -s -n 1000 > test-jac2dn-1000.out
 	cmp test-jac2dn-1000.out $(SDIR)test-jac2dn-1000.expected
 
 test-jac3d:
-	mpirun -np 4 ../../examples/jac3d -s 100 | sort > test-jac3d-100.out
+	mpirun -np 4 ../../examples/jac3d -s 100 > test-jac3d-100.out
 	cmp test-jac3d-100.out $(SDIR)test-jac3d-100.expected
 
 test-jac3d-noc:
-	mpirun -np 4 ../../examples/jac3d -s -n 100 | sort > test-jac3dn-100.out
+	mpirun -np 4 ../../examples/jac3d -s -n 100 > test-jac3dn-100.out
 	cmp test-jac3dn-100.out $(SDIR)test-jac3dn-100.expected
 
 test-markov:
-	mpirun -np 4 ../../examples/markov 40 4 | sort > test-markov-40-4.out
+	mpirun -np 4 ../../examples/markov 40 4 > test-markov-40-4.out
 	cmp test-markov-40-4.out $(SDIR)test-markov-40-4.expected
 
 test-markov2:
-	mpirun -np 4 ../../examples/markov2 40 4 | sort > test-markov2-40-4.out
+	mpirun -np 4 ../../examples/markov2 40 4 > test-markov2-40-4.out
 	cmp test-markov2-40-4.out $(SDIR)test-markov2-40-4.expected
 
 test-propagation2d:
