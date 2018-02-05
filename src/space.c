@@ -969,8 +969,8 @@ void appendBorder(int64_t b, int task, int sliceNo, int mapNo,
     sb->isInput = isInput ? 1 : 0;
 
 #ifdef DEBUG_REDUCTIONSLICES
-    laik_log(1, "  add border %ld, task %d slice/map %d/%d (%s, %s)",
-             b, task, sliceNo, mapNo,
+    laik_log(1, "  add border %lld, task %d slice/map %d/%d (%s, %s)",
+             (long long int) b, task, sliceNo, mapNo,
              isStart ? "start" : "end", isInput ? "input" : "output");
 #endif
 }
@@ -1264,8 +1264,8 @@ void calcAddReductions(Laik_Group* group,
         SliceBorder* sb = &(borderList[i]);
 
 #ifdef DEBUG_REDUCTIONSLICES
-        laik_log(1, "processing border %lu, task %d (%s, %s)",
-                 sb->b, sb->task,
+        laik_log(1, "processing border %lld, task %d (%s, %s)",
+                 (long long int) sb->b, sb->task,
                  sb->isStart ? "start" : "end",
                  sb->isInput ? "input" : "output");
 #endif
@@ -1307,8 +1307,9 @@ void calcAddReductions(Laik_Group* group,
             int64_t nextBorder = borderList[i + 1].b;
 
 #ifdef DEBUG_REDUCTIONSLICES
-            laik_log(1, "  range (%ld - %ld), act %d",
-                     sb->b, nextBorder, myActivity);
+            laik_log(1, "  range (%lld - %lld), act %d",
+                     (long long int) sb->b,
+                     (long long int) nextBorder, myActivity);
 #endif
 
             if (myActivity > 0) {
@@ -1333,10 +1334,11 @@ void calcAddReductions(Laik_Group* group,
                                                myInputMapNo, myOutputMapNo);
 #ifdef DEBUG_REDUCTIONSLICES
                                 laik_log(1, "  adding local (special reduction)"
-                                            " (%lu - %lu) from %d/%d to %d/%d (slc/map)",
-                                         slc.from.i[0], slc.to.i[0],
-                                        myInputSliceNo, myInputMapNo,
-                                        myOutputSliceNo, myOutputMapNo);
+                                            " (%lld - %lld) from %d/%d to %d/%d (slc/map)",
+                                         (long long int) slc.from.i[0],
+                                         (long long int) slc.to.i[0],
+                                         myInputSliceNo, myInputMapNo,
+                                         myOutputSliceNo, myOutputMapNo);
 #endif
                                 continue;
                             }
@@ -1348,8 +1350,9 @@ void calcAddReductions(Laik_Group* group,
                                           outputGroup.task[out]);
 #ifdef DEBUG_REDUCTIONSLICES
                             laik_log(1, "  adding send (special reduction)"
-                                        " (%lu - %lu) slc/map %d/%d to T%d",
-                                     slc.from.i[0], slc.to.i[0],
+                                        " (%lld - %lld) slc/map %d/%d to T%d",
+                                    (long long int) slc.from.i[0],
+                                    (long long int) slc.to.i[0],
                                     myInputSliceNo, myInputMapNo,
                                     outputGroup.task[out]);
 #endif
@@ -1368,8 +1371,9 @@ void calcAddReductions(Laik_Group* group,
 
 #ifdef DEBUG_REDUCTIONSLICES
                             laik_log(1, "  adding recv (special reduction)"
-                                        " (%lu - %lu) slc/map %d/%d from T%d",
-                                     slc.from.i[0], slc.to.i[0],
+                                        " (%lld - %lld) slc/map %d/%d from T%d",
+                                    (long long int) slc.from.i[0],
+                                    (long long int) slc.to.i[0],
                                     myOutputSliceNo, myOutputMapNo,
                                     inputGroup.task[0]);
 #endif

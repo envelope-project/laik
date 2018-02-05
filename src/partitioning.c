@@ -429,8 +429,9 @@ void updatePartitioningOffsetsSI(Laik_Partitioning* p)
                 continue;
             }
         }
-        laik_log(1, "  adding slice for offsets %d - %d: task %d, [%lu;%lu[",
-                 j, i-1, task, idx0, idx +1);
+        laik_log(1, "  adding slice for offsets %d - %d: task %d, [%lld;%lld[",
+                 j, i-1, task,
+                 (long long) idx0, (long long) (idx + 1) );
 
         Laik_TaskSlice_Gen* ts = &(p->tslice[off]);
         ts->type = TS_Generic;

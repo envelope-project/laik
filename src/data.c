@@ -418,11 +418,13 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     }
 
     laik_log(1, "allocated memory for '%s'/%d: %llu x %d (%llu B) at %p"
-             "\n  layout: %dd, strides (%lu/%lu/%lu)",
+             "\n  layout: %dd, strides (%llu/%llu/%llu)",
              d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
              (unsigned long long) m->capacity, (void*) m->base,
-             m->layout->dims, m->layout->stride[0],
-             m->layout->stride[1], m->layout->stride[2]);
+             m->layout->dims,
+             (unsigned long long) m->layout->stride[0],
+             (unsigned long long) m->layout->stride[1],
+             (unsigned long long) m->layout->stride[2]);
 }
 
 static

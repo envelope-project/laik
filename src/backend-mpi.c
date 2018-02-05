@@ -328,8 +328,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 // do the manual reduction on smallest rank of output group
                 int reduceTask = t->group[op->outputGroup].task[0];
 
-                laik_log(1, "Manual reduction at T%d: (%ld - %ld) slc/map %d/%d",
-                         reduceTask, from, to,
+                laik_log(1, "Manual reduction at T%d: (%lld - %lld) slc/map %d/%d",
+                         reduceTask, (long long int) from, (long long int) to,
                          op->myInputSliceNo, op->myInputMapNo);
 
                 if (reduceTask == myid) {
@@ -592,9 +592,10 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 int64_t to   = op->slc.to.i[0] - toMap->requiredSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "  direct recv to local [%ld;%ld[, slc/map %d/%d, "
+                laik_log(1, "  direct recv to local [%lld;%lld[, slc/map %d/%d, "
                          "elemsize %d, baseptr %p\n",
-                         from, to, op->sliceNo, op->mapNo,
+                         (long long int) from, (long long int) to,
+                         op->sliceNo, op->mapNo,
                          d->elemsize, (void*) toMap->base);
 
                 if (mpi_bug > 0) {
@@ -682,9 +683,10 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 int64_t to   = op->slc.to.i[0] - fromMap->requiredSlice.from.i[0];
                 count = to - from;
 
-                laik_log(1, "  direct send: from local [%ld;%ld[, slice/map %d/%d, "
+                laik_log(1, "  direct send: from local [%lld;%lld[, slice/map %d/%d, "
                             "elemsize %d, baseptr %p\n",
-                         from, to, op->sliceNo, op->mapNo,
+                         (long long int) from, (long long int) to,
+                         op->sliceNo, op->mapNo,
                          d->elemsize, (void*) fromMap->base);
 
                 // TODO: tag 1 may conflict with application
