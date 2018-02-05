@@ -844,6 +844,10 @@ void laik_append_phase(Laik_PartGroup* g, Laik_AccessPhase* ap)
 
 // helper functions for laik_calc_transition
 
+// TODO:
+// - quadratic complexity for 2d/3d spaces
+// - for 1d, does not cope with overlapping slices belonging to same task
+
 // print verbose debug output for creating slices for reductions?
 #define DEBUG_REDUCTIONSLICES 1
 
@@ -979,7 +983,12 @@ static int sb_cmp(const void *p1, const void *p2)
 {
     const SliceBorder* sb1 = (const SliceBorder*) p1;
     const SliceBorder* sb2 = (const SliceBorder*) p2;
-    return sb1->b - sb2->b; // order just by border
+    // order by border, at same point first close slice
+    if (sb1->b == sb2->b) {
+        return sb1->isStart - sb2->isStart;
+    }
+    return sb1->b - sb2->b;
+
 }
 
 static bool addTask(TaskGroup* g, int task, int maxTasks)
