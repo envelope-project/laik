@@ -80,6 +80,14 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     d->didInit = false;
     d->comm = MPI_COMM_WORLD;
 
+    MPIGroupData* gd = malloc(sizeof(MPIGroupData));
+    if (!gd) {
+        laik_panic("Out of memory allocating MPIGroupData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    gd->comm = MPI_COMM_WORLD;
+
+
     if (argc) {
         MPI_Init(argc, argv);
         d->didInit = true;
@@ -96,7 +104,7 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_mpi, size, rank,
-                             processor_name, d);
+                             processor_name, d, gd);
 
     sprintf(inst->guid, "%d", rank);
 

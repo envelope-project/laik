@@ -75,7 +75,7 @@ char* laik_mylocation(Laik_Instance* inst)
 // allocate space for a new LAIK instance
 Laik_Instance* laik_new_instance(const Laik_Backend* b,
                                  int size, int myid,
-                                 char* location, void* data)
+                                 char* location, void* data, void *gdata)
 {
     Laik_Instance* instance;
     instance = malloc(sizeof(Laik_Instance));
@@ -141,7 +141,7 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     Laik_Group* first_group = laik_create_group (instance);
     first_group->size         = size;
     first_group->myid         = myid;
-    first_group->backend_data = data;
+    first_group->backend_data = gdata;
 
     return instance;
 }

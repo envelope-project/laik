@@ -42,7 +42,7 @@ typedef struct _Laik_Group Laik_Group;
 
 // allocate space for a new LAIK instance
 Laik_Instance* laik_new_instance(const Laik_Backend* b, int size, int myid,
-                                 char* location, void* data);
+                                 char* location, void* data, void *gdata);
 
 //! shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance* inst);
