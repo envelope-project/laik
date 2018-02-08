@@ -1,0 +1,9 @@
+[1,0]<stdout>:My world ID 0, in shrinked group: -1
+[1,0]<stdout>:Id 0: partitial sums 499999500000, 31249875000, 124999750000, 0
+[1,0]<stdout>:Total sums: 499999500000, 499999500000, 499999500000, 499999500000
+[1,1]<stdout>:My world ID 1, in shrinked group: 0
+[1,1]<stdout>:Id 1: partitial sums 0, 93749875000, 124999344065, 55555277778
+[1,2]<stdout>:My world ID 2, in shrinked group: 1
+[1,2]<stdout>:Id 2: partitial sums 0, 156249875000, 125000123235, 166666833333
+[1,3]<stdout>:My world ID 3, in shrinked group: 2
+[1,3]<stdout>:Id 3: partitial sums 0, 218749875000, 125000282700, 277777388889
