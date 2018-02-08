@@ -1,0 +1,7 @@
+100 x 100 x 100 cells (mem 16.0 MB), running 50 iterations with 1 tasks (halo without corners)
+Residuum after  1 iters: 3088288.333334
+Residuum after 11 iters: 11612.580828
+Residuum after 21 iters: 3544.954272
+Residuum after 31 iters: 1925.258713
+Residuum after 41 iters: 1238.432564
+Global value sum after 50 iterations: 2192500.161333

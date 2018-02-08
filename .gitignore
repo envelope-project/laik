@@ -8,3 +8,4 @@ Makefile.config
 .vscode
 compile_commands.json
 log
+/build/
