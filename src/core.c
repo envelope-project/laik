@@ -27,6 +27,42 @@ static int laik_log_totask = -1;
 //program name
 extern const char *__progname;
 
+//-----------------------------------------------------------------------
+// LAIK init/finalize
+//
+// see corresponding backend code for non-generic initialization of LAIK
+
+// generic LAIK init function
+Laik_Instance* laik_init (int* argc, char*** argv)
+{
+    const char* override = getenv("LAIK_BACKEND");
+
+#ifdef USE_MPI
+    // default to MPI if available, or if explicitly wanted
+    if ((override == 0) || (strcmp(override, "mpi") == 0)) {
+        return laik_init_mpi(argc, argv);
+    }
+#endif
+
+    // fall-back to "single" backend as default if MPI is not available, or
+    // if "single" backend is explicitly requested
+    if ((override == 0) || (strcmp(override, "single") == 0)) {
+        (void) argc;
+        (void) argv;
+        return laik_init_single();
+    }
+
+    // Error: unknown backend wanted
+    assert(override != 0);
+
+    // create dummy backend for laik_log to work
+    laik_init_single();
+    laik_log(LAIK_LL_Panic,
+             "Unknwown backend '%s' requested by LAIK_BACKEND", override);
+    exit (1);
+}
+
+
 int laik_size(Laik_Group* g)
 {
     return g->size;
@@ -714,27 +750,3 @@ void laik_kv_sync(Laik_Instance* inst)
     (b->sync)(inst);
 }
 
-// generic LAIK init function
-Laik_Instance* laik_init (int* argc, char*** argv) {
-    const char* override = getenv ("LAIK_BACKEND");
-
-    #ifdef USE_MPI
-    if (!override || strcmp (override, "mpi") == 0) {
-        return laik_init_mpi (argc, argv);
-    }
-    #endif
-
-    if (!override || strcmp (override, "single") == 0) {
-        (void) argc;
-        (void) argv;
-        return laik_init_single ();
-    }
-
-    if (override) {
-        laik_log (LAIK_LL_Panic, "LAIK was compiled without the %s backend requested by LAIK_BACKEND", override);
-    } else {
-        laik_log (LAIK_LL_Panic, "LAIK was compiled without any backends");
-    }
-
-    exit (1);
-}
