@@ -236,6 +236,7 @@ void laik_profile_printf(const char* msg, ...)
         va_list args;
         va_start(args, msg);
         vfprintf((FILE*)laik_profinst->profiling->profile_file, msg, args);
+        va_end(args);
     }
 }
 

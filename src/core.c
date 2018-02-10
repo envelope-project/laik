@@ -460,6 +460,7 @@ void laik_log_append(const char* msg, ...)
     va_list args;
     va_start(args, msg);
     log_append(msg, args);
+    va_end(args);
 }
 
 static
@@ -569,6 +570,7 @@ void laik_log_flush(const char* msg, ...)
         va_list args;
         va_start(args, msg);
         log_append(msg, args);
+        va_end(args);
     }
 
     log_flush();
@@ -581,6 +583,7 @@ void laik_log(Laik_LogLevel l, const char* msg, ...)
     va_list args;
     va_start(args, msg);
     log_append(msg, args);
+    va_end(args);
 
     log_flush();
 }
