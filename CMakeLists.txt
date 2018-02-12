@@ -42,7 +42,7 @@ function (add_pandoc_target target)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_custom_target ("${target}_target" ALL DEPENDS "${target}")
-endfunction (add_pandoc_target)
+endfunction ()
 
 # Add a pkg-config helper function
 function (add_pkgconfig_library name)
@@ -53,7 +53,7 @@ function (add_pkgconfig_library name)
         target_compile_options ("${name}" INTERFACE "${${name}_CFLAGS}")
         target_link_libraries  ("${name}" INTERFACE "${${name}_LDFLAGS}")
     endif (NOT TARGET "${name}")
-endfunction (add_pkgconfig_library)
+endfunction ()
 
 # Add a protobuf helper function
 function (compile_protobuf_module name)
@@ -64,7 +64,7 @@ function (compile_protobuf_module name)
         VERBATIM
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
-endfunction (compile_protobuf_module)
+endfunction ()
 
 # Add the subdirectories
 add_subdirectory ("doc")
