@@ -23,17 +23,18 @@ foreach (test
     # Determine a suitable test name automatically
     string (REPLACE ";" "_" name "${test}")
 
-    if (enable-mpi-backend)
+    # Get the compile definitions passed to liblaik
+    get_target_property (definitions "laik" "COMPILE_DEFINITIONS")
+
+    if ("USE_MPI" IN_LIST definitions)
         add_test (
             NAME    "mpi_${name}"
             COMMAND "env" "LAIK_BACKEND=mpi" "${CMAKE_CURRENT_SOURCE_DIR}/run_example_test.sh" ${test}
         )
-    endif (enable-mpi-backend)
+    endif ()
 
-    if (enable-single-backend)
-        add_test (
-            NAME    "single_${name}"
-            COMMAND "env" "LAIK_BACKEND=single" "${CMAKE_CURRENT_SOURCE_DIR}/run_example_test.sh" ${test}
-        )
-    endif (enable-single-backend)
+    add_test (
+        NAME    "single_${name}"
+        COMMAND "env" "LAIK_BACKEND=single" "${CMAKE_CURRENT_SOURCE_DIR}/run_example_test.sh" ${test}
+    )
 endforeach ()
