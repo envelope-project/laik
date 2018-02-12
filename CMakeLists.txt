@@ -31,6 +31,7 @@ option (openmp-examples   "Enable OpenMP examples (needs an OpenMP-capable compi
 option (profiling-agent   "Enable profiling agent (needs libpapi-dev)"                                  on)
 option (simple-agent      "Enable simple agent"                                                         on)
 option (single-backend    "Enable Single backend"                                                       on)
+option (skip-missing      "Enable skipping optional features in the case of missing dependencies"       on)
 
 # Add a pandoc helper function
 function (add_pandoc_target target)

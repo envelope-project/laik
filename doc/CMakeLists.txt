@@ -18,6 +18,8 @@ if (documentation)
 
         add_pandoc_target ("all.html" ${docs})
         add_pandoc_target ("all.pdf"  ${docs})
+    elseif (skip-missing)
+        message (WARNING "Dependency check for option 'documentation' failed, skipping!")
     else ()
         message (FATAL_ERROR "Dependency check for option 'documentation' failed, stopping!")
     endif ()

@@ -15,6 +15,8 @@ if (mosquitto-agent)
             PRIVATE "laik"
             PRIVATE "${mosquitto}"
         )
+    elseif (skip-missing)
+        message (WARNING "Dependency check for option 'mosquitto-agent' failed, skipping!")
     else ()
         message (FATAL_ERROR "Dependency check for option 'mosquitto-agent' failed, stopping!")
     endif ()

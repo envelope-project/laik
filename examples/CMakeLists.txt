@@ -56,6 +56,8 @@ if (openmp-examples)
                 PRIVATE "${OpenMP_C_FLAGS}"
             )
         endforeach ()
+    elseif (skip-missing)
+        message (WARNING "Dependency check for option 'openmp-examples' failed, skipping!")
     else ()
         message (FATAL_ERROR "Dependency check for option 'openmp-examples' failed, stopping!")
     endif ()

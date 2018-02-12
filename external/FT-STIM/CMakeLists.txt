@@ -17,6 +17,8 @@ if (failure-simulator)
         target_link_libraries ("laikfti"
             PRIVATE "libprotobuf-c"
         )
+    elseif (skip-missing)
+        message (WARNING "Dependency check for option 'failure-simulator' failed, skipping!")
     else ()
         message (FATAL_ERROR "Dependency check for option 'failure-simulator' failed, stopping!")
     endif ()
