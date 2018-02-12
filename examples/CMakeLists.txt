@@ -23,7 +23,7 @@ foreach (example
         PRIVATE "laik"
         PRIVATE "m"
     )
-endforeach (example)
+endforeach ()
 
 # If C++ support is enabled, build the C++ examples
 if (enable-cpp-examples)
@@ -37,7 +37,7 @@ if (enable-cpp-examples)
         target_link_libraries ("${example}"
             PRIVATE "laik"
         )
-    endforeach (example)
+    endforeach ()
 endif (enable-cpp-examples)
 
 # If OpenMP support is enabled, pass its flags to the examples supporting it.
@@ -54,5 +54,5 @@ if (enable-openmp-examples)
         target_link_libraries ("${example}"
             PRIVATE "${OpenMP_C_FLAGS}"
         )
-    endforeach (example)
+    endforeach ()
 endif (enable-openmp-examples)

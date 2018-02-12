@@ -36,4 +36,4 @@ foreach (test
             COMMAND "env" "LAIK_BACKEND=single" "${CMAKE_CURRENT_SOURCE_DIR}/run_example_test.sh" ${test}
         )
     endif (enable-single-backend)
-endforeach (test)
+endforeach ()

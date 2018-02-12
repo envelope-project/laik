@@ -11,7 +11,7 @@ if (enable-documentation)
 
         add_pandoc_target ("${name}.html" "${doc}")
         add_pandoc_target ("${name}.pdf"  "${doc}")
-    endforeach (doc)
+    endforeach ()
 
     add_pandoc_target ("all.html" ${docs})
     add_pandoc_target ("all.pdf"  ${docs})
