@@ -1,15 +1,21 @@
 if (mosquitto-agent)
-    add_library (mqttagent SHARED
-        "mqttagent.c"
-        "mqttclient.c"
-    )
+    find_library (mosquitto "mosquitto")
 
-    target_include_directories (mqttagent
-        PUBLIC "."
-    )
+    if (mosquitto)
+        add_library (mqttagent SHARED
+            "mqttagent.c"
+            "mqttclient.c"
+        )
 
-    target_link_libraries (mqttagent
-        PRIVATE "laik"
-        PRIVATE "mosquitto"
-    )
+        target_include_directories (mqttagent
+            PUBLIC "."
+        )
+
+        target_link_libraries (mqttagent
+            PRIVATE "laik"
+            PRIVATE "${mosquitto}"
+        )
+    else ()
+        message (FATAL_ERROR "Dependency check for option 'mosquitto-agent' failed, stopping!")
+    endif ()
 endif ()

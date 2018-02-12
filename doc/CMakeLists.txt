@@ -1,18 +1,24 @@
 if (documentation)
-    set (docs
-        "index.md"
-        "tutorial-jacobi2d.md"
-        "Debugging.md"
-        "TODO.md"
-    )
+    find_program (pandoc "pandoc")
 
-    foreach (doc ${docs})
-        get_filename_component (name "${doc}" NAME_WE)
+    if (pandoc)
+        set (docs
+            "index.md"
+            "tutorial-jacobi2d.md"
+            "Debugging.md"
+            "TODO.md"
+        )
 
-        add_pandoc_target ("${name}.html" "${doc}")
-        add_pandoc_target ("${name}.pdf"  "${doc}")
-    endforeach ()
+        foreach (doc ${docs})
+            get_filename_component (name "${doc}" NAME_WE)
 
-    add_pandoc_target ("all.html" ${docs})
-    add_pandoc_target ("all.pdf"  ${docs})
+            add_pandoc_target ("${name}.html" "${doc}")
+            add_pandoc_target ("${name}.pdf"  "${doc}")
+        endforeach ()
+
+        add_pandoc_target ("all.html" ${docs})
+        add_pandoc_target ("all.pdf"  ${docs})
+    else ()
+        message (FATAL_ERROR "Dependency check for option 'documentation' failed, stopping!")
+    endif ()
 endif ()

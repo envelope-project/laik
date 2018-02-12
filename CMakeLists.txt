@@ -44,17 +44,6 @@ function (add_pandoc_target target)
     add_custom_target ("${target}_target" ALL DEPENDS "${target}")
 endfunction ()
 
-# Add a pkg-config helper function
-function (add_pkgconfig_library name)
-    if (NOT TARGET "${name}")
-        find_package (PkgConfig REQUIRED)
-        pkg_check_modules ("${name}" REQUIRED "${name}")
-        add_library ("${name}" INTERFACE)
-        target_compile_options ("${name}" INTERFACE "${${name}_CFLAGS}")
-        target_link_libraries  ("${name}" INTERFACE "${${name}_LDFLAGS}")
-    endif (NOT TARGET "${name}")
-endfunction ()
-
 # Add a protobuf helper function
 function (compile_protobuf_module name)
     add_custom_command (
@@ -64,6 +53,21 @@ function (compile_protobuf_module name)
         VERBATIM
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
+endfunction ()
+
+# Add a pkg-config helper function
+function (find_pkgconfig name)
+    if (NOT TARGET "${name}")
+        find_package (PkgConfig)
+        if (PkgConfig_FOUND)
+            pkg_check_modules ("${name}" "${name}")
+            if (${name}_FOUND)
+                add_library ("${name}" INTERFACE)
+                target_compile_options ("${name}" INTERFACE "${${name}_CFLAGS}")
+                target_link_libraries  ("${name}" INTERFACE "${${name}_LDFLAGS}")
+            endif ()
+        endif ()
+    endif ()
 endfunction ()
 
 # Add the subdirectories

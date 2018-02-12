@@ -42,17 +42,21 @@ endif ()
 
 # If OpenMP support is enabled, pass its flags to the examples supporting it.
 if (openmp-examples)
-    find_package (OpenMP REQUIRED)
+    find_package (OpenMP)
 
-    foreach (example
-        "spmv2"
-    )
-        target_compile_options ("${example}"
-            PRIVATE "${OpenMP_C_FLAGS}"
+    if (OPENMP_FOUND)
+        foreach (example
+            "spmv2"
         )
+            target_compile_options ("${example}"
+                PRIVATE "${OpenMP_C_FLAGS}"
+            )
 
-        target_link_libraries ("${example}"
-            PRIVATE "${OpenMP_C_FLAGS}"
-        )
-    endforeach ()
+            target_link_libraries ("${example}"
+                PRIVATE "${OpenMP_C_FLAGS}"
+            )
+        endforeach ()
+    else ()
+        message (FATAL_ERROR "Dependency check for option 'openmp-examples' failed, stopping!")
+    endif ()
 endif ()
