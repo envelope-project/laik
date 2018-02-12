@@ -113,6 +113,8 @@ void get_counters(
         strncpy(data[i].name, events[i], MAX_PERF_NAME_LENGTH);
         data[i].value = values[i];
     }
+
+    *count = ev_count;
 }
 
 
