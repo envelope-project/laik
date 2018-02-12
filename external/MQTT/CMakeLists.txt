@@ -1,4 +1,4 @@
-if (enable-mosquitto-agent)
+if (mosquitto-agent)
     add_library (mqttagent SHARED
         "mqttagent.c"
         "mqttclient.c"
@@ -12,4 +12,4 @@ if (enable-mosquitto-agent)
         PRIVATE "laik"
         PRIVATE "mosquitto"
     )
-endif (enable-mosquitto-agent)
+endif ()

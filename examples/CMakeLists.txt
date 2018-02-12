@@ -26,7 +26,7 @@ foreach (example
 endforeach ()
 
 # If C++ support is enabled, build the C++ examples
-if (enable-cpp-examples)
+if (cpp-examples)
     foreach (example
         "raytracer"
     )
@@ -38,10 +38,10 @@ if (enable-cpp-examples)
             PRIVATE "laik"
         )
     endforeach ()
-endif (enable-cpp-examples)
+endif ()
 
 # If OpenMP support is enabled, pass its flags to the examples supporting it.
-if (enable-openmp-examples)
+if (openmp-examples)
     find_package (OpenMP REQUIRED)
 
     foreach (example
@@ -55,4 +55,4 @@ if (enable-openmp-examples)
             PRIVATE "${OpenMP_C_FLAGS}"
         )
     endforeach ()
-endif (enable-openmp-examples)
+endif ()

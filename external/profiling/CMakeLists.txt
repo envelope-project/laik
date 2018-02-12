@@ -1,4 +1,4 @@
-if (enable-profiling-agent)
+if (profiling-agent)
     add_pkgconfig_library ("papi")
 
     add_library (profileagent SHARED
@@ -13,4 +13,4 @@ if (enable-profiling-agent)
         PRIVATE "laik"
         PRIVATE "papi"
     )
-endif (enable-profiling-agent)
+endif ()

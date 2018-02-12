@@ -1,4 +1,4 @@
-if (enable-documentation)
+if (documentation)
     set (docs
         "index.md"
         "tutorial-jacobi2d.md"
@@ -15,4 +15,4 @@ if (enable-documentation)
 
     add_pandoc_target ("all.html" ${docs})
     add_pandoc_target ("all.pdf"  ${docs})
-endif (enable-documentation)
+endif ()

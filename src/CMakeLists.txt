@@ -22,7 +22,7 @@ target_link_libraries ("laik"
 )
 
 # Optional MPI backend
-if (enable-mpi-backend)
+if (mpi-backend)
     add_pkgconfig_library ("mpi")
 
     target_sources ("laik"
@@ -36,14 +36,14 @@ if (enable-mpi-backend)
     target_link_libraries ("laik"
         PRIVATE "mpi"
     )
-endif (enable-mpi-backend)
+endif ()
 
 # Optional Single backend
-if (enable-single-backend)
+if (single-backend)
     target_sources ("laik"
         PRIVATE "backend-single.c"
     )
-endif (enable-single-backend)
+endif ()
 
 # Installation rules
 install (TARGETS "laik" DESTINATION "lib")

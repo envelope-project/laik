@@ -35,6 +35,6 @@ USER "user"
 # Build and test
 RUN mkdir "build"
 WORKDIR "build"
-RUN CC="${CC}" CXX="${CXX}" cmake -D"enable-documentation=off" ".."
+RUN CC="${CC}" CXX="${CXX}" cmake -D "documentation=off" ".."
 RUN make
 RUN ctest

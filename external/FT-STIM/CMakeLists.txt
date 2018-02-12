@@ -1,4 +1,4 @@
-if (enable-failure-simulator)
+if (failure_simulator)
     add_pkgconfig_library ("libprotobuf-c")
 
     compile_protobuf_module ("laik_ext")
@@ -15,4 +15,4 @@ if (enable-failure-simulator)
     target_link_libraries ("laikfti"
         PRIVATE "libprotobuf-c"
     )
-endif (enable-failure-simulator)
+endif ()
