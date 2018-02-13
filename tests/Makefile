@@ -16,32 +16,25 @@ mpi:
 	+$(MAKE) -C mpi
 
 test-vsum:
-	../examples/vsum > test-vsum.out
-	cmp test-vsum.out $(SDIR)test-vsum.expected
+	$(SDIR)./test-vsum-single.sh
 
 test-vsum-log:
-	LAIK_LOG=1:0 ../examples/vsum > test-vsum.out 2>/dev/null
-	cmp test-vsum.out $(SDIR)test-vsum.expected
+	$(SDIR)./test-vsum-log-single.sh
 
 test-vsum2:
-	../examples/vsum2 > test-vsum2.out
-	cmp test-vsum2.out $(SDIR)test-vsum.expected
+	$(SDIR)./test-vsum2-single.sh
 
 test-vsum3:
-	../examples/vsum > test-vsum3.out
-	cmp test-vsum3.out $(SDIR)test-vsum.expected
+	$(SDIR)./test-vsum3-single.sh
 
 test-spmv:
-	../examples/spmv 4000 > test-spmv.out
-	cmp test-spmv.out $(SDIR)test-spmv.expected
+	$(SDIR)./test-spmv-single.sh
 
 test-spmv2:
-	../examples/spmv2 10 3000 > test-spmv2.out
-	cmp test-spmv2.out $(SDIR)test-spmv2.expected
+	$(SDIR)./test-spmv2-single.sh
 
 test-spmv2r:
-	../examples/spmv2 -r 10 3000 > test-spmv2r.out
-	cmp test-spmv2r.out $(SDIR)test-spmv2.expected
+	$(SDIR)./test-spmv2r-single.sh
 
 test-jac1d:
 	../examples/jac1d 100 > test-jac1d-100.out

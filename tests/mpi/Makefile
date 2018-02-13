@@ -1,4 +1,4 @@
-# often same tests as in tests/, but using 4 MPI tasks
+# often same tests as in tests/, but using 1 and 4 MPI tasks
 
 TESTS= \
     test-vsum test-vsum2 test-vsum3 \
@@ -15,28 +15,28 @@ TESTS= \
 all: clean $(TESTS)
 
 test-vsum:
-	mpirun -np 4 ../../examples/vsum | sort > test-vsum.out
-	cmp test-vsum.out $(SDIR)test-vsum.expected
+	$(SDIR)./test-vsum-mpi-1.sh
+	$(SDIR)./test-vsum-mpi-4.sh
 
 test-vsum2:
-	mpirun -np 4 ../../examples/vsum2 | sort > test-vsum2.out
-	cmp test-vsum2.out $(SDIR)test-vsum2.expected
+	$(SDIR)./test-vsum2-mpi-1.sh
+	$(SDIR)./test-vsum2-mpi-4.sh
 
 test-vsum3:
-	mpirun -np 4 ../../examples/vsum3 | sort > test-vsum3.out
-	cmp test-vsum3.out $(SDIR)test-vsum.expected
+	$(SDIR)./test-vsum3-mpi-1.sh
+	$(SDIR)./test-vsum3-mpi-4.sh
 
 test-spmv:
-	mpirun -np 4 ../../examples/spmv 4000 | sort > test-spmv.out
-	cmp test-spmv.out $(SDIR)test-spmv.expected
+	$(SDIR)./test-spmv-mpi-1.sh
+	$(SDIR)./test-spmv-mpi-4.sh
 
 test-spmv2:
-	mpirun -np 4 ../../examples/spmv2 10 3000 | sort > test-spmv2.out
-	cmp test-spmv2.out $(SDIR)test-spmv2.expected
+	$(SDIR)./test-spmv2-mpi-1.sh
+	$(SDIR)./test-spmv2-mpi-4.sh
 
 test-spmv2r:
-	mpirun -np 4 ../../examples/spmv2 -r 10 3000 | sort > test-spmv2r.out
-	cmp test-spmv2r.out $(SDIR)test-spmv2.expected
+	$(SDIR)./test-spmv2r-mpi-1.sh
+	$(SDIR)./test-spmv2r-mpi-4.sh
 
 test-spmv2-shrink:
 	mpirun -np 4 ../../examples/spmv2 -s 2 10 3000 | sort > test-spmv2s.out
