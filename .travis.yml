@@ -11,4 +11,8 @@ env:
  - IMG="ubuntu:xenial"  PKG="gcc-5 g++-5"          CC="gcc-5"     CXX="g++-5"
 
 script:
- - docker build --build-arg "IMG=${IMG}" --build-arg "PKG=${PKG}" --build-arg "CC=${CC}" --build-arg "CXX=${CXX}" "."
+ - docker build --build-arg "IMG=${IMG}" --build-arg "PKG=${PKG}" -t laikenv "."
+ - docker run -v `pwd`:/mnt -e "CC=${CC}" -e "CXX=${CXX}" laikenv ./configure
+ - docker run -v `pwd`:/mnt laikenv cat Makefile.config
+ - docker run -v `pwd`:/mnt -e "OMPI_CC=${CC}" laikenv make
+ - docker run -v `pwd`:/mnt laikenv make test
