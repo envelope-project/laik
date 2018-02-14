@@ -37,32 +37,25 @@ test-spmv2r:
 	$(SDIR)./test-spmv2r-single.sh
 
 test-jac1d:
-	../examples/jac1d 100 > test-jac1d-100.out
-	cmp test-jac1d-100.out $(SDIR)test-jac1d-100.expected
+	$(SDIR)./test-jac1d-100-single.sh
 
 test-jac1d-repart:
-	../examples/jac1d 1000 50 10 > test-jac1d-1000-repart.out
-	cmp test-jac1d-1000-repart.out $(SDIR)test-jac1d-1000-repart.expected
+	$(SDIR)./test-jac1d-1000-repart-single.sh
 
 test-jac2d:
-	../examples/jac2d -s 1000 > test-jac2d-1000.out
-	cmp test-jac2d-1000.out $(SDIR)test-jac2d-1000.expected
+	$(SDIR)./test-jac2d-1000-single.sh
 
 test-jac3d:
-	../examples/jac3d -s 100 > test-jac3d-100.out
-	cmp test-jac3d-100.out $(SDIR)test-jac3d-100.expected
+	$(SDIR)./test-jac3d-100-single.sh
 
 test-markov:
-	../examples/markov 20 4 > test-markov-20-4.out
-	cmp test-markov-20-4.out $(SDIR)test-markov-20-4.expected
+	$(SDIR)./test-markov-20-4-single.sh
 
 test-markov2:
-	../examples/markov2 20 4 > test-markov2-20-4.out
-	cmp test-markov2-20-4.out $(SDIR)test-markov2-20-4.expected
+	$(SDIR)./test-markov2-20-4-single.sh
 
 test-propagation2d:
-	../examples/propagation2d 10 10 > test-propagation2d-10.out
-	cmp test-propagation2d-10.out $(SDIR)test-propagation2d-10.expected
+	$(SDIR)./test-propagation2d-10-single.sh
 
 clean:
 	rm -rf *.out
