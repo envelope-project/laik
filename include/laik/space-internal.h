@@ -23,6 +23,7 @@
 #endif
 
 #include <stdbool.h>
+#include <stdint.h>
 
 // "laik-internal.h" includes the following. This is just to make IDE happy
 #include "space.h"

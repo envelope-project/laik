@@ -17,10 +17,12 @@ RUN env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
     "libopenmpi-dev" \
     "libpapi-dev" \
     "libprotobuf-c-dev" \
+    "make" \
     "openmpi-bin" \
     "openssh-client" \
     "pkg-config" \
     "protobuf-c-compiler" \
+    "python" \
     ${PKG}
 
 # Copy the current directory to the container and continue inside it
@@ -33,8 +35,6 @@ RUN chown --recursive "user:user" "."
 USER "user"
 
 # Build and test
-RUN mkdir "build"
-WORKDIR "build"
-RUN CC="${CC}" CXX="${CXX}" cmake -D "documentation=off" -D "skip-missing=off" ".."
-RUN make
-RUN ctest
+RUN CC="${CC}" CXX="${CXX}" ./configure
+RUN OMPI_CC="${CC}" make
+RUN make test
