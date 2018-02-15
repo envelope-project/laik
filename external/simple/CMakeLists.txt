@@ -1,4 +1,4 @@
-if (enable-simple-agent)
+if (simple-agent)
     add_library (simpleagent SHARED
         "simple-agent.c"
     )
@@ -10,4 +10,4 @@ if (enable-simple-agent)
     target_link_libraries (simpleagent
         PRIVATE "laik"
     )
-endif (enable-simple-agent)
+endif ()

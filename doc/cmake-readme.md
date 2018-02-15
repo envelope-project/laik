@@ -12,7 +12,7 @@ Now, change into your build directory:
 
 Next, you need to configure your build, for example like this:
 
-    cmake -Denable-mpi-backend=off ..
+    cmake -D mpi-backend=off ..
 
 This tells CMake that the source files are located in the parent directory and
 that it should create the build files with MPI support disabled. You can of
@@ -25,7 +25,7 @@ Now you can build the project:
 
 Ok, great! Now let's try re-configuring the build:
 
-    cmake -Denable-mpi-backend=on ..
+    cmake -D mpi-backend=on ..
 
 This enabled MPI support. Now let's rebuild:
 

@@ -1,16 +1,22 @@
-if (enable-profiling-agent)
-    add_pkgconfig_library ("papi")
+if (profiling-agent)
+    find_pkgconfig ("papi")
 
-    add_library (profileagent SHARED
-        "profilagent.c"
-    )
+    if (TARGET "papi")
+        add_library (profileagent SHARED
+            "profilagent.c"
+        )
 
-    target_include_directories (profileagent
-        PUBLIC "."
-    )
+        target_include_directories (profileagent
+            PUBLIC "."
+        )
 
-    target_link_libraries (profileagent
-        PRIVATE "laik"
-        PRIVATE "papi"
-    )
-endif (enable-profiling-agent)
+        target_link_libraries (profileagent
+            PRIVATE "laik"
+            PRIVATE "papi"
+        )
+    elseif (skip-missing)
+        message (WARNING "Dependency check for option 'profiling-agent' failed, skipping!")
+    else ()
+        message (FATAL_ERROR "Dependency check for option 'profiling-agent' failed, stopping!")
+    endif ()
+endif ()

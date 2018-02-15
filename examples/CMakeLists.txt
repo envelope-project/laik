@@ -23,10 +23,10 @@ foreach (example
         PRIVATE "laik"
         PRIVATE "m"
     )
-endforeach (example)
+endforeach ()
 
 # If C++ support is enabled, build the C++ examples
-if (enable-cpp-examples)
+if (cpp-examples)
     foreach (example
         "raytracer"
     )
@@ -37,22 +37,28 @@ if (enable-cpp-examples)
         target_link_libraries ("${example}"
             PRIVATE "laik"
         )
-    endforeach (example)
-endif (enable-cpp-examples)
+    endforeach ()
+endif ()
 
 # If OpenMP support is enabled, pass its flags to the examples supporting it.
-if (enable-openmp-examples)
-    find_package (OpenMP REQUIRED)
+if (openmp-examples)
+    find_package (OpenMP)
 
-    foreach (example
-        "spmv2"
-    )
-        target_compile_options ("${example}"
-            PRIVATE "${OpenMP_C_FLAGS}"
+    if (OPENMP_FOUND)
+        foreach (example
+            "spmv2"
         )
+            target_compile_options ("${example}"
+                PRIVATE "${OpenMP_C_FLAGS}"
+            )
 
-        target_link_libraries ("${example}"
-            PRIVATE "${OpenMP_C_FLAGS}"
-        )
-    endforeach (example)
-endif (enable-openmp-examples)
+            target_link_libraries ("${example}"
+                PRIVATE "${OpenMP_C_FLAGS}"
+            )
+        endforeach ()
+    elseif (skip-missing)
+        message (WARNING "Dependency check for option 'openmp-examples' failed, skipping!")
+    else ()
+        message (FATAL_ERROR "Dependency check for option 'openmp-examples' failed, stopping!")
+    endif ()
+endif ()

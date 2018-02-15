@@ -22,28 +22,36 @@ target_link_libraries ("laik"
 )
 
 # Optional MPI backend
-if (enable-mpi-backend)
-    add_pkgconfig_library ("mpi")
+if (mpi-backend)
+    find_pkgconfig ("mpi")
+    find_program (mpirun "mpirun")
 
-    target_sources ("laik"
-        PRIVATE "backend-mpi.c"
-    )
+    if (TARGET "mpi" AND mpirun)
+        target_sources ("laik"
+            PRIVATE "backend-mpi.c"
+        )
 
-    target_compile_definitions ("laik"
-        PRIVATE "USE_MPI"
-    )
+        target_compile_definitions ("laik"
+            PRIVATE "USE_MPI"
+        )
 
-    target_link_libraries ("laik"
-        PRIVATE "mpi"
-    )
-endif (enable-mpi-backend)
+        target_link_libraries ("laik"
+            PRIVATE "mpi"
+        )
+    elseif (skip-missing)
+        message (WARNING "Dependency check for option 'mpi-backend' failed, skipping!")
+    else ()
+        message (FATAL_ERROR "Dependency check for option 'mpi-backend' failed, stopping!")
+    endif ()
+
+endif ()
 
 # Optional Single backend
-if (enable-single-backend)
+if (single-backend)
     target_sources ("laik"
         PRIVATE "backend-single.c"
     )
-endif (enable-single-backend)
+endif ()
 
 # Installation rules
 install (TARGETS "laik" DESTINATION "lib")

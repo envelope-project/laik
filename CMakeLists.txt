@@ -22,15 +22,16 @@ set (CMAKE_CXX_EXTENSIONS        ON)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Declare the options
-option (enable-cpp-examples      "Enable C++ examples (needs a C++ compiler)"                                  ON)
-option (enable-documentation     "Enable documentation (needs pandoc and texlive)"                             ON)
-option (enable-failure-simulator "Enable failure simulator (needs libprotobuf-c-dev and protobuf-c-compiler)"  ON)
-option (enable-mosquitto-agent   "Enable Mosquitto agent (needs libmosquitto-dev)"                             ON)
-option (enable-mpi-backend       "Enable MPI backend (needs libopenmpi-dev, openmpi-bin, and openssh-client)"  ON)
-option (enable-openmp-examples   "Enable OpenMP examples (needs an OpenMP-capable compiler)"                   ON)
-option (enable-profiling-agent   "Enable profiling agent (needs libpapi-dev)"                                  ON)
-option (enable-simple-agent      "Enable simple agent"                                                         ON)
-option (enable-single-backend    "Enable Single backend"                                                       ON)
+option (cpp-examples      "Enable C++ examples (needs a C++ compiler)"                                  on)
+option (documentation     "Enable documentation (needs pandoc and texlive)"                             on)
+option (failure-simulator "Enable failure simulator (needs libprotobuf-c-dev and protobuf-c-compiler)"  on)
+option (mosquitto-agent   "Enable Mosquitto agent (needs libmosquitto-dev)"                             on)
+option (mpi-backend       "Enable MPI backend (needs libopenmpi-dev, openmpi-bin, and openssh-client)"  on)
+option (openmp-examples   "Enable OpenMP examples (needs an OpenMP-capable compiler)"                   on)
+option (profiling-agent   "Enable profiling agent (needs libpapi-dev)"                                  on)
+option (simple-agent      "Enable simple agent"                                                         on)
+option (single-backend    "Enable Single backend"                                                       on)
+option (skip-missing      "Enable skipping optional features in the case of missing dependencies"       on)
 
 # Add a pandoc helper function
 function (add_pandoc_target target)
@@ -42,18 +43,7 @@ function (add_pandoc_target target)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_custom_target ("${target}_target" ALL DEPENDS "${target}")
-endfunction (add_pandoc_target)
-
-# Add a pkg-config helper function
-function (add_pkgconfig_library name)
-    if (NOT TARGET "${name}")
-        find_package (PkgConfig REQUIRED)
-        pkg_check_modules ("${name}" REQUIRED "${name}")
-        add_library ("${name}" INTERFACE)
-        target_compile_options ("${name}" INTERFACE "${${name}_CFLAGS}")
-        target_link_libraries  ("${name}" INTERFACE "${${name}_LDFLAGS}")
-    endif (NOT TARGET "${name}")
-endfunction (add_pkgconfig_library)
+endfunction ()
 
 # Add a protobuf helper function
 function (compile_protobuf_module name)
@@ -64,7 +54,22 @@ function (compile_protobuf_module name)
         VERBATIM
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
-endfunction (compile_protobuf_module)
+endfunction ()
+
+# Add a pkg-config helper function
+function (find_pkgconfig name)
+    if (NOT TARGET "${name}")
+        find_package (PkgConfig)
+        if (PkgConfig_FOUND)
+            pkg_check_modules ("${name}" "${name}")
+            if (${name}_FOUND)
+                add_library ("${name}" INTERFACE)
+                target_compile_options ("${name}" INTERFACE "${${name}_CFLAGS}")
+                target_link_libraries  ("${name}" INTERFACE "${${name}_LDFLAGS}")
+            endif ()
+        endif ()
+    endif ()
+endfunction ()
 
 # Add the subdirectories
 add_subdirectory ("doc")
