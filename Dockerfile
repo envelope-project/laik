@@ -12,7 +12,9 @@ RUN apt-get update
 
 # Install the packages needed for the build
 RUN env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
-    "cmake" \
+    "bear" \
+    "clang" \
+    "clang-tidy" \
     "libmosquitto-dev" \
     "libopenmpi-dev" \
     "libpapi-dev" \
@@ -36,5 +38,6 @@ USER "user"
 
 # Build and test
 RUN CC="${CC}" CXX="${CXX}" ./configure
-RUN OMPI_CC="${CC}" make
+RUN OMPI_CC="${CC}" bear make
 RUN make test
+RUN find 'src' -name '*.c' -print0 | xargs --null --max-args='1' clang-tidy -p 'compile_commands.json'
