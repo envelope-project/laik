@@ -890,18 +890,15 @@ void laik_switchto_partitioning(Laik_Data* d,
 {
     // calculate actions to be done for switching
 
-    Laik_Group* g;
     if (d->activePartitioning) {
-        g = d->activePartitioning->group;
         if (toP)
-            assert(g == toP->group);
+            assert(d->activePartitioning->group == toP->group);
     }
     else {
         if (!toP) {
             // nothing to switch from/to
             return;
         }
-        g = toP->group;
     }
 
     // if data is in an access phase, it must be consistent with partitioning
