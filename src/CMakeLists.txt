@@ -24,9 +24,21 @@ target_link_libraries ("laik"
 # Optional MPI backend
 if (mpi-backend)
     find_pkgconfig ("mpi")
-    find_program (mpirun "mpirun")
 
-    if (TARGET "mpi" AND mpirun)
+    # If pkg-config didn't find MPI above, also try CMake's native FindMPI
+    # module since we really want to enable MPI support whenever possible!
+    if (NOT TARGET "mpi")
+        find_package (MPI)
+        if (MPI_C_FOUND)
+            add_library ("mpi" INTERFACE)
+            target_include_directories ("mpi" INTERFACE "${MPI_C_INCLUDE_PATH}")
+            target_compile_options     ("mpi" INTERFACE "${MPI_C_COMPILE_FLAGS}")
+            target_link_libraries      ("mpi" INTERFACE "${MPI_C_LINK_FLAGS}")
+            target_link_libraries      ("mpi" INTERFACE "${MPI_C_LIBRARIES}")
+        endif ()
+    endif ()
+
+    if (TARGET "mpi")
         target_sources ("laik"
             PRIVATE "backend-mpi.c"
         )
@@ -43,7 +55,6 @@ if (mpi-backend)
     else ()
         message (FATAL_ERROR "Dependency check for option 'mpi-backend' failed, stopping!")
     endif ()
-
 endif ()
 
 # Optional Single backend
