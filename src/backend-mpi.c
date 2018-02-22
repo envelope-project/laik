@@ -274,12 +274,12 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
 
             assert(op->myInputMapNo >= 0);
             assert(op->myInputMapNo < fromList->count);
-            Laik_Mapping* fromMap = fromList->map[op->myInputMapNo];
+            Laik_Mapping* fromMap = &(fromList->map[op->myInputMapNo]);
 
             Laik_Mapping* toMap = 0;
             if (toList && (op->myOutputMapNo >= 0)) {
                 assert(op->myOutputMapNo < toList->count);
-                toMap = toList->map[op->myOutputMapNo];
+                toMap = &(toList->map[op->myOutputMapNo]);
 
                 if (toMap->base == 0) {
                     laik_allocateMap(toMap, ss);
@@ -559,7 +559,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
             assert(myid != op->fromTask);
 
             assert(op->mapNo < toList->count);
-            Laik_Mapping* toMap = toList->map[op->mapNo];
+            Laik_Mapping* toMap = &(toList->map[op->mapNo]);
             assert(toMap != 0);
             if (toMap->base == 0) {
                 // space not yet allocated
@@ -651,7 +651,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
             assert(myid != op->toTask);
 
             assert(op->mapNo < fromList->count);
-            Laik_Mapping* fromMap = fromList->map[op->mapNo];
+            Laik_Mapping* fromMap = &(fromList->map[op->mapNo]);
             // data to send must exist in local memory
             assert(fromMap);
             if (!fromMap->base) {

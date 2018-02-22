@@ -151,11 +151,13 @@ struct _Laik_Mapping {
     char* base; // address matching requiredSlice.from (usually same as start)
     uint64_t capacity; // number of bytes allocated
     int reusedFor; // -1: not reused, otherwise map number used for
+
+    Laik_Mapping* baseMapping; // mapping this one is embedded in
 };
 
 struct _Laik_MappingList {
     int count;
-    Laik_Mapping* map[]; // Look out, this is a C99 "flexible array member"!
+    Laik_Mapping map[]; // a C99 "flexible array member"
 };
 
 // initialize the LAIK data module, called from laik_new_instance

@@ -189,6 +189,9 @@ void initMapping(Laik_Mapping* m, Laik_Data* d)
     m->start = 0;
     m->base = 0;
     m->layout = 0;
+
+    // not embedded in another mapping
+    m->baseMapping = 0;
 }
 
 static
@@ -220,23 +223,18 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
     assert(n > 0);
 
     Laik_MappingList* ml;
-    int mlSize = sizeof(Laik_MappingList) + n * sizeof(Laik_Mapping*);
-    // also allocate n Laik_Mapping structs
-    ml = malloc(mlSize + n * sizeof(Laik_Mapping));
+    ml = malloc(sizeof(Laik_MappingList) + n * sizeof(Laik_Mapping));
     if (!ml) {
-        laik_panic("Out of memory allocating Laik_Mapping object");
+        laik_panic("Out of memory allocating Laik_MappingList object");
         exit(1); // not actually needed, laik_panic never returns
     }
     ml->count = n;
-    // set pointers to space allocated after MappingList
-    for(int i = 0; i < n; i++)
-        ml->map[i] = &( ((Laik_Mapping*) (((char*)ml) + mlSize))[i] );
 
     int firstOff, lastOff;
     int mapNo = 0;
     for(int o = p->off[myid]; o < p->off[myid+1]; o++, mapNo++) {
         assert(mapNo == p->tslice[o].mapNo);
-        Laik_Mapping* m = ml->map[mapNo];
+        Laik_Mapping* m = &(ml->map[mapNo]);
         initMapping(m, d);
         m->mapNo = mapNo;
         // remember layout request as hint
@@ -276,7 +274,7 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
     if (ml == 0) return;
 
     for(int i = 0; i < ml->count; i++) {
-        Laik_Mapping* m = ml->map[i];
+        Laik_Mapping* m = &(ml->map[i]);
         assert(m != 0);
 
         Laik_Data* d = m->data;
@@ -365,6 +363,9 @@ Laik_Layout* laik_new_layout_def_3d(uint64_t stride1, uint64_t stride2)
 
 void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
 {
+    // should only be called if not embedded in another mapping
+    assert(m->baseMapping == 0);
+
     if (m->base) return;
     if (m->count == 0) return;
     Laik_Data* d = m->data;
@@ -438,9 +439,9 @@ void copyMaps(Laik_Transition* t,
     for(int i = 0; i < t->localCount; i++) {
         struct localTOp* op = &(t->local[i]);
         assert(op->fromMapNo < fromList->count);
-        Laik_Mapping* fromMap = fromList->map[op->fromMapNo];
+        Laik_Mapping* fromMap = &(fromList->map[op->fromMapNo]);
         assert(op->toMapNo < toList->count);
-        Laik_Mapping* toMap = toList->map[op->toMapNo];
+        Laik_Mapping* toMap = &(toList->map[op->toMapNo]);
 
         assert(toMap->data == fromMap->data);
         int dims = fromMap->data->space->dims;
@@ -534,6 +535,37 @@ void copyMaps(Laik_Transition* t,
     }
 }
 
+// given that memory for a mapping is already allocated,
+// we want to re-use part of it for another mapping <toMap>.
+// given required slice in <toMap>, it must be part of allocation in <fromMap>
+// the original base mapping descriptor can be removed afterwards if it
+// is ensured that memory is not deleted beyound the new mapping
+static
+void initEmbeddedMapping(Laik_Mapping* toMap, Laik_Mapping* fromMap)
+{
+    Laik_Data* data = toMap->data;
+    int dims = data->space->dims;
+    assert(data == fromMap->data);
+
+    assert(laik_slice_within_slice(dims, &(toMap->requiredSlice),
+                                   &(fromMap->allocatedSlice)));
+
+    // take over allocation into new mapping descriptor
+    toMap->start = fromMap->start;
+    toMap->allocatedSlice = fromMap->allocatedSlice;
+    toMap->allocCount = fromMap->allocCount;
+    toMap->capacity = fromMap->capacity;
+    toMap->layout = fromMap->layout;
+
+    // set <base> of embedded mapping according to required vs. allocated
+    Laik_Index idx;
+    laik_sub_index(&idx,
+                   &(toMap->requiredSlice.from),
+                   &(toMap->allocatedSlice.from));
+    uint64_t off = laik_offset(&idx, toMap->layout);
+    toMap->base = toMap->start + off * data->elemsize;
+}
+
 // try to reuse already allocated memory from old mapping
 // we reuse mapping if it has same or larger size
 // and if old mapping covered all indexed needed in new mapping.
@@ -544,13 +576,13 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
     // reuse only possible if old mappings exist
     if (!fromList) return;
     if ((toList == 0) || (toList->count ==0)) return;
-    Laik_Data* d = toList->map[0]->data;
+    Laik_Data* d = toList->map[0].data;
     int dims = d->space->dims;
 
     for(int i = 0; i < toList->count; i++) {
-        Laik_Mapping* toMap = toList->map[i];
+        Laik_Mapping* toMap = &(toList->map[i]);
         for(int sNo = 0; sNo < fromList->count; sNo++) {
-            Laik_Mapping* fromMap = fromList->map[sNo];
+            Laik_Mapping* fromMap = &(fromList->map[sNo]);
             if (fromMap->base == 0) continue;
             if (fromMap->reusedFor >= 0) continue; // only reuse once
 
@@ -560,31 +592,20 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
                 // no, cannot reuse
                 continue;
             }
+
             // always reuse larger mapping
+            initEmbeddedMapping(toMap, fromMap);
 
-            toMap->start     = fromMap->start;
-            toMap->allocatedSlice = fromMap->allocatedSlice;
-            toMap->allocCount = fromMap->allocCount;
-            toMap->capacity  = fromMap->capacity;
-            toMap->layout    = fromMap->layout;
-
-            // offset of validSlice.from in mapping of fullSlice
-            Laik_Index idx;
-            laik_sub_index(&idx,
-                           &(toMap->requiredSlice.from),
-                           &(toMap->allocatedSlice.from));
-            uint64_t off = laik_offset(&idx, toMap->layout);
-
-            toMap->base = toMap->start + off * d->elemsize;
-            fromMap->reusedFor = i; // mark as reused by slice <i>
+            // mark as reused by slice <i>: this prohibits delete of memory
+            fromMap->reusedFor = i;
 
             if (laik_log_begin(1)) {
                 laik_log_append("map reuse for '%s'/%d ", toMap->data->name, i);
                 laik_log_Slice(dims, &(toMap->requiredSlice));
                 laik_log_append(" (in ");
                 laik_log_Slice(dims, &(toMap->allocatedSlice));
-                laik_log_flush(" with off %llu), %llu B at %p)\n",
-                               (unsigned long long) off,
+                laik_log_flush(" with byte-off %llu), %llu Bytes at %p)\n",
+                               (unsigned long long) (toMap->base - toMap->start),
                                (unsigned long long) fromMap->capacity,
                                toMap->base);
             }
@@ -603,7 +624,7 @@ void initMaps(Laik_Transition* t,
     for(int i = 0; i < t->initCount; i++) {
         struct initTOp* op = &(t->init[i]);
         assert(op->mapNo < toList->count);
-        Laik_Mapping* toMap = toList->map[op->mapNo];
+        Laik_Mapping* toMap = &(toList->map[op->mapNo]);
 
         if (toMap->count == 0) {
             // no elements to initialize
@@ -710,11 +731,6 @@ void laik_clear_reservation(Laik_Data* d)
         free(d->res[r].mList);
         d->res[r].mList = 0;
     }
-    if (d->rMappingCount > 0) {
-        assert(d->rMapping != 0);
-        free(d->rMapping);
-        d->rMapping = 0;
-    }
     d->resCount = 0;
 }
 
@@ -749,10 +765,12 @@ void laik_reserve(Laik_Data* d, Laik_AccessPhase* ap)
 
 // helpers for laik_allocate
 
+// entry for a slice group
 struct mygroup {
-    int resIndex; // reservation index, specifying partitioning to reserve for
-    int mapNo;    // mapping number within partitioning
-    int tag;      // tag given by partitioner, used to identify same mappings
+    int partIndex; // index in reservation specifying partitioning of group
+    int partMapNo; // mapping number within partitioning
+    int resMapNo;  // mapping number within reservation
+    int tag;       // tag given by partitioner, used to identify same mappings
 };
 
 static
@@ -771,7 +789,14 @@ void laik_allocate(Laik_Data* d)
         return;
     }
 
-    // number of my slice groups in all reserved partitionings
+    // (1) detect how many different mappings (= slice groups) are needed
+    //     in this process over all partitionings in the reservation.
+    //     slice groups using same tag in partitionings go into same mapping.
+    //     We do this by adding slice groups over all partitionings into a
+    //     list, sort by tag and count the number of different tags used
+
+    // (1a) calculate list length needed:
+    //      number of my slice groups in all partitionings
     int groupCount = 0;
     for(int r = 0; r < d->resCount; r++) {
         Laik_Partitioning* p = d->res[r].p;
@@ -783,91 +808,107 @@ void laik_allocate(Laik_Data* d)
         groupCount += p->myMapCount;
     }
 
+    // (1b) allocate list and add entries for slice groups to list
     struct mygroup *glist = malloc(groupCount * sizeof(struct mygroup));
     int gOff = 0;
     for(int r = 0; r < d->resCount; r++) {
         Laik_Partitioning* p = d->res[r].p;
-        for(int map = 0; map < p->myMapCount; map++) {
-            int off = p->myMapOff[map];
+        for(int mapNo = 0; mapNo < p->myMapCount; mapNo++) {
+            int off = p->myMapOff[mapNo];
             int tag = p->tslice[off].tag;
             // for reservation, tag >0 to specify partitioning relations
             // TODO: tag == 0 means to use heuristic, but not implemented yet
             //       but we are fine with just one slice group and tag 0
             if (p->myMapCount > 1)
                 assert(tag > 0);
-            glist[gOff].resIndex = r;
-            glist[gOff].mapNo = map;
+            glist[gOff].partIndex = r;
+            glist[gOff].partMapNo = mapNo;
+            glist[gOff].resMapNo = -1; // not calculated yet
             glist[gOff].tag = tag;
             gOff++;
         }
     }
     assert(gOff == groupCount);
-    qsort(glist, groupCount, sizeof(struct mygroup), mygroup_cmp);
 
-    // number of groups with different tag = number of mappings needed
-    int mCount = 0;
+    // (1c) sort list by tags and count number of different tags
+    qsort(glist, groupCount, sizeof(struct mygroup), mygroup_cmp);
+    int resMapNo = -1;
     int lastTag = -1;
     for(int i = 0; i < groupCount; i++) {
-        if (glist[i].tag == lastTag) continue;
-        lastTag = glist[i].tag;
-        mCount++;
+        if (glist[i].tag != lastTag) {
+            lastTag = glist[i].tag;
+            resMapNo++;
+        }
+        assert(resMapNo >= 0);
+        glist[i].resMapNo = resMapNo;
     }
+    int mCount = resMapNo + 1;
     d->rMappingCount = mCount;
 
-    // alloc and init mapping objects
+    // (2) allocate mapping descriptors, both for
+    //     - combined descriptors for same tag in all partitionings, and
+    //     - per-partitioning descriptors
+
     Laik_Mapping* mList = malloc(mCount * sizeof(Laik_Mapping));
-    for(int i = 0; i < mCount; i++)
+    for(int i = 0; i < mCount; i++) {
         initMapping(&(mList[i]), d);
+        mList[i].mapNo = i;
+    }
     d->rMapping = mList;
 
     for(int r = 0; r < d->resCount; r++) {
         Laik_Partitioning* p = d->res[r].p;
-        d->res[r].mList = malloc(sizeof(Laik_MappingList) +
-                                 (p->myMapCount -1) * sizeof(Laik_Mapping*));
-        d->res[r].mList->count = 0;
+        Laik_MappingList* mList = malloc(sizeof(Laik_MappingList) +
+                                      p->myMapCount * sizeof(Laik_Mapping));
+        mList->count = p->myMapCount;
+        d->res[r].mList = mList;
+        for(int i = 0; i < p->myMapCount; i++) {
+            initMapping(&(mList->map[i]), d);
+            mList->map[i].mapNo = i;
+        }
     }
 
-    // determine required space for each mapping
-    int dims = d->space->dims;
-    int mapNo = -1; // global mapNo over all partitionings to reserve for
-    lastTag = -1;
-    for(int i = 0; i < groupCount; i++) {
-        // increase mapNo whenever we detect a new tag
-        if (glist[i].tag != lastTag) {
-            lastTag = glist[i].tag;
-            mapNo++;
-        }
-        int r = glist[i].resIndex;
-        Laik_MappingList* ml = d->res[r].mList;
-        Laik_Mapping* m = &(mList[mapNo]);
-        ml->map[ml->count] = m;
-        ml->count++;
+    // (3) link per-partitioning descriptor to corresponding combined one
+    //     and determine required space for each mapping
 
-        Laik_Partitioning* p = d->res[r].p;
-        int pMapNo = glist[i].mapNo;
-        assert(ml->count -1 == pMapNo);
+    int dims = d->space->dims;
+    for(int i = 0; i < groupCount; i++) {
+        int r = glist[i].partIndex;
+
+        int partMapNo = glist[i].partMapNo;
+        assert(partMapNo < d->res[r].mList->count);
+        Laik_Mapping* pMap = &(d->res[r].mList->map[partMapNo]);
+
+        int resMapNo = glist[i].resMapNo;
+        assert(resMapNo < mCount);
+        Laik_Mapping* rMap = &(mList[resMapNo]);
+
+        assert(pMap->baseMapping == 0);
+        pMap->baseMapping = rMap;
 
         // go over all slices in this slice group (same tag) and extend
-        for(int o = p->myMapOff[pMapNo]; o < p->myMapOff[pMapNo+1]; o++) {
-            assert(p->tslice[o].mapNo == pMapNo);
+        Laik_Partitioning* p = d->res[r].p;
+        for(int o = p->myMapOff[partMapNo]; o < p->myMapOff[partMapNo+1]; o++) {
+            assert(p->tslice[o].mapNo == partMapNo);
             assert(p->tslice[o].tag == glist[i].tag);
             assert(laik_slice_size(dims, &(p->tslice[o].s)) > 0);
-            if (laik_slice_isEmpty(dims, &(m->requiredSlice)))
-                m->requiredSlice = p->tslice[o].s;
+            if (laik_slice_isEmpty(dims, &(pMap->requiredSlice)))
+                pMap->requiredSlice = p->tslice[o].s;
             else
-                laik_slice_expand(dims, &(m->requiredSlice), &(p->tslice[o].s));
+                laik_slice_expand(dims, &(pMap->requiredSlice), &(p->tslice[o].s));
         }
+
+        // extend combined mapping descriptor by required size
+        if (laik_slice_isEmpty(dims, &(rMap->requiredSlice)))
+            rMap->requiredSlice = pMap->requiredSlice;
+        else
+            laik_slice_expand(dims, &(rMap->requiredSlice), &(pMap->requiredSlice));
     }
-    assert(mapNo + 1 == mCount);
+
     free(glist);
 
-    // check that MappingList's are fully set
-    for(int r = 0; r < d->resCount; r++) {
-        Laik_Partitioning* p = d->res[r].p;
-        assert(d->res[r].mList->count == p->myMapCount);
-    }
 
-    // set final sizes of mappings, and do allocation
+    // (4) set final sizes of base mappings, and do allocation
     for(int i = 0; i < mCount; i++) {
         Laik_Mapping* m = &(mList[i]);
         Laik_Slice* slc = &(m->requiredSlice);
@@ -880,6 +921,30 @@ void laik_allocate(Laik_Data* d)
         m->size[2] = (dims > 2) ? (slc->to.i[2] - slc->from.i[2]) : 0;
 
         laik_allocateMap(m, d->stat);
+    }
+
+    laik_log(2, "Reservations:");
+
+    // (5) set parameters for embedded mappings
+    for(int r = 0; r < d->resCount; r++) {
+        Laik_Partitioning* p = d->res[r].p;
+        laik_log(2, " part '%s'", p->name);
+        for(int mapNo = 0; mapNo < p->myMapCount; mapNo++) {
+            Laik_Mapping* m = &(d->res[r].mList->map[mapNo]);
+            m->allocatedSlice = m->baseMapping->requiredSlice;
+            m->allocCount = m->baseMapping->count;
+
+            initEmbeddedMapping(m, m->baseMapping);
+            if (laik_log_begin(1)) {
+                laik_log_append(" [P %d] ", m->mapNo);
+                laik_log_Slice(dims, &(m->requiredSlice));
+                laik_log_append(" in [R %d] ", m->baseMapping->mapNo);
+                laik_log_Slice(dims, &(m->baseMapping->allocatedSlice));
+                laik_log_flush(" with byte-off %llu\n",
+                               (unsigned long long) (m->base - m->start));
+            }
+
+        }
     }
 }
 
@@ -1416,7 +1481,7 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
     if (n >= d->activeMappings->count)
         return 0;
 
-    Laik_Mapping* m = d->activeMappings->map[n];
+    Laik_Mapping* m = &(d->activeMappings->map[n]);
     // ensure the mapping is backed by real memory
     laik_allocateMap(m, d->stat);
 
@@ -1523,7 +1588,7 @@ Laik_Mapping* laik_global2local_1d(Laik_Data* d, int64_t gidx, uint64_t* lidx)
     assert(d->space->dims == 1);
     if (!d->activeMappings) return 0;
     for(int i = 0; i < d->activeMappings->count; i++) {
-        Laik_Mapping* m = d->activeMappings->map[i];
+        Laik_Mapping* m = &(d->activeMappings->map[i]);
 
         if (gidx < m->requiredSlice.from.i[0]) continue;
         if (gidx >= m->requiredSlice.to.i[0]) continue;
@@ -1540,7 +1605,7 @@ Laik_Mapping* laik_global2maplocal_1d(Laik_Data* d, int64_t gidx,
     assert(d->space->dims == 1);
     if (!d->activeMappings) return 0;
     for(int i = 0; i < d->activeMappings->count; i++) {
-        Laik_Mapping* m = d->activeMappings->map[i];
+        Laik_Mapping* m = &(d->activeMappings->map[i]);
 
         if (gidx < m->requiredSlice.from.i[0]) continue;
         if (gidx >= m->requiredSlice.to.i[0]) continue;
@@ -1559,7 +1624,7 @@ int64_t laik_local2global_1d(Laik_Data* d, uint64_t off)
     assert(d->activeMappings && (d->activeMappings->count == 1));
 
     // TODO: check all mappings, not just map 0
-    Laik_Mapping* m = d->activeMappings->map[0];
+    Laik_Mapping* m = &(d->activeMappings->map[0]);
     assert(off < m->count);
 
     // TODO: take layout into account
@@ -1573,7 +1638,7 @@ int64_t laik_maplocal2global_1d(Laik_Data* d, int mapNo, uint64_t li)
     assert(d->activeMappings);
 
     // TODO: check all mappings, not just map 0
-    Laik_Mapping* m = d->activeMappings->map[mapNo];
+    Laik_Mapping* m = &(d->activeMappings->map[mapNo]);
     assert(li < m->count);
 
     // TODO: take layout into account
