@@ -49,7 +49,6 @@ static Laik_Instance* mpi_instance = 0;
 typedef struct _MPIData MPIData;
 struct _MPIData {
     MPI_Comm comm;
-    bool didInit;
 };
 
 typedef struct _MPIGroupData MPIGroupData;
@@ -77,7 +76,6 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
         laik_panic("Out of memory allocating MPIData object");
         exit(1); // not actually needed, laik_panic never returns
     }
-    d->didInit = false;
     d->comm = MPI_COMM_WORLD;
 
     MPIGroupData* gd = malloc(sizeof(MPIGroupData));
@@ -88,9 +86,10 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     gd->comm = MPI_COMM_WORLD;
 
 
-    if (argc) {
-        MPI_Init(argc, argv);
-        d->didInit = true;
+    // Initialize the MPI subsystem if necessary
+    int mpi_is_initialized; MPI_Initialized (&mpi_is_initialized);
+    if (!mpi_is_initialized) {
+        MPI_Init (argc, argv);
     }
 
     int size, rank;
@@ -130,11 +129,6 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     return inst;
 }
 
-static MPIData* mpiData(Laik_Instance* i)
-{
-    return (MPIData*) i->backend_data;
-}
-
 static MPIGroupData* mpiGroupData(Laik_Group* g)
 {
     return (MPIGroupData*) g->backend_data;
@@ -142,8 +136,11 @@ static MPIGroupData* mpiGroupData(Laik_Group* g)
 
 static void laik_mpi_finalize()
 {
-    if (mpiData(mpi_instance)->didInit)
+    // Finalize the MPI subsystem if necessary
+    int mpi_is_initialized; MPI_Initialized (&mpi_is_initialized);
+    if (mpi_is_initialized) {
         MPI_Finalize();
+    }
 }
 
 // update backend specific data for group if needed
