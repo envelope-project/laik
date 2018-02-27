@@ -5,8 +5,6 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "laik-internal.h"
-
 #define SIZE 8
 
 void runLuleshPartitioner1d(Laik_Partitioner* pr,

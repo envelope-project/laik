@@ -32,21 +32,6 @@ void laik_set_index(Laik_Index* i, int64_t i1, int64_t i2, int64_t i3);
 void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
 void laik_sub_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
 
-
-struct _Laik_Space {
-    char* name; // for debugging
-    int id;     // for debugging
-
-    int dims;
-    Laik_Slice s; // defines the valid indexes in this space
-
-    Laik_Instance* inst;
-    Laik_Space* nextSpaceForInstance; // for list of spaces used in instance
-
-    // linked list of access phases for this space
-    Laik_AccessPhase* firstAccessPhaseForSpace;
-};
-
 // add/remove access phase to/from space
 void laik_addAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p);
 void laik_removeAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p);
@@ -67,51 +52,6 @@ struct _Laik_Partitioner {
 
 // different internal types are used to save memory
 enum { TS_Generic = 1, TS_Single1d };
-
-struct _Laik_TaskSlice {
-    int type;
-    int task;
-};
-
-// generic task slice
-// the tag is a hint for the data layer: if >0, slices with same tag
-// go into same mapping
-typedef struct _Laik_TaskSlice_Gen {
-    int type;
-    int task;
-    Laik_Slice s;
-
-    int tag;
-    void* data;
-
-    // calculated from <tag> after partitioner run
-    int mapNo;
-    int compactStart; // for compact mapping: offset of slice in mapping
-} Laik_TaskSlice_Gen;
-
-// for single-index slices in 1d
-typedef struct _Laik_TaskSlice_Single1d {
-    int type;
-    int task;
-    int64_t idx;
-} Laik_TaskSlice_Single1d;
-
-struct _Laik_Partitioning {
-    int id;
-    char* name;
-
-    Laik_Group* group; // process group used in this partitioning
-    Laik_Space* space; // slices cover this space
-    int capacity;  // slices allocated
-    int count;     // slices used
-    int* off;      // offsets from task IDs into slice array
-
-    int myMapCount; // number of maps in slices of this task
-    int* myMapOff; // offsets from local map IDs into slice array
-
-    Laik_TaskSlice_Gen* tslice; // slice borders, may be multiple per task
-    Laik_TaskSlice_Single1d* tss1d;
-};
 
 Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
                                                bool useSingle1d);
