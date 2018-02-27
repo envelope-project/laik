@@ -106,10 +106,67 @@ typedef struct _Laik_AccessPhase Laik_AccessPhase;
 // set of partitionings to make consistent at the same time
 typedef struct _Laik_PartGroup Laik_PartGroup;
 
+struct _Laik_Space {
+    char* name; // for debugging
+    int id;     // for debugging
+
+    int dims;
+    Laik_Slice s; // defines the valid indexes in this space
+
+    Laik_Instance* inst;
+    Laik_Space* nextSpaceForInstance; // for list of spaces used in instance
+
+    // linked list of access phases for this space
+    Laik_AccessPhase* firstAccessPhaseForSpace;
+};
+
 // a slice mapped to a task, created by a partitioner
+struct _Laik_TaskSlice {
+    int type;
+    int task;
+};
 typedef struct _Laik_TaskSlice Laik_TaskSlice;
 
+// generic task slice
+// the tag is a hint for the data layer: if >0, slices with same tag
+// go into same mapping
+typedef struct _Laik_TaskSlice_Gen {
+    int type;
+    int task;
+    Laik_Slice s;
+
+    int tag;
+    void* data;
+
+    // calculated from <tag> after partitioner run
+    int mapNo;
+    int compactStart; // for compact mapping: offset of slice in mapping
+} Laik_TaskSlice_Gen;
+
+// for single-index slices in 1d
+typedef struct _Laik_TaskSlice_Single1d {
+    int type;
+    int task;
+    int64_t idx;
+} Laik_TaskSlice_Single1d;
+
 // calculated partitioning borders, result of a partitioner run
+struct _Laik_Partitioning {
+    int id;
+    char* name;
+
+    Laik_Group* group; // process group used in this partitioning
+    Laik_Space* space; // slices cover this space
+    int capacity;  // slices allocated
+    int count;     // slices used
+    int* off;      // offsets from task IDs into slice array
+
+    int myMapCount; // number of maps in slices of this task
+    int* myMapOff; // offsets from local map IDs into slice array
+
+    Laik_TaskSlice_Gen* tslice; // slice borders, may be multiple per task
+    Laik_TaskSlice_Single1d* tss1d;
+};
 typedef struct _Laik_Partitioning Laik_Partitioning;
 
 // communication requirements when switching partitioning groups
