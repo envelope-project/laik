@@ -15,6 +15,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef _LAIK_DEFINITIONS_H_
+#define _LAIK_DEFINITIONS_H_
+
 #define MAX_GROUPS        10
 #define MAX_SPACES        10
 #define MAX_PARTITIONINGS 10
@@ -22,3 +25,5 @@
 #define MAX_MAPPINGS      10
 #define MAX_AGENTS        10
 #define MAX_FILENAME_LENGTH 128
+
+#endif // _LAIK_DEFINITIONS_H_
