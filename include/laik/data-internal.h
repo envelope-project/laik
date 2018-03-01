@@ -163,6 +163,7 @@ struct _Laik_Mapping {
 };
 
 struct _Laik_MappingList {
+    Laik_Reservation* res; // mappings belong to this reservation, may be 0
     int count;
     Laik_Mapping map[]; // a C99 "flexible array member"
 };

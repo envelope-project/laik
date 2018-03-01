@@ -204,9 +204,13 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
     // reserved and already allocated?
     Laik_Reservation* r = d->activeReservation;
     if (r) {
-        for(int i = 0; i < r->resCount; i++)
-            if ((r->res[i].p == p) && (r->res[i].mList != 0))
-                return r->res[i].mList;
+        for(int i = 0; i < r->resCount; i++) {
+            if ((r->res[i].p == p) && (r->res[i].mList != 0)) {
+                Laik_MappingList* ml = r->res[i].mList;
+                assert(ml->res == r);
+                return ml;
+            }
+        }
 
         // with reservations, we never should get to this point:
         // clear the reservation before switching to a new partitioning!
@@ -227,6 +231,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         laik_panic("Out of memory allocating Laik_MappingList object");
         exit(1); // not actually needed, laik_panic never returns
     }
+    ml->res = 0; // not part of a reservation
     ml->count = n;
 
     int firstOff, lastOff;
@@ -890,6 +895,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
         Laik_MappingList* mList = malloc(sizeof(Laik_MappingList) +
                                       p->myMapCount * sizeof(Laik_Mapping));
         mList->count = p->myMapCount;
+        mList->res = res;
         res->res[i].mList = mList;
         for(int i = 0; i < p->myMapCount; i++) {
             initMapping(&(mList->map[i]), res->data);
