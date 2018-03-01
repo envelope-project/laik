@@ -172,13 +172,16 @@ int main(int argc, char* argv[])
         // - order is important, as calculating baRead needs baWrite
         Laik_Partitioning* paWrite = laik_phase_run_partitioner(pWrite);
         Laik_Partitioning* paRead  = laik_phase_get_partitioning(pRead);
-        laik_extend_reservation(data1, paRead);
-        laik_extend_reservation(data1, paWrite);
-        laik_extend_reservation(data2, paRead);
-        laik_extend_reservation(data2, paWrite);
-        // now do memory allocation for reserved partition sizes
-        laik_allocate(data1);
-        laik_allocate(data2);
+
+        Laik_Reservation* r1 = laik_reservation_new(data1);
+        laik_reservation_add(r1, paRead);
+        laik_reservation_add(r1, paWrite);
+        laik_reservation_alloc(r1);
+
+        Laik_Reservation* r2 = laik_reservation_new(data2);
+        laik_reservation_add(r2, paRead);
+        laik_reservation_add(r2, paWrite);
+        laik_reservation_alloc(r2);
     }
 
     // for global sum, used for residuum

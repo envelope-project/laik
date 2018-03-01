@@ -103,24 +103,25 @@ Laik_AccessPhase* laik_data_get_accessphase(Laik_Data* d);
 // free resources for a data container
 void laik_free(Laik_Data*);
 
-// forget any previous reservations done for <d>.
-// this does not change current allocation, but influences the next
-void laik_clear_reservation(Laik_Data* d);
-
-// enlarge the reservation for <d> to include partition sizes of <p>.
-// this does not change current allocation, but influences the next
-void laik_extend_reservation(Laik_Data* d, Laik_Partitioning* p);
-
-// high-level: declare that for allocations done for <d>, we always should
-// take into account the size of partitionings used in access phase <ap>,
-// such that switching to <ap> does not require dynamic re-allocation.
 //
-// If a partitioning for <ap> changes, also does the reservation. However,
-// this only has influence on the next allocation
-void laik_reserve(Laik_Data* d, Laik_AccessPhase* ap);
+// Reservations for data containers
+//
+typedef struct _Laik_Reservation Laik_Reservation;
 
-// allocate memory for <d> taking into account any reservations done
-void laik_allocate(Laik_Data* d);
+// create a reservation object for <data>
+Laik_Reservation* laik_reservation_new(Laik_Data* d);
+
+// register a partitioning for inclusion in a reservation:
+// this will include space required for this partitioning on allocation
+void laik_reservation_add(Laik_Reservation* r, Laik_Partitioning* p);
+
+// allocate space for all partitionings registered in a reservation
+void laik_reservation_alloc(Laik_Reservation* r);
+
+// free the memory space allocated in this reservation
+void laik_reservation_free(Laik_Reservation* r);
+
+
 
 // switch to new partitioning (new flow is derived from previous flow)
 void laik_switchto_partitioning(Laik_Data* d,

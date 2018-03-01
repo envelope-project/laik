@@ -69,10 +69,22 @@ Laik_SwitchStat* laik_newSwitchStat();
 void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src);
 
 // information for a reservation
-typedef struct _Laik_Reservation {
+typedef struct _Laik_ReservationEntry {
     Laik_Partitioning* p;
     Laik_MappingList* mList; // from partitioning-local map numbers to mappings
-} Laik_Reservation;
+} Laik_ReservationEntry;
+
+struct _Laik_Reservation {
+    Laik_Data* data;
+
+    // for reservations
+    int resCount;    // number of reservations done
+    int resCapacity; // number of elements allocated for reservation
+    Laik_ReservationEntry* res; // list of reservations
+    Laik_ReservationEntry* activeRes; // currently used reservation
+    int rMappingCount; // number of mappings needed for reservations
+    Laik_Mapping* rMapping; // array of mappings for reservations
+};
 
 // a data container
 struct _Laik_Data {
@@ -95,13 +107,8 @@ struct _Laik_Data {
     // active mappings (multiple possible)
     Laik_MappingList* activeMappings;
 
-    // for reservations
-    int resCount;    // number of reservations done
-    int resCapacity; // number of elements allocated for reservation
-    Laik_Reservation* res; // list of reservations
-    Laik_Reservation* activeRes; // currently used reservation
-    int rMappingCount; // number of mappings needed for reservations
-    Laik_Mapping* rMapping; // array of mappings for reservations
+    // when switching to a partitioning, we check for reservations first
+    Laik_Reservation* activeReservation;
 
     Laik_Allocator* allocator;
 
