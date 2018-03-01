@@ -78,12 +78,11 @@ struct _Laik_Reservation {
     Laik_Data* data;
 
     // for reservations
-    int resCount;    // number of reservations done
-    int resCapacity; // number of elements allocated for reservation
-    Laik_ReservationEntry* res; // list of reservations
-    Laik_ReservationEntry* activeRes; // currently used reservation
-    int rMappingCount; // number of mappings needed for reservations
-    Laik_Mapping* rMapping; // array of mappings for reservations
+    int count;    // number of partitionings registered for reservation
+    int capacity; // number of entries allocated
+    Laik_ReservationEntry* entry; // list of partitionings part of reservation
+    int mappingCount; // number of mappings needed for reservations
+    Laik_Mapping* mapping; // array of mappings for reservations
 };
 
 // a data container
