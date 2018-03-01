@@ -310,15 +310,15 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
 
             // all-groups never should be specified explicitly
             if (op->outputGroup >= 0)
-                assert(t->group[op->outputGroup].count < g->size);
+                assert(t->subgroup[op->outputGroup].count < g->size);
             if (op->inputGroup >= 0)
-                assert(t->group[op->inputGroup].count < g->size);
+                assert(t->subgroup[op->inputGroup].count < g->size);
 
             // if neither input nor output are all-groups: manual reduction
             if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
 
                 // do the manual reduction on smallest rank of output group
-                int reduceTask = t->group[op->outputGroup].task[0];
+                int reduceTask = t->subgroup[op->outputGroup].task[0];
 
                 laik_log(1, "Manual reduction at T%d: (%lld - %lld) slc/map %d/%d",
                          reduceTask, (long long int) from, (long long int) to,
@@ -328,7 +328,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                     TaskGroup* tg;
 
                     // collect values from tasks in input group
-                    tg = &(t->group[op->inputGroup]);
+                    tg = &(t->subgroup[op->inputGroup]);
                     // check that bufsize is enough
                     assert(tg->count * byteCount < PACKBUFSIZE);
 
@@ -406,7 +406,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
 #endif
 
                     // send result to tasks in output group
-                    tg = &(t->group[op->outputGroup]);
+                    tg = &(t->subgroup[op->outputGroup]);
                     for(int i = 0; i< tg->count; i++) {
                         if (tg->task[i] == myid) {
                             // that's myself: nothing to do
@@ -461,8 +461,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 if (op->outputGroup == -1) rootTask = -1;
                 else {
                     // TODO: support more then 1 receiver
-                    assert(t->group[op->outputGroup].count == 1);
-                    rootTask = t->group[op->outputGroup].task[0];
+                    assert(t->subgroup[op->outputGroup].count == 1);
+                    rootTask = t->subgroup[op->outputGroup].task[0];
                 }
 
                 if (laik_log_begin(1)) {

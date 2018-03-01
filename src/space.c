@@ -1675,6 +1675,13 @@ laik_calc_transition(Laik_Space* space,
         exit(1); // not actually needed, laik_panic never returns
     }
 
+    t->space = space;
+    t->group = group;
+    t->fromPartitioning = fromP;
+    t->toPartitioning = toP;
+    t->fromFlow = fromFlow;
+    t->toFlow = toFlow;
+
     t->dims = dims;
     t->actionCount = localBufCount + initBufCount +
                      sendBufCount + recvBufCount + redBufCount;
@@ -1683,13 +1690,13 @@ laik_calc_transition(Laik_Space* space,
     t->send  = (struct sendTOp*)  (((char*)t) + sendOff);
     t->recv  = (struct recvTOp*)  (((char*)t) + recvOff);
     t->red   = (struct redTOp*)   (((char*)t) + redOff);
-    t->group = (TaskGroup*)       (((char*)t) + gListOff);
+    t->subgroup = (TaskGroup*)       (((char*)t) + gListOff);
     t->localCount = localBufCount;
     t->initCount  = initBufCount;
     t->sendCount  = sendBufCount;
     t->recvCount  = recvBufCount;
     t->redCount   = redBufCount;
-    t->groupCount = groupListCount;
+    t->subgroupCount = groupListCount;
     memcpy(t->local, localBuf, localSize);
     memcpy(t->init, initBuf,  initSize);
     memcpy(t->send, sendBuf,  sendSize);
@@ -1699,8 +1706,8 @@ laik_calc_transition(Laik_Space* space,
     // copy group list and task list of each group into transition object
     char* tList = ((char*)t) + tListOff;
     for (int i = 0; i < groupListCount; i++) {
-        t->group[i].count = groupList[i].count;
-        t->group[i].task = (int*) tList;
+        t->subgroup[i].count = groupList[i].count;
+        t->subgroup[i].task = (int*) tList;
         tListSize = groupList[i].count * sizeof(int);
         memcpy(tList, groupList[i].task, tListSize);
         tList += tListSize;

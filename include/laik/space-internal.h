@@ -217,6 +217,12 @@ struct redTOp {
 };
 
 struct _Laik_Transition {
+    // data identifying this transition
+    Laik_Space* space;
+    Laik_Group* group;
+    Laik_Partitioning *fromPartitioning, *toPartitioning;
+    Laik_DataFlow fromFlow, toFlow;
+
     int dims;
     int actionCount;
 
@@ -242,9 +248,9 @@ struct _Laik_Transition {
     int redCount;
     struct redTOp *red;
 
-    // groups referenced by reduction operations
-    int groupCount;
-    TaskGroup *group;
+    // sub-groups of task group referenced by reduction operations
+    int subgroupCount;
+    TaskGroup *subgroup;
 };
 
 // initialize the LAIK space module, called from laik_new_instance

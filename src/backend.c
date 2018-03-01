@@ -15,8 +15,8 @@ bool laik_isInGroup(Laik_Transition* t, int group, int task)
     // all-group?
     if (group == -1) return true;
 
-    assert(group < t->groupCount);
-    TaskGroup* tg = &(t->group[group]);
+    assert(group < t->subgroupCount);
+    TaskGroup* tg = &(t->subgroup[group]);
     for(int i = 0; i < tg->count; i++)
         if (tg->task[i] == task) return true;
     return false;

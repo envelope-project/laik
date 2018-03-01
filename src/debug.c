@@ -154,8 +154,8 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
         return;
     }
 
-    assert(group < t->groupCount);
-    TaskGroup* tg = &(t->group[group]);
+    assert(group < t->subgroupCount);
+    TaskGroup* tg = &(t->subgroup[group]);
 
     laik_log_append("(");
     for(int i = 0; i < tg->count; i++) {
