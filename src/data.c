@@ -907,6 +907,7 @@ void laik_allocate(Laik_Data* d)
 
     free(glist);
 
+    laik_log(2, "Allocated reservations for '%s'", d->name);
 
     // (4) set final sizes of base mappings, and do allocation
     for(int i = 0; i < mCount; i++) {
@@ -921,29 +922,33 @@ void laik_allocate(Laik_Data* d)
         m->size[2] = (dims > 2) ? (slc->to.i[2] - slc->from.i[2]) : 0;
 
         laik_allocateMap(m, d->stat);
-    }
 
-    laik_log(2, "Reservations:");
+        if (laik_log_begin(2)) {
+            laik_log_append(" map [%d] ", m->mapNo);
+            laik_log_Slice(dims, &(m->allocatedSlice));
+            laik_log_flush(0);
+        }
+    }
 
     // (5) set parameters for embedded mappings
     for(int r = 0; r < d->resCount; r++) {
         Laik_Partitioning* p = d->res[r].p;
-        laik_log(2, " part '%s'", p->name);
+        laik_log(2, " part '%s':", p->name);
         for(int mapNo = 0; mapNo < p->myMapCount; mapNo++) {
             Laik_Mapping* m = &(d->res[r].mList->map[mapNo]);
+
             m->allocatedSlice = m->baseMapping->requiredSlice;
             m->allocCount = m->baseMapping->count;
 
             initEmbeddedMapping(m, m->baseMapping);
-            if (laik_log_begin(1)) {
-                laik_log_append(" [P %d] ", m->mapNo);
+
+            if (laik_log_begin(2)) {
+                laik_log_append("  [%d] ", m->mapNo);
                 laik_log_Slice(dims, &(m->requiredSlice));
-                laik_log_append(" in [R %d] ", m->baseMapping->mapNo);
-                laik_log_Slice(dims, &(m->baseMapping->allocatedSlice));
-                laik_log_flush(" with byte-off %llu\n",
+                laik_log_flush(" in map [%d] with byte-off %llu",
+                               m->baseMapping->mapNo,
                                (unsigned long long) (m->base - m->start));
             }
-
         }
     }
 }
@@ -1483,7 +1488,8 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
 
     Laik_Mapping* m = &(d->activeMappings->map[n]);
     // ensure the mapping is backed by real memory
-    laik_allocateMap(m, d->stat);
+    if (m->base == 0)
+        laik_allocateMap(m, d->stat);
 
     return m;
 }
