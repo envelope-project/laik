@@ -121,6 +121,10 @@ void laik_reservation_alloc(Laik_Reservation* r);
 // free the memory space allocated in this reservation
 void laik_reservation_free(Laik_Reservation* r);
 
+// make data container aware of reservation:
+// when switching to a partitioning, it will use space from reservation
+void laik_data_use_reservation(Laik_Data* d, Laik_Reservation* r);
+
 
 
 // switch to new partitioning (new flow is derived from previous flow)

@@ -312,6 +312,9 @@ void freeMaps(Laik_MappingList* ml, Laik_SwitchStat* ss)
 {
     if (ml == 0) return;
 
+    // never free mappings from a reservation
+    if (ml->res != 0) return;
+
     for(int i = 0; i < ml->count; i++) {
         Laik_Mapping* m = &(ml->map[i]);
         assert(m != 0);
@@ -446,6 +449,10 @@ void copyMaps(Laik_Transition* t,
     assert(t->localCount > 0);
     assert(fromList != 0);
     assert(toList != 0);
+
+    // no copy required if we stay in same reservation
+    if ((fromList->res != 0) && (fromList->res == toList->res)) return;
+
     for(int i = 0; i < t->localCount; i++) {
         struct localTOp* op = &(t->local[i]);
         assert(op->fromMapNo < fromList->count);
@@ -586,6 +593,10 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
     // reuse only possible if old mappings exist
     if (!fromList) return;
     if ((toList == 0) || (toList->count ==0)) return;
+
+    // no reuse check required if we stay in same reservation
+    if ((fromList->res != 0) && (fromList->res == toList->res)) return;
+
     Laik_Data* d = toList->map[0].data;
     int dims = d->space->dims;
 
@@ -731,6 +742,13 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
     // free old mapping/partitioning
     if (fromList)
         freeMaps(fromList, d->stat);
+}
+
+// make data container aware of reservation
+void laik_data_use_reservation(Laik_Data* d, Laik_Reservation* r)
+{
+    assert(r->data == d);
+    d->activeReservation = r;
 }
 
 

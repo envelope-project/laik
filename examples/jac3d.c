@@ -161,7 +161,7 @@ int main(int argc, char* argv[])
     if (do_reservation) {
         // reserve and pre-allocate memory for data1/2
         // this is purely optional, and the application still works when we
-        // switch to a partitioning not reserved and allocatedd for.
+        // switch to a partitioning not reserved and allocated for.
         // However, this makes sure that no allocation happens in the main
         // iteration, and reservation/allocation should be done again on
         // re-partitioning.
@@ -177,11 +177,13 @@ int main(int argc, char* argv[])
         laik_reservation_add(r1, paRead);
         laik_reservation_add(r1, paWrite);
         laik_reservation_alloc(r1);
+        laik_data_use_reservation(data1, r1);
 
         Laik_Reservation* r2 = laik_reservation_new(data2);
         laik_reservation_add(r2, paRead);
         laik_reservation_add(r2, paWrite);
         laik_reservation_alloc(r2);
+        laik_data_use_reservation(data2, r2);
     }
 
     // for global sum, used for residuum
