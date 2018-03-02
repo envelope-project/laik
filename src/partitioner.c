@@ -143,6 +143,8 @@ void runCornerHaloPartitioner(Laik_Partitioner* pr,
     assert(otherP->group == p->group); // must use same task group
     assert(otherP->space == p->space);
 
+    int tag = 1; // TODO: make it a parameter
+
     int dims = p->space->dims;
     int d = *((int*) pr->data);
 
@@ -170,7 +172,7 @@ void runCornerHaloPartitioner(Laik_Partitioner* pr,
                     slc.to.i[2] = to->i[2] + d;
             }
         }
-        laik_append_slice(p, otherP->tslice[i].task, &slc, 0, 0);
+        laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
     }
 }
 
@@ -269,9 +271,11 @@ Laik_Partitioner* laik_new_halo_partitioner(int depth)
 static void doBisection(Laik_Partitioning* p,
                         Laik_Slice* s, int fromTask, int toTask)
 {
+    int tag = 1; // TODO: make it a parameter
+
     assert(toTask > fromTask);
     if (toTask - fromTask == 1) {
-        laik_append_slice(p, fromTask, s, 0, 0);
+        laik_append_slice(p, fromTask, s, tag, 0);
         return;
     }
 
@@ -295,7 +299,7 @@ static void doBisection(Laik_Partitioning* p,
     }
     assert(width > 0);
     if (width == 1) {
-        laik_append_slice(p, fromTask, s, 0, 0);
+        laik_append_slice(p, fromTask, s, tag, 0);
         return;
     }
 

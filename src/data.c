@@ -211,10 +211,6 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
                 return ml;
             }
         }
-
-        // with reservations, we never should get to this point:
-        // clear the reservation before switching to a new partitioning!
-        assert(r->count == 0);
     }
 
     // number of local slices
@@ -594,8 +590,9 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
     if (!fromList) return;
     if ((toList == 0) || (toList->count ==0)) return;
 
-    // no reuse check required if we stay in same reservation
-    if ((fromList->res != 0) && (fromList->res == toList->res)) return;
+    // no automatic reuse check allowed if reservations are involved
+    // (if we stay in same reservation, space is reused anyways)
+    if ((fromList->res != 0) || (toList->res != 0)) return;
 
     Laik_Data* d = toList->map[0].data;
     int dims = d->space->dims;
@@ -991,6 +988,12 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
             m->allocatedSlice = m->baseMapping->requiredSlice;
             m->allocCount = m->baseMapping->count;
+
+            Laik_Slice* slc = &(m->requiredSlice);
+            m->count = laik_slice_size(dims, slc);
+            m->size[0] = slc->to.i[0] - slc->from.i[0];
+            m->size[1] = (dims > 1) ? (slc->to.i[1] - slc->from.i[1]) : 0;
+            m->size[2] = (dims > 2) ? (slc->to.i[2] - slc->from.i[2]) : 0;
 
             initEmbeddedMapping(m, m->baseMapping);
 

@@ -2,7 +2,7 @@ TESTS= \
     test-vsum test-vsum-log test-vsum2 test-vsum3 \
     test-spmv test-spmv2 test-spmv2r \
     test-jac1d test-jac1d-repart \
-    test-jac2d test-jac3d \
+    test-jac2d test-jac3d test-jac3dr \
     test-markov test-markov2 \
     test-propagation2d
 
@@ -47,6 +47,9 @@ test-jac2d:
 
 test-jac3d:
 	$(SDIR)./test-jac3d-100-single.sh
+
+test-jac3dr:
+	$(SDIR)./test-jac3dr-100-single.sh
 
 test-markov:
 	$(SDIR)./test-markov-20-4-single.sh
