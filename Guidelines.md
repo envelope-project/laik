@@ -60,3 +60,15 @@ On a release:
   * mark API changes with [API]
   * start bug fixes with "Fix ..." and if this relates to a Github issue, reference the issue number
   * a commit message must include a short summary of what the commit is about
+
+## Header Files and Include Directives
+
+Header files in LAIK are subject to the following rules; the keywords are to be
+interpreted according to [RFC 2119](https://www.ietf.org/rfc/rfc2119.txt):
+
+  1. Files and directories below ```include``` MUST begin with ```laik```.
+  2. When building LAIK (as in the project), both ```include``` and ```src```
+     MUST be in the include path.
+  3. The examples MUST only include headers from ```include```.
+  4. ```include "foo.h"``` MUST NOT be used if ```foo.h``` is not in the same
+     directory.
