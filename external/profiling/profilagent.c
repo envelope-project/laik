@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include <papi.h>
-#include "interface/agent.h"
+#include <laik.h>
 
 static int eventset = PAPI_NULL;
 static int isInited = 0;
