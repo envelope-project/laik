@@ -7,7 +7,7 @@ SUBDIRS=examples
 # settings from 'configure', may overwrite defaults
 -include Makefile.config
 
-CFLAGS=$(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)include -fPIC
+CFLAGS=$(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)include -I$(SDIR)src -fPIC
 LDFLAGS=$(OPT)
 
 SRCS = $(wildcard $(SDIR)src/*.c)
