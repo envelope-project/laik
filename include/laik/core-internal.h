@@ -18,14 +18,9 @@
 #ifndef _LAIK_CORE_INTERNAL_H_
 #define _LAIK_CORE_INTERNAL_H_
 
-#ifndef _LAIK_INTERNAL_H_
-#error "include laik-internal.h instead"
-#endif
-
-#include "ext.h"
-#include "laik-internal.h"
-#include "definitions.h"
-
+#include <laik.h>         // for Laik_Instance, Laik_Group, Laik_AccessPhase
+#include <stdbool.h>      // for bool
+#include "definitions.h"  // for MAX_DATAS, MAX_GROUPS, MAX_MAPPINGS
 
 // key-value store (see below)
 typedef struct _Laik_KVNode Laik_KVNode;

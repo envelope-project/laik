@@ -18,18 +18,11 @@
 #ifndef _LAIK_DATA_H_
 #define _LAIK_DATA_H_
 
-#ifndef _LAIK_H_
-#error "include laik.h instead"
-#endif
-
-// "laik.h" includes the following. This is just to make IDE happy
-#include "core.h"
-#include "space.h"
-
-#include <stdbool.h>
-#include <stdint.h>  // uint64_t
-#include <stdlib.h>  // size_t
-
+#include <stdbool.h>  // for bool
+#include <stdint.h>   // for int64_t, uint64_t
+#include <stdlib.h>   // for size_t
+#include "core.h"     // for Laik_Group, Laik_Instance
+#include "space.h"    // for Laik_DataFlow, Laik_AccessPhase, Laik_Partitioning
 
 /*********************************************************************/
 /* LAIK Data - Data containers for LAIK index spaces

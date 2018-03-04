@@ -18,10 +18,6 @@
 #ifndef LAIK_PROGRAM_INTERNAL
 #define LAIK_PROGRAM_INTERNAL
 
-#ifndef _LAIK_INTERNAL_H_
-#error "include laik-internal.h instead"
-#endif
-
 struct tag_laik_program_control
 {
     int cur_phase;

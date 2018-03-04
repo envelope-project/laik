@@ -19,12 +19,7 @@
 #ifndef LAIK_PROGRAM_H
 #define LAIK_PROGRAM_H
 
-#ifndef _LAIK_H_
-#error "include laik.h instead"
-#endif
-
-// "laik.h" includes the following. This is just to make IDE happy
-#include "core.h"
+#include "core.h"  // for Laik_Instance
 
 // struct for storing program control information
 typedef struct tag_laik_program_control Laik_Program_Control;

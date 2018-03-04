@@ -18,15 +18,9 @@
 #ifndef _LAIK_SPACE_INTERNAL_H_
 #define _LAIK_SPACE_INTERNAL_H_
 
-#ifndef _LAIK_INTERNAL_H_
-#error "include laik-internal.h instead"
-#endif
-
-#include <stdbool.h>
-#include <stdint.h>
-
-// "laik-internal.h" includes the following. This is just to make IDE happy
-#include "space.h"
+#include <laik.h>     // for Laik_AccessPhase, Laik_Index, Laik_Partitioning
+#include <stdbool.h>  // for bool
+#include <stdint.h>   // for int64_t
 
 void laik_set_index(Laik_Index* i, int64_t i1, int64_t i2, int64_t i3);
 void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);

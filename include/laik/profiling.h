@@ -19,12 +19,7 @@
 #ifndef _LAIK_PROFILING_H_
 #define _LAIK_PROFILING_H_
 
-#ifndef _LAIK_H_
-#error "include laik.h instead"
-#endif
-
-// "laik.h" includes the following. This is just to make IDE happy
-#include "core.h"
+#include "core.h"  // for Laik_Instance
 
 //
 // application controlled profiling
