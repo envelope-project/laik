@@ -15,6 +15,7 @@ add_library ("laik" SHARED
 
 target_include_directories ("laik"
     PUBLIC "../include"
+    PUBLIC "."
 )
 
 target_link_libraries ("laik"
