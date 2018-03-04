@@ -19,6 +19,10 @@
 #ifndef _LAIK_EXT_H_
 #define _LAIK_EXT_H_
 
+#ifndef _LAIK_H_INSIDE_
+#error "include laik.h instead"
+#endif
+
 #include <laik/agent.h>
 
 // "laik.h" includes the following. This is just to make IDE happy

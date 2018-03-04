@@ -18,7 +18,7 @@
 #ifndef _LAIK_DEBUG_H_
 #define _LAIK_DEBUG_H_
 
-#ifndef _LAIK_H_
+#ifndef _LAIK_H_INSIDE_
 #error "include laik.h instead"
 #endif
 

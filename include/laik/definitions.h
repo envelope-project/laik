@@ -18,6 +18,10 @@
 #ifndef _LAIK_DEFINITIONS_H_
 #define _LAIK_DEFINITIONS_H_
 
+#ifndef _LAIK_INTERNAL_H_INSIDE_
+#error "include laik-internal.h instead"
+#endif
+
 #define MAX_GROUPS        10
 #define MAX_SPACES        10
 #define MAX_PARTITIONINGS 10

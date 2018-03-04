@@ -24,7 +24,7 @@
 // Do not include this file in LAIK applications!
 //
 
-#ifndef _LAIK_INTERNAL_H_
+#ifndef _LAIK_INTERNAL_H_INSIDE_
 #error "include laik-internal.h instead"
 #endif
 

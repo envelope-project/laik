@@ -18,6 +18,8 @@
 #ifndef _LAIK_INTERNAL_H_
 #define _LAIK_INTERNAL_H_
 
+#define _LAIK_INTERNAL_H_INSIDE_
+
 #include "laik.h"
 
 // also include all internal LAIK headers
@@ -30,5 +32,7 @@
 #include "laik/program-internal.h"
 #include "laik/profiling-internal.h"
 #include "laik/ext.h"
+
+#undef _LAIK_INTERNAL_H_INSIDE_
 
 #endif // _LAIK_INTERNAL_H_
