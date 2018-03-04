@@ -18,6 +18,8 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#ifndef _LAIK_AGENT_H_
+#define _LAIK_AGENT_H_
 
 #define MAX_UID_LENGTH 64
 #define MAX_FAILED_BUFFER 32
@@ -188,3 +190,4 @@ struct tag_laik_ext_profile_agent{
 
 };
 
+#endif // _LAIK_AGENT_H_
