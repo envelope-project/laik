@@ -19,7 +19,7 @@
 #ifndef _LAIK_EXT_H_
 #define _LAIK_EXT_H_
 
-#include "interface/agent.h"
+#include <laik/agent.h>
 
 // "laik.h" includes the following. This is just to make IDE happy
 #include "core.h"
