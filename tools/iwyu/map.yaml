@@ -1,0 +1,41 @@
+# IWYU mapping file for LAIK, see [0] for details on the format!
+# [0] https://github.com/include-what-you-use/include-what-you-use/blob/master/docs/IWYUMappings.md
+
+# IWYU somehow doesn't get these two right...
+- include:
+  - '<bits/stdint-intn.h>'
+  - 'private'
+  - '<stdint.h>'
+  - 'public'
+
+- include: 
+  - '<bits/stdint-uintn.h>'
+  - 'private'
+  - '<stdint.h>'
+  - 'public'
+
+# Accessing the public API is only allowed via "#include <laik.h>"
+- include:
+  - '"laik.h"'
+  - 'private'
+  - '<laik.h>'
+  - 'public'
+
+- include:
+  - '@.laik/(core|data|debug|ext|profiling|program|space).*'
+  - 'private'
+  - '<laik.h>'
+  - 'public'
+
+# Accessing the public API is only allowed via "#include <laik-internal.h>"
+- include:
+  - '"laik-internal.h"'
+  - 'private'
+  - '<laik-internal.h>'
+  - 'public'
+
+- include:
+  - '@.laik/(agent|backend|definitions|.*-internal).*'
+  - 'private'
+  - '<laik-internal.h>'
+  - 'public'
