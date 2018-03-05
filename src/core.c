@@ -6,6 +6,7 @@
 #include <laik-internal.h>
 #include <laik-backend-mpi.h>
 #include <laik-backend-single.h>
+#include <laik-backend-tcp.h>
 
 #include <assert.h>
 #include <stdio.h>
@@ -51,6 +52,12 @@ Laik_Instance* laik_init (int* argc, char*** argv)
         (void) argv;
         return laik_init_single();
     }
+
+#ifdef LAIK_TCP_BACKEND_AVAILABLE
+    if (!override || strcmp (override, "tcp") == 0) {
+        return laik_init_tcp (argc, argv);
+    }
+#endif
 
     // Error: unknown backend wanted
     assert(override != 0);
