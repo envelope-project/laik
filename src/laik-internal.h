@@ -18,16 +18,16 @@
 #ifndef _LAIK_INTERNAL_H_
 #define _LAIK_INTERNAL_H_
 
-#include "laik.h"
+#include <laik.h>
 
 // also include all internal LAIK headers
 // only used internally by LAIK sources, not part of LAIK API
 
-#include "laik/core-internal.h"
-#include "laik/space-internal.h"
-#include "laik/data-internal.h"
-#include "laik/backend.h"
-#include "laik/program-internal.h"
-#include "laik/profiling-internal.h"
+#include "core-internal.h"
+#include "space-internal.h"
+#include "data-internal.h"
+#include "backend.h"
+#include "program-internal.h"
+#include "profiling-internal.h"
 
 #endif // _LAIK_INTERNAL_H_
