@@ -12,7 +12,7 @@ OPT=-g
 # pull in global config: CC, OPT, DEFS
 -include ../../Makefile.config
 
-CFLAGS = -std=gnu99 -I$(SDIR)../../include -fPIC -Wall -Wextra
+CFLAGS = -std=gnu99 -I$(SDIR)../../include -I$(SDIR)../../src -fPIC -Wall -Wextra
 CFLAGS += $(OPT) $(DEFS) -MMD -MP
 
 LDFLAGS= -shared
