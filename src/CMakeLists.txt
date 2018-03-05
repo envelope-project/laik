@@ -67,6 +67,47 @@ if (single-backend)
     )
 endif ()
 
+# Optional TCP backend
+if (tcp-backend)
+    find_pkgconfig ("gio-2.0")
+    find_pkgconfig ("glib-2.0")
+
+    if (TARGET "gio-2.0" AND TARGET "glib-2.0")
+        message (STATUS "Dependency check for option 'tcp-backend' succeeded, building!")
+
+        target_sources ("laik"
+            PRIVATE
+                "backends/tcp/backend.c"
+                "backends/tcp/client.c"
+                "backends/tcp/config.c"
+                "backends/tcp/debug.c"
+                "backends/tcp/errors.c"
+                "backends/tcp/map.c"
+                "backends/tcp/messenger.c"
+                "backends/tcp/minimpi.c"
+                "backends/tcp/server.c"
+                "backends/tcp/socket.c"
+                "backends/tcp/task.c"
+        )
+
+        target_compile_definitions ("laik"
+            PRIVATE "GLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_48"
+            PRIVATE "GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_48"
+            PRIVATE "LAIK_TCP_BACKEND_AVAILABLE"
+            # PRIVATE "LAIK_TCP_DEBUG"
+        )
+
+        target_link_libraries ("laik"
+            PRIVATE "gio-2.0"
+            PRIVATE "glib-2.0"
+        )
+    elseif (skip-missing)
+        message (STATUS "Dependency check for option 'tcp-backend' failed, skipping!")
+    else ()
+        message (FATAL_ERROR "Dependency check for option 'tcp-backend' failed, stopping!")
+    endif ()
+endif ()
+
 # Installation rules
 install (TARGETS "laik" DESTINATION "lib")
 
