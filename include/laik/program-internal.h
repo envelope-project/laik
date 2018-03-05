@@ -18,7 +18,7 @@
 #ifndef LAIK_PROGRAM_INTERNAL
 #define LAIK_PROGRAM_INTERNAL
 
-#ifndef _LAIK_INTERNAL_H_
+#ifndef _LAIK_INTERNAL_H_INSIDE_
 #error "include laik-internal.h instead"
 #endif
 

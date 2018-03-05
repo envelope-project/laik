@@ -18,6 +18,8 @@
 #ifndef _LAIK_H_
 #define _LAIK_H_
 
+#define _LAIK_H_INSIDE_
+
 // include headers of all Laik modules (without LAIK backends)
 #include "laik/core.h"
 #include "laik/space.h"
@@ -26,5 +28,7 @@
 #include "laik/program.h"
 #include "laik/profiling.h"
 #include "laik/ext.h"
+
+#undef _LAIK_H_INSIDE_
 
 #endif // _LAIK_H_

@@ -19,7 +19,7 @@
 #ifndef LAIK_PROGRAM_H
 #define LAIK_PROGRAM_H
 
-#ifndef _LAIK_H_
+#ifndef _LAIK_H_INSIDE_
 #error "include laik.h instead"
 #endif
 

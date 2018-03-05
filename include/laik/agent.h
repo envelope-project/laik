@@ -21,6 +21,10 @@
 #ifndef _LAIK_AGENT_H_
 #define _LAIK_AGENT_H_
 
+#ifndef _LAIK_H_INSIDE_
+#error "include laik.h instead"
+#endif
+
 #define MAX_UID_LENGTH 64
 #define MAX_FAILED_BUFFER 32
 
