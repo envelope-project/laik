@@ -159,7 +159,7 @@ void laik_set_space_name(Laik_Space* s, char* n);
 void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1);
 
 // are the indexes equal?
-bool laik_index_isEqual(int dims, Laik_Index* i1, Laik_Index* i2);
+bool laik_index_isEqual(int dims, const Laik_Index* i1, const Laik_Index* i2);
 
 // is the given slice empty?
 bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
@@ -171,16 +171,16 @@ Laik_Slice* laik_slice_intersect(int dims, const Laik_Slice* s1, const Laik_Slic
 void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src);
 
 // is slice <slc1> contained in <slc2>?
-bool laik_slice_within_slice(int dims, Laik_Slice* slc1, Laik_Slice* slc2);
+bool laik_slice_within_slice(int dims, const Laik_Slice* slc1, const Laik_Slice* slc2);
 
 // is slice within space borders?
-bool laik_slice_within_space(Laik_Slice* slc, Laik_Space* sp);
+bool laik_slice_within_space(const Laik_Slice* slc, const Laik_Space* sp);
 
 // are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 
 // number of indexes in the slice
-uint64_t laik_slice_size(int dims, Laik_Slice* s);
+uint64_t laik_slice_size(int dims, const Laik_Slice* s);
 
 // get the index slice covered by the space
 const Laik_Slice* laik_space_asslice(Laik_Space* space);

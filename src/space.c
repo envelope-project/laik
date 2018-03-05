@@ -35,7 +35,7 @@ void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2)
     res->i[2] = src1->i[2] + src2->i[2];
 }
 
-void laik_sub_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2)
+void laik_sub_index(Laik_Index* res, const Laik_Index* src1, const Laik_Index* src2)
 {
     res->i[0] = src1->i[0] - src2->i[0];
     res->i[1] = src1->i[1] - src2->i[1];
@@ -43,7 +43,7 @@ void laik_sub_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2)
 }
 
 
-bool laik_index_isEqual(int dims, Laik_Index* i1, Laik_Index* i2)
+bool laik_index_isEqual(int dims, const Laik_Index* i1, const Laik_Index* i2)
 {
     if (i1->i[0] != i2->i[0]) return false;
     if (dims == 1) return true;
@@ -124,7 +124,7 @@ void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src)
 }
 
 // is slice <slc1> contained in <slc2>?
-bool laik_slice_within_slice(int dims, Laik_Slice* slc1, Laik_Slice* slc2)
+bool laik_slice_within_slice(int dims, const Laik_Slice* slc1, const Laik_Slice* slc2)
 {
     if (slc1->from.i[0] < slc1->to.i[0]) {
         // not empty
@@ -149,7 +149,7 @@ bool laik_slice_within_slice(int dims, Laik_Slice* slc1, Laik_Slice* slc2)
 }
 
 // is slice within space borders?
-bool laik_slice_within_space(Laik_Slice* slc, Laik_Space* sp)
+bool laik_slice_within_space(const Laik_Slice* slc, const Laik_Space* sp)
 {
     return laik_slice_within_slice(sp->dims, slc, &(sp->s));
 }
@@ -164,7 +164,7 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
 
 
 // number of indexes in the slice
-uint64_t laik_slice_size(int dims, Laik_Slice* s)
+uint64_t laik_slice_size(int dims, const Laik_Slice* s)
 {
     uint64_t size = s->to.i[0] - s->from.i[0];
     if (dims > 1) {

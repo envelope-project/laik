@@ -32,7 +32,7 @@
 void laik_log_IntList(int len, int* list);
 void laik_log_PrettyInt(uint64_t v);
 void laik_log_Space(Laik_Space* spc);
-void laik_log_Index(int dims, Laik_Index* idx);
+void laik_log_Index(int dims, const Laik_Index* idx);
 void laik_log_Slice(int dims, Laik_Slice* slc);
 void laik_log_Reduction(Laik_ReductionOperation op);
 void laik_log_DataFlow(Laik_DataFlow flow);

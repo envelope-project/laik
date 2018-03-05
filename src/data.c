@@ -12,9 +12,9 @@
 #include <stdio.h>
 
 // forward decl
-int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
+int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
                 char* buf, int size);
-int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
+int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
                   char* buf, int size);
 
 // initialize the LAIK data module, called from laik_new_instance
@@ -1274,7 +1274,7 @@ int64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
 }
 
 // pack/unpack routines for default layout
-int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
+int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
                   char* buf, int size)
 {
     int elemsize = m->data->elemsize;
@@ -1396,7 +1396,7 @@ int laik_pack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
     return count;
 }
 
-int laik_unpack_def(Laik_Mapping* m, Laik_Slice* s, Laik_Index* idx,
+int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
                     char* buf, int size)
 {
     int elemsize = m->data->elemsize;
