@@ -18,16 +18,9 @@
 #ifndef _LAIK_DEBUG_H_
 #define _LAIK_DEBUG_H_
 
-#ifndef _LAIK_H_
-#error "include laik.h instead"
-#endif
-
-// "laik.h" includes the following. This is just to make IDE happy
-#include "core.h"
-#include "space.h"
-#include "data.h"
-
-#include <stdint.h>
+#include <stdint.h>  // for uint64_t
+#include "data.h"    // for Laik_SwitchStat
+#include "space.h"   // for Laik_DataFlow, Laik_Index, Laik_Partitioning
 
 void laik_log_IntList(int len, int* list);
 void laik_log_PrettyInt(uint64_t v);

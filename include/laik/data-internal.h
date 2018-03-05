@@ -18,15 +18,9 @@
 #ifndef _LAIK_DATA_INTERNAL_H_
 #define _LAIK_DATA_INTERNAL_H_
 
-#ifndef _LAIK_INTERNAL_H_
-#error "include laik-internal.h instead"
-#endif
-
-// already included - this is just for an IDE to know about LAIK types
-#include "laik-internal.h"
-
-#include <stdbool.h>
-#include <stdint.h>
+#include <laik.h>     // for Laik_Mapping, Laik_Slice, Laik_Data, Laik_Switc...
+#include <stdbool.h>  // for bool
+#include <stdint.h>   // for uint64_t
 
 // kinds of data types supported by Laik
 typedef enum _Laik_TypeKind {

@@ -18,13 +18,8 @@
 #ifndef _LAIK_PROFILING_INTERNAL_
 #define _LAIK_PROFILING_INTERNAL_
 
-#ifndef _LAIK_INTERNAL_H_
-#error "include laik-internal.h instead"
-#endif
-
-#include "definitions.h"
-
-#include <stdbool.h>
+#include <stdbool.h>      // for bool
+#include "definitions.h"  // for MAX_FILENAME_LENGTH
 
 struct _Laik_Profiling_Controller
 {

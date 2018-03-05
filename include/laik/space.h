@@ -18,15 +18,9 @@
 #ifndef _LAIK_SPACE_H_
 #define _LAIK_SPACE_H_
 
-#ifndef _LAIK_H_
-#error "include laik.h instead"
-#endif
-
-// "laik.h" includes the following. This is just to make IDE happy
-#include "core.h"
-
-#include <stdint.h>
-#include <stdbool.h>
+#include <stdbool.h>  // for bool
+#include <stdint.h>   // for int64_t, uint64_t
+#include "core.h"     // for Laik_Group, Laik_Instance
 
 /*********************************************************************/
 /* LAIK Spaces - Distributed partitioning of index spaces

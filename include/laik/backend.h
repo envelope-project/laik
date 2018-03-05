@@ -24,16 +24,8 @@
 // Do not include this file in LAIK applications!
 //
 
-#ifndef _LAIK_INTERNAL_H_
-#error "include laik-internal.h instead"
-#endif
-
-// "laik-internal.h" includes all the following. This is just to make IDE happy
-#include "core.h"
-#include "space.h"
-#include "space-internal.h"
-#include "data-internal.h"
-#include <stdbool.h>
+#include <laik.h>     // for Laik_Transition, Laik_Data, Laik_Instance, Laik...
+#include <stdbool.h>  // for bool
 
 // specific to backend driver, result of preparing the execution of a transition
 typedef struct _Laik_TransitionPlan Laik_TransitionPlan;

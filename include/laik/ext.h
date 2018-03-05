@@ -19,10 +19,8 @@
 #ifndef _LAIK_EXT_H_
 #define _LAIK_EXT_H_
 
-#include <laik/agent.h>
-
-// "laik.h" includes the following. This is just to make IDE happy
-#include "core.h"
+#include "agent.h"  // for Laik_Agent, laik_agent_init
+#include "core.h"   // for Laik_Instance
 
 // LAIK application-external interfaces
 //

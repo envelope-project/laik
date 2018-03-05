@@ -18,11 +18,7 @@
 #ifndef _LAIK_CORE_H_
 #define _LAIK_CORE_H_
 
-#ifndef _LAIK_H_
-#error "include laik.h instead"
-#endif
-
-#include <stdbool.h>
+#include <stdbool.h>  // for bool
 
 // configuration for a LAIK instance (there may be multiple)
 typedef struct _Laik_Instance Laik_Instance;
