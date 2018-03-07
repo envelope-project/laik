@@ -194,13 +194,46 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
                                          Laik_Group* g, Laik_Space* space,
                                          Laik_Partitioning* otherP);
 
+// give an access phase a name, for debug output
+void laik_partitioning_set_name(Laik_Partitioning* p, char* n);
+
+
 // migrate partitioning to new group without changing borders
 // - added tasks get empty partitions
 // - removed tasks must have empty partitiongs
 void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
 
+// get number of slices for this task
+int laik_my_slicecount(Laik_Partitioning* p);
+
 // how many mappings does the partitioning for this process ask for?
 int laik_my_mapcount(Laik_Partitioning* p);
+
+// get number of slices within a given mapping for this task
+int laik_my_mapslicecount(Laik_Partitioning* p, int mapNo);
+
+// get slice number <n> from the slices for this task
+Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n);
+
+// get slice number <n> within mapping <mapNo> from the slices for this task
+Laik_TaskSlice* laik_my_mapslice(Laik_Partitioning* p, int mapNo, int n);
+
+// get borders of slice number <n> from the 1d slices for this task
+Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
+                                 int64_t* from, int64_t* to);
+
+// get borders of slice number <n> from the 2d slices for this task
+Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
+                                 int64_t* x1, int64_t* x2,
+                                 int64_t* y1, int64_t* y2);
+
+// get borders of slice number <n> from the 3d slices for this task
+Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
+                                 int64_t* x1, int64_t* x2,
+                                 int64_t* y1, int64_t* y2,
+                                 int64_t* z1, int64_t* z2);
+
+
 
 // Partitioner API:
 // applications can write their own partitioner algorithms

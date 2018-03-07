@@ -718,7 +718,7 @@ void laik_set_slice_data(Laik_TaskSlice* ts, void* data)
 }
 
 
-// give a partitioning a name, for debug output
+// give an access phase a name, for debug output
 void laik_set_accessphase_name(Laik_AccessPhase* ap, char* n)
 {
     ap->name = strdup(n);
