@@ -1152,19 +1152,19 @@ void laik_switchto_phase(Laik_Data* d,
 // switch to another data flow, keep partitioning
 void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow)
 {
-    if (!d->activeAccessPhase) {
+    if (!d->activePartitioning) {
         // makes no sense without partitioning
         laik_panic("laik_switch_flow without active partitioning!");
     }
-    laik_switchto_phase(d, d->activeAccessPhase, toFlow);
+    laik_switchto_partitioning(d, d->activePartitioning, toFlow);
 }
 
 
 // get slice number <n> in own partition
 Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n)
 {
-    if (d->activeAccessPhase == 0) return 0;
-    return laik_phase_my_slice(d->activeAccessPhase, n);
+    if (d->activePartitioning == 0) return 0;
+    return laik_my_slice(d->activePartitioning, n);
 }
 
 Laik_AccessPhase* laik_switchto_new_phase(Laik_Data* d, Laik_Group* g,
@@ -1204,7 +1204,7 @@ void laik_fill_double(Laik_Data* d, double v)
 
     laik_map_def1(d, (void**) &base, &count);
     // TODO: partitioning can have multiple slices
-    assert(laik_phase_my_slicecount(d->activeAccessPhase) == 1);
+    assert(laik_my_slicecount(d->activePartitioning) == 1);
     for (i = 0; i < count; i++)
         base[i] = v;
 }
@@ -1593,7 +1593,7 @@ Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
         return 0;
     }
 
-    int n = laik_phase_my_mapcount(d->activeAccessPhase);
+    int n = laik_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
                                 "but partition with %d slices!", n);
@@ -1623,7 +1623,7 @@ Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
         return 0;
     }
 
-    int n = laik_phase_my_mapcount(d->activeAccessPhase);
+    int n = laik_my_mapcount(d->activePartitioning);
     if (n > 1)
         laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
                                 "but partition with %d slices!", n);
