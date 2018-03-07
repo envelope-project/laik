@@ -53,8 +53,8 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 void runAllPartitioner(Laik_Partitioner* pr,
                        Laik_Partitioning* p, Laik_Partitioning* oldP)
 {
-    (void) pr;    /* FIXME: Why have this parameter if it's never used */
-    (void) oldP; /* FIXME: Why have this parameter if it's never used */
+    (void) pr;   /* unused parameter of interface signature */
+    (void) oldP; /* unused parameter of interface signature */
 
     Laik_Space* space = p->space;
     Laik_Group* g = p->group;
@@ -74,8 +74,8 @@ Laik_Partitioner* laik_new_all_partitioner()
 void runMasterPartitioner(Laik_Partitioner* pr,
                           Laik_Partitioning* p, Laik_Partitioning* oldP)
 {
-    (void) pr;   /* FIXME: Why have this parameter if it's never used */
-    (void) oldP; /* FIXME: Why have this parameter if it's never used */
+    (void) pr;   /* unused parameter of interface signature */
+    (void) oldP; /* unused parameter of interface signature */
 
     // only full slice for master
     laik_append_slice(p, 0, &(p->space->s), 0, 0);
@@ -113,7 +113,8 @@ void runCopyPartitioner(Laik_Partitioner* pr,
         Laik_Slice slc = p->space->s;
         slc.from.i[toDim] = otherP->tslice[i].s.from.i[fromDim];
         slc.to.i[toDim] = otherP->tslice[i].s.to.i[fromDim];
-        laik_append_slice(p, otherP->tslice[i].task, &slc, 0, 0);
+        laik_append_slice(p, otherP->tslice[i].task, &slc,
+                          otherP->tslice[i].tag, 0);
     }
 }
 
@@ -143,8 +144,6 @@ void runCornerHaloPartitioner(Laik_Partitioner* pr,
     assert(otherP->group == p->group); // must use same task group
     assert(otherP->space == p->space);
 
-    int tag = 1; // TODO: make it a parameter
-
     int dims = p->space->dims;
     int d = *((int*) pr->data);
 
@@ -172,7 +171,8 @@ void runCornerHaloPartitioner(Laik_Partitioner* pr,
                     slc.to.i[2] = to->i[2] + d;
             }
         }
-        laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
+        laik_append_slice(p, otherP->tslice[i].task, &slc,
+                          otherP->tslice[i].tag, 0);
     }
 }
 
@@ -190,7 +190,9 @@ Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth)
 // halo partitioner: extend borders of another partitioning
 // excluding corners, e.g. for 5-point 2d stencil.
 // this creates multiple slices for each original slice, and uses tags
-// to mark the halos of a slice to go into same mapping
+// to mark the halos of a slice to go into same mapping. For this, the
+// tags of original slices is used, which are expected >0 to allow for
+// specification of slice groups (tag 0 is special, produces a group per slice)
 void runHaloPartitioner(Laik_Partitioner* pr,
                         Laik_Partitioning* p, Laik_Partitioning* otherP)
 {
@@ -200,25 +202,25 @@ void runHaloPartitioner(Laik_Partitioner* pr,
     int dims = p->space->dims;
     int d = *((int*) pr->data);
 
-    int nextTag = 1;
-
     // take all slices and extend them if possible
     for(int i = 0; i < otherP->count; i++) {
         Laik_Slice slc;
         Laik_Slice sp = p->space->s;
+        int tag = otherP->tslice[i].tag;
+        assert(tag > 0); // tag must be >0 to specify slice groups
 
         slc = otherP->tslice[i].s;
-        laik_append_slice(p, otherP->tslice[i].task, &slc, nextTag, 0);
+        laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
         if (slc.from.i[0] > sp.from.i[0] + d) {
             slc.to.i[0] = slc.from.i[0];
             slc.from.i[0] -= d;
-            laik_append_slice(p, otherP->tslice[i].task, &slc, nextTag, 0);
+            laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
         }
         slc = otherP->tslice[i].s;
         if (slc.to.i[0] < sp.to.i[0] - d) {
             slc.from.i[0] = slc.to.i[0];
             slc.to.i[0] += d;
-            laik_append_slice(p, otherP->tslice[i].task, &slc, nextTag, 0);
+            laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
         }
 
         if (dims > 1) {
@@ -226,13 +228,13 @@ void runHaloPartitioner(Laik_Partitioner* pr,
             if (slc.from.i[1] > sp.from.i[1] + d) {
                 slc.to.i[1] = slc.from.i[1];
                 slc.from.i[1] -= d;
-                laik_append_slice(p, otherP->tslice[i].task, &slc, nextTag, 0);
+                laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
             }
             slc = otherP->tslice[i].s;
             if (slc.to.i[1] < sp.to.i[1] - d) {
                 slc.from.i[1] = slc.to.i[1];
                 slc.to.i[1] += d;
-                laik_append_slice(p, otherP->tslice[i].task, &slc, nextTag, 0);
+                laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
             }
 
             if (dims > 2) {
@@ -240,18 +242,16 @@ void runHaloPartitioner(Laik_Partitioner* pr,
                 if (slc.from.i[2] > sp.from.i[2] + d) {
                     slc.to.i[2] = slc.from.i[2];
                     slc.from.i[2] -= d;
-                    laik_append_slice(p, otherP->tslice[i].task, &slc, nextTag, 0);
+                    laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
                 }
                 slc = otherP->tslice[i].s;
                 if (slc.to.i[2] < sp.to.i[2] - d) {
                     slc.from.i[2] = slc.to.i[2];
                     slc.to.i[2] += d;
-                    laik_append_slice(p, otherP->tslice[i].task, &slc, nextTag, 0);
+                    laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
                 }
             }
         }
-
-        nextTag++; // could reset to 1 when going to next task
     }
 }
 

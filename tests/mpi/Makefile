@@ -6,7 +6,7 @@ TESTS= \
     test-spmv2-shrink test-spmv2-shrink-inc \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d test-jac3dr \
-    test-jac2d-noc test-jac3d-noc \
+    test-jac2d-noc test-jac3d-noc test-jac3dr-noc \
     test-markov test-markov2 \
     test-propagation2d
 
@@ -67,9 +67,11 @@ test-jac3dr:
 	$(SDIR)./test-jac3dr-100-mpi-1.sh
 	$(SDIR)./test-jac3dr-100-mpi-4.sh
 
-
 test-jac3d-noc:
 	$(SDIR)./test-jac3dn-100-mpi-4.sh
+
+test-jac3dr-noc:
+	$(SDIR)./test-jac3dnr-100-mpi-4.sh
 
 test-markov:
 	$(SDIR)./test-markov-20-4-mpi-1.sh
