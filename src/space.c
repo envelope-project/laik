@@ -526,10 +526,7 @@ int laik_phase_my_slicecount(Laik_AccessPhase* ap)
     if (!ap->hasValidPartitioning)
         laik_phase_run_partitioner(ap);
 
-    int myid = ap->group->myid;
-    if (myid < 0) return 0; // this task is not part of task group
-    assert(myid < ap->group->size);
-    return ap->partitioning->off[myid+1] - ap->partitioning->off[myid];
+    return laik_my_slicecount(ap->partitioning);
 }
 
 // get number of mappings of this task
@@ -538,14 +535,7 @@ int laik_phase_my_mapcount(Laik_AccessPhase* ap)
     if (!ap->hasValidPartitioning)
         laik_phase_run_partitioner(ap);
 
-    int myid = ap->group->myid;
-    if (myid < 0) return 0; // this task is not part of task group
-    assert(myid < ap->group->size);
-    int sCount = ap->partitioning->off[myid+1] - ap->partitioning->off[myid];
-    if (sCount == 0) return 0;
-
-    // map number of my last slice, incremented by one to get count
-    return ap->partitioning->tslice[ap->partitioning->off[myid+1] - 1].mapNo + 1;
+    return laik_my_mapcount(ap->partitioning);
 }
 
 int laik_phase_my_mapslicecount(Laik_AccessPhase* ap, int mapNo)
@@ -553,16 +543,7 @@ int laik_phase_my_mapslicecount(Laik_AccessPhase* ap, int mapNo)
     if (!ap->hasValidPartitioning)
         laik_phase_run_partitioner(ap);
 
-    int myid = ap->group->myid;
-    if (myid < 0) return 0; // this task is not part of task group
-
-    // lazily calculate my map offsets
-    Laik_Partitioning* p = ap->partitioning;
-    if (p->myMapCount < 0)
-        laik_updateMyMapOffsets(p);
-
-    if (mapNo >= p->myMapCount) return 0;
-    return p->myMapOff[mapNo + 1] - p->myMapOff[mapNo];
+    return laik_my_mapslicecount(ap->partitioning, mapNo);
 }
 
 int laik_tslice_get_mapNo(Laik_TaskSlice* ts)
@@ -597,15 +578,7 @@ Laik_TaskSlice* laik_phase_my_slice(Laik_AccessPhase* ap, int n)
     if (!ap->hasValidPartitioning)
         laik_phase_run_partitioner(ap);
 
-    int myid = ap->group->myid;
-    if (myid < 0) return 0; // this task is not part of task group
-    int o = ap->partitioning->off[myid] + n;
-    if (o >= ap->partitioning->off[myid+1]) {
-        // slice <n> is invalid
-        return 0;
-    }
-    assert(ap->partitioning->tslice[o].task == myid);
-    return (Laik_TaskSlice*) &(ap->partitioning->tslice[o]);
+    return laik_my_slice(ap->partitioning, n);
 }
 
 Laik_TaskSlice* laik_phase_my_mapslice(Laik_AccessPhase* ap, int mapNo, int n)
@@ -613,72 +586,26 @@ Laik_TaskSlice* laik_phase_my_mapslice(Laik_AccessPhase* ap, int mapNo, int n)
     if (!ap->hasValidPartitioning)
         laik_phase_run_partitioner(ap);
 
-    int myid = ap->group->myid;
-    if (myid < 0) return 0; // this task is not part of task group
-
-    // lazily calculate my map offsets
-    Laik_Partitioning* p = ap->partitioning;
-    if (p->myMapCount < 0)
-        laik_updateMyMapOffsets(p);
-
-    // does map with mapNo exist?
-    if (mapNo >= p->myMapCount) return 0;
-
-    int o = p->myMapOff[mapNo] + n;
-    if (o >= p->myMapOff[mapNo + 1]) {
-        // slice <n> is invalid
-        return 0;
-    }
-    assert(p->tslice[o].task == myid);
-    assert(p->tslice[o].mapNo == mapNo);
-    return (Laik_TaskSlice*) &(p->tslice[o]);
+    return laik_my_mapslice(ap->partitioning, mapNo, n);
 }
 
 Laik_TaskSlice* laik_phase_myslice_1d(Laik_AccessPhase* ap, int n,
                                       int64_t* from, int64_t* to)
 {
-    assert(ap->space->dims == 1);
-    Laik_TaskSlice* ts = laik_phase_my_slice(ap, n);
-    if (ts == 0) {
-        if (from) *from = 0;
-        if (to) *to = 0;
-        return 0;
-    }
+    if (!ap->hasValidPartitioning)
+        laik_phase_run_partitioner(ap);
 
-    switch(ts->type) {
-    case TS_Generic: {
-        Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
-        if (from) *from = tsg->s.from.i[0];
-        if (to) *to = tsg->s.to.i[0];
-        break;
-    }
-    case TS_Single1d: {
-        Laik_TaskSlice_Single1d* tss = (Laik_TaskSlice_Single1d*) ts;
-        if (from) *from = tss->idx;
-        if (to) *to = tss->idx + 1;
-        break;
-    }
-    default:
-        assert(0);
-    }
-
-    return ts;
+    return laik_my_slice_1d(ap->partitioning, n, from, to);
 }
 
 Laik_TaskSlice* laik_phase_myslice_2d(Laik_AccessPhase* ap, int n,
                                       int64_t* x1, int64_t* x2,
                                       int64_t* y1, int64_t* y2)
 {
-    assert(ap->space->dims == 2);
-    Laik_TaskSlice* ts = laik_phase_my_slice(ap, n);
-    assert((ts == 0) || (ts->type == TS_Generic));
-    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
-    if (x1) *x1 = ts ? tsg->s.from.i[0] : 0;
-    if (x2) *x2 = ts ? tsg->s.to.i[0] : 0;
-    if (y1) *y1 = ts ? tsg->s.from.i[1] : 0;
-    if (y2) *y2 = ts ? tsg->s.to.i[1] : 0;
+    if (!ap->hasValidPartitioning)
+        laik_phase_run_partitioner(ap);
 
-    return ts;
+    return laik_my_slice_2d(ap->partitioning, n, x1, x2, y1, y2);
 }
 
 Laik_TaskSlice* laik_phase_myslice_3d(Laik_AccessPhase* ap, int n,
@@ -686,18 +613,10 @@ Laik_TaskSlice* laik_phase_myslice_3d(Laik_AccessPhase* ap, int n,
                                       int64_t* y1, int64_t* y2,
                                       int64_t* z1, int64_t* z2)
 {
-    assert(ap->space->dims == 3);
-    Laik_TaskSlice* ts = laik_phase_my_slice(ap, n);
-    assert((ts == 0) || (ts->type == TS_Generic));
-    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
-    if (x1) *x1 = ts ? tsg->s.from.i[0] : 0;
-    if (x2) *x2 = ts ? tsg->s.to.i[0] : 0;
-    if (y1) *y1 = ts ? tsg->s.from.i[1] : 0;
-    if (y2) *y2 = ts ? tsg->s.to.i[1] : 0;
-    if (z1) *z1 = ts ? tsg->s.from.i[2] : 0;
-    if (z2) *z2 = ts ? tsg->s.to.i[2] : 0;
+    if (!ap->hasValidPartitioning)
+        laik_phase_run_partitioner(ap);
 
-    return ts;
+    return laik_my_slice_3d(ap->partitioning, n, x1, x2, y1, y2, z1, z2);
 }
 
 
