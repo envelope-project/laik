@@ -1633,6 +1633,16 @@ laik_calc_transition(Laik_Space* space,
     }
     assert(tList == ((char*)t) + tsize);
 
+    if (laik_log_begin(1)) {
+        laik_log_append("transition (");
+        laik_log_DataFlow(fromFlow);
+        laik_log_append("/'%s' => ", fromP ? fromP->name : "(none)");
+        laik_log_DataFlow(toFlow);
+        laik_log_append("/'%s'): ", toP ? toP->name : "(none)");
+        laik_log_Transition(t);
+        laik_log_flush(0);
+    }
+
     return t;
 }
 

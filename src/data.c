@@ -1047,21 +1047,6 @@ void laik_switchto_partitioning(Laik_Data* d,
                                               d->activeFlow,
                                               toP, toFlow);
 
-    if (laik_log_begin(1)) {
-        laik_log_append("transition (data '%s', partition '%s'):\n",
-                        d->name, ap ? ap->name : "(none)");
-        laik_log_append("  from ");
-        laik_log_DataFlow(d->activeFlow);
-        laik_log_append(", ");
-        laik_log_Partitioning(d->activePartitioning);
-        laik_log_append("\n  to ");
-        laik_log_DataFlow(toFlow);
-        laik_log_append(", ");
-        laik_log_Partitioning(toP);
-        laik_log_append(": ");
-        laik_log_Transition(t);
-        laik_log_flush(0);
-    }
 #if 0 // don't pollute log level 2, should introduce more...
     else
         laik_log(2, "switch in '%s' (data '%s'): "
