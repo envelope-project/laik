@@ -1008,6 +1008,25 @@ void laik_reservation_alloc(Laik_Reservation* res)
     }
 }
 
+// execute a previously calculated transition on a data container
+void laik_exec_transition(Laik_Data* d, Laik_Transition* t)
+{
+    // we only can execute transtion if start state in transition is correct
+    if ((d->activeFlow != t->fromFlow) ||
+        (d->activePartitioning != t->fromPartitioning)) {
+        laik_panic("laik_exec_transition starts in wrong phase!");
+        exit(1);
+    }
+
+    Laik_MappingList* toList = prepareMaps(d, t->toPartitioning, 0);
+    doTransition(d, t, d->activeMappings, toList);
+
+    // set new mapping/partitioning active
+    d->activePartitioning = t->toPartitioning;
+    d->activeFlow = t->toFlow;
+    d->activeMappings = toList;
+}
+
 // switch to new partitioning borders
 // new flow is derived from previous flow when set to LAIK_DF_Previous
 void laik_switchto_partitioning(Laik_Data* d,
@@ -1046,15 +1065,6 @@ void laik_switchto_partitioning(Laik_Data* d,
                                               d->activePartitioning,
                                               d->activeFlow,
                                               toP, toFlow);
-
-#if 0 // don't pollute log level 2, should introduce more...
-    else
-        laik_log(2, "switch in '%s' (data '%s'): "
-                 "%d local, %d init, %d send, %d recv, %d red",
-                 part ? part->name : "(none)", d->name,
-                 t->localCount, t->initCount,
-                 t->sendCount, t->recvCount, t->redCount);
-#endif
 
     doTransition(d, t, d->activeMappings, toList);
 

@@ -118,7 +118,8 @@ void laik_reservation_free(Laik_Reservation* r);
 // when switching to a partitioning, it will use space from reservation
 void laik_data_use_reservation(Laik_Data* d, Laik_Reservation* r);
 
-
+// execute a previously calculated transition on a data container
+void laik_exec_transition(Laik_Data* d, Laik_Transition* t);
 
 // switch to new partitioning (new flow is derived from previous flow)
 void laik_switchto_partitioning(Laik_Data* d,
