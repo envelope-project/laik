@@ -94,6 +94,7 @@ int main(int argc, char* argv[])
     bool do_profiling = false;
     bool do_sum = false;
     bool do_reservation = false;
+    bool do_exec = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
@@ -101,6 +102,7 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'p') do_profiling = true;
         if (argv[arg][1] == 's') do_sum = true;
         if (argv[arg][1] == 'r') do_reservation = true;
+        if (argv[arg][1] == 'e') do_exec = true;
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
@@ -108,6 +110,7 @@ int main(int argc, char* argv[])
                    " -p : write profiling data to 'jac3d_profiling.txt'\n"
                    " -s : print value sum at end (warning: sum done at master)\n"
                    " -r : do space reservation before iteration loop\n"
+                   " -e : execute transitions calculated before iteration loop\n"
                    " -h : print this help text and exit\n",
                    argv[0]);
             exit(1);
@@ -161,6 +164,8 @@ int main(int argc, char* argv[])
     // now calculate all partitionings we need for current <world> group
     paWrite = laik_new_partitioning(prWrite, world, space, 0);
     paRead  = laik_new_partitioning(prRead, world, space, paWrite);
+    laik_partitioning_set_name(paWrite, "paWrite");
+    laik_partitioning_set_name(paRead, "paRead");
 
     if (do_reservation) {
         // reserve and pre-allocate memory for data1/2
@@ -181,6 +186,17 @@ int main(int argc, char* argv[])
         laik_reservation_add(r2, paWrite);
         laik_reservation_alloc(r2);
         laik_data_use_reservation(data2, r2);
+    }
+
+    Laik_Transition* toHaloR = 0;
+    Laik_Transition* toExclW = 0;
+    if (do_exec) {
+        toHaloR = laik_calc_transition(space,
+                                       paWrite, LAIK_DF_CopyOut,
+                                       paRead, LAIK_DF_CopyIn);
+        toExclW = laik_calc_transition(space,
+                                       paRead, LAIK_DF_CopyIn,
+                                       paWrite, LAIK_DF_CopyOut);
     }
 
     // for global sum, used for residuum
@@ -210,6 +226,9 @@ int main(int argc, char* argv[])
     setBoundary(size, paWrite, dWrite);
     laik_log(2, "Init done\n");
 
+    // set data2 to read to make exec_transtion happy (this is a no-op)
+    laik_switchto_partitioning(dRead,  paRead,  LAIK_DF_CopyIn);
+
     // for statistics (with LAIK_LOG=2)
     double t, t1 = laik_wtime(), t2 = t1;
     int last_iter = 0;
@@ -224,8 +243,15 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto_partitioning(dRead,  paRead,  LAIK_DF_CopyIn);
-        laik_switchto_partitioning(dWrite, paWrite, LAIK_DF_CopyOut);
+        if (do_exec) {
+            laik_exec_transition(dRead, toHaloR);
+            laik_exec_transition(dWrite, toExclW);
+        }
+        else {
+            laik_switchto_partitioning(dRead,  paRead,  LAIK_DF_CopyIn);
+            laik_switchto_partitioning(dWrite, paWrite, LAIK_DF_CopyOut);
+        }
+
         laik_map_def1_3d(dRead,  (void**) &baseR,
                          &zsizeR, &zstrideR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_3d(dWrite, (void**) &baseW,

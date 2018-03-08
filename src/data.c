@@ -1011,6 +1011,18 @@ void laik_reservation_alloc(Laik_Reservation* res)
 // execute a previously calculated transition on a data container
 void laik_exec_transition(Laik_Data* d, Laik_Transition* t)
 {
+    if (laik_log_begin(1)) {
+        laik_log_append("exec transition (");
+        laik_log_DataFlow(t->fromFlow);
+        laik_log_append("/'%s' => ", t->fromPartitioning ? t->fromPartitioning->name : "(none)");
+        laik_log_DataFlow(t->toFlow);
+        laik_log_append("/'%s') on data '%s' (in ",
+                        t->toPartitioning ? t->toPartitioning->name : "(none)", d->name);
+        laik_log_DataFlow(d->activeFlow);
+        laik_log_flush("/'%s')",
+                        d->activePartitioning ? d->activePartitioning->name : "(none)");
+    }
+
     // we only can execute transtion if start state in transition is correct
     if ((d->activeFlow != t->fromFlow) ||
         (d->activePartitioning != t->fromPartitioning)) {
