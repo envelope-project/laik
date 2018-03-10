@@ -3,6 +3,8 @@ if (failure-simulator)
     find_program (protoc "protoc-c")
 
     if (TARGET "libprotobuf-c" AND protoc)
+        message (STATUS "Dependency check for option 'failure-simulator' succeeded, building!")
+
         compile_protobuf_module ("laik_ext")
 
         add_library ("laikfti" SHARED
