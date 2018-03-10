@@ -45,6 +45,8 @@ if (openmp-examples)
     find_package (OpenMP)
 
     if (OPENMP_FOUND)
+        message (STATUS "Dependency check for option 'openmp-examples' succeeded, building!")
+
         foreach (example
             "spmv2"
         )

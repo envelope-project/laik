@@ -40,6 +40,8 @@ if (mpi-backend)
     endif ()
 
     if (TARGET "mpi")
+        message (STATUS "Dependency check for option 'mpi-backend' succeeded, building!")
+
         target_sources ("laik"
             PRIVATE "backend-mpi.c"
         )

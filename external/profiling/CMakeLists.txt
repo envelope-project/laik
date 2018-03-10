@@ -2,6 +2,8 @@ if (profiling-agent)
     find_pkgconfig ("papi")
 
     if (TARGET "papi")
+        message (STATUS "Dependency check for option 'profiling-agent' succeeded, building!")
+
         add_library (profileagent SHARED
             "profilagent.c"
         )

@@ -2,6 +2,8 @@ if (mosquitto-agent)
     find_library (mosquitto "mosquitto")
 
     if (mosquitto)
+        message (STATUS "Dependency check for option 'mosquitto-agent' succeeded, building!")
+
         add_library (mqttagent SHARED
             "mqttagent.c"
             "mqttclient.c"
