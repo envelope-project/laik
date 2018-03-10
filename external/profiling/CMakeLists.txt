@@ -15,7 +15,7 @@ if (profiling-agent)
             PRIVATE "papi"
         )
     elseif (skip-missing)
-        message (WARNING "Dependency check for option 'profiling-agent' failed, skipping!")
+        message (STATUS "Dependency check for option 'profiling-agent' failed, skipping!")
     else ()
         message (FATAL_ERROR "Dependency check for option 'profiling-agent' failed, stopping!")
     endif ()

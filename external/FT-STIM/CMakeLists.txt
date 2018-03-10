@@ -18,7 +18,7 @@ if (failure-simulator)
             PRIVATE "libprotobuf-c"
         )
     elseif (skip-missing)
-        message (WARNING "Dependency check for option 'failure-simulator' failed, skipping!")
+        message (STATUS "Dependency check for option 'failure-simulator' failed, skipping!")
     else ()
         message (FATAL_ERROR "Dependency check for option 'failure-simulator' failed, stopping!")
     endif ()

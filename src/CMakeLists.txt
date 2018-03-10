@@ -52,7 +52,7 @@ if (mpi-backend)
             PRIVATE "mpi"
         )
     elseif (skip-missing)
-        message (WARNING "Dependency check for option 'mpi-backend' failed, skipping!")
+        message (STATUS "Dependency check for option 'mpi-backend' failed, skipping!")
     else ()
         message (FATAL_ERROR "Dependency check for option 'mpi-backend' failed, stopping!")
     endif ()
