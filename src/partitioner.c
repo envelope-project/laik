@@ -200,7 +200,7 @@ void runHaloPartitioner(Laik_Partitioner* pr,
     assert(otherP->space == p->space);
 
     int dims = p->space->dims;
-    int d = *((int*) pr->data);
+    int depth = *((int*) pr->data);
 
     // take all slices and extend them if possible
     for(int i = 0; i < otherP->count; i++) {
@@ -211,43 +211,43 @@ void runHaloPartitioner(Laik_Partitioner* pr,
 
         slc = otherP->tslice[i].s;
         laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
-        if (slc.from.i[0] > sp.from.i[0] + d) {
+        if (slc.from.i[0] > sp.from.i[0] + depth) {
             slc.to.i[0] = slc.from.i[0];
-            slc.from.i[0] -= d;
+            slc.from.i[0] -= depth;
             laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
         }
         slc = otherP->tslice[i].s;
-        if (slc.to.i[0] < sp.to.i[0] - d) {
+        if (slc.to.i[0] < sp.to.i[0] - depth) {
             slc.from.i[0] = slc.to.i[0];
-            slc.to.i[0] += d;
+            slc.to.i[0] += depth;
             laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
         }
 
         if (dims > 1) {
             slc = otherP->tslice[i].s;
-            if (slc.from.i[1] > sp.from.i[1] + d) {
+            if (slc.from.i[1] > sp.from.i[1] + depth) {
                 slc.to.i[1] = slc.from.i[1];
-                slc.from.i[1] -= d;
+                slc.from.i[1] -= depth;
                 laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
             }
             slc = otherP->tslice[i].s;
-            if (slc.to.i[1] < sp.to.i[1] - d) {
+            if (slc.to.i[1] < sp.to.i[1] - depth) {
                 slc.from.i[1] = slc.to.i[1];
-                slc.to.i[1] += d;
+                slc.to.i[1] += depth;
                 laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
             }
 
             if (dims > 2) {
                 slc = otherP->tslice[i].s;
-                if (slc.from.i[2] > sp.from.i[2] + d) {
+                if (slc.from.i[2] > sp.from.i[2] + depth) {
                     slc.to.i[2] = slc.from.i[2];
-                    slc.from.i[2] -= d;
+                    slc.from.i[2] -= depth;
                     laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
                 }
                 slc = otherP->tslice[i].s;
-                if (slc.to.i[2] < sp.to.i[2] - d) {
+                if (slc.to.i[2] < sp.to.i[2] - depth) {
                     slc.from.i[2] = slc.to.i[2];
-                    slc.to.i[2] += d;
+                    slc.to.i[2] += depth;
                     laik_append_slice(p, otherP->tslice[i].task, &slc, tag, 0);
                 }
             }
