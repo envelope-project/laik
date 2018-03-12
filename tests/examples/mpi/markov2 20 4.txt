@@ -1,4 +1,0 @@
-[1,0]<stdout>:Init Markov chain with 20 states, max fan-out 4.
-[1,0]<stdout>:Running 10 iterations.
-[1,0]<stdout>:All initial values set to 0.050000.
-[1,0]<stdout>:Result probs: p0 = 0.063492, p1 = 0.0418765, p2 = 0.0540845, Sum: 1.000000

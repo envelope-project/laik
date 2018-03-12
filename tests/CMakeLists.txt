@@ -1,40 +1,19 @@
-# Run the example tests for all enabled backeds
 foreach (test
-    "jac1d;100"
-    "jac1d;1000;50;10"
-    "jac2d;-s;1000"
-    "jac2d;-s;-n;1000"
-    "jac3d;-s;100"
-    "jac3d;-s;-n;100"
-    "markov2"
-    "markov;20;4"
-    "markov2;20;4"
-    "propagation2d;10;10"
-    "spmv;1000"
-    "spmv2;10;3000"
-    "spmv2;-r;10;3000"
-    "spmv2;-s;2;10;3000"
-    "spmv2;-s;2;-i;10;3000"
-    "spmv;4000"
-    "vsum"
-    "vsum2"
-    "vsum3"
+    "test-jac1d-1000-repart-single.sh"
+    "test-jac1d-100-single.sh"
+    "test-jac2d-1000-single.sh"
+    "test-jac3d-100-single.sh"
+    "test-jac3dr-100-single.sh"
+    "test-markov-20-4-single.sh"
+    "test-markov2-20-4-single.sh"
+    "test-propagation2d-10-single.sh"
+    "test-spmv2r-single.sh"
+    "test-spmv2-single.sh"
+    "test-spmv-single.sh"
+    "test-vsum2-single.sh"
+    "test-vsum3-single.sh"
+    "test-vsum-log-single.sh"
+    "test-vsum-single.sh"
 )
-    # Determine a suitable test name automatically
-    string (REPLACE ";" "_" name "${test}")
-
-    # Get the compile definitions passed to liblaik
-    get_target_property (definitions "laik" "COMPILE_DEFINITIONS")
-
-    if ("USE_MPI" IN_LIST definitions)
-        add_test (
-            NAME    "mpi_${name}"
-            COMMAND "env" "LAIK_BACKEND=mpi" "${CMAKE_CURRENT_SOURCE_DIR}/run_example_test.sh" ${test}
-        )
-    endif ()
-
-    add_test (
-        NAME    "single_${name}"
-        COMMAND "env" "LAIK_BACKEND=single" "${CMAKE_CURRENT_SOURCE_DIR}/run_example_test.sh" ${test}
-    )
+    add_test ("single/${test}" "${CMAKE_CURRENT_SOURCE_DIR}/${test}")
 endforeach ()
