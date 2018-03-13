@@ -9,7 +9,7 @@ EXAMPLES = vsum vsum2 vsum3 spmv spmv2 \
     markov-ser markov markov2 \
     propagation1d propagation2d
 
-CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../include
+CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../include -I$(SDIR)../src
 LAIKLIB = $(abspath ../liblaik.so)
 
 all: $(EXAMPLES)
