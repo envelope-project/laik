@@ -45,7 +45,7 @@ $(LAIKLIB): $(OBJS)
 examples: $(LAIKLIB)
 	cd examples && $(MAKE)
 
-examples/c++:
+examples/c++: $(LAIKLIB)
 	cd examples/c++ && $(MAKE)
 
 # tests
