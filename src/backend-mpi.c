@@ -193,26 +193,219 @@ MPI_Datatype getMPIDataType(Laik_Data* d)
     return mpiDataType;
 }
 
+// temporarily developed within MPI backend
+// TODO: move outside
+
+typedef enum _Laik_ActionType {
+    LAIK_AT_Invalid = 0,
+
+    // send items from a buffer (or directly from container)
+    LAIK_AT_Send,
+    // receive items into a buffer (or directly into container)
+    LAIK_AT_Recv,
+
+    // pack items from container into buffer and send it afterwards
+    LAIK_AT_PackAndSend,
+    // pack items from container into buffer (must be followed by Send action)
+    LAIK_AT_Pack,
+
+    // receive items into buffer and unpack into container
+    LAIK_AT_RecvAndUnpack,
+    // unpack data from buffer into container (must have Recv action before)
+    LAIK_AT_Unpack,
+
+    // copy 1d data from container into buffer or from buffer into container
+    LAIK_AT_Copy
+
+} Laik_ActionType;
+
+typedef struct _Laik_Action {
+    int type;
+
+    int count;         // for Send, Recv, Copy, Reduce
+    void* buf;         // for Send, Recv, Pack, Unpack, Copy, Reduce
+    int peer_rank;     // for Send, Recv, PackAndSend, RecvAndUnpack
+    void *toBuf;       // for Copy
+
+    // points to slice given in operation of transition
+    Laik_Slice* slc;   // for Pack, Unpack, PackAndSend, RecvAndUnpack
+    // we can assume that allocation is fixed
+    Laik_Mapping* map; // for Pack, Unpack, PackAndSend, RecvAndUnpack
+
+    // subgroup defined in transition
+    int subgroup;      // for Reduce
+
+} Laik_Action;
+
 struct _Laik_TransitionPlan {
+    // TODO: allow to merge multiple transitions over various data containers
     Laik_Data* data;
     Laik_Transition* transition;
+
+    // allocations done for this plan
+    int bufCount, bufAllocCount;
+    char** buf;
+
+    // action sequence to trigger on execution
+    int actionCount, actionAllocCount;
+    Laik_Action* action;
+
+    // summary to update statistics
+    int sendCount, recvCount;
 };
-static Laik_TransitionPlan plan = {0,0};
+
+Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
+{
+    Laik_TransitionPlan* tp = malloc(sizeof(Laik_TransitionPlan));
+    tp->data = d;
+    tp->transition = t;
+
+    tp->bufCount = 0;
+    tp->bufAllocCount = 0;
+    tp->buf = 0;
+
+    tp->actionCount = 0;
+    tp->actionAllocCount = 0;
+    tp->action = 0;
+
+    tp->sendCount = 0;
+    tp->recvCount = 0;
+
+    return tp;
+}
+
+Laik_Action* laik_transplan_appendAction(Laik_TransitionPlan* tp)
+{
+    if (tp->actionCount == tp->actionAllocCount) {
+        // enlarge buffer
+        tp->actionAllocCount = (tp->actionCount + 20) * 2;
+        tp->action = realloc(tp->action,
+                             tp->actionAllocCount * sizeof(Laik_Action));
+        if (!tp->action) {
+            laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
+            exit(1); // not actually needed, laik_panic never returns
+        }
+    }
+    Laik_Action* a = &(tp->action[tp->actionCount]);
+    tp->actionCount++;
+
+    a->type = LAIK_AT_Invalid;
+    return a;
+}
+
+// allocates buffer and appends it list of buffers used for <tp>, returns off
+int laik_transplan_appendBuf(Laik_TransitionPlan* tp, int size)
+{
+    if (tp->bufCount == tp->bufAllocCount) {
+        // enlarge buffer
+        tp->bufAllocCount = (tp->bufCount + 20) * 2;
+        tp->buf = realloc(tp->buf, tp->bufAllocCount * sizeof(char**));
+        if (!tp->buf) {
+            laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
+            exit(1); // not actually needed, laik_panic never returns
+        }
+    }
+    char* buf = malloc(size);
+    if (buf) {
+        laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    int bufNo = tp->bufCount;
+    tp->buf[bufNo] = buf;
+    tp->bufCount++;
+
+    return bufNo;
+}
+
+void laik_transplan_recordSend(Laik_TransitionPlan* tp,
+                               void* buf, int count, int to)
+{
+    Laik_Action* a = laik_transplan_appendAction(tp);
+    a->type = LAIK_AT_Send;
+    a->buf = buf;
+    a->count = count;
+    a->peer_rank = to;
+
+    tp->sendCount += count;
+}
+
+void laik_transplan_recordRecv(Laik_TransitionPlan* tp,
+                               void* buf, int count, int from)
+{
+    Laik_Action* a = laik_transplan_appendAction(tp);
+    a->type = LAIK_AT_Recv;
+    a->buf = buf;
+    a->count = count;
+    a->peer_rank = from;
+
+    tp->recvCount += count;
+}
+
+void laik_transplan_recordPackAndSend(Laik_TransitionPlan* tp,
+                                      Laik_Mapping* fromMap, Laik_Slice* slc, int to)
+{
+    Laik_Action* a = laik_transplan_appendAction(tp);
+    a->type = LAIK_AT_PackAndSend;
+    a->map = fromMap;
+    a->slc = slc;
+    a->peer_rank = to;
+
+    a->count = laik_slice_size(tp->transition->space->dims, slc);
+    tp->sendCount += a->count;
+}
+
+void laik_transplan_free(Laik_TransitionPlan* tp)
+{
+    if (tp->buf) {
+        for(int i = 0; i < tp->bufCount; i++)
+            free(tp->buf[i]);
+        free(tp->buf);
+    }
+
+    free(tp->action);
+    free(tp);
+}
+
+static void exec_plan(Laik_TransitionPlan* tp, Laik_SwitchStat* ss)
+{
+    assert(tp->actionCount > 0);
+
+    // common for all MPI calls: tag, comm, datatype
+    int tag = 1;
+    MPIGroupData* gd = mpiGroupData(tp->transition->group);
+    assert(gd);
+    MPI_Comm comm = gd->comm;
+    MPI_Datatype datatype = getMPIDataType(tp->data);
+    MPI_Status st;
+
+    for(int i = 0; i < tp->actionCount; i++) {
+        Laik_Action* a = &(tp->action[i]);
+
+        switch(a->type) {
+        case LAIK_AT_Send:
+            MPI_Send(a->buf, a->count, datatype, a->peer_rank, tag, comm);
+            break;
+        case LAIK_AT_Recv:
+            MPI_Recv(a->buf, a->count, datatype, a->peer_rank, tag, comm, &st);
+            break;
+        default: assert(0);
+        }
+    }
+
+    ss->sentBytes += tp->sendCount * tp->data->elemsize;
+    ss->receivedBytes += tp->recvCount * tp->data->elemsize;
+}
+
 
 static Laik_TransitionPlan* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t)
 {
-    // only one prepared plan allowed in this backend driver (for now)
-    assert(plan.data == 0);
-
-    plan.data = d;
-    plan.transition = t;
-    return &plan;
+    Laik_TransitionPlan* tp = laik_transplan_new(d, t);
+    return tp;
 }
 
-static void laik_mpi_cleanup(Laik_TransitionPlan* p)
+static void laik_mpi_cleanup(Laik_TransitionPlan* tp)
 {
-    // the plan object <p> can be reused to prepare another plan
-    p->data = 0;
+    laik_transplan_free(tp);
 }
 
 static void laik_mpi_wait(Laik_TransitionPlan* p, int mapNo)
@@ -235,13 +428,26 @@ static bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo)
 }
 
 
+
 static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
                    Laik_MappingList* fromList, Laik_MappingList* toList)
 {
+    int record = 0;
+
     if (p) {
         assert(d == p->data);
         assert(t == p->transition);
+
+        // if we got a transition plan:
+        // - with actions provided: just execute the actions
+        // - without actions: just record MPI actions into plan (no exec)
+        if (p->actionCount > 0) {
+            exec_plan(p, d->stat);
+            return;
+        }
+        // record = 1;
     }
+
     Laik_Group* g = d->activePartitioning->group;
     int myid  = g->myid;
     int dims = d->space->dims;
@@ -313,6 +519,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 assert(t->subgroup[op->outputGroup].count < g->size);
             if (op->inputGroup >= 0)
                 assert(t->subgroup[op->inputGroup].count < g->size);
+
+            if (record) assert(0); // TODO
 
             // if neither input nor output are all-groups: manual reduction
             if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
@@ -600,6 +808,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                     }
                 }
 
+                if (record) assert(0); // TODO
+
                 MPI_Recv(toMap->base + from * d->elemsize, count,
                          mpiDataType, op->fromTask, 1, comm, &s);
             }
@@ -608,6 +818,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
 
                 // the used layout must support unpacking
                 assert(toMap->layout->unpack);
+
+                if (record) assert(0); // TODO
 
                 Laik_Index idx = op->slc.from;
                 count = 0;
@@ -626,8 +838,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 assert(count == laik_slice_size(dims, &(op->slc)));
             }
 
-
-            if (ss) {
+            if ((record == 0) && ss) {
                 ss->recvCount++;
                 ss->receivedBytes += count * d->elemsize;
             }
@@ -643,6 +854,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
             if (sendToHigher && (myid > task)) continue;
 
             if (laik_log_begin(1)) {
+                if (record) laik_log_append("Record ");
                 laik_log_append("MPI Send ");
                 laik_log_Slice(dims, &(op->slc));
                 laik_log_flush(" to T%d", op->toTask);
@@ -681,9 +893,15 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                          op->sliceNo, op->mapNo,
                          d->elemsize, (void*) fromMap->base);
 
-                // TODO: tag 1 may conflict with application
-                MPI_Send(fromMap->base + from * d->elemsize, count,
-                         mpiDataType, op->toTask, 1, comm);
+
+                if (record)
+                    laik_transplan_recordSend(p, fromMap->base + from * d->elemsize,
+                                              count, op->toTask);
+                else {
+                    // TODO: tag 1 may conflict with application
+                    MPI_Send(fromMap->base + from * d->elemsize, count,
+                             mpiDataType, op->toTask, 1, comm);
+                }
             }
             else {
                 // use temporary receive buffer and layout-specific unpack
@@ -691,24 +909,29 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 // the used layout must support packing
                 assert(fromMap->layout->pack);
 
-                Laik_Index idx = op->slc.from;
-                uint64_t size = laik_slice_size(dims, &(op->slc));
-                assert(size > 0);
-                int packed;
-                count = 0;
-                while(1) {
-                    packed = (fromMap->layout->pack)(fromMap, &(op->slc), &idx,
-                                                     packbuf, PACKBUFSIZE);
-                    assert(packed > 0);
-                    MPI_Send(packbuf, packed,
-                             mpiDataType, op->toTask, 1, comm);
-                    count += packed;
-                    if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
+                if (record)
+                    laik_transplan_recordPackAndSend(p, fromMap,
+                                                     &(op->slc), op->toTask);
+                else {
+                    Laik_Index idx = op->slc.from;
+                    uint64_t size = laik_slice_size(dims, &(op->slc));
+                    assert(size > 0);
+                    int packed;
+                    count = 0;
+                    while(1) {
+                        packed = (fromMap->layout->pack)(fromMap, &(op->slc), &idx,
+                                                         packbuf, PACKBUFSIZE);
+                        assert(packed > 0);
+                        MPI_Send(packbuf, packed,
+                                 mpiDataType, op->toTask, 1, comm);
+                        count += packed;
+                        if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
+                    }
+                    assert(count == size);
                 }
-                assert(count == size);
             }
 
-            if (ss) {
+            if ((record == 0) && ss) {
                 ss->sendCount++;
                 ss->sentBytes += count * d->elemsize;
             }
