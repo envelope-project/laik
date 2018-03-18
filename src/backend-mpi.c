@@ -26,8 +26,8 @@
 static void laik_mpi_finalize();
 static Laik_TransitionPlan* laik_mpi_prepare(Laik_Data*, Laik_Transition*);
 static void laik_mpi_cleanup(Laik_TransitionPlan*);
-static void laik_mpi_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
-                   Laik_MappingList* from, Laik_MappingList* to);
+static void laik_mpi_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* tp,
+                          Laik_MappingList* from, Laik_MappingList* to);
 static void laik_mpi_wait(Laik_TransitionPlan*, int mapNo);
 static bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo);
 static void laik_mpi_updateGroup(Laik_Group*);
@@ -193,6 +193,17 @@ MPI_Datatype getMPIDataType(Laik_Data* d)
     return mpiDataType;
 }
 
+static
+MPI_Op getMPIOp(Laik_ReductionOperation redOp)
+{
+    MPI_Op mpiRedOp;
+    switch(redOp) {
+    case LAIK_RO_Sum: mpiRedOp = MPI_SUM; break;
+    default: assert(0);
+    }
+    return mpiRedOp;
+}
+
 // temporarily developed within MPI backend
 // TODO: move outside
 
@@ -214,6 +225,11 @@ typedef enum _Laik_ActionType {
     // unpack data from buffer into container (must have Recv action before)
     LAIK_AT_Unpack,
 
+    // reduce from all to one or all
+    LAIK_AT_Reduce,
+    // reduce using input from a subgroup of task and output to subgroup
+    LAIK_AT_GroupReduce,
+
     // copy 1d data from container into buffer or from buffer into container
     LAIK_AT_Copy
 
@@ -223,17 +239,21 @@ typedef struct _Laik_Action {
     int type;
 
     int count;         // for Send, Recv, Copy, Reduce
-    void* buf;         // for Send, Recv, Pack, Unpack, Copy, Reduce
-    int peer_rank;     // for Send, Recv, PackAndSend, RecvAndUnpack
-    void *toBuf;       // for Copy
+
+    // if 0, fromBuf/toBuf is used
+    Laik_Mapping* map; // for Send, Recv, Pack, Unpack, PackAndSend, RecvAndUnpack
+    uint64_t offset;   // for Send, Recv
+
+    char* fromBuf;     // for Send, Pack, Copy, Reduce
+    char* toBuf;       // for Recv, Unpack, Copy, Reduce
+    int peer_rank;     // for Send, Recv, PackAndSend, RecvAndUnpack, Reduce
 
     // points to slice given in operation of transition
     Laik_Slice* slc;   // for Pack, Unpack, PackAndSend, RecvAndUnpack
-    // we can assume that allocation is fixed
-    Laik_Mapping* map; // for Pack, Unpack, PackAndSend, RecvAndUnpack
 
-    // subgroup defined in transition
-    int subgroup;      // for Reduce
+    // subgroup IDs defined in transition
+    int inputGroup, outputGroup;      // for Reduce
+    Laik_ReductionOperation redOp; // for Reduce
 
 } Laik_Action;
 
@@ -251,7 +271,7 @@ struct _Laik_TransitionPlan {
     Laik_Action* action;
 
     // summary to update statistics
-    int sendCount, recvCount;
+    int sendCount, recvCount, reduceCount;
 };
 
 Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
@@ -270,6 +290,7 @@ Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
 
     tp->sendCount = 0;
     tp->recvCount = 0;
+    tp->reduceCount = 0;
 
     return tp;
 }
@@ -318,11 +339,14 @@ int laik_transplan_appendBuf(Laik_TransitionPlan* tp, int size)
 }
 
 void laik_transplan_recordSend(Laik_TransitionPlan* tp,
-                               void* buf, int count, int to)
+                               Laik_Mapping* fromMap, uint64_t off,
+                               int count, int to)
 {
     Laik_Action* a = laik_transplan_appendAction(tp);
     a->type = LAIK_AT_Send;
-    a->buf = buf;
+    a->map = fromMap;
+    a->offset = off;
+    a->fromBuf = 0; // not used
     a->count = count;
     a->peer_rank = to;
 
@@ -330,11 +354,14 @@ void laik_transplan_recordSend(Laik_TransitionPlan* tp,
 }
 
 void laik_transplan_recordRecv(Laik_TransitionPlan* tp,
-                               void* buf, int count, int from)
+                               Laik_Mapping* toMap, uint64_t off,
+                               int count, int from)
 {
     Laik_Action* a = laik_transplan_appendAction(tp);
     a->type = LAIK_AT_Recv;
-    a->buf = buf;
+    a->map = toMap;
+    a->offset = off;
+    a->toBuf = 0; // not used
     a->count = count;
     a->peer_rank = from;
 
@@ -351,8 +378,58 @@ void laik_transplan_recordPackAndSend(Laik_TransitionPlan* tp,
     a->peer_rank = to;
 
     a->count = laik_slice_size(tp->transition->space->dims, slc);
+    assert(a->count > 0);
     tp->sendCount += a->count;
 }
+
+void laik_transplan_recordRecvAndUnpack(Laik_TransitionPlan* tp,
+                                        Laik_Mapping* toMap, Laik_Slice* slc, int from)
+{
+    Laik_Action* a = laik_transplan_appendAction(tp);
+    a->type = LAIK_AT_RecvAndUnpack;
+    a->map = toMap;
+    a->slc = slc;
+    a->peer_rank = from;
+
+    a->count = laik_slice_size(tp->transition->space->dims, slc);
+    assert(a->count > 0);
+    tp->recvCount += a->count;
+}
+
+void laik_transplan_recordReduce(Laik_TransitionPlan* tp,
+                                 char* fromBuf, char* toBuf, int count,
+                                 int rootTask, Laik_ReductionOperation redOp)
+{
+    Laik_Action* a = laik_transplan_appendAction(tp);
+    a->type = LAIK_AT_Reduce;
+    a->fromBuf = fromBuf;
+    a->toBuf = toBuf;
+    a->count = count;
+    a->peer_rank = rootTask;
+    a->redOp = redOp;
+
+    assert(a->count > 0);
+    tp->reduceCount += a->count;
+}
+
+void laik_transplan_recordGroupReduce(Laik_TransitionPlan* tp,
+                                      int inputGroup, int outputGroup,
+                                      char* fromBuf, char* toBuf, int count,
+                                      Laik_ReductionOperation redOp)
+{
+    Laik_Action* a = laik_transplan_appendAction(tp);
+    a->type = LAIK_AT_GroupReduce;
+    a->inputGroup = inputGroup;
+    a->outputGroup = outputGroup;
+    a->fromBuf = fromBuf;
+    a->toBuf = toBuf;
+    a->count = count;
+    a->redOp = redOp;
+
+    assert(a->count > 0);
+    tp->reduceCount += a->count;
+}
+
 
 void laik_transplan_free(Laik_TransitionPlan* tp)
 {
@@ -366,16 +443,221 @@ void laik_transplan_free(Laik_TransitionPlan* tp)
     free(tp);
 }
 
-static void exec_plan(Laik_TransitionPlan* tp, Laik_SwitchStat* ss)
+static
+void laik_mpi_exec_packAndSend(Laik_Action* a, int dims,
+                               MPI_Datatype dataType, int tag, MPI_Comm comm)
+{
+    Laik_Index idx = a->slc->from;
+    int packed;
+    int count = 0;
+    while(1) {
+        packed = (a->map->layout->pack)(a->map, a->slc, &idx,
+                                        packbuf, PACKBUFSIZE);
+        assert(packed > 0);
+        MPI_Send(packbuf, packed,
+                 dataType, a->peer_rank, tag, comm);
+        count += packed;
+        if (laik_index_isEqual(dims, &idx, &(a->slc->to))) break;
+    }
+    assert(count == a->count);
+}
+
+static
+void laik_mpi_exec_recvAndUnpack(Laik_Action* a, int dims, int elemsize,
+                                 MPI_Datatype dataType, int tag, MPI_Comm comm)
+{
+    MPI_Status st;
+    Laik_Index idx = a->slc->from;
+    int recvCount, unpacked;
+    int count = 0;
+    while(1) {
+        MPI_Recv(packbuf, PACKBUFSIZE / elemsize,
+                 dataType, a->peer_rank, tag, comm, &st);
+        MPI_Get_count(&st, dataType, &recvCount);
+        unpacked = (a->map->layout->unpack)(a->map, a->slc, &idx,
+                                           packbuf,
+                                           recvCount * elemsize);
+        assert(recvCount == unpacked);
+        count += unpacked;
+        if (laik_index_isEqual(dims, &idx, &(a->slc->to))) break;
+    }
+    assert(count == a->count);
+}
+
+static
+void laik_mpi_exec_reduce(Laik_Action* a,
+                          MPI_Datatype dataType, MPI_Comm comm)
+{
+    MPI_Op mpiRedOp = getMPIOp(a->redOp);
+    int rootTask = a->peer_rank;
+
+    if (rootTask == -1) {
+        if (a->fromBuf == a->toBuf)
+            MPI_Allreduce(MPI_IN_PLACE, a->toBuf, a->count,
+                          dataType, mpiRedOp, comm);
+        else
+            MPI_Allreduce(a->fromBuf, a->toBuf, a->count,
+                          dataType, mpiRedOp, comm);
+    }
+    else {
+        if (a->fromBuf == a->toBuf)
+            MPI_Reduce(MPI_IN_PLACE, a->toBuf, a->count,
+                       dataType, mpiRedOp, rootTask, comm);
+        else
+            MPI_Reduce(a->fromBuf, a->toBuf, a->count,
+                       dataType, mpiRedOp, rootTask, comm);
+    }
+}
+
+static
+void laik_mpi_exec_groupReduce(Laik_Action* a, Laik_Transition* t, Laik_Data* data,
+                               MPI_Datatype dataType, MPI_Comm comm)
+{
+    // do the manual reduction on smallest rank of output group
+    int reduceTask = t->subgroup[a->outputGroup].task[0];
+    laik_log(1, "reduce at T%d", reduceTask);
+
+    uint64_t byteCount = a->count * data->elemsize;
+    int myid = t->group->myid;
+    MPI_Status st;
+
+    if (reduceTask == myid) {
+        TaskGroup* tg;
+
+        // collect values from tasks in input group
+        tg = &(t->subgroup[a->inputGroup]);
+        // check that bufsize is enough
+        assert(tg->count * byteCount < PACKBUFSIZE);
+
+        char* ptr[32], *p;
+        assert(tg->count <= 32);
+        p = packbuf;
+        int myIdx = -1;
+        for(int i = 0; i< tg->count; i++) {
+            if (tg->task[i] == myid) {
+                ptr[i] = a->fromBuf;
+                myIdx = i;
+
+#ifdef LOG_DOUBLE_VALUES
+                assert(d->elemsize == 8);
+                for(uint64_t i = 0; i < elemCount; i++)
+                    laik_log(1, "    have at %d: %f", from + i,
+                             ((double*)fromBase)[i]);
+#endif
+#ifdef LOG_FLOAT_VALUES
+                assert(d->elemsize == 4);
+                for(uint64_t i = 0; i < elemCount; i++)
+                    laik_log(1, "    have at %d: %f", from + i,
+                             (double) ((float*)fromBase)[i] );
+#endif
+                continue;
+            }
+
+            laik_log(1, "  MPI_Recv from T%d (buf off %lld)",
+                     tg->task[i], (long long int) (p - packbuf));
+
+            ptr[i] = p;
+            MPI_Recv(p, a->count, dataType, tg->task[i], 1, comm, &st);
+#ifdef LOG_DOUBLE_VALUES
+            assert(d->elemsize == 8);
+            for(uint64_t i = 0; i < elemCount; i++)
+                laik_log(1, "    got at %d: %f", from + i,
+                         ((double*)p)[i]);
+#endif
+            p += byteCount;
+        }
+
+        // toBase may be same as fromBase (= our values).
+        // e.g. when we are 3rd task (ptr[3] == fromBase), we
+        // would overwrite our values. Swap ptr[0] with ptr[3].
+        if (myIdx >= 0) {
+            assert(ptr[myIdx] == a->fromBuf);
+            ptr[myIdx] = ptr[0];
+            ptr[0] = a->fromBuf;
+        }
+
+        // do the reduction, put result back to my input buffer
+        if (data->type->reduce) {
+            assert(tg->count > 1);
+
+
+            (data->type->reduce)(a->toBuf, ptr[0], ptr[1],
+                                 a->count, a->redOp);
+            for(int t = 2; t < tg->count; t++)
+                (data->type->reduce)(a->toBuf, a->toBuf, ptr[t],
+                                     a->count, a->redOp);
+        }
+        else {
+            laik_log(LAIK_LL_Panic,
+                     "Need reduce function for type '%s'. Not set!",
+                     data->type->name);
+            assert(0);
+        }
+
+#ifdef LOG_DOUBLE_VALUES
+        assert(d->elemsize == 8);
+        for(uint64_t i = 0; i < elemCount; i++)
+            laik_log(1, "    sum at %d: %f", from + i,
+                     ((double*)toBase)[i]);
+#endif
+
+        // send result to tasks in output group
+        tg = &(t->subgroup[a->outputGroup]);
+        for(int i = 0; i< tg->count; i++) {
+            if (tg->task[i] == myid) {
+                // that's myself: nothing to do
+                continue;
+            }
+
+            laik_log(1, "  MPI_Send result to T%d", tg->task[i]);
+
+            MPI_Send(a->toBuf, a->count, dataType,
+                     tg->task[i], 1, comm);
+        }
+    }
+    else {
+        if (laik_isInGroup(t, a->inputGroup, myid)) {
+            laik_log(1, "  MPI_Send to T%d", reduceTask);
+
+#ifdef LOG_DOUBLE_VALUES
+            assert(d->elemsize == 8);
+            for(uint64_t i = 0; i < elemCount; i++)
+                laik_log(1, "    at %d: %f", from + i,
+                         ((double*)fromBase)[i]);
+#endif
+
+            MPI_Send(a->fromBuf, a->count, dataType,
+                     reduceTask, 1, comm);
+        }
+        if (laik_isInGroup(t, a->outputGroup, myid)) {
+            laik_log(1, "  MPI_Recv from T%d", reduceTask);
+
+            MPI_Recv(a->toBuf, a->count, dataType,
+                     reduceTask, 1, comm, &st);
+#ifdef LOG_DOUBLE_VALUES
+            assert(d->elemsize == 8);
+            for(uint64_t i = 0; i < elemCount; i++)
+                laik_log(1, "    at %d: %f", from + i,
+                         ((double*)toBase)[i]);
+#endif
+        }
+    }
+}
+
+static
+void laik_mpi_exec_plan(Laik_TransitionPlan* tp, Laik_SwitchStat* ss)
 {
     assert(tp->actionCount > 0);
+
+    int dims = tp->data->space->dims;
+    int elemsize = tp->data->elemsize;
 
     // common for all MPI calls: tag, comm, datatype
     int tag = 1;
     MPIGroupData* gd = mpiGroupData(tp->transition->group);
     assert(gd);
     MPI_Comm comm = gd->comm;
-    MPI_Datatype datatype = getMPIDataType(tp->data);
+    MPI_Datatype dataType = getMPIDataType(tp->data);
     MPI_Status st;
 
     for(int i = 0; i < tp->actionCount; i++) {
@@ -383,17 +665,38 @@ static void exec_plan(Laik_TransitionPlan* tp, Laik_SwitchStat* ss)
 
         switch(a->type) {
         case LAIK_AT_Send:
-            MPI_Send(a->buf, a->count, datatype, a->peer_rank, tag, comm);
+            MPI_Send(a->map->base + a->offset, a->count,
+                     dataType, a->peer_rank, tag, comm);
             break;
+
         case LAIK_AT_Recv:
-            MPI_Recv(a->buf, a->count, datatype, a->peer_rank, tag, comm, &st);
+            MPI_Recv(a->map->base + a->offset, a->count,
+                     dataType, a->peer_rank, tag, comm, &st);
             break;
+
+        case LAIK_AT_PackAndSend:
+            laik_mpi_exec_packAndSend(a, dims, dataType, tag, comm);
+            break;
+
+        case LAIK_AT_RecvAndUnpack:
+            laik_mpi_exec_recvAndUnpack(a, dims, elemsize, dataType, tag, comm);
+            break;
+
+        case LAIK_AT_Reduce:
+            laik_mpi_exec_reduce(a, dataType, comm);
+            break;
+
+        case LAIK_AT_GroupReduce:
+            laik_mpi_exec_groupReduce(a, tp->transition, tp->data, dataType, comm);
+            break;
+
         default: assert(0);
         }
     }
 
-    ss->sentBytes += tp->sendCount * tp->data->elemsize;
+    ss->sentBytes     += tp->sendCount * tp->data->elemsize;
     ss->receivedBytes += tp->recvCount * tp->data->elemsize;
+    ss->reducedBytes  += tp->reduceCount * tp->data->elemsize;
 }
 
 
@@ -427,25 +730,13 @@ static bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo)
     return true;
 }
 
-
-
-static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
-                   Laik_MappingList* fromList, Laik_MappingList* toList)
+static
+void laik_execOrRecord(bool record,
+                       Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
+                       Laik_MappingList* fromList, Laik_MappingList* toList)
 {
-    int record = 0;
-
-    if (p) {
-        assert(d == p->data);
-        assert(t == p->transition);
-
-        // if we got a transition plan:
-        // - with actions provided: just execute the actions
-        // - without actions: just record MPI actions into plan (no exec)
-        if (p->actionCount > 0) {
-            exec_plan(p, d->stat);
-            return;
-        }
-        // record = 1;
+    if (record) {
+        assert(p && (p->actionCount == 0));
     }
 
     Laik_Group* g = d->activePartitioning->group;
@@ -520,138 +811,148 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
             if (op->inputGroup >= 0)
                 assert(t->subgroup[op->inputGroup].count < g->size);
 
-            if (record) assert(0); // TODO
-
             // if neither input nor output are all-groups: manual reduction
             if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
 
-                // do the manual reduction on smallest rank of output group
-                int reduceTask = t->subgroup[op->outputGroup].task[0];
+                if (laik_log_begin(1)) {
+                    if (record) laik_log_append("Record ");
+                    laik_log_append("manual reduction: (%lld - %lld) slc/map %d/%d",
+                                    (long long int) from, (long long int) to,
+                                    op->myInputSliceNo, op->myInputMapNo);
+                    laik_log_flush(0);
+                }
 
-                laik_log(1, "Manual reduction at T%d: (%lld - %lld) slc/map %d/%d",
-                         reduceTask, (long long int) from, (long long int) to,
-                         op->myInputSliceNo, op->myInputMapNo);
+                if (record)
+                    laik_transplan_recordGroupReduce(p,
+                                                     op->inputGroup, op->outputGroup,
+                                                     fromBase, toBase, elemCount, op->redOp);
+                else {
+                    // do the manual reduction on smallest rank of output group
+                    int reduceTask = t->subgroup[op->outputGroup].task[0];
+                    laik_log(1, "reduce at T%d", reduceTask);
 
-                if (reduceTask == myid) {
-                    TaskGroup* tg;
 
-                    // collect values from tasks in input group
-                    tg = &(t->subgroup[op->inputGroup]);
-                    // check that bufsize is enough
-                    assert(tg->count * byteCount < PACKBUFSIZE);
+                    if (reduceTask == myid) {
+                        TaskGroup* tg;
 
-                    char* ptr[32], *p;
-                    assert(tg->count <= 32);
-                    p = packbuf;
-                    int myIdx = -1;
-                    for(int i = 0; i< tg->count; i++) {
-                        if (tg->task[i] == myid) {
-                            ptr[i] = fromBase;
-                            myIdx = i;
+                        // collect values from tasks in input group
+                        tg = &(t->subgroup[op->inputGroup]);
+                        // check that bufsize is enough
+                        assert(tg->count * byteCount < PACKBUFSIZE);
+
+                        char* ptr[32], *p;
+                        assert(tg->count <= 32);
+                        p = packbuf;
+                        int myIdx = -1;
+                        for(int i = 0; i< tg->count; i++) {
+                            if (tg->task[i] == myid) {
+                                ptr[i] = fromBase;
+                                myIdx = i;
+
+#ifdef LOG_DOUBLE_VALUES
+                                assert(d->elemsize == 8);
+                                for(uint64_t i = 0; i < elemCount; i++)
+                                    laik_log(1, "    have at %d: %f", from + i,
+                                             ((double*)fromBase)[i]);
+#endif
+#ifdef LOG_FLOAT_VALUES
+                                assert(d->elemsize == 4);
+                                for(uint64_t i = 0; i < elemCount; i++)
+                                    laik_log(1, "    have at %d: %f", from + i,
+                                             (double) ((float*)fromBase)[i] );
+#endif
+                                continue;
+                            }
+
+                            laik_log(1, "  MPI_Recv from T%d (buf off %lld)",
+                                     tg->task[i], (long long int) (p - packbuf));
+
+                            ptr[i] = p;
+                            MPI_Recv(p, elemCount, mpiDataType,
+                                     tg->task[i], 1, comm, &status);
+#ifdef LOG_DOUBLE_VALUES
+                            assert(d->elemsize == 8);
+                            for(uint64_t i = 0; i < elemCount; i++)
+                                laik_log(1, "    got at %d: %f", from + i,
+                                         ((double*)p)[i]);
+#endif
+                            p += byteCount;
+                        }
+
+                        // toBase may be same as fromBase (= our values).
+                        // e.g. when we are 3rd task (ptr[3] == fromBase), we
+                        // would overwrite our values. Swap ptr[0] with ptr[3].
+                        if (myIdx >= 0) {
+                            assert(ptr[myIdx] == fromBase);
+                            ptr[myIdx] = ptr[0];
+                            ptr[0] = fromBase;
+                        }
+
+                        // do the reduction, put result back to my input buffer
+                        if (d->type->reduce) {
+                            assert(tg->count > 1);
+
+
+                            (d->type->reduce)(toBase, ptr[0], ptr[1],
+                                    elemCount, op->redOp);
+                            for(int t = 2; t < tg->count; t++)
+                                (d->type->reduce)(toBase, toBase, ptr[t],
+                                                  elemCount, op->redOp);
+                        }
+                        else {
+                            laik_log(LAIK_LL_Panic,
+                                     "Need reduce function for type '%s'. Not set!",
+                                     d->type->name);
+                            assert(0);
+                        }
+
+#ifdef LOG_DOUBLE_VALUES
+                        assert(d->elemsize == 8);
+                        for(uint64_t i = 0; i < elemCount; i++)
+                            laik_log(1, "    sum at %d: %f", from + i,
+                                     ((double*)toBase)[i]);
+#endif
+
+                        // send result to tasks in output group
+                        tg = &(t->subgroup[op->outputGroup]);
+                        for(int i = 0; i< tg->count; i++) {
+                            if (tg->task[i] == myid) {
+                                // that's myself: nothing to do
+                                continue;
+                            }
+
+                            laik_log(1, "  MPI_Send result to T%d", tg->task[i]);
+
+                            MPI_Send(toBase, elemCount, mpiDataType,
+                                     tg->task[i], 1, comm);
+                        }
+                    }
+                    else {
+                        if (laik_isInGroup(t, op->inputGroup, myid)) {
+                            laik_log(1, "  MPI_Send to T%d", reduceTask);
 
 #ifdef LOG_DOUBLE_VALUES
                             assert(d->elemsize == 8);
                             for(uint64_t i = 0; i < elemCount; i++)
-                                laik_log(1, "    have at %d: %f", from + i,
+                                laik_log(1, "    at %d: %f", from + i,
                                          ((double*)fromBase)[i]);
 #endif
-#ifdef LOG_FLOAT_VALUES
-                            assert(d->elemsize == 4);
+
+                            MPI_Send(fromBase, elemCount, mpiDataType,
+                                     reduceTask, 1, comm);
+                        }
+                        if (laik_isInGroup(t, op->outputGroup, myid)) {
+                            laik_log(1, "  MPI_Recv from T%d", reduceTask);
+
+                            MPI_Recv(toBase, elemCount, mpiDataType,
+                                     reduceTask, 1, comm, &status);
+#ifdef LOG_DOUBLE_VALUES
+                            assert(d->elemsize == 8);
                             for(uint64_t i = 0; i < elemCount; i++)
-                                laik_log(1, "    have at %d: %f", from + i,
-                                         (double) ((float*)fromBase)[i] );
+                                laik_log(1, "    at %d: %f", from + i,
+                                         ((double*)toBase)[i]);
 #endif
-                            continue;
                         }
-
-                        laik_log(1, "  MPI_Recv from T%d (buf off %lld)",
-                                 tg->task[i], (long long int) (p - packbuf));
-
-                        ptr[i] = p;
-                        MPI_Recv(p, elemCount, mpiDataType,
-                                 tg->task[i], 1, comm, &status);
-#ifdef LOG_DOUBLE_VALUES
-                        assert(d->elemsize == 8);
-                        for(uint64_t i = 0; i < elemCount; i++)
-                            laik_log(1, "    got at %d: %f", from + i,
-                                     ((double*)p)[i]);
-#endif
-                        p += byteCount;
-                    }
-
-                    // toBase may be same as fromBase (= our values).
-                    // e.g. when we are 3rd task (ptr[3] == fromBase), we
-                    // would overwrite our values. Swap ptr[0] with ptr[3].
-                    if (myIdx >= 0) {
-                        assert(ptr[myIdx] == fromBase);
-                        ptr[myIdx] = ptr[0];
-                        ptr[0] = fromBase;
-                    }
-
-                    // do the reduction, put result back to my input buffer
-                    if (d->type->reduce) {
-                        assert(tg->count > 1);
-
-
-                        (d->type->reduce)(toBase, ptr[0], ptr[1],
-                                elemCount, op->redOp);
-                        for(int t = 2; t < tg->count; t++)
-                            (d->type->reduce)(toBase, toBase, ptr[t],
-                                              elemCount, op->redOp);
-                    }
-                    else {
-                        laik_log(LAIK_LL_Panic,
-                                 "Need reduce function for type '%s'. Not set!",
-                                 d->type->name);
-                        assert(0);
-                    }
-
-#ifdef LOG_DOUBLE_VALUES
-                    assert(d->elemsize == 8);
-                    for(uint64_t i = 0; i < elemCount; i++)
-                        laik_log(1, "    sum at %d: %f", from + i,
-                                 ((double*)toBase)[i]);
-#endif
-
-                    // send result to tasks in output group
-                    tg = &(t->subgroup[op->outputGroup]);
-                    for(int i = 0; i< tg->count; i++) {
-                        if (tg->task[i] == myid) {
-                            // that's myself: nothing to do
-                            continue;
-                        }
-
-                        laik_log(1, "  MPI_Send result to T%d", tg->task[i]);
-
-                        MPI_Send(toBase, elemCount, mpiDataType,
-                                 tg->task[i], 1, comm);
-                    }
-                }
-                else {
-                    if (laik_isInGroup(t, op->inputGroup, myid)) {
-                        laik_log(1, "  MPI_Send to T%d", reduceTask);
-
-#ifdef LOG_DOUBLE_VALUES
-                        assert(d->elemsize == 8);
-                        for(uint64_t i = 0; i < elemCount; i++)
-                            laik_log(1, "    at %d: %f", from + i,
-                                     ((double*)fromBase)[i]);
-#endif
-
-                        MPI_Send(fromBase, elemCount, mpiDataType,
-                                 reduceTask, 1, comm);
-                    }
-                    if (laik_isInGroup(t, op->outputGroup, myid)) {
-                        laik_log(1, "  MPI_Recv from T%d", reduceTask);
-
-                        MPI_Recv(toBase, elemCount, mpiDataType,
-                                 reduceTask, 1, comm, &status);
-#ifdef LOG_DOUBLE_VALUES
-                        assert(d->elemsize == 8);
-                        for(uint64_t i = 0; i < elemCount; i++)
-                            laik_log(1, "    at %d: %f", from + i,
-                                     ((double*)toBase)[i]);
-#endif
                     }
                 }
             }
@@ -659,11 +960,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 // not handled yet: either input or output is all-group
                 assert((op->inputGroup == -1) || (op->outputGroup == -1));
 
-                MPI_Op mpiRedOp;
-                switch(op->redOp) {
-                case LAIK_RO_Sum: mpiRedOp = MPI_SUM; break;
-                default: assert(0);
-                }
+                MPI_Op mpiRedOp = getMPIOp(op->redOp);
 
                 int rootTask;
                 if (op->outputGroup == -1) rootTask = -1;
@@ -674,6 +971,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 }
 
                 if (laik_log_begin(1)) {
+                    if (record) laik_log_append("Record ");
                     laik_log_append("MPI Reduce (root ");
                     if (rootTask == -1)
                         laik_log_append("ALL");
@@ -698,35 +996,39 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 }
 #endif
 
-                if (rootTask == -1) {
-                    if (fromBase == toBase)
-                        MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
-                                      mpiDataType, mpiRedOp, comm);
-                    else
-                        MPI_Allreduce(fromBase, toBase, to - from,
-                                      mpiDataType, mpiRedOp, comm);
-                }
+                if (record)
+                    laik_transplan_recordReduce(p, fromBase, toBase, to - from,
+                                                rootTask, op->redOp);
                 else {
-                    if (fromBase == toBase)
-                        MPI_Reduce(MPI_IN_PLACE, toBase, to - from,
-                                   mpiDataType, mpiRedOp, rootTask, comm);
-                    else
-                        MPI_Reduce(fromBase, toBase, to - from,
-                                   mpiDataType, mpiRedOp, rootTask, comm);
-                }
+                    if (rootTask == -1) {
+                        if (fromBase == toBase)
+                            MPI_Allreduce(MPI_IN_PLACE, toBase, to - from,
+                                          mpiDataType, mpiRedOp, comm);
+                        else
+                            MPI_Allreduce(fromBase, toBase, to - from,
+                                          mpiDataType, mpiRedOp, comm);
+                    }
+                    else {
+                        if (fromBase == toBase)
+                            MPI_Reduce(MPI_IN_PLACE, toBase, to - from,
+                                       mpiDataType, mpiRedOp, rootTask, comm);
+                        else
+                            MPI_Reduce(fromBase, toBase, to - from,
+                                       mpiDataType, mpiRedOp, rootTask, comm);
+                    }
 
 #ifdef LOG_DOUBLE_VALUES
-                if (toBase) {
-                    assert(d->elemsize == 8);
-                    for(uint64_t i = 0; i < elemCount; i++)
-                        laik_log(1, "    after at %d: %f", from + i,
-                                 ((double*)toBase)[i]);
-                }
+                    if (toBase) {
+                        assert(d->elemsize == 8);
+                        for(uint64_t i = 0; i < elemCount; i++)
+                            laik_log(1, "    after at %d: %f", from + i,
+                                     ((double*)toBase)[i]);
+                    }
 #endif
-
+                }
             }
 
-            if (ss) {
+            if ((record == 0) && ss) {
                 ss->reduceCount++;
                 ss->reducedBytes += (to - from) * d->elemsize;
             }
@@ -759,6 +1061,7 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
             if (recvFromHigher && (myid > task)) continue;
 
             if (laik_log_begin(1)) {
+                if (record) laik_log_append("Record ");
                 laik_log_append("MPI Recv ");
                 laik_log_Slice(dims, &(op->slc));
                 laik_log_flush(" from T%d", op->fromTask);
@@ -790,6 +1093,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 // from global to receiver-local indexes
                 int64_t from = op->slc.from.i[0] - toMap->requiredSlice.from.i[0];
                 int64_t to   = op->slc.to.i[0] - toMap->requiredSlice.from.i[0];
+                assert(from >= 0);
+                assert(to > from);
                 count = to - from;
 
                 laik_log(1, "  direct recv to local [%lld;%lld[, slc/map %d/%d, "
@@ -808,10 +1113,14 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                     }
                 }
 
-                if (record) assert(0); // TODO
-
-                MPI_Recv(toMap->base + from * d->elemsize, count,
-                         mpiDataType, op->fromTask, 1, comm, &s);
+                if (record)
+                    laik_transplan_recordRecv(p, toMap, from * d->elemsize,
+                                              count, op->fromTask);
+                else {
+                    // TODO: tag 1 may conflict with application
+                    MPI_Recv(toMap->base + from * d->elemsize, count,
+                             mpiDataType, op->fromTask, 1, comm, &s);
+                }
             }
             else {
                 // use temporary receive buffer and layout-specific unpack
@@ -819,23 +1128,28 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 // the used layout must support unpacking
                 assert(toMap->layout->unpack);
 
-                if (record) assert(0); // TODO
-
-                Laik_Index idx = op->slc.from;
-                count = 0;
-                int recvCount, unpacked;
-                while(1) {
-                    MPI_Recv(packbuf, PACKBUFSIZE / d->elemsize,
-                             mpiDataType, op->fromTask, 1, comm, &s);
-                    MPI_Get_count(&s, mpiDataType, &recvCount);
-                    unpacked = (toMap->layout->unpack)(toMap, &(op->slc), &idx,
-                                                       packbuf,
-                                                       recvCount * d->elemsize);
-                    assert(recvCount == unpacked);
-                    count += unpacked;
-                    if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
+                if (record)
+                    laik_transplan_recordRecvAndUnpack(p, toMap,
+                                                       &(op->slc), op->fromTask);
+                else {
+                    Laik_Index idx = op->slc.from;
+                    uint64_t size = laik_slice_size(dims, &(op->slc));
+                    assert(size > 0);
+                    int recvCount, unpacked;
+                    count = 0;
+                    while(1) {
+                        MPI_Recv(packbuf, PACKBUFSIZE / d->elemsize,
+                                 mpiDataType, op->fromTask, 1, comm, &s);
+                        MPI_Get_count(&s, mpiDataType, &recvCount);
+                        unpacked = (toMap->layout->unpack)(toMap, &(op->slc), &idx,
+                                                           packbuf,
+                                                           recvCount * d->elemsize);
+                        assert(recvCount == unpacked);
+                        count += unpacked;
+                        if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
+                    }
+                    assert(count == size);
                 }
-                assert(count == laik_slice_size(dims, &(op->slc)));
             }
 
             if ((record == 0) && ss) {
@@ -885,6 +1199,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                 // from global to sender-local indexes
                 int64_t from = op->slc.from.i[0] - fromMap->requiredSlice.from.i[0];
                 int64_t to   = op->slc.to.i[0] - fromMap->requiredSlice.from.i[0];
+                assert(from >= 0);
+                assert(to > from);
                 count = to - from;
 
                 laik_log(1, "  direct send: from local [%lld;%lld[, slice/map %d/%d, "
@@ -893,9 +1209,8 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
                          op->sliceNo, op->mapNo,
                          d->elemsize, (void*) fromMap->base);
 
-
                 if (record)
-                    laik_transplan_recordSend(p, fromMap->base + from * d->elemsize,
+                    laik_transplan_recordSend(p, fromMap, from * d->elemsize,
                                               count, op->toTask);
                 else {
                     // TODO: tag 1 may conflict with application
@@ -939,5 +1254,25 @@ static void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan*
     
     }
 }
+
+static
+void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* tp,
+                   Laik_MappingList* fromList, Laik_MappingList* toList)
+{
+    if (tp) {
+        assert(d == tp->data);
+        assert(t == tp->transition);
+
+        if (tp->actionCount == 0) {
+            laik_execOrRecord(true, d, t, tp, fromList, toList);
+            assert(tp->actionCount > 0);
+        }
+        laik_mpi_exec_plan(tp, d->stat);
+        return;
+    }
+
+    laik_execOrRecord(false, d, t, tp, fromList, toList);
+}
+
 
 #endif // USE_MPI
