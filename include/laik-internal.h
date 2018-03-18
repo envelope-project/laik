@@ -26,6 +26,7 @@
 #include "laik/core-internal.h"
 #include "laik/space-internal.h"
 #include "laik/data-internal.h"
+#include "laik/action-internal.h"
 #include "laik/backend.h"
 #include "laik/program-internal.h"
 #include "laik/profiling-internal.h"

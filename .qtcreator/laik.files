@@ -12,7 +12,7 @@
 ../doc/tutorial-jacobi2d.md
 ../doc/design/Mapping.md
 
-../examples/vsum3.c
+../src/action.c
 ../src/backend.c
 ../src/backend-mpi.c
 ../src/backend-single.c
@@ -32,6 +32,8 @@
 ../include/laik-backend-single.h
 ../include/laik-backend-mpi.h
 
+../include/laik/action.h
+../include/laik/action-internal.h
 ../include/laik/backend.h
 ../include/laik/core.h
 ../include/laik/core-internal.h
@@ -50,6 +52,7 @@
 ../examples/.gitignore
 ../examples/vsum.c
 ../examples/vsum2.c
+../examples/vsum3.c
 ../examples/spmv.c
 ../examples/spmv2.c
 ../examples/jac1d.c

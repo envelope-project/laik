@@ -27,8 +27,6 @@
 #include <laik.h>     // for Laik_Transition, Laik_Data, Laik_Instance, Laik...
 #include <stdbool.h>  // for bool
 
-// specific to backend driver, result of preparing the execution of a transition
-typedef struct _Laik_TransitionPlan Laik_TransitionPlan;
 
 // LAIK communication back-end
 struct _Laik_Backend {
