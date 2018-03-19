@@ -15,6 +15,7 @@ RUN env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
     "bear" \
     "clang" \
     "clang-tidy" \
+    "libglib2.0-dev" \
     "libmosquitto-dev" \
     "libopenmpi-dev" \
     "libpapi-dev" \
