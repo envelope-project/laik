@@ -11,10 +11,10 @@
 
 /* Type definitions */
 
-struct _Laik_TransitionPlan {
-    Laik_Data*       data;
-    Laik_Transition* transition;
-};
+//struct _Laik_TransitionPlan {
+//    Laik_Data*       data;
+//    Laik_Transition* transition;
+//};
 
 /* Internal functions */
 
@@ -531,20 +531,20 @@ static void laik_tcp_backend_finalize () {
     }
 }
 
-static Laik_TransitionPlan* laik_tcp_backend_prepare (Laik_Data* data, Laik_Transition* transition) {
-    laik_tcp_always (data);
-    laik_tcp_always (transition);
-
-    // Allocate a plan object
-    Laik_TransitionPlan* plan = g_new0 (Laik_TransitionPlan, 1);
-
-    // Fill the plan object
-    plan->data       = data;
-    plan->transition = transition;
-
-    // Return the plan object
-    return plan;
-}
+//static Laik_TransitionPlan* laik_tcp_backend_prepare (Laik_Data* data, Laik_Transition* transition) {
+//    laik_tcp_always (data);
+//    laik_tcp_always (transition);
+//
+//    // Allocate a plan object
+//    Laik_TransitionPlan* plan = g_new0 (Laik_TransitionPlan, 1);
+//
+//    // Fill the plan object
+//    plan->data       = data;
+//    plan->transition = transition;
+//
+//    // Return the plan object
+//    return plan;
+//}
 
 static bool laik_tcp_backend_probe (Laik_TransitionPlan* plan, const int map_number) {
     laik_tcp_always (plan);
@@ -610,7 +610,7 @@ Laik_Instance* laik_init_tcp (int* argc, char*** argv) {
         .exec        = laik_tcp_backend_exec,
         .finalize    = laik_tcp_backend_finalize,
         .name        = "TCP Backend",
-        .prepare     = laik_tcp_backend_prepare,
+        .prepare     = 0, // laik_tcp_backend_prepare,
         .probe       = laik_tcp_backend_probe,
         .sync        = laik_tcp_backend_sync,
         .updateGroup = laik_tcp_backend_update_group,

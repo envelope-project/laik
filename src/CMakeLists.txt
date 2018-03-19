@@ -93,7 +93,7 @@ if (tcp-backend)
         target_compile_definitions ("laik"
             PRIVATE "GLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_48"
             PRIVATE "GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_48"
-            PRIVATE "LAIK_TCP_BACKEND_AVAILABLE"
+            PRIVATE "USE_TCP"
             # PRIVATE "LAIK_TCP_DEBUG"
         )
 

@@ -2,5 +2,6 @@
 ../include/laik
 ../src
 /usr/include/mpi
+/usr/include/glib-2.0
 ../examples
 ../

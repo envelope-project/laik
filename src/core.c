@@ -53,9 +53,9 @@ Laik_Instance* laik_init (int* argc, char*** argv)
         return laik_init_single();
     }
 
-#ifdef LAIK_TCP_BACKEND_AVAILABLE
-    if (!override || strcmp (override, "tcp") == 0) {
-        return laik_init_tcp (argc, argv);
+#ifdef USE_TCP
+    if ((override == 0) || (strcmp(override, "tcp") == 0)) {
+        return laik_init_tcp(argc, argv);
     }
 #endif
 

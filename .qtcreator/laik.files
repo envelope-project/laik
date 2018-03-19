@@ -48,6 +48,30 @@
 ../include/laik/space.h
 ../include/laik/space-internal.h
 
+# TCP backend
+../src/backends/tcp/backend.c
+../src/backends/tcp/client.c
+../src/backends/tcp/config.c
+../src/backends/tcp/debug.c
+../src/backends/tcp/errors.c
+../src/backends/tcp/map.c
+../src/backends/tcp/messenger.c
+../src/backends/tcp/minimpi.c
+../src/backends/tcp/server.c
+../src/backends/tcp/socket.c
+../src/backends/tcp/task.c
+../src/backends/tcp/client.h
+../src/backends/tcp/config.h
+../src/backends/tcp/debug.h
+../src/backends/tcp/errors.h
+../src/backends/tcp/map.h
+../src/backends/tcp/messenger.h
+../src/backends/tcp/minimpi.h
+../src/backends/tcp/mpi.h
+../src/backends/tcp/server.h
+../src/backends/tcp/socket.h
+../src/backends/tcp/task.h
+
 ../examples/Makefile
 ../examples/.gitignore
 ../examples/vsum.c

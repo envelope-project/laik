@@ -9,6 +9,7 @@ import subprocess
 import distutils.spawn
 
 defs = ""
+miscvars = ""
 subdirs = "examples"
 test_subdirs = ""
 ipath = "/usr/include"
@@ -74,6 +75,22 @@ else:
     defs += " -DUSE_MPI"
     test_subdirs += " mpi"
 
+#------------------------------------
+# TCP backend support
+
+# run pkg-config for glib-2 cflags
+glib_inc = os.popen('pkg-config --cflags gio-2.0').read().strip()
+if glib_inc:
+    glib_libs = os.popen('pkg-config --libs gio-2.0').read().strip()
+    print("TCP backend enabled (glib-2.0/gio-2.0 found).")
+    defs += " -DUSE_TCP"
+    miscvars += "USE_TCP=1\n"
+    miscvars += "TCP_INC=" + glib_inc + "\n"
+    miscvars += "TCP_LIBS=" + glib_libs + "\n"
+    test_subdirs += " tcp"
+else:
+    print("TCP backend disabled: glib-2.0/gio-2.0 not found")
+    print("  On Ubuntu, install 'libglib2.0-dev'")
 
 #------------------------------------
 # C++ support
@@ -130,6 +147,8 @@ if mpicc:
     cfile.write("MPICC=" + mpicc + "\n")
 if ompflag:
     cfile.write("OMP_FLAGS=" + ompflag + "\n")
+if miscvars:
+    cfile.write(miscvars)
 
 if "PREFIX" in os.environ:
     cfile.write("PREFIX=" + os.path.abspath(os.environ['PREFIX']) + "\n")
