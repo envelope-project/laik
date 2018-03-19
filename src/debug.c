@@ -313,10 +313,12 @@ void laik_log_Action(Laik_Action* a)
     Laik_BackendAction* ba = (Laik_BackendAction*) a;
     switch(ba->type) {
     case LAIK_AT_Send:
-        laik_log_append("    send(count %d)", ba->count);
+        laik_log_append("    send(count %d, to %d)",
+                        ba->count, ba->peer_rank);
         break;
     case LAIK_AT_Recv:
-        laik_log_append("    recv(count %d)", ba->count);
+        laik_log_append("    recv(count %d, from %d)",
+                        ba->count, ba->peer_rank);
         break;
     case LAIK_AT_Copy:
         laik_log_append("    copy(count %d)", ba->count);

@@ -51,6 +51,7 @@ typedef struct _Laik_BackendAction {
 typedef struct _Laik_TransitionContext {
     Laik_Transition* transition;
     Laik_Data* data;
+    Laik_MappingList *fromList, *toList;
 } Laik_TransitionContext;
 
 // TODO: Rename to ActionSeq

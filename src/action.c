@@ -8,11 +8,14 @@
 #include <assert.h>
 #include <stdlib.h>
 
+// TODO: rename to ActionSeq, start with empty, and appendTransition()
 Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
 {
     Laik_TransitionContext* tc = malloc(sizeof(Laik_TransitionContext));
     tc->data = d;
     tc->transition = t;
+    tc->fromList = 0;
+    tc->toList = 0;
 
     Laik_TransitionPlan* tp = malloc(sizeof(Laik_TransitionPlan));
     for(int i = 0; i < CONTEXTS_MAX; i++)

@@ -684,7 +684,7 @@ void initMaps(Laik_Transition* t,
 }
 
 static
-void doTransition(Laik_Data* d, Laik_Transition* t,
+void doTransition(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
                   Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     if (d->stat) {
@@ -711,13 +711,20 @@ void doTransition(Laik_Data* d, Laik_Transition* t,
                 inst->profiling->timer_backend = laik_wtime();
 
             if (inst->backend->prepare) {
+                // HACK: if p is given, just execute it without cleanup
+                // We really should check that the plan matches!!
+                bool prepareAndCleanupPlan = (p == 0);
+
                 // backend driver supports asynchronous communication
-                // TODO: do prepare as early as possible
-                Laik_TransitionPlan* p = (inst->backend->prepare)(d, t);
+                if (prepareAndCleanupPlan)
+                    p = (inst->backend->prepare)(d, t);
+
                 (inst->backend->exec)(d, t, p, fromList, toList);
                 // TODO: only wait in laik_map/laik_wait
                 (inst->backend->wait)(p, -1);
-                (inst->backend->cleanup)(p);
+
+                if (prepareAndCleanupPlan)
+                    (inst->backend->cleanup)(p);
             }
             else {
                 (inst->backend->exec)(d, t, 0, fromList, toList);
@@ -804,6 +811,20 @@ void laik_reservation_free(Laik_Reservation* r)
     free(r->mapping);
     r->mappingCount = 0;
     r->mapping = 0;
+}
+
+// get mapping list allocated in a reservation for a given partitioning
+Laik_MappingList* laik_reservation_getMList(Laik_Reservation* r,
+                                            Laik_Partitioning* p)
+{
+    for(int i = 0; i < r->count; i++) {
+        if ((r->entry[i].p == p) && (r->entry[i].mList != 0)) {
+            Laik_MappingList* ml = r->entry[i].mList;
+            assert(ml->res == r);
+            return ml;
+        }
+    }
+    return 0;
 }
 
 
@@ -1031,13 +1052,83 @@ void laik_exec_transition(Laik_Data* d, Laik_Transition* t)
     }
 
     Laik_MappingList* toList = prepareMaps(d, t->toPartitioning, 0);
-    doTransition(d, t, d->activeMappings, toList);
+    doTransition(d, t, 0, d->activeMappings, toList);
 
     // set new mapping/partitioning active
     d->activePartitioning = t->toPartitioning;
     d->activeFlow = t->toFlow;
     d->activeMappings = toList;
 }
+
+Laik_TransitionPlan* laik_calc_transitionplan(Laik_Data* d,
+                                              Laik_Transition* t,
+                                              Laik_Reservation* fromRes,
+                                              Laik_Reservation* toRes)
+{
+    Laik_MappingList* fromList = 0;
+    Laik_MappingList* toList = 0;
+    if (fromRes)
+        fromList = laik_reservation_getMList(fromRes, t->fromPartitioning);
+    if (toRes)
+        toList = laik_reservation_getMList(toRes, t->toPartitioning);
+
+    const Laik_Backend* backend = d->space->inst->backend;
+    assert(backend->prepare);
+
+    // FIXME: preparation needs from/toList (!!)
+    Laik_TransitionPlan* tp = (backend->prepare)(d, t);
+    Laik_TransitionContext* tc = tp->context[0];
+    tc->fromList = fromList;
+    tc->toList = toList;
+
+    return tp;
+}
+
+// execute a previously calculated transition on a data container
+void laik_exec_transitionplan(Laik_TransitionPlan* tp)
+{
+    Laik_TransitionContext* tc = tp->context[0];
+    Laik_Transition* t = tc->transition;
+    Laik_Data* d = tc->data;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("exec transition plan for (");
+        laik_log_DataFlow(t->fromFlow);
+        laik_log_append("/'%s' => ", t->fromPartitioning ? t->fromPartitioning->name : "(none)");
+        laik_log_DataFlow(t->toFlow);
+        laik_log_append("/'%s') on data '%s' (in ",
+                        t->toPartitioning ? t->toPartitioning->name : "(none)", d->name);
+        laik_log_DataFlow(d->activeFlow);
+        laik_log_flush("/'%s')",
+                        d->activePartitioning ? d->activePartitioning->name : "(none)");
+    }
+
+    // we only can execute transtion if start state in transition is correct
+    if ((d->activeFlow != t->fromFlow) ||
+        (d->activePartitioning != t->fromPartitioning)) {
+        laik_panic("laik_exec_transitionplan starts in wrong phase!");
+        exit(1);
+    }
+
+    Laik_MappingList* toList = prepareMaps(d, t->toPartitioning, 0);
+
+    if (tc->fromList && (tc->fromList != d->activeMappings)) {
+        laik_panic("laik_exec_transitionplan starts with wrong mappings!");
+        exit(1);
+    }
+    if (tc->toList && (tc->toList != toList)) {
+        laik_panic("laik_exec_transitionplan ends with wrong mappings!");
+        exit(1);
+    }
+
+    doTransition(d, t, tp, d->activeMappings, toList);
+
+    // set new mapping/partitioning active
+    d->activePartitioning = t->toPartitioning;
+    d->activeFlow = t->toFlow;
+    d->activeMappings = toList;
+}
+
 
 // switch to new partitioning borders
 // new flow is derived from previous flow when set to LAIK_DF_Previous
@@ -1078,7 +1169,7 @@ void laik_switchto_partitioning(Laik_Data* d,
                                               d->activeFlow,
                                               toP, toFlow);
 
-    doTransition(d, t, d->activeMappings, toList);
+    doTransition(d, t, 0, d->activeMappings, toList);
 
     // set new mapping/partitioning active
     d->activePartitioning = toP;
@@ -1136,7 +1227,7 @@ void laik_switchto_phase(Laik_Data* d,
                  t->sendCount, t->recvCount, t->redCount);
 #endif
 
-    doTransition(d, t, d->activeMappings, toList);
+    doTransition(d, t, 0, d->activeMappings, toList);
 
     if (d->activeAccessPhase) {
         laik_removeDataFromAccessPhase(d->activeAccessPhase, d);
