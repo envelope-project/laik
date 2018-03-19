@@ -274,9 +274,13 @@ void laik_mpi_exec_reduce(Laik_BackendAction* a,
 }
 
 static
-void laik_mpi_exec_groupReduce(Laik_BackendAction* a, Laik_Transition* t, Laik_Data* data,
+void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
+                               Laik_BackendAction* a,
                                MPI_Datatype dataType, MPI_Comm comm)
 {
+    Laik_Transition* t = tc->transition;
+    Laik_Data* data = tc->data;
+
     // do the manual reduction on smallest rank of output group
     int reduceTask = t->subgroup[a->outputGroup].task[0];
     laik_log(1, "reduce at T%d", reduceTask);
@@ -413,15 +417,17 @@ void laik_mpi_exec_plan(Laik_TransitionPlan* tp, Laik_SwitchStat* ss)
 {
     assert(tp->actionCount > 0);
 
-    int dims = tp->data->space->dims;
-    int elemsize = tp->data->elemsize;
+    // TODO: use transition context given by each action
+    Laik_TransitionContext* tc = tp->context[0];
+    int dims = tc->data->space->dims;
+    int elemsize = tc->data->elemsize;
 
     // common for all MPI calls: tag, comm, datatype
     int tag = 1;
-    MPIGroupData* gd = mpiGroupData(tp->transition->group);
+    MPIGroupData* gd = mpiGroupData(tc->transition->group);
     assert(gd);
     MPI_Comm comm = gd->comm;
-    MPI_Datatype dataType = getMPIDataType(tp->data);
+    MPI_Datatype dataType = getMPIDataType(tc->data);
     MPI_Status st;
 
     for(int i = 0; i < tp->actionCount; i++) {
@@ -451,16 +457,16 @@ void laik_mpi_exec_plan(Laik_TransitionPlan* tp, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_GroupReduce:
-            laik_mpi_exec_groupReduce(a, tp->transition, tp->data, dataType, comm);
+            laik_mpi_exec_groupReduce(tc, a, dataType, comm);
             break;
 
         default: assert(0);
         }
     }
 
-    ss->sentBytes     += tp->sendCount * tp->data->elemsize;
-    ss->receivedBytes += tp->recvCount * tp->data->elemsize;
-    ss->reducedBytes  += tp->reduceCount * tp->data->elemsize;
+    ss->sentBytes     += tp->sendCount * tc->data->elemsize;
+    ss->receivedBytes += tp->recvCount * tc->data->elemsize;
+    ss->reducedBytes  += tp->reduceCount * tc->data->elemsize;
 }
 
 
@@ -1024,12 +1030,17 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* tp,
                    Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     if (tp) {
-        assert(d == tp->data);
-        assert(t == tp->transition);
+        Laik_TransitionContext* tc = tp->context[0];
+        assert(d == tc->data);
+        assert(t == tc->transition);
 
         if (tp->actionCount == 0) {
             laik_execOrRecord(true, d, t, tp, fromList, toList);
             assert(tp->actionCount > 0);
+            if (laik_log_begin(1)) {
+                laik_log_TransitionPlan(tp);
+                laik_log_flush(0);
+            }
         }
         laik_mpi_exec_plan(tp, d->stat);
         return;

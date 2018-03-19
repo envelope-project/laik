@@ -21,6 +21,7 @@
 #include <stdint.h>  // for uint64_t
 #include "data.h"    // for Laik_SwitchStat
 #include "space.h"   // for Laik_DataFlow, Laik_Index, Laik_Partitioning
+#include "action.h"  // for Laik_Action
 
 void laik_log_IntList(int len, int* list);
 void laik_log_PrettyInt(uint64_t v);
@@ -29,8 +30,10 @@ void laik_log_Index(int dims, const Laik_Index* idx);
 void laik_log_Slice(int dims, Laik_Slice* slc);
 void laik_log_Reduction(Laik_ReductionOperation op);
 void laik_log_DataFlow(Laik_DataFlow flow);
-void laik_log_Transition(Laik_Transition* t);
+void laik_log_Transition(Laik_Transition* t, bool showActions);
 void laik_log_Partitioning(Laik_Partitioning* p);
 void laik_log_SwitchStat(Laik_SwitchStat* ss);
+void laik_log_Action(Laik_Action* a);
+void laik_log_TransitionPlan(Laik_TransitionPlan* tp);
 
 #endif // _LAIK_DEBUG_H_

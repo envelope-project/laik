@@ -165,8 +165,21 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
     laik_log_append(")");
 }
 
-void laik_log_Transition(Laik_Transition* t)
+void laik_log_Transition(Laik_Transition* t, bool showActions)
 {
+    laik_log_append("transition (%s/",
+                    t->fromPartitioning ? t->fromPartitioning->name : "none");
+    laik_log_DataFlow(t->fromFlow);
+    laik_log_append(" => %s/",
+                    t->toPartitioning->name ? t->toPartitioning->name : "none");
+    laik_log_DataFlow(t->toFlow);
+    if (!showActions) {
+        laik_log_append(")");
+        return;
+    }
+
+    laik_log_append("): ");
+
     if ((t == 0) ||
         (t->localCount + t->initCount +
          t->sendCount + t->recvCount + t->redCount == 0)) {
@@ -295,3 +308,45 @@ void laik_log_SwitchStat(Laik_SwitchStat* ss)
     }
 }
 
+void laik_log_Action(Laik_Action* a)
+{
+    Laik_BackendAction* ba = (Laik_BackendAction*) a;
+    switch(ba->type) {
+    case LAIK_AT_Send:
+        laik_log_append("    send(count %d)", ba->count);
+        break;
+    case LAIK_AT_Recv:
+        laik_log_append("    recv(count %d)", ba->count);
+        break;
+    case LAIK_AT_Copy:
+        laik_log_append("    copy(count %d)", ba->count);
+        break;
+    case LAIK_AT_Reduce:
+        laik_log_append("    reduce(count %d)", ba->count);
+        break;
+    case LAIK_AT_GroupReduce:
+        laik_log_append("    groupReduce(count %d)", ba->count);
+        break;
+    case LAIK_AT_PackAndSend:
+        laik_log_append("    packAndSend(count %d)", ba->count);
+        break;
+    case LAIK_AT_RecvAndUnpack:
+        laik_log_append("    recvAndUnpack(count %d)", ba->count);
+        break;
+
+    default: assert(0);
+    }
+}
+
+void laik_log_TransitionPlan(Laik_TransitionPlan *tp)
+{
+    Laik_TransitionContext* tc = tp->context[0];
+    laik_log_append("actions for ");
+    laik_log_Transition(tc->transition, false);
+    laik_log_append(" on '%s':\n", tc->data->name);
+
+    for(int i = 0; i < tp->actionCount; i++) {
+        laik_log_Action((Laik_Action*) &(tp->action[i]));
+        laik_log_append("\n");
+    }
+}

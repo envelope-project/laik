@@ -1117,14 +1117,14 @@ void laik_switchto_phase(Laik_Data* d,
                                               toP, toFlow);
 
     if (laik_log_begin(1)) {
-        laik_log_append("switch partitionings for data '%s':\n"
+        laik_log_append("switch access phase for data '%s':\n"
                         "  %s/",
                         d->name, fromAP ? fromAP->name : "(none)");
         laik_log_DataFlow(d->activeFlow);
         laik_log_append(" => %s/", toAP ? toAP->name : "(none)");
         laik_log_DataFlow(toFlow);
-        laik_log_append(": ");
-        laik_log_Transition(t);
+        laik_log_append(":\n    ");
+        laik_log_Transition(t, true);
         laik_log_flush(0);
     }
 #if 0 // don't pollute log level 2, should introduce more...

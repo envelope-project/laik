@@ -26,6 +26,9 @@ typedef struct _Laik_BackendAction {
     char type;
     char len;
 
+    // transition context ID
+    char tid;
+
     int count;         // for Send, Recv, Copy, Reduce
 
     // if 0, fromBuf/toBuf is used
@@ -52,9 +55,9 @@ typedef struct _Laik_TransitionContext {
 
 // TODO: Rename to ActionSeq
 struct _Laik_TransitionPlan {
-    // TODO: allow to merge multiple transitions over various data containers
-    Laik_Data* data;
-    Laik_Transition* transition;
+    // actions can refer to different transition contexts
+#define CONTEXTS_MAX 1
+    void* context[CONTEXTS_MAX];
 
     // allocations done for this plan
     int bufCount, bufAllocCount;

@@ -10,9 +10,16 @@
 
 Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
 {
+    Laik_TransitionContext* tc = malloc(sizeof(Laik_TransitionContext));
+    tc->data = d;
+    tc->transition = t;
+
     Laik_TransitionPlan* tp = malloc(sizeof(Laik_TransitionPlan));
-    tp->data = d;
-    tp->transition = t;
+    for(int i = 0; i < CONTEXTS_MAX; i++)
+        tp->context[i] = 0;
+
+    // set context 0 fix to transition context
+    tp->context[0] = tc;
 
     tp->bufCount = 0;
     tp->bufAllocCount = 0;
@@ -31,6 +38,9 @@ Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
 
 void laik_transplan_free(Laik_TransitionPlan* tp)
 {
+    for(int i = 0; i < CONTEXTS_MAX; i++)
+        free(tp->context[i]);
+
     if (tp->buf) {
         for(int i = 0; i < tp->bufCount; i++)
             free(tp->buf[i]);
@@ -58,6 +68,8 @@ Laik_BackendAction* laik_transplan_appendAction(Laik_TransitionPlan* tp)
 
     a->type = LAIK_AT_Invalid;
     a->len = sizeof(Laik_BackendAction);
+    a->tid = 0; // always refer to single transition context
+
     return a;
 }
 
@@ -124,7 +136,8 @@ void laik_transplan_recordPackAndSend(Laik_TransitionPlan* tp,
     a->slc = slc;
     a->peer_rank = to;
 
-    a->count = laik_slice_size(tp->transition->space->dims, slc);
+    Laik_TransitionContext* tc = tp->context[0];
+    a->count = laik_slice_size(tc->transition->space->dims, slc);
     assert(a->count > 0);
     tp->sendCount += a->count;
 }
@@ -138,7 +151,8 @@ void laik_transplan_recordRecvAndUnpack(Laik_TransitionPlan* tp,
     a->slc = slc;
     a->peer_rank = from;
 
-    a->count = laik_slice_size(tp->transition->space->dims, slc);
+    Laik_TransitionContext* tc = tp->context[0];
+    a->count = laik_slice_size(tc->transition->space->dims, slc);
     assert(a->count > 0);
     tp->recvCount += a->count;
 }
