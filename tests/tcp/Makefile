@@ -1,0 +1,75 @@
+TESTS = \
+        jac1d_1000_50_10 \
+        jac1d_100 \
+        jac2d_-s_1000 \
+        jac2d_-s_-n_1000 \
+        jac3d_-r_-s_100 \
+        jac3d_-s_100 \
+        jac3d_-s_-n_100 \
+        markov2_40_4 \
+        markov_40_4 \
+        propagation2d_10_10 \
+        spmv2_10_3000 \
+        spmv2_-r_10_3000 \
+        spmv2_-s_2_10_3000 \
+        spmv2_-s_2_-i_10_3000 \
+        spmv_4000 \
+        vsum2 \
+        vsum3 \
+        vsum
+
+all: $(TESTS)
+
+jac1d_1000_50_10:
+	$(SDIR)./jac1d_1000_50_10.sh
+
+jac1d_100:
+	$(SDIR)./jac1d_100.sh
+
+jac2d_-s_1000:
+	$(SDIR)./jac2d_-s_1000.sh
+
+jac2d_-s_-n_1000:
+	$(SDIR)./jac2d_-s_-n_1000.sh
+
+jac3d_-r_-s_100:
+	$(SDIR)./jac3d_-r_-s_100.sh
+
+jac3d_-s_100:
+	$(SDIR)./jac3d_-s_100.sh
+
+jac3d_-s_-n_100:
+	$(SDIR)./jac3d_-s_-n_100.sh
+
+markov2_40_4:
+	$(SDIR)./markov2_40_4.sh
+
+markov_40_4:
+	$(SDIR)./markov_40_4.sh
+
+propagation2d_10_10:
+	$(SDIR)./propagation2d_10_10.sh
+
+spmv2_10_3000:
+	$(SDIR)./spmv2_10_3000.sh
+
+spmv2_-r_10_3000:
+	$(SDIR)./spmv2_-r_10_3000.sh
+
+spmv2_-s_2_10_3000:
+	$(SDIR)./spmv2_-s_2_10_3000.sh
+
+spmv2_-s_2_-i_10_3000:
+	$(SDIR)./spmv2_-s_2_-i_10_3000.sh
+
+spmv_4000:
+	$(SDIR)./spmv_4000.sh
+
+vsum2:
+	$(SDIR)./vsum2.sh
+
+vsum3:
+	$(SDIR)./vsum3.sh
+
+vsum:
+	$(SDIR)./vsum.sh

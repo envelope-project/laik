@@ -8,12 +8,15 @@ TESTS= \
 
 -include ../Makefile.config
 
-.PHONY: mpi $(TESTS)
+.PHONY: mpi tcp $(TESTS)
 
 all: clean $(TESTS) $(TEST_SUBDIRS)
 
 mpi:
 	+$(MAKE) -C mpi
+
+tcp:
+	+$(MAKE) -C tcp
 
 test-vsum:
 	$(SDIR)./test-vsum-single.sh
