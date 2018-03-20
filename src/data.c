@@ -215,11 +215,11 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
 
     // number of local slices
     int sn = p->off[myid+1] - p->off[myid];
-    if (sn == 0) return 0;
 
     // number of maps
-    int n = p->tslice[p->off[myid+1] - 1].mapNo + 1;
-    assert(n > 0);
+    int n = 0;
+    if (sn > 0)
+        n = p->tslice[p->off[myid+1] - 1].mapNo + 1;
 
     Laik_MappingList* ml;
     ml = malloc(sizeof(Laik_MappingList) + n * sizeof(Laik_Mapping));
@@ -229,6 +229,11 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
     }
     ml->res = 0; // not part of a reservation
     ml->count = n;
+
+    laik_log(1, "prepare %d maps for data '%s' (partitioning '%s')",
+             n, d->name, p->name);
+
+    if (n == 0) return ml;
 
     int firstOff, lastOff;
     int mapNo = 0;
@@ -253,7 +258,6 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         m->size[0] = slc.to.i[0] - slc.from.i[0];
         m->size[1] = (dims > 1) ? (slc.to.i[1] - slc.from.i[1]) : 0;
         m->size[2] = (dims > 2) ? (slc.to.i[2] - slc.from.i[2]) : 0;
-
 
         if (laik_log_begin(1)) {
             laik_log_append("prepare map for '%s'/%d: req.slice ",

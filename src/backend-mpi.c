@@ -519,7 +519,7 @@ void laik_execOrRecord(bool record,
             Laik_Mapping* fromMap = &(fromList->map[op->myInputMapNo]);
 
             Laik_Mapping* toMap = 0;
-            if (toList && (op->myOutputMapNo >= 0)) {
+            if (toList && (toList->count > 0) && (op->myOutputMapNo >= 0)) {
                 assert(op->myOutputMapNo < toList->count);
                 toMap = &(toList->map[op->myOutputMapNo]);
 
