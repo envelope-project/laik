@@ -9,34 +9,27 @@
 #include <stdlib.h>
 
 // TODO: rename to ActionSeq, start with empty, and appendTransition()
-Laik_ActionSeq* laik_actions_new(Laik_Data* d, Laik_Transition* t)
+Laik_ActionSeq* laik_actions_new(Laik_Instance *inst)
 {
-    Laik_TransitionContext* tc = malloc(sizeof(Laik_TransitionContext));
-    tc->data = d;
-    tc->transition = t;
-    tc->fromList = 0;
-    tc->toList = 0;
+    Laik_ActionSeq* as = malloc(sizeof(Laik_ActionSeq));
+    as->inst = inst;
 
-    Laik_ActionSeq* tp = malloc(sizeof(Laik_ActionSeq));
     for(int i = 0; i < CONTEXTS_MAX; i++)
-        tp->context[i] = 0;
+        as->context[i] = 0;
 
-    // set context 0 fix to transition context
-    tp->context[0] = tc;
+    as->bufCount = 0;
+    as->bufAllocCount = 0;
+    as->buf = 0;
 
-    tp->bufCount = 0;
-    tp->bufAllocCount = 0;
-    tp->buf = 0;
+    as->actionCount = 0;
+    as->actionAllocCount = 0;
+    as->action = 0;
 
-    tp->actionCount = 0;
-    tp->actionAllocCount = 0;
-    tp->action = 0;
+    as->sendCount = 0;
+    as->recvCount = 0;
+    as->reduceCount = 0;
 
-    tp->sendCount = 0;
-    tp->recvCount = 0;
-    tp->reduceCount = 0;
-
-    return tp;
+    return as;
 }
 
 void laik_actions_free(Laik_ActionSeq* as)
@@ -99,6 +92,24 @@ int laik_actions_addBuf(Laik_ActionSeq* as, int size)
 
     return bufNo;
 }
+
+int laik_actions_addTContext(Laik_ActionSeq* as,
+                             Laik_Data* data, Laik_Transition* transition,
+                             Laik_MappingList* fromList,
+                             Laik_MappingList* toList)
+{
+    Laik_TransitionContext* tc = malloc(sizeof(Laik_TransitionContext));
+    tc->data = data;
+    tc->transition = transition;
+    tc->fromList = fromList;
+    tc->toList = toList;
+
+    assert(as->context[0] == 0);
+    as->context[0] = tc;
+
+    return 0;
+}
+
 
 void laik_actions_addSend(Laik_ActionSeq* as,
                                Laik_Mapping* fromMap, uint64_t off,

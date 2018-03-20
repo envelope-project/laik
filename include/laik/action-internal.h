@@ -56,6 +56,8 @@ typedef struct _Laik_TransitionContext {
 } Laik_TransitionContext;
 
 struct _Laik_ActionSeq {
+    Laik_Instance* inst;
+
     // actions can refer to different transition contexts
 #define CONTEXTS_MAX 1
     void* context[CONTEXTS_MAX];
@@ -72,13 +74,18 @@ struct _Laik_ActionSeq {
     int sendCount, recvCount, reduceCount;
 };
 
-Laik_ActionSeq* laik_actions_new(Laik_Data* d, Laik_Transition* t);
+Laik_ActionSeq* laik_actions_new(Laik_Instance* inst);
 void laik_actions_free(Laik_ActionSeq* as);
 
 // append an invalid backend action
 Laik_BackendAction* laik_actions_addAction(Laik_ActionSeq* as);
 // allocate buffer space to use in actions. Returns buffer ID
 int laik_actions_addBuf(Laik_ActionSeq* as, int size);
+// returns the transaction ID
+int laik_actions_addTContext(Laik_ActionSeq* as,
+                             Laik_Data* d, Laik_Transition* transition,
+                             Laik_MappingList* fromList,
+                             Laik_MappingList* toList);
 
 // append specific actions
 void laik_actions_addSend(Laik_ActionSeq* as,

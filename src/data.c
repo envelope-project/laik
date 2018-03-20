@@ -717,7 +717,7 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
 
                 // backend driver supports asynchronous communication
                 if (prepareAndCleanupPlan)
-                    p = (inst->backend->prepare)(d, t);
+                    p = (inst->backend->prepare)(d, t, fromList, toList);
 
                 (inst->backend->exec)(d, t, p, fromList, toList);
                 // TODO: only wait in laik_map/laik_wait
@@ -1060,10 +1060,10 @@ void laik_exec_transition(Laik_Data* d, Laik_Transition* t)
     d->activeMappings = toList;
 }
 
-Laik_ActionSeq* laik_calc_transitionplan(Laik_Data* d,
-                                              Laik_Transition* t,
-                                              Laik_Reservation* fromRes,
-                                              Laik_Reservation* toRes)
+Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
+                                  Laik_Transition* t,
+                                  Laik_Reservation* fromRes,
+                                  Laik_Reservation* toRes)
 {
     Laik_MappingList* fromList = 0;
     Laik_MappingList* toList = 0;
@@ -1075,19 +1075,14 @@ Laik_ActionSeq* laik_calc_transitionplan(Laik_Data* d,
     const Laik_Backend* backend = d->space->inst->backend;
     assert(backend->prepare);
 
-    // FIXME: preparation needs from/toList (!!)
-    Laik_ActionSeq* tp = (backend->prepare)(d, t);
-    Laik_TransitionContext* tc = tp->context[0];
-    tc->fromList = fromList;
-    tc->toList = toList;
-
-    return tp;
+    Laik_ActionSeq* as = (backend->prepare)(d, t, fromList, toList);
+    return as;
 }
 
 // execute a previously calculated transition on a data container
-void laik_exec_transitionplan(Laik_ActionSeq* tp)
+void laik_exec_actions(Laik_ActionSeq* as)
 {
-    Laik_TransitionContext* tc = tp->context[0];
+    Laik_TransitionContext* tc = as->context[0];
     Laik_Transition* t = tc->transition;
     Laik_Data* d = tc->data;
 
@@ -1121,7 +1116,7 @@ void laik_exec_transitionplan(Laik_ActionSeq* tp)
         exit(1);
     }
 
-    doTransition(d, t, tp, d->activeMappings, toList);
+    doTransition(d, t, as, d->activeMappings, toList);
 
     // set new mapping/partitioning active
     d->activePartitioning = t->toPartitioning;

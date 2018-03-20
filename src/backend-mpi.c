@@ -24,12 +24,13 @@
 // forward decls, types/structs , global variables
 
 static void laik_mpi_finalize();
-static Laik_ActionSeq* laik_mpi_prepare(Laik_Data*, Laik_Transition*);
+static Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
+                                        Laik_MappingList *fromList, Laik_MappingList *toList);
 static void laik_mpi_cleanup(Laik_ActionSeq*);
 static void laik_mpi_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* tp,
                           Laik_MappingList* from, Laik_MappingList* to);
-static void laik_mpi_wait(Laik_ActionSeq*, int mapNo);
-static bool laik_mpi_probe(Laik_ActionSeq* p, int mapNo);
+static void laik_mpi_wait(Laik_ActionSeq* as, int mapNo);
+static bool laik_mpi_probe(Laik_ActionSeq* as, int mapNo);
 static void laik_mpi_updateGroup(Laik_Group*);
 
 // C guarantees that unset function pointers are NULL
@@ -413,7 +414,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 }
 
 static
-void laik_mpi_exec_plan(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
+void laik_mpi_exec_actions(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
 {
     assert(tp->actionCount > 0);
 
@@ -470,35 +471,6 @@ void laik_mpi_exec_plan(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
 }
 
 
-static Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t)
-{
-    Laik_ActionSeq* tp = laik_actions_new(d, t);
-    return tp;
-}
-
-static void laik_mpi_cleanup(Laik_ActionSeq* tp)
-{
-    laik_actions_free(tp);
-}
-
-static void laik_mpi_wait(Laik_ActionSeq* p, int mapNo)
-{
-    // required due to interface signature
-    (void) p;
-    (void) mapNo;
-
-    // nothing to wait for: this backend driver currently is synchronous
-}
-
-static bool laik_mpi_probe(Laik_ActionSeq* p, int mapNo)
-{
-    // required due to interface signature
-    (void) p;
-    (void) mapNo;
-
-    // all communication finished: this backend driver currently is synchronous
-    return true;
-}
 
 static
 void laik_execOrRecord(bool record,
@@ -1026,27 +998,61 @@ void laik_execOrRecord(bool record,
 }
 
 static
-void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_ActionSeq* tp,
+Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
+                                 Laik_MappingList* fromList,
+                                 Laik_MappingList* toList)
+{
+    Laik_ActionSeq* as = laik_actions_new(d->space->inst);
+    laik_actions_addTContext(as, d, t, fromList, toList);
+    laik_execOrRecord(true, d, t, as, fromList, toList);
+
+    if (laik_log_begin(1)) {
+        laik_log_TransitionPlan(as);
+        laik_log_flush(0);
+    }
+
+    return as;
+}
+
+static void laik_mpi_cleanup(Laik_ActionSeq* as)
+{
+    laik_actions_free(as);
+}
+
+static void laik_mpi_wait(Laik_ActionSeq* as, int mapNo)
+{
+    // required due to interface signature
+    (void) as;
+    (void) mapNo;
+
+    // nothing to wait for: this backend driver currently is synchronous
+}
+
+static bool laik_mpi_probe(Laik_ActionSeq* p, int mapNo)
+{
+    // required due to interface signature
+    (void) p;
+    (void) mapNo;
+
+    // all communication finished: this backend driver currently is synchronous
+    return true;
+}
+
+static
+void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_ActionSeq* as,
                    Laik_MappingList* fromList, Laik_MappingList* toList)
 {
-    if (tp) {
-        Laik_TransitionContext* tc = tp->context[0];
-        assert(d == tc->data);
-        assert(t == tc->transition);
-
-        if (tp->actionCount == 0) {
-            laik_execOrRecord(true, d, t, tp, fromList, toList);
-            assert(tp->actionCount > 0);
-            if (laik_log_begin(1)) {
-                laik_log_TransitionPlan(tp);
-                laik_log_flush(0);
-            }
-        }
-        laik_mpi_exec_plan(tp, d->stat);
+    if (!as) {
+        laik_execOrRecord(false, d, t, as, fromList, toList);
         return;
     }
 
-    laik_execOrRecord(false, d, t, tp, fromList, toList);
+    Laik_TransitionContext* tc = as->context[0];
+    assert(d == tc->data);
+    assert(t == tc->transition);
+    assert(as->actionCount > 0);
+
+    laik_mpi_exec_actions(as, d->stat);
 }
 
 

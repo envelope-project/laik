@@ -23,6 +23,7 @@
 #include <stdlib.h>   // for size_t
 #include "core.h"     // for Laik_Group, Laik_Instance
 #include "space.h"    // for Laik_DataFlow, Laik_AccessPhase, Laik_Partitioning
+#include "action.h"
 
 /*********************************************************************/
 /* LAIK Data - Data containers for LAIK index spaces
@@ -120,6 +121,15 @@ void laik_data_use_reservation(Laik_Data* d, Laik_Reservation* r);
 
 // execute a previously calculated transition on a data container
 void laik_exec_transition(Laik_Data* d, Laik_Transition* t);
+
+// record steps for a transition on a container into an action sequence,
+// optionally provide allocations from reservations which are known
+Laik_ActionSeq* laik_calc_actions(Laik_Data* d, Laik_Transition* t,
+                                  Laik_Reservation* fromRes,
+                                  Laik_Reservation* toRes);
+
+// execute a previously calculated transition on a data container
+void laik_exec_actions(Laik_ActionSeq* as);
 
 // switch to new partitioning (new flow is derived from previous flow)
 void laik_switchto_partitioning(Laik_Data* d,

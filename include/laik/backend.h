@@ -55,7 +55,8 @@ struct _Laik_Backend {
   // - for reserved and pre-allocated mappings (and fixed data layout),
   //   we could further optimize/specialize our plan:
   //   => extend by providing from/to mappings (instead of providing in exec)
-  Laik_ActionSeq* (*prepare)(Laik_Data*, Laik_Transition*);
+  Laik_ActionSeq* (*prepare)(Laik_Data*, Laik_Transition*,
+                             Laik_MappingList*, Laik_MappingList*);
 
   // free resources allocated for a transition plan
   void (*cleanup)(Laik_ActionSeq*);
