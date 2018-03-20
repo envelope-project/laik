@@ -688,13 +688,22 @@ void initMaps(Laik_Transition* t,
 }
 
 static
-void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
+void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
                   Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     if (d->stat) {
         d->stat->switches++;
         if (!t || (t->actionCount == 0))
             d->stat->switches_noactions++;
+    }
+
+    if (as) {
+        // check that <as> has actions for given transition
+        Laik_TransitionContext* tc = as->context[0];
+        assert(tc->data == d);
+        assert(tc->transition == t);
+        if (fromList) assert(tc->fromList == fromList);
+        if (toList) assert(tc->toList == toList);
     }
 
     if (t) {
@@ -714,24 +723,29 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
             if (inst->profiling->do_profiling)
                 inst->profiling->timer_backend = laik_wtime();
 
+#if 0
+            // test action recording
             if (inst->backend->prepare) {
                 // HACK: if p is given, just execute it without cleanup
                 // We really should check that the plan matches!!
-                bool prepareAndCleanupPlan = (p == 0);
+                bool prepareAndCleanupPlan = (as == 0);
 
                 // backend driver supports asynchronous communication
                 if (prepareAndCleanupPlan)
-                    p = (inst->backend->prepare)(d, t, fromList, toList);
+                    as = (inst->backend->prepare)(d, t, fromList, toList);
 
-                (inst->backend->exec)(d, t, p, fromList, toList);
+                (inst->backend->exec)(d, t, as, fromList, toList);
                 // TODO: only wait in laik_map/laik_wait
-                (inst->backend->wait)(p, -1);
+                (inst->backend->wait)(as, -1);
 
                 if (prepareAndCleanupPlan)
-                    (inst->backend->cleanup)(p);
+                    (inst->backend->cleanup)(as);
             }
-            else {
-                (inst->backend->exec)(d, t, 0, fromList, toList);
+            else
+#endif
+            {
+                (inst->backend->exec)(d, t, as, fromList, toList);
+                //if (as) (inst->backend->wait)(as, -1);
             }
 
             if (inst->profiling->do_profiling)
