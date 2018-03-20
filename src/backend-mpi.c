@@ -418,8 +418,12 @@ void laik_mpi_exec_actions(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
 {
     assert(tp->actionCount > 0);
 
+    laik_log(1, "MPI backend: exec %d actions\n", tp->actionCount);
+
     // TODO: use transition context given by each action
     Laik_TransitionContext* tc = tp->context[0];
+    Laik_MappingList* fromList = tc->fromList;
+    Laik_MappingList* toList = tc->toList;
     int dims = tc->data->space->dims;
     int elemsize = tc->data->elemsize;
 
@@ -436,12 +440,22 @@ void laik_mpi_exec_actions(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
 
         switch(a->type) {
         case LAIK_AT_Send:
-            MPI_Send(a->map->base + a->offset, a->count,
+            MPI_Send(fromList->map[a->mapNo].base + a->offset, a->count,
+                     dataType, a->peer_rank, tag, comm);
+            break;
+
+        case LAIK_AT_SendBuf:
+            MPI_Send(a->fromBuf, a->count,
                      dataType, a->peer_rank, tag, comm);
             break;
 
         case LAIK_AT_Recv:
-            MPI_Recv(a->map->base + a->offset, a->count,
+            MPI_Recv(toList->map[a->mapNo].base + a->offset, a->count,
+                     dataType, a->peer_rank, tag, comm, &st);
+            break;
+
+        case LAIK_AT_RecvBuf:
+            MPI_Recv(a->toBuf, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
             break;
 
@@ -489,10 +503,10 @@ void laik_execOrRecord(bool record,
     int dims = d->space->dims;
     Laik_SwitchStat* ss = d->stat;
 
-    laik_log(1, "MPI backend execute transition:\n"
-             "  data '%s', group %d (size %d, myid %d)\n"
-             "  actions: %d reductions, %d sends, %d recvs",
-             d->name, g->gid, g->size, myid,
+    laik_log(1, "MPI backend: %s transition (data '%s', group %d:%d/%d)\n"
+             "    actions: %d reductions, %d sends, %d recvs",
+             record ? "record":"execute",
+             d->name, g->gid, myid, g->size,
              t->redCount, t->sendCount, t->recvCount);
 
     if (myid < 0) {
@@ -560,8 +574,8 @@ void laik_execOrRecord(bool record,
             if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
 
                 if (laik_log_begin(1)) {
-                    if (record) laik_log_append("Record ");
-                    laik_log_append("manual reduction: (%lld - %lld) slc/map %d/%d",
+                    laik_log_append("    %s manual reduction: (%lld - %lld) slc/map %d/%d",
+                                    record ? "record":"execute",
                                     (long long int) from, (long long int) to,
                                     op->myInputSliceNo, op->myInputMapNo);
                     laik_log_flush(0);
@@ -716,8 +730,8 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (laik_log_begin(1)) {
-                    if (record) laik_log_append("Record ");
-                    laik_log_append("MPI Reduce (root ");
+                    laik_log_append("    %s reduce (root ",
+                                    record ? "record":"execute");
                     if (rootTask == -1)
                         laik_log_append("ALL");
                     else
@@ -806,8 +820,7 @@ void laik_execOrRecord(bool record,
             if (recvFromHigher && (myid > task)) continue;
 
             if (laik_log_begin(1)) {
-                if (record) laik_log_append("Record ");
-                laik_log_append("MPI Recv ");
+                laik_log_append("    %s recv ", record ? "record":"execute");
                 laik_log_Slice(dims, &(op->slc));
                 laik_log_flush(" from T%d", op->fromTask);
             }
@@ -859,8 +872,8 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record)
-                    laik_actions_addRecv(p, toMap, from * d->elemsize,
-                                              count, op->fromTask);
+                    laik_actions_addRecvBuf(p, toMap->base + from * d->elemsize,
+                                            count, op->fromTask);
                 else {
                     // TODO: tag 1 may conflict with application
                     MPI_Recv(toMap->base + from * d->elemsize, count,
@@ -875,7 +888,7 @@ void laik_execOrRecord(bool record,
 
                 if (record)
                     laik_actions_addRecvAndUnpack(p, toMap,
-                                                       &(op->slc), op->fromTask);
+                                                  &(op->slc), op->fromTask);
                 else {
                     Laik_Index idx = op->slc.from;
                     uint64_t size = laik_slice_size(dims, &(op->slc));
@@ -913,8 +926,7 @@ void laik_execOrRecord(bool record,
             if (sendToHigher && (myid > task)) continue;
 
             if (laik_log_begin(1)) {
-                if (record) laik_log_append("Record ");
-                laik_log_append("MPI Send ");
+                laik_log_append("    %s send ", record ? "record":"execute");
                 laik_log_Slice(dims, &(op->slc));
                 laik_log_flush(" to T%d", op->toTask);
             }
@@ -955,8 +967,8 @@ void laik_execOrRecord(bool record,
                          d->elemsize, (void*) fromMap->base);
 
                 if (record)
-                    laik_actions_addSend(p, fromMap, from * d->elemsize,
-                                              count, op->toTask);
+                    laik_actions_addSendBuf(p, fromMap->base + from * d->elemsize,
+                                            count, op->toTask);
                 else {
                     // TODO: tag 1 may conflict with application
                     MPI_Send(fromMap->base + from * d->elemsize, count,
@@ -971,7 +983,7 @@ void laik_execOrRecord(bool record,
 
                 if (record)
                     laik_actions_addPackAndSend(p, fromMap,
-                                                     &(op->slc), op->toTask);
+                                                &(op->slc), op->toTask);
                 else {
                     Laik_Index idx = op->slc.from;
                     uint64_t size = laik_slice_size(dims, &(op->slc));
@@ -1010,7 +1022,7 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     laik_execOrRecord(true, d, t, as, fromList, toList);
 
     if (laik_log_begin(1)) {
-        laik_log_TransitionPlan(as);
+        laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
 

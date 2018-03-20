@@ -58,9 +58,9 @@ typedef enum _Laik_ActionType {
     // low-level, independent from backend
 
     // send items from a buffer (or directly from container)
-    LAIK_AT_Send,
+    LAIK_AT_Send, LAIK_AT_SendBuf,
     // receive items into a buffer (or directly into container)
-    LAIK_AT_Recv,
+    LAIK_AT_Recv, LAIK_AT_RecvBuf,
 
     // pack items from container into buffer and send it afterwards
     LAIK_AT_PackAndSend,

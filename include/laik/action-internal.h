@@ -31,12 +31,12 @@ typedef struct _Laik_BackendAction {
 
     int count;         // for Send, Recv, Copy, Reduce
 
-    // if 0, fromBuf/toBuf is used
-    Laik_Mapping* map; // for Send, Recv, Pack, Unpack, PackAndSend, RecvAndUnpack
+    Laik_Mapping* map; // for Pack, Unpack, PackAndSend, RecvAndUnpack
+    int mapNo;         // for Send, Recv
     uint64_t offset;   // for Send, Recv
 
-    char* fromBuf;     // for Send, Pack, Copy, Reduce
-    char* toBuf;       // for Recv, Unpack, Copy, Reduce
+    char* fromBuf;     // for SendBuf, Pack, Copy, Reduce
+    char* toBuf;       // for RecvBuf, Unpack, Copy, Reduce
     int peer_rank;     // for Send, Recv, PackAndSend, RecvAndUnpack, Reduce
 
     // points to slice given in operation of transition
@@ -89,11 +89,15 @@ int laik_actions_addTContext(Laik_ActionSeq* as,
 
 // append specific actions
 void laik_actions_addSend(Laik_ActionSeq* as,
-                          Laik_Mapping* fromMap, uint64_t off,
+                          int fromMapNo, uint64_t off,
                           int count, int to);
+void laik_actions_addSendBuf(Laik_ActionSeq* as,
+                             char* fromBuf, int count, int to);
 void laik_actions_addRecv(Laik_ActionSeq* as,
-                          Laik_Mapping* toMap, uint64_t off,
+                          int toMapNo, uint64_t off,
                           int count, int from);
+void laik_actions_addRecvBuf(Laik_ActionSeq* as,
+                             char* toBuf, int count, int to);
 void laik_actions_addPackAndSend(Laik_ActionSeq* as,
                                  Laik_Mapping* fromMap,
                                  Laik_Slice* slc, int to);

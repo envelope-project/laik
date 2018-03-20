@@ -110,16 +110,27 @@ int laik_actions_addTContext(Laik_ActionSeq* as,
     return 0;
 }
 
-
+// if buffer is unknown: use indirection over mapping list + offset
 void laik_actions_addSend(Laik_ActionSeq* as,
-                               Laik_Mapping* fromMap, uint64_t off,
-                               int count, int to)
+                          int fromMapNo, uint64_t off,
+                          int count, int to)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_Send;
-    a->map = fromMap;
+    a->mapNo = fromMapNo;
     a->offset = off;
-    a->fromBuf = 0; // not used
+    a->count = count;
+    a->peer_rank = to;
+
+    as->sendCount += count;
+}
+
+void laik_actions_addSendBuf(Laik_ActionSeq* as,
+                             char* fromBuf, int count, int to)
+{
+    Laik_BackendAction* a = laik_actions_addAction(as);
+    a->type = LAIK_AT_SendBuf;
+    a->fromBuf = fromBuf;
     a->count = count;
     a->peer_rank = to;
 
@@ -127,22 +138,34 @@ void laik_actions_addSend(Laik_ActionSeq* as,
 }
 
 void laik_actions_addRecv(Laik_ActionSeq* as,
-                               Laik_Mapping* toMap, uint64_t off,
-                               int count, int from)
+                          int toMapNo, uint64_t off,
+                          int count, int from)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_Recv;
-    a->map = toMap;
+    a->mapNo = toMapNo;
     a->offset = off;
-    a->toBuf = 0; // not used
     a->count = count;
     a->peer_rank = from;
 
     as->recvCount += count;
 }
 
+void laik_actions_addRecvBuf(Laik_ActionSeq* as,
+                             char* toBuf, int count, int to)
+{
+    Laik_BackendAction* a = laik_actions_addAction(as);
+    a->type = LAIK_AT_RecvBuf;
+    a->toBuf = toBuf;
+    a->count = count;
+    a->peer_rank = to;
+
+    as->recvCount += count;
+}
+
+
 void laik_actions_addPackAndSend(Laik_ActionSeq* as,
-                                      Laik_Mapping* fromMap, Laik_Slice* slc, int to)
+                                 Laik_Mapping* fromMap, Laik_Slice* slc, int to)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_PackAndSend;

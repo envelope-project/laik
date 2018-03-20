@@ -313,13 +313,35 @@ void laik_log_Action(Laik_Action* a)
     Laik_BackendAction* ba = (Laik_BackendAction*) a;
     switch(ba->type) {
     case LAIK_AT_Send:
-        laik_log_append("    send(count %d, to %d)",
-                        ba->count, ba->peer_rank);
+        laik_log_append("    send (from map %d, off %d, count %d, to T%d)",
+                        ba->mapNo,
+                        ba->offset,
+                        ba->count,
+                        ba->peer_rank);
         break;
+
+    case LAIK_AT_SendBuf:
+        laik_log_append("    send (from %p, count %d, to T%d)",
+                        ba->fromBuf,
+                        ba->count,
+                        ba->peer_rank);
+        break;
+
     case LAIK_AT_Recv:
-        laik_log_append("    recv(count %d, from %d)",
-                        ba->count, ba->peer_rank);
+        laik_log_append("    recv (from T%d, to map %d, off %d, count %d)",
+                        ba->peer_rank,
+                        ba->mapNo,
+                        ba->offset,
+                        ba->count);
         break;
+
+    case LAIK_AT_RecvBuf:
+        laik_log_append("    recv (from T%d, to %p, count %d)",
+                        ba->peer_rank,
+                        ba->toBuf,
+                        ba->count);
+        break;
+
     case LAIK_AT_Copy:
         laik_log_append("    copy(count %d)", ba->count);
         break;
@@ -340,15 +362,15 @@ void laik_log_Action(Laik_Action* a)
     }
 }
 
-void laik_log_TransitionPlan(Laik_ActionSeq *tp)
+void laik_log_ActionSeq(Laik_ActionSeq *as)
 {
-    Laik_TransitionContext* tc = tp->context[0];
+    Laik_TransitionContext* tc = as->context[0];
     laik_log_append("actions for ");
     laik_log_Transition(tc->transition, false);
     laik_log_append(" on '%s':\n", tc->data->name);
 
-    for(int i = 0; i < tp->actionCount; i++) {
-        laik_log_Action((Laik_Action*) &(tp->action[i]));
+    for(int i = 0; i < as->actionCount; i++) {
+        laik_log_Action((Laik_Action*) &(as->action[i]));
         laik_log_append("\n");
     }
 }
