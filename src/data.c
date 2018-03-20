@@ -684,7 +684,7 @@ void initMaps(Laik_Transition* t,
 }
 
 static
-void doTransition(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
+void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
                   Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     if (d->stat) {
@@ -1060,7 +1060,7 @@ void laik_exec_transition(Laik_Data* d, Laik_Transition* t)
     d->activeMappings = toList;
 }
 
-Laik_TransitionPlan* laik_calc_transitionplan(Laik_Data* d,
+Laik_ActionSeq* laik_calc_transitionplan(Laik_Data* d,
                                               Laik_Transition* t,
                                               Laik_Reservation* fromRes,
                                               Laik_Reservation* toRes)
@@ -1076,7 +1076,7 @@ Laik_TransitionPlan* laik_calc_transitionplan(Laik_Data* d,
     assert(backend->prepare);
 
     // FIXME: preparation needs from/toList (!!)
-    Laik_TransitionPlan* tp = (backend->prepare)(d, t);
+    Laik_ActionSeq* tp = (backend->prepare)(d, t);
     Laik_TransitionContext* tc = tp->context[0];
     tc->fromList = fromList;
     tc->toList = toList;
@@ -1085,7 +1085,7 @@ Laik_TransitionPlan* laik_calc_transitionplan(Laik_Data* d,
 }
 
 // execute a previously calculated transition on a data container
-void laik_exec_transitionplan(Laik_TransitionPlan* tp)
+void laik_exec_transitionplan(Laik_ActionSeq* tp)
 {
     Laik_TransitionContext* tc = tp->context[0];
     Laik_Transition* t = tc->transition;

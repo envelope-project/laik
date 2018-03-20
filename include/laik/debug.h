@@ -34,6 +34,6 @@ void laik_log_Transition(Laik_Transition* t, bool showActions);
 void laik_log_Partitioning(Laik_Partitioning* p);
 void laik_log_SwitchStat(Laik_SwitchStat* ss);
 void laik_log_Action(Laik_Action* a);
-void laik_log_TransitionPlan(Laik_TransitionPlan* tp);
+void laik_log_TransitionPlan(Laik_ActionSeq* tp);
 
 #endif // _LAIK_DEBUG_H_

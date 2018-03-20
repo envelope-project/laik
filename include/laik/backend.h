@@ -55,17 +55,17 @@ struct _Laik_Backend {
   // - for reserved and pre-allocated mappings (and fixed data layout),
   //   we could further optimize/specialize our plan:
   //   => extend by providing from/to mappings (instead of providing in exec)
-  Laik_TransitionPlan* (*prepare)(Laik_Data*, Laik_Transition*);
+  Laik_ActionSeq* (*prepare)(Laik_Data*, Laik_Transition*);
 
   // free resources allocated for a transition plan
-  void (*cleanup)(Laik_TransitionPlan*);
+  void (*cleanup)(Laik_ActionSeq*);
 
   // execute a transition by triggering required communication.
   // a transition plan can be specified, allowing asynchronous execution.
   // else, the transition will be executed synchronously (set <p> to 0).
   // data to send is found in mappings in <from>, to receive in <to>
   // before executing a transition plan again, call wait (see below)
-  void (*exec)(Laik_Data*, Laik_Transition*, Laik_TransitionPlan*,
+  void (*exec)(Laik_Data*, Laik_Transition*, Laik_ActionSeq*,
                Laik_MappingList* from, Laik_MappingList* to);
 
   // wait for outstanding asynchronous communication requests resulting from
@@ -73,11 +73,11 @@ struct _Laik_Backend {
   // If a LAIK container uses multiple mappings, you can wait for finished
   // communication for each mapping separately.
   // Use -1 for <mapNo> to wait for all.
-  void (*wait)(Laik_TransitionPlan*, int mapNo);
+  void (*wait)(Laik_ActionSeq*, int mapNo);
 
   // similar to wait, but just probe if any communication for a given mapping
   // already finished (-1 for all)
-  bool (*probe)(Laik_TransitionPlan*, int mapNo);
+  bool (*probe)(Laik_ActionSeq*, int mapNo);
 
   // update backend specific data for group if needed
   void (*updateGroup)(Laik_Group*);

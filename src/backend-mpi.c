@@ -24,12 +24,12 @@
 // forward decls, types/structs , global variables
 
 static void laik_mpi_finalize();
-static Laik_TransitionPlan* laik_mpi_prepare(Laik_Data*, Laik_Transition*);
-static void laik_mpi_cleanup(Laik_TransitionPlan*);
-static void laik_mpi_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* tp,
+static Laik_ActionSeq* laik_mpi_prepare(Laik_Data*, Laik_Transition*);
+static void laik_mpi_cleanup(Laik_ActionSeq*);
+static void laik_mpi_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* tp,
                           Laik_MappingList* from, Laik_MappingList* to);
-static void laik_mpi_wait(Laik_TransitionPlan*, int mapNo);
-static bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo);
+static void laik_mpi_wait(Laik_ActionSeq*, int mapNo);
+static bool laik_mpi_probe(Laik_ActionSeq* p, int mapNo);
 static void laik_mpi_updateGroup(Laik_Group*);
 
 // C guarantees that unset function pointers are NULL
@@ -413,7 +413,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 }
 
 static
-void laik_mpi_exec_plan(Laik_TransitionPlan* tp, Laik_SwitchStat* ss)
+void laik_mpi_exec_plan(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
 {
     assert(tp->actionCount > 0);
 
@@ -470,18 +470,18 @@ void laik_mpi_exec_plan(Laik_TransitionPlan* tp, Laik_SwitchStat* ss)
 }
 
 
-static Laik_TransitionPlan* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t)
+static Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t)
 {
-    Laik_TransitionPlan* tp = laik_transplan_new(d, t);
+    Laik_ActionSeq* tp = laik_actions_new(d, t);
     return tp;
 }
 
-static void laik_mpi_cleanup(Laik_TransitionPlan* tp)
+static void laik_mpi_cleanup(Laik_ActionSeq* tp)
 {
-    laik_transplan_free(tp);
+    laik_actions_free(tp);
 }
 
-static void laik_mpi_wait(Laik_TransitionPlan* p, int mapNo)
+static void laik_mpi_wait(Laik_ActionSeq* p, int mapNo)
 {
     // required due to interface signature
     (void) p;
@@ -490,7 +490,7 @@ static void laik_mpi_wait(Laik_TransitionPlan* p, int mapNo)
     // nothing to wait for: this backend driver currently is synchronous
 }
 
-static bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo)
+static bool laik_mpi_probe(Laik_ActionSeq* p, int mapNo)
 {
     // required due to interface signature
     (void) p;
@@ -502,7 +502,7 @@ static bool laik_mpi_probe(Laik_TransitionPlan* p, int mapNo)
 
 static
 void laik_execOrRecord(bool record,
-                       Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* p,
+                       Laik_Data *d, Laik_Transition *t, Laik_ActionSeq* p,
                        Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     if (record) {
@@ -593,7 +593,7 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record)
-                    laik_transplan_recordGroupReduce(p,
+                    laik_actions_addGroupReduce(p,
                                                      op->inputGroup, op->outputGroup,
                                                      fromBase, toBase, elemCount, op->redOp);
                 else {
@@ -767,7 +767,7 @@ void laik_execOrRecord(bool record,
 #endif
 
                 if (record)
-                    laik_transplan_recordReduce(p, fromBase, toBase, to - from,
+                    laik_actions_addReduce(p, fromBase, toBase, to - from,
                                                 rootTask, op->redOp);
                 else {
                     if (rootTask == -1) {
@@ -884,7 +884,7 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record)
-                    laik_transplan_recordRecv(p, toMap, from * d->elemsize,
+                    laik_actions_addRecv(p, toMap, from * d->elemsize,
                                               count, op->fromTask);
                 else {
                     // TODO: tag 1 may conflict with application
@@ -899,7 +899,7 @@ void laik_execOrRecord(bool record,
                 assert(toMap->layout->unpack);
 
                 if (record)
-                    laik_transplan_recordRecvAndUnpack(p, toMap,
+                    laik_actions_addRecvAndUnpack(p, toMap,
                                                        &(op->slc), op->fromTask);
                 else {
                     Laik_Index idx = op->slc.from;
@@ -980,7 +980,7 @@ void laik_execOrRecord(bool record,
                          d->elemsize, (void*) fromMap->base);
 
                 if (record)
-                    laik_transplan_recordSend(p, fromMap, from * d->elemsize,
+                    laik_actions_addSend(p, fromMap, from * d->elemsize,
                                               count, op->toTask);
                 else {
                     // TODO: tag 1 may conflict with application
@@ -995,7 +995,7 @@ void laik_execOrRecord(bool record,
                 assert(fromMap->layout->pack);
 
                 if (record)
-                    laik_transplan_recordPackAndSend(p, fromMap,
+                    laik_actions_addPackAndSend(p, fromMap,
                                                      &(op->slc), op->toTask);
                 else {
                     Laik_Index idx = op->slc.from;
@@ -1026,7 +1026,7 @@ void laik_execOrRecord(bool record,
 }
 
 static
-void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_TransitionPlan* tp,
+void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_ActionSeq* tp,
                    Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     if (tp) {

@@ -340,7 +340,7 @@ void laik_log_Action(Laik_Action* a)
     }
 }
 
-void laik_log_TransitionPlan(Laik_TransitionPlan *tp)
+void laik_log_TransitionPlan(Laik_ActionSeq *tp)
 {
     Laik_TransitionContext* tc = tp->context[0];
     laik_log_append("actions for ");

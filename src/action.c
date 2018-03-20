@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 // TODO: rename to ActionSeq, start with empty, and appendTransition()
-Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
+Laik_ActionSeq* laik_actions_new(Laik_Data* d, Laik_Transition* t)
 {
     Laik_TransitionContext* tc = malloc(sizeof(Laik_TransitionContext));
     tc->data = d;
@@ -17,7 +17,7 @@ Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
     tc->fromList = 0;
     tc->toList = 0;
 
-    Laik_TransitionPlan* tp = malloc(sizeof(Laik_TransitionPlan));
+    Laik_ActionSeq* tp = malloc(sizeof(Laik_ActionSeq));
     for(int i = 0; i < CONTEXTS_MAX; i++)
         tp->context[i] = 0;
 
@@ -39,35 +39,35 @@ Laik_TransitionPlan* laik_transplan_new(Laik_Data* d, Laik_Transition* t)
     return tp;
 }
 
-void laik_transplan_free(Laik_TransitionPlan* tp)
+void laik_actions_free(Laik_ActionSeq* as)
 {
     for(int i = 0; i < CONTEXTS_MAX; i++)
-        free(tp->context[i]);
+        free(as->context[i]);
 
-    if (tp->buf) {
-        for(int i = 0; i < tp->bufCount; i++)
-            free(tp->buf[i]);
-        free(tp->buf);
+    if (as->buf) {
+        for(int i = 0; i < as->bufCount; i++)
+            free(as->buf[i]);
+        free(as->buf);
     }
 
-    free(tp->action);
-    free(tp);
+    free(as->action);
+    free(as);
 }
 
-Laik_BackendAction* laik_transplan_appendAction(Laik_TransitionPlan* tp)
+Laik_BackendAction* laik_actions_addAction(Laik_ActionSeq* as)
 {
-    if (tp->actionCount == tp->actionAllocCount) {
+    if (as->actionCount == as->actionAllocCount) {
         // enlarge buffer
-        tp->actionAllocCount = (tp->actionCount + 20) * 2;
-        tp->action = realloc(tp->action,
-                             tp->actionAllocCount * sizeof(Laik_BackendAction));
-        if (!tp->action) {
+        as->actionAllocCount = (as->actionCount + 20) * 2;
+        as->action = realloc(as->action,
+                             as->actionAllocCount * sizeof(Laik_BackendAction));
+        if (!as->action) {
             laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
             exit(1); // not actually needed, laik_panic never returns
         }
     }
-    Laik_BackendAction* a = &(tp->action[tp->actionCount]);
-    tp->actionCount++;
+    Laik_BackendAction* a = &(as->action[as->actionCount]);
+    as->actionCount++;
 
     a->type = LAIK_AT_Invalid;
     a->len = sizeof(Laik_BackendAction);
@@ -77,13 +77,13 @@ Laik_BackendAction* laik_transplan_appendAction(Laik_TransitionPlan* tp)
 }
 
 // allocates buffer and appends it list of buffers used for <tp>, returns off
-int laik_transplan_appendBuf(Laik_TransitionPlan* tp, int size)
+int laik_actions_addBuf(Laik_ActionSeq* as, int size)
 {
-    if (tp->bufCount == tp->bufAllocCount) {
+    if (as->bufCount == as->bufAllocCount) {
         // enlarge buffer
-        tp->bufAllocCount = (tp->bufCount + 20) * 2;
-        tp->buf = realloc(tp->buf, tp->bufAllocCount * sizeof(char**));
-        if (!tp->buf) {
+        as->bufAllocCount = (as->bufCount + 20) * 2;
+        as->buf = realloc(as->buf, as->bufAllocCount * sizeof(char**));
+        if (!as->buf) {
             laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
             exit(1); // not actually needed, laik_panic never returns
         }
@@ -93,18 +93,18 @@ int laik_transplan_appendBuf(Laik_TransitionPlan* tp, int size)
         laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
         exit(1); // not actually needed, laik_panic never returns
     }
-    int bufNo = tp->bufCount;
-    tp->buf[bufNo] = buf;
-    tp->bufCount++;
+    int bufNo = as->bufCount;
+    as->buf[bufNo] = buf;
+    as->bufCount++;
 
     return bufNo;
 }
 
-void laik_transplan_recordSend(Laik_TransitionPlan* tp,
+void laik_actions_addSend(Laik_ActionSeq* as,
                                Laik_Mapping* fromMap, uint64_t off,
                                int count, int to)
 {
-    Laik_BackendAction* a = laik_transplan_appendAction(tp);
+    Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_Send;
     a->map = fromMap;
     a->offset = off;
@@ -112,14 +112,14 @@ void laik_transplan_recordSend(Laik_TransitionPlan* tp,
     a->count = count;
     a->peer_rank = to;
 
-    tp->sendCount += count;
+    as->sendCount += count;
 }
 
-void laik_transplan_recordRecv(Laik_TransitionPlan* tp,
+void laik_actions_addRecv(Laik_ActionSeq* as,
                                Laik_Mapping* toMap, uint64_t off,
                                int count, int from)
 {
-    Laik_BackendAction* a = laik_transplan_appendAction(tp);
+    Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_Recv;
     a->map = toMap;
     a->offset = off;
@@ -127,44 +127,44 @@ void laik_transplan_recordRecv(Laik_TransitionPlan* tp,
     a->count = count;
     a->peer_rank = from;
 
-    tp->recvCount += count;
+    as->recvCount += count;
 }
 
-void laik_transplan_recordPackAndSend(Laik_TransitionPlan* tp,
+void laik_actions_addPackAndSend(Laik_ActionSeq* as,
                                       Laik_Mapping* fromMap, Laik_Slice* slc, int to)
 {
-    Laik_BackendAction* a = laik_transplan_appendAction(tp);
+    Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_PackAndSend;
     a->map = fromMap;
     a->slc = slc;
     a->peer_rank = to;
 
-    Laik_TransitionContext* tc = tp->context[0];
+    Laik_TransitionContext* tc = as->context[0];
     a->count = laik_slice_size(tc->transition->space->dims, slc);
     assert(a->count > 0);
-    tp->sendCount += a->count;
+    as->sendCount += a->count;
 }
 
-void laik_transplan_recordRecvAndUnpack(Laik_TransitionPlan* tp,
+void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as,
                                         Laik_Mapping* toMap, Laik_Slice* slc, int from)
 {
-    Laik_BackendAction* a = laik_transplan_appendAction(tp);
+    Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_RecvAndUnpack;
     a->map = toMap;
     a->slc = slc;
     a->peer_rank = from;
 
-    Laik_TransitionContext* tc = tp->context[0];
+    Laik_TransitionContext* tc = as->context[0];
     a->count = laik_slice_size(tc->transition->space->dims, slc);
     assert(a->count > 0);
-    tp->recvCount += a->count;
+    as->recvCount += a->count;
 }
 
-void laik_transplan_recordReduce(Laik_TransitionPlan* tp,
+void laik_actions_addReduce(Laik_ActionSeq* as,
                                  char* fromBuf, char* toBuf, int count,
                                  int rootTask, Laik_ReductionOperation redOp)
 {
-    Laik_BackendAction* a = laik_transplan_appendAction(tp);
+    Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_Reduce;
     a->fromBuf = fromBuf;
     a->toBuf = toBuf;
@@ -173,15 +173,15 @@ void laik_transplan_recordReduce(Laik_TransitionPlan* tp,
     a->redOp = redOp;
 
     assert(a->count > 0);
-    tp->reduceCount += a->count;
+    as->reduceCount += a->count;
 }
 
-void laik_transplan_recordGroupReduce(Laik_TransitionPlan* tp,
+void laik_actions_addGroupReduce(Laik_ActionSeq* as,
                                       int inputGroup, int outputGroup,
                                       char* fromBuf, char* toBuf, int count,
                                       Laik_ReductionOperation redOp)
 {
-    Laik_BackendAction* a = laik_transplan_appendAction(tp);
+    Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_GroupReduce;
     a->inputGroup = inputGroup;
     a->outputGroup = outputGroup;
@@ -191,7 +191,7 @@ void laik_transplan_recordGroupReduce(Laik_TransitionPlan* tp,
     a->redOp = redOp;
 
     assert(a->count > 0);
-    tp->reduceCount += a->count;
+    as->reduceCount += a->count;
 }
 
 

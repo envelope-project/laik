@@ -9,12 +9,6 @@
 #include "errors.h"         // for laik_tcp_errors_push, laik_tcp_errors_pre...
 #include "mpi.h"            // for MPI_Comm, MPI_Datatype, MPI_COMM_WORLD
 
-/* Type definitions */
-
-//struct _Laik_TransitionPlan {
-//    Laik_Data*       data;
-//    Laik_Transition* transition;
-//};
 
 /* Internal functions */
 
@@ -412,7 +406,7 @@ static void laik_tcp_backend_reduce
 
 /* API functions */
 
-static void laik_tcp_backend_cleanup (Laik_TransitionPlan* plan) {
+static void laik_tcp_backend_cleanup (Laik_ActionSeq* plan) {
     // Check the parameters
     laik_tcp_always (plan);
 
@@ -422,7 +416,7 @@ static void laik_tcp_backend_cleanup (Laik_TransitionPlan* plan) {
 static void laik_tcp_backend_exec
     ( Laik_Data* data
     , Laik_Transition* transition
-    , Laik_TransitionPlan* plan
+    , Laik_ActionSeq* plan
     , Laik_MappingList* input_list
     , Laik_MappingList* output_list
     )
@@ -546,7 +540,7 @@ static void laik_tcp_backend_finalize () {
 //    return plan;
 //}
 
-static bool laik_tcp_backend_probe (Laik_TransitionPlan* plan, const int map_number) {
+static bool laik_tcp_backend_probe (Laik_ActionSeq* plan, const int map_number) {
     laik_tcp_always (plan);
 
     (void) plan;
@@ -592,7 +586,7 @@ static void laik_tcp_backend_update_group (Laik_Group* group) {
     }
 }
 
-static void laik_tcp_backend_wait (Laik_TransitionPlan* plan, const int map_number) {
+static void laik_tcp_backend_wait (Laik_ActionSeq* plan, const int map_number) {
     laik_tcp_always (plan);
 
     (void) plan;

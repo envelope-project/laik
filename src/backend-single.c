@@ -12,7 +12,7 @@
 #include <stdio.h>
 
 // forward decl
-void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
+void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
                       Laik_MappingList* fromList, Laik_MappingList* toList);
 
 // C guarantees that unset function pointers are NULL
@@ -46,7 +46,7 @@ Laik_Group* laik_single_world()
     return single_instance->group[0];
 }
 
-void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_TransitionPlan* p,
+void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
                       Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     assert(p == 0); // does not support transition plans

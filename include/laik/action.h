@@ -103,8 +103,4 @@ typedef struct _Laik_Action {
 
 typedef struct _Laik_ActionSeq Laik_ActionSeq;
 
-// action sequence for one transition. TODO: morph into ActionSeq
-typedef struct _Laik_TransitionPlan Laik_TransitionPlan;
-
-
 #endif // _LAIK_ACTIONS_H_
