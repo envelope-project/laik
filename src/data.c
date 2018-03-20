@@ -1087,7 +1087,7 @@ void laik_exec_actions(Laik_ActionSeq* as)
     Laik_Data* d = tc->data;
 
     if (laik_log_begin(1)) {
-        laik_log_append("exec transition plan for (");
+        laik_log_append("exec actions for (");
         laik_log_DataFlow(t->fromFlow);
         laik_log_append("/'%s' => ", t->fromPartitioning ? t->fromPartitioning->name : "(none)");
         laik_log_DataFlow(t->toFlow);

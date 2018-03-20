@@ -95,6 +95,7 @@ int main(int argc, char* argv[])
     bool do_sum = false;
     bool do_reservation = false;
     bool do_exec = false;
+    bool do_actions = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
@@ -103,6 +104,7 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 's') do_sum = true;
         if (argv[arg][1] == 'r') do_reservation = true;
         if (argv[arg][1] == 'e') do_exec = true;
+        if (argv[arg][1] == 'a') do_actions = true;
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
@@ -110,7 +112,8 @@ int main(int argc, char* argv[])
                    " -p : write profiling data to 'jac3d_profiling.txt'\n"
                    " -s : print value sum at end (warning: sum done at master)\n"
                    " -r : do space reservation before iteration loop\n"
-                   " -e : execute transitions calculated before iteration loop\n"
+                   " -e : pre-calculate transitions to exec in iteration loop\n"
+                   " -a : pre-calculate action sequence to exec (includes -e)\n"
                    " -h : print this help text and exit\n",
                    argv[0]);
             exit(1);
@@ -167,6 +170,8 @@ int main(int argc, char* argv[])
     laik_partitioning_set_name(paWrite, "paWrite");
     laik_partitioning_set_name(paRead, "paRead");
 
+    Laik_Reservation* r1 = 0;
+    Laik_Reservation* r2 = 0;
     if (do_reservation) {
         // reserve and pre-allocate memory for data1/2
         // this is purely optional, and the application still works when we
@@ -175,28 +180,38 @@ int main(int argc, char* argv[])
         // iteration, and reservation/allocation should be done again on
         // re-partitioning.
 
-        Laik_Reservation* r1 = laik_reservation_new(data1);
+        r1 = laik_reservation_new(data1);
         laik_reservation_add(r1, paRead);
         laik_reservation_add(r1, paWrite);
         laik_reservation_alloc(r1);
         laik_data_use_reservation(data1, r1);
 
-        Laik_Reservation* r2 = laik_reservation_new(data2);
+        r2 = laik_reservation_new(data2);
         laik_reservation_add(r2, paRead);
         laik_reservation_add(r2, paWrite);
         laik_reservation_alloc(r2);
         laik_data_use_reservation(data2, r2);
     }
 
-    Laik_Transition* toHaloR = 0;
-    Laik_Transition* toExclW = 0;
-    if (do_exec) {
-        toHaloR = laik_calc_transition(space,
-                                       paWrite, LAIK_DF_CopyOut,
-                                       paRead, LAIK_DF_CopyIn);
-        toExclW = laik_calc_transition(space,
-                                       paRead, LAIK_DF_CopyIn,
-                                       paWrite, LAIK_DF_CopyOut);
+    Laik_Transition* toHaloTransition = 0;
+    Laik_Transition* toExclTransition = 0;
+    Laik_ActionSeq* data1_toHaloActions = 0;
+    Laik_ActionSeq* data1_toExclActions = 0;
+    Laik_ActionSeq* data2_toHaloActions = 0;
+    Laik_ActionSeq* data2_toExclActions = 0;
+    if (do_exec || do_actions) {
+        toHaloTransition = laik_calc_transition(space,
+                                                paWrite, LAIK_DF_CopyOut,
+                                                paRead, LAIK_DF_CopyIn);
+        toExclTransition = laik_calc_transition(space,
+                                                paRead, LAIK_DF_CopyIn,
+                                                paWrite, LAIK_DF_CopyOut);
+        if (do_actions) {
+            data1_toHaloActions = laik_calc_actions(data1, toHaloTransition, r1, r1);
+            data1_toExclActions = laik_calc_actions(data1, toExclTransition, r1, r1);
+            data2_toHaloActions = laik_calc_actions(data2, toHaloTransition, r2, r2);
+            data2_toExclActions = laik_calc_actions(data2, toExclTransition, r2, r2);
+        }
     }
 
     // for global sum, used for residuum
@@ -243,11 +258,35 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        if (do_exec) {
-            laik_exec_transition(dRead, toHaloR);
-            laik_exec_transition(dWrite, toExclW);
+        // we show 3 different ways of switching containers among partitionings
+        // (1) no preparation: directly switch to another partitioning
+        // (2) with pre-calculated transitions between partitiongs: execute it
+        // (3) with pre-calculated action sequence for transitions: execute it
+        // with (3), it is especially beneficial to use a reservation, as
+        // the actions usually directly refer to e.g. MPI calls
+
+        if (do_exec || do_actions) {
+            // we did pre-calculation to speed up switches
+            if (do_actions) {
+                // we pre-calculated the communication action sequences
+                if (dRead == data1) {
+                    // switch data 1 to halo partitioning
+                    laik_exec_actions(data1_toHaloActions);
+                    laik_exec_actions(data2_toExclActions);
+                }
+                else {
+                    laik_exec_actions(data2_toHaloActions);
+                    laik_exec_actions(data1_toExclActions);
+                }
+            }
+            else {
+                // pre-calculation of transitions
+                laik_exec_transition(dRead, toHaloTransition);
+                laik_exec_transition(dWrite, toExclTransition);
+            }
         }
         else {
+            // no pre-calculation: switch to partitionings
             laik_switchto_partitioning(dRead,  paRead,  LAIK_DF_CopyIn);
             laik_switchto_partitioning(dWrite, paWrite, LAIK_DF_CopyOut);
         }

@@ -479,9 +479,12 @@ void laik_execOrRecord(bool record,
 {
     if (record) {
         assert(p && (p->actionCount == 0));
+
+        assert((fromList != 0) && (toList != 0) &&
+               "recording without mappings not supported at the moment");
     }
 
-    Laik_Group* g = d->activePartitioning->group;
+    Laik_Group* g = t->group;
     int myid  = g->myid;
     int dims = d->space->dims;
     Laik_SwitchStat* ss = d->stat;
