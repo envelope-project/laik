@@ -414,14 +414,14 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 }
 
 static
-void laik_mpi_exec_actions(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
+void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
 {
-    assert(tp->actionCount > 0);
+    assert(as->actionCount > 0);
 
-    laik_log(1, "MPI backend: exec %d actions\n", tp->actionCount);
+    laik_log(1, "MPI backend: exec %d actions\n", as->actionCount);
 
     // TODO: use transition context given by each action
-    Laik_TransitionContext* tc = tp->context[0];
+    Laik_TransitionContext* tc = as->context[0];
     Laik_MappingList* fromList = tc->fromList;
     Laik_MappingList* toList = tc->toList;
     int dims = tc->data->space->dims;
@@ -435,8 +435,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
     MPI_Datatype dataType = getMPIDataType(tc->data);
     MPI_Status st;
 
-    for(int i = 0; i < tp->actionCount; i++) {
-        Laik_BackendAction* a = &(tp->action[i]);
+    for(int i = 0; i < as->actionCount; i++) {
+        Laik_BackendAction* a = &(as->action[i]);
 
         switch(a->type) {
         case LAIK_AT_Send:
@@ -479,34 +479,34 @@ void laik_mpi_exec_actions(Laik_ActionSeq* tp, Laik_SwitchStat* ss)
         }
     }
 
-    ss->sentBytes     += tp->sendCount * tc->data->elemsize;
-    ss->receivedBytes += tp->recvCount * tc->data->elemsize;
-    ss->reducedBytes  += tp->reduceCount * tc->data->elemsize;
+    ss->sentBytes     += as->sendCount * tc->data->elemsize;
+    ss->receivedBytes += as->recvCount * tc->data->elemsize;
+    ss->reducedBytes  += as->reduceCount * tc->data->elemsize;
 }
 
 
 
 static
 void laik_execOrRecord(bool record,
-                       Laik_Data *d, Laik_Transition *t, Laik_ActionSeq* p,
+                       Laik_Data *data, Laik_Transition *t, Laik_ActionSeq* as,
                        Laik_MappingList* fromList, Laik_MappingList* toList)
 {
     if (record) {
-        assert(p && (p->actionCount == 0));
+        assert(as && (as->actionCount == 0));
 
         assert((fromList != 0) && (toList != 0) &&
                "recording without mappings not supported at the moment");
     }
 
-    Laik_Group* g = t->group;
-    int myid  = g->myid;
-    int dims = d->space->dims;
-    Laik_SwitchStat* ss = d->stat;
+    Laik_Group* group = t->group;
+    int myid  = group->myid;
+    int dims = data->space->dims;
+    Laik_SwitchStat* ss = data->stat;
 
     laik_log(1, "MPI backend: %s transition (data '%s', group %d:%d/%d)\n"
              "    actions: %d reductions, %d sends, %d recvs",
              record ? "record":"execute",
-             d->name, g->gid, myid, g->size,
+             data->name, group->gid, myid, group->size,
              t->redCount, t->sendCount, t->recvCount);
 
     if (myid < 0) {
@@ -514,7 +514,7 @@ void laik_execOrRecord(bool record,
         return;
     }
 
-    MPIGroupData* gd = mpiGroupData(g);
+    MPIGroupData* gd = mpiGroupData(group);
     assert(gd); // must have been updated by laik_mpi_updateGroup()
     MPI_Comm comm = gd->comm;
     MPI_Status status;
@@ -546,7 +546,7 @@ void laik_execOrRecord(bool record,
             char* fromBase = fromMap ? fromMap->base : 0;
             char* toBase = toMap ? toMap->base : 0;
             uint64_t elemCount = to - from;
-            uint64_t byteCount = elemCount * d->elemsize;
+            uint64_t byteCount = elemCount * data->elemsize;
 
             assert(fromBase != 0);
             // if current task is receiver, toBase should be allocated
@@ -556,19 +556,19 @@ void laik_execOrRecord(bool record,
                 toBase = 0; // no interest in receiving anything
 
             assert(from >= fromMap->requiredSlice.from.i[0]);
-            fromBase += (from - fromMap->requiredSlice.from.i[0]) * d->elemsize;
+            fromBase += (from - fromMap->requiredSlice.from.i[0]) * data->elemsize;
             if (toBase) {
                 assert(from >= toMap->requiredSlice.from.i[0]);
-                toBase += (from - toMap->requiredSlice.from.i[0]) * d->elemsize;
+                toBase += (from - toMap->requiredSlice.from.i[0]) * data->elemsize;
             }
 
-            MPI_Datatype mpiDataType = getMPIDataType(d);
+            MPI_Datatype mpiDataType = getMPIDataType(data);
 
             // all-groups never should be specified explicitly
             if (op->outputGroup >= 0)
-                assert(t->subgroup[op->outputGroup].count < g->size);
+                assert(t->subgroup[op->outputGroup].count < group->size);
             if (op->inputGroup >= 0)
-                assert(t->subgroup[op->inputGroup].count < g->size);
+                assert(t->subgroup[op->inputGroup].count < group->size);
 
             // if neither input nor output are all-groups: manual reduction
             if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
@@ -582,7 +582,7 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record)
-                    laik_actions_addGroupReduce(p,
+                    laik_actions_addGroupReduce(as,
                                                      op->inputGroup, op->outputGroup,
                                                      fromBase, toBase, elemCount, op->redOp);
                 else {
@@ -648,20 +648,20 @@ void laik_execOrRecord(bool record,
                         }
 
                         // do the reduction, put result back to my input buffer
-                        if (d->type->reduce) {
+                        if (data->type->reduce) {
                             assert(tg->count > 1);
 
 
-                            (d->type->reduce)(toBase, ptr[0], ptr[1],
+                            (data->type->reduce)(toBase, ptr[0], ptr[1],
                                     elemCount, op->redOp);
                             for(int t = 2; t < tg->count; t++)
-                                (d->type->reduce)(toBase, toBase, ptr[t],
+                                (data->type->reduce)(toBase, toBase, ptr[t],
                                                   elemCount, op->redOp);
                         }
                         else {
                             laik_log(LAIK_LL_Panic,
                                      "Need reduce function for type '%s'. Not set!",
-                                     d->type->name);
+                                     data->type->name);
                             assert(0);
                         }
 
@@ -743,7 +743,7 @@ void laik_execOrRecord(bool record,
                                    from, to,
                                    op->myInputSliceNo, op->myInputMapNo,
                                    op->myOutputSliceNo, op->myOutputMapNo,
-                                   d->elemsize, fromBase, toBase);
+                                   data->elemsize, fromBase, toBase);
                 }
 
 #ifdef LOG_DOUBLE_VALUES
@@ -756,7 +756,7 @@ void laik_execOrRecord(bool record,
 #endif
 
                 if (record)
-                    laik_actions_addReduce(p, fromBase, toBase, to - from,
+                    laik_actions_addReduce(as, fromBase, toBase, to - from,
                                                 rootTask, op->redOp);
                 else {
                     if (rootTask == -1) {
@@ -789,7 +789,7 @@ void laik_execOrRecord(bool record,
 
             if ((record == 0) && ss) {
                 ss->reduceCount++;
-                ss->reducedBytes += (to - from) * d->elemsize;
+                ss->reducedBytes += (to - from) * data->elemsize;
             }
         }
     }
@@ -804,7 +804,7 @@ void laik_execOrRecord(bool record,
     //
     // TODO: prepare communication schedule with sorted transitions actions!
 
-    int count = g->size;
+    int count = group->size;
     for(int phase = 0; phase < 2*count; phase++) {
         int task = (phase < count) ? phase : (2*count-phase-1);
         bool sendToHigher   = (phase < count);
@@ -839,7 +839,7 @@ void laik_execOrRecord(bool record,
             MPI_Status s;
             uint64_t count;
 
-            MPI_Datatype mpiDataType = getMPIDataType(d);
+            MPI_Datatype mpiDataType = getMPIDataType(data);
 
             // TODO:
             // - tag 1 may conflict with application
@@ -859,7 +859,7 @@ void laik_execOrRecord(bool record,
                          "elemsize %d, baseptr %p\n",
                          (long long int) from, (long long int) to,
                          op->sliceNo, op->mapNo,
-                         d->elemsize, (void*) toMap->base);
+                         data->elemsize, (void*) toMap->base);
 
                 if (mpi_bug > 0) {
                     // intentional bug: ignore small amounts of data received
@@ -872,11 +872,11 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record)
-                    laik_actions_addRecvBuf(p, toMap->base + from * d->elemsize,
+                    laik_actions_addRecvBuf(as, toMap->base + from * data->elemsize,
                                             count, op->fromTask);
                 else {
                     // TODO: tag 1 may conflict with application
-                    MPI_Recv(toMap->base + from * d->elemsize, count,
+                    MPI_Recv(toMap->base + from * data->elemsize, count,
                              mpiDataType, op->fromTask, 1, comm, &s);
                 }
             }
@@ -887,7 +887,7 @@ void laik_execOrRecord(bool record,
                 assert(toMap->layout->unpack);
 
                 if (record)
-                    laik_actions_addRecvAndUnpack(p, toMap,
+                    laik_actions_addRecvAndUnpack(as, toMap,
                                                   &(op->slc), op->fromTask);
                 else {
                     Laik_Index idx = op->slc.from;
@@ -896,12 +896,12 @@ void laik_execOrRecord(bool record,
                     int recvCount, unpacked;
                     count = 0;
                     while(1) {
-                        MPI_Recv(packbuf, PACKBUFSIZE / d->elemsize,
+                        MPI_Recv(packbuf, PACKBUFSIZE / data->elemsize,
                                  mpiDataType, op->fromTask, 1, comm, &s);
                         MPI_Get_count(&s, mpiDataType, &recvCount);
                         unpacked = (toMap->layout->unpack)(toMap, &(op->slc), &idx,
                                                            packbuf,
-                                                           recvCount * d->elemsize);
+                                                           recvCount * data->elemsize);
                         assert(recvCount == unpacked);
                         count += unpacked;
                         if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
@@ -912,7 +912,7 @@ void laik_execOrRecord(bool record,
 
             if ((record == 0) && ss) {
                 ss->recvCount++;
-                ss->receivedBytes += count * d->elemsize;
+                ss->receivedBytes += count * data->elemsize;
             }
 
 
@@ -939,7 +939,7 @@ void laik_execOrRecord(bool record,
             assert(fromMap);
             if (!fromMap->base) {
                 laik_log_begin(LAIK_LL_Panic);
-                laik_log_append("About to send data ('%s', slice ", d->name);
+                laik_log_append("About to send data ('%s', slice ", data->name);
                 laik_log_Slice(dims, &(op->slc));
                 laik_log_flush(") to preserve it for the next phase as"
                                 " requested by you, but it never was written"
@@ -948,7 +948,7 @@ void laik_execOrRecord(bool record,
             }
 
             uint64_t count;
-            MPI_Datatype mpiDataType = getMPIDataType(d);
+            MPI_Datatype mpiDataType = getMPIDataType(data);
 
             if (dims == 1) {
                 // we directly support 1d data layouts
@@ -964,14 +964,14 @@ void laik_execOrRecord(bool record,
                             "elemsize %d, baseptr %p\n",
                          (long long int) from, (long long int) to,
                          op->sliceNo, op->mapNo,
-                         d->elemsize, (void*) fromMap->base);
+                         data->elemsize, (void*) fromMap->base);
 
                 if (record)
-                    laik_actions_addSendBuf(p, fromMap->base + from * d->elemsize,
+                    laik_actions_addSendBuf(as, fromMap->base + from * data->elemsize,
                                             count, op->toTask);
                 else {
                     // TODO: tag 1 may conflict with application
-                    MPI_Send(fromMap->base + from * d->elemsize, count,
+                    MPI_Send(fromMap->base + from * data->elemsize, count,
                              mpiDataType, op->toTask, 1, comm);
                 }
             }
@@ -982,7 +982,7 @@ void laik_execOrRecord(bool record,
                 assert(fromMap->layout->pack);
 
                 if (record)
-                    laik_actions_addPackAndSend(p, fromMap,
+                    laik_actions_addPackAndSend(as, fromMap,
                                                 &(op->slc), op->toTask);
                 else {
                     Laik_Index idx = op->slc.from;
@@ -1005,7 +1005,7 @@ void laik_execOrRecord(bool record,
 
             if ((record == 0) && ss) {
                 ss->sendCount++;
-                ss->sentBytes += count * d->elemsize;
+                ss->sentBytes += count * data->elemsize;
             }
         }
     
