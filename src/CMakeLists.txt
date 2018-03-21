@@ -1,5 +1,6 @@
 # Base library
 add_library ("laik" SHARED
+    "action.c"
     "backend.c"
     "core.c"
     "data.c"
