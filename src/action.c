@@ -336,7 +336,7 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     as->ce = malloc(copyRanges * sizeof(Laik_CopyEntry));
 
     laik_log(1, "Optimized action sequence: buf %p, length %d x %d, ranges %d",
-             as->buf, bufSize, elemsize, copyRanges);
+        (void*) as->buf, bufSize, elemsize, copyRanges);
 
     // second pass: add merged actions
     int bufOff = 0;
