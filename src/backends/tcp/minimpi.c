@@ -195,7 +195,7 @@ int laik_tcp_minimpi_barrier (const Laik_Tcp_MiniMpiComm* comm) {
 
     laik_tcp_debug ("MPI_Barrier entered by task %zu", comm->rank);
 
-    const int master = 0;
+    const size_t master = 0;
 
     if (comm->rank == master) {
         // Receive the ping message from all slaves
