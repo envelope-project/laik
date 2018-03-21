@@ -21,6 +21,12 @@
 #include <laik.h>         // for Laik_Instance, Laik_Group, Laik_AccessPhase
 
 
+// for CopyFromBuf / CopyToBuf
+typedef struct _Laik_CopyEntry {
+    char* ptr;
+    int offset, bytes;
+} Laik_CopyEntry;
+
 // TODO: split off into different action types with minimal space requirements
 typedef struct _Laik_BackendAction {
     char type;
@@ -38,6 +44,7 @@ typedef struct _Laik_BackendAction {
     char* fromBuf;     // for SendBuf, Pack, Copy, Reduce
     char* toBuf;       // for RecvBuf, Unpack, Copy, Reduce
     int peer_rank;     // for Send, Recv, PackAndSend, RecvAndUnpack, Reduce
+    Laik_CopyEntry* ce; // for CopyFromBuf, CopyToBuf
 
     // points to slice given in operation of transition
     Laik_Slice* slc;   // for Pack, Unpack, PackAndSend, RecvAndUnpack
@@ -47,6 +54,7 @@ typedef struct _Laik_BackendAction {
     Laik_ReductionOperation redOp; // for Reduce
 
 } Laik_BackendAction;
+
 
 typedef struct _Laik_TransitionContext {
     Laik_Transition* transition;
@@ -62,9 +70,11 @@ struct _Laik_ActionSeq {
 #define CONTEXTS_MAX 1
     void* context[CONTEXTS_MAX];
 
-    // allocations done for this plan
-    int bufCount, bufAllocCount;
-    char** buf;
+    // buffer space
+    char* buf;
+
+    // for copy actions
+    Laik_CopyEntry* ce;
 
     // action sequence to trigger on execution
     int actionCount, actionAllocCount;
@@ -97,7 +107,7 @@ void laik_actions_addRecv(Laik_ActionSeq* as,
                           int toMapNo, uint64_t off,
                           int count, int from);
 void laik_actions_addRecvBuf(Laik_ActionSeq* as,
-                             char* toBuf, int count, int to);
+                             char* toBuf, int count, int from);
 void laik_actions_addPackAndSend(Laik_ActionSeq* as,
                                  Laik_Mapping* fromMap,
                                  Laik_Slice* slc, int to);
@@ -111,5 +121,20 @@ void laik_actions_addGroupReduce(Laik_ActionSeq* as,
                                  int inputGroup, int outputGroup,
                                  char* fromBuf, char* toBuf, int count,
                                  Laik_ReductionOperation redOp);
+void laik_actions_addCopyToBuf(Laik_ActionSeq* as,
+                               Laik_CopyEntry* ce, char* toBuf, int count);
+void laik_actions_addCopyFromBuf(Laik_ActionSeq* as,
+                                 Laik_CopyEntry* ce, char* fromBuf, int count);
+
+
+// returns a new empty action sequence with same transition context
+Laik_ActionSeq* laik_actions_cloneSeq(Laik_ActionSeq* oldAS);
+
+// just copy actions from oldAS into as
+void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
+
+// merge send/recv actions from oldAS into as
+void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
+
 
 #endif // _LAIK_ACTION_INTERNAL_H_

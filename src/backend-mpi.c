@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
@@ -437,6 +438,10 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
 
     for(int i = 0; i < as->actionCount; i++) {
         Laik_BackendAction* a = &(as->action[i]);
+        if (laik_log_begin(1)) {
+            laik_log_Action((Laik_Action*) a);
+            laik_log_flush(0);
+        }
 
         switch(a->type) {
         case LAIK_AT_Send:
@@ -457,6 +462,20 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         case LAIK_AT_RecvBuf:
             MPI_Recv(a->toBuf, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
+            break;
+
+        case LAIK_AT_CopyFromBuf:
+            for(int i = 0; i < a->count; i++)
+                memcpy(a->ce[i].ptr,
+                       as->buf + a->ce[i].offset,
+                       a->ce[i].bytes);
+            break;
+
+        case LAIK_AT_CopyToBuf:
+            for(int i = 0; i < a->count; i++)
+                memcpy(as->buf + a->ce[i].offset,
+                       a->ce[i].ptr,
+                       a->ce[i].bytes);
             break;
 
         case LAIK_AT_PackAndSend:
@@ -1012,6 +1031,7 @@ void laik_execOrRecord(bool record,
     }
 }
 
+
 static
 Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
                                  Laik_MappingList* fromList,
@@ -1025,8 +1045,20 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
+    //return as;
 
-    return as;
+    Laik_ActionSeq* as2 = laik_actions_cloneSeq(as);
+    laik_actions_optSeq(as, as2);
+    //laik_actions_copySeq(as, as2);
+    laik_actions_free(as);
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After optimization:\n");
+        laik_log_ActionSeq(as2);
+        laik_log_flush(0);
+    }
+
+    return as2;
 }
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)

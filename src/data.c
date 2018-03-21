@@ -723,7 +723,7 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
             if (inst->profiling->do_profiling)
                 inst->profiling->timer_backend = laik_wtime();
 
-#if 0
+#if 1
             // test action recording
             if (inst->backend->prepare) {
                 // HACK: if p is given, just execute it without cleanup

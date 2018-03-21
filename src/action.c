@@ -17,9 +17,8 @@ Laik_ActionSeq* laik_actions_new(Laik_Instance *inst)
     for(int i = 0; i < CONTEXTS_MAX; i++)
         as->context[i] = 0;
 
-    as->bufCount = 0;
-    as->bufAllocCount = 0;
     as->buf = 0;
+    as->ce = 0;
 
     as->actionCount = 0;
     as->actionAllocCount = 0;
@@ -37,11 +36,8 @@ void laik_actions_free(Laik_ActionSeq* as)
     for(int i = 0; i < CONTEXTS_MAX; i++)
         free(as->context[i]);
 
-    if (as->buf) {
-        for(int i = 0; i < as->bufCount; i++)
-            free(as->buf[i]);
-        free(as->buf);
-    }
+    free(as->buf);
+    free(as->ce);
 
     free(as->action);
     free(as);
@@ -67,30 +63,6 @@ Laik_BackendAction* laik_actions_addAction(Laik_ActionSeq* as)
     a->tid = 0; // always refer to single transition context
 
     return a;
-}
-
-// allocates buffer and appends it list of buffers used for <tp>, returns off
-int laik_actions_addBuf(Laik_ActionSeq* as, int size)
-{
-    if (as->bufCount == as->bufAllocCount) {
-        // enlarge buffer
-        as->bufAllocCount = (as->bufCount + 20) * 2;
-        as->buf = realloc(as->buf, as->bufAllocCount * sizeof(char**));
-        if (!as->buf) {
-            laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
-            exit(1); // not actually needed, laik_panic never returns
-        }
-    }
-    char* buf = malloc(size);
-    if (buf) {
-        laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
-        exit(1); // not actually needed, laik_panic never returns
-    }
-    int bufNo = as->bufCount;
-    as->buf[bufNo] = buf;
-    as->bufCount++;
-
-    return bufNo;
 }
 
 int laik_actions_addTContext(Laik_ActionSeq* as,
@@ -152,13 +124,13 @@ void laik_actions_addRecv(Laik_ActionSeq* as,
 }
 
 void laik_actions_addRecvBuf(Laik_ActionSeq* as,
-                             char* toBuf, int count, int to)
+                             char* toBuf, int count, int from)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_RecvBuf;
     a->toBuf = toBuf;
     a->count = count;
-    a->peer_rank = to;
+    a->peer_rank = from;
 
     as->recvCount += count;
 }
@@ -180,7 +152,7 @@ void laik_actions_addPackAndSend(Laik_ActionSeq* as,
 }
 
 void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as,
-                                        Laik_Mapping* toMap, Laik_Slice* slc, int from)
+                                   Laik_Mapping* toMap, Laik_Slice* slc, int from)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_RecvAndUnpack;
@@ -195,8 +167,8 @@ void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as,
 }
 
 void laik_actions_addReduce(Laik_ActionSeq* as,
-                                 char* fromBuf, char* toBuf, int count,
-                                 int rootTask, Laik_ReductionOperation redOp)
+                            char* fromBuf, char* toBuf, int count,
+                            int rootTask, Laik_ReductionOperation redOp)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_Reduce;
@@ -211,9 +183,9 @@ void laik_actions_addReduce(Laik_ActionSeq* as,
 }
 
 void laik_actions_addGroupReduce(Laik_ActionSeq* as,
-                                      int inputGroup, int outputGroup,
-                                      char* fromBuf, char* toBuf, int count,
-                                      Laik_ReductionOperation redOp)
+                                 int inputGroup, int outputGroup,
+                                 char* fromBuf, char* toBuf, int count,
+                                 Laik_ReductionOperation redOp)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_GroupReduce;
@@ -228,4 +200,240 @@ void laik_actions_addGroupReduce(Laik_ActionSeq* as,
     as->reduceCount += a->count;
 }
 
+void laik_actions_addCopyToBuf(Laik_ActionSeq* as,
+                               Laik_CopyEntry* ce, char* toBuf, int count)
+{
+    Laik_BackendAction* a = laik_actions_addAction(as);
+    a->type = LAIK_AT_CopyToBuf;
+    a->ce = ce;
+    a->toBuf = toBuf;
+    a->count = count;
+}
+
+void laik_actions_addCopyFromBuf(Laik_ActionSeq* as,
+                                 Laik_CopyEntry* ce, char* fromBuf, int count)
+{
+    Laik_BackendAction* a = laik_actions_addAction(as);
+    a->type = LAIK_AT_CopyFromBuf;
+    a->ce = ce;
+    a->fromBuf = fromBuf;
+    a->count = count;
+}
+
+
+// returns a new empty action sequence with same transition context
+Laik_ActionSeq* laik_actions_cloneSeq(Laik_ActionSeq* oldAS)
+{
+    Laik_TransitionContext* tc = oldAS->context[0];
+    Laik_Data* d = tc->data;
+    Laik_ActionSeq* as = laik_actions_new(d->space->inst);
+    laik_actions_addTContext(as, d, tc->transition,
+                             tc->fromList, tc->toList);
+    return as;
+}
+
+// just copy actions from oldAS into as
+void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
+{
+    for(int i = 0; i < oldAS->actionCount; i++) {
+        Laik_BackendAction* ba = &(oldAS->action[i]);
+        switch(ba->type) {
+        case LAIK_AT_SendBuf:
+            laik_actions_addSendBuf(as, ba->fromBuf, ba->count, ba->peer_rank);
+            break;
+
+        case LAIK_AT_RecvBuf:
+            laik_actions_addRecvBuf(as, ba->toBuf, ba->count, ba->peer_rank);
+            break;
+
+        case LAIK_AT_PackAndSend:
+            laik_actions_addPackAndSend(as, ba->map, ba->slc, ba->peer_rank);
+            break;
+
+        case LAIK_AT_RecvAndUnpack:
+            laik_actions_addRecvAndUnpack(as, ba->map, ba->slc, ba->peer_rank);
+            break;
+
+        case LAIK_AT_Reduce:
+            laik_actions_addReduce(as, ba->fromBuf, ba->toBuf, ba->count,
+                                   ba->peer_rank, ba->redOp);
+            break;
+
+        case LAIK_AT_GroupReduce:
+            laik_actions_addGroupReduce(as, ba->inputGroup, ba->outputGroup,
+                                        ba->fromBuf, ba->toBuf,
+                                        ba->count, ba->redOp);
+            break;
+
+         default: assert(0);
+        }
+    }
+}
+
+// merge send/recv actions from oldAS into as
+void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
+{
+    Laik_TransitionContext* tc = oldAS->context[0];
+    Laik_Data* d = tc->data;
+    int elemsize = d->elemsize;
+
+    // first pass: how much buffer space?
+    int bufSize = 0, copyRanges = 0;
+    int rank, i, j, count;
+    for(i = 0; i < oldAS->actionCount; i++) {
+        Laik_BackendAction* ba = &(oldAS->action[i]);
+        switch(ba->type) {
+        case LAIK_AT_SendBuf:
+            count = ba->count;
+            rank = ba->peer_rank;
+            for(j = i+1; j < oldAS->actionCount; j++) {
+                if (oldAS->action[j].type != LAIK_AT_SendBuf) break;
+                if (oldAS->action[j].peer_rank != rank) break;
+                count += oldAS->action[j].count;
+            }
+            if (j - i > 1) {
+                bufSize += count;
+                copyRanges += (j-i);
+                i = j - 1;
+            }
+            break;
+
+        case LAIK_AT_RecvBuf:
+            count = ba->count;
+            rank = ba->peer_rank;
+            for(j = i+1; j < oldAS->actionCount; j++) {
+                if (oldAS->action[j].type != LAIK_AT_RecvBuf) break;
+                if (oldAS->action[j].peer_rank != rank) break;
+                count += oldAS->action[j].count;
+            }
+            if (j - i > 1) {
+                bufSize += count;
+                copyRanges += (j-i);
+                i = j - 1;
+            }
+            break;
+
+        case LAIK_AT_PackAndSend:
+        case LAIK_AT_RecvAndUnpack:
+        case LAIK_AT_Reduce:
+        case LAIK_AT_GroupReduce:
+            // nothing to merge for these actions
+            break;
+
+        default: assert(0);
+        }
+    }
+
+    if (bufSize == 0) {
+        assert(copyRanges == 0);
+        laik_log(1, "Optimized action sequence: nothing to do.");
+        laik_actions_copySeq(oldAS, as);
+        return;
+    }
+
+    assert(copyRanges > 0);
+    as->buf = malloc(bufSize * elemsize);
+    as->ce = malloc(copyRanges * sizeof(Laik_CopyEntry));
+
+    laik_log(1, "Optimized action sequence: buf %p, length %d x %d, ranges %d",
+             as->buf, bufSize, elemsize, copyRanges);
+
+    // second pass: add merged actions
+    int bufOff = 0;
+    int rangeOff = 0;
+
+    for(i = 0; i < oldAS->actionCount; i++) {
+        Laik_BackendAction* ba = &(oldAS->action[i]);
+        switch(ba->type) {
+        case LAIK_AT_SendBuf:
+            count = ba->count;
+            rank = ba->peer_rank;
+            for(j = i+1; j < oldAS->actionCount; j++) {
+                if (oldAS->action[j].type != LAIK_AT_SendBuf) break;
+                if (oldAS->action[j].peer_rank != rank) break;
+                count += oldAS->action[j].count;
+            }
+            if (j - i > 1) {
+                //laik_log(1,"Send Seq %d - %d, rangeOff %d, bufOff %d, count %d",
+                //         i, j, rangeOff, bufOff, count);
+                laik_actions_addCopyToBuf(as,
+                                          as->ce + rangeOff,
+                                          as->buf + bufOff * elemsize,
+                                          j - i);
+                laik_actions_addSendBuf(as,
+                                        as->buf + bufOff * elemsize,
+                                        count, rank);
+                for(int k = i; k < j; k++) {
+                    assert(rangeOff < copyRanges);
+                    as->ce[rangeOff].ptr = oldAS->action[k].fromBuf;
+                    as->ce[rangeOff].bytes = oldAS->action[k].count * elemsize;
+                    as->ce[rangeOff].offset = bufOff * elemsize;
+                    bufOff += oldAS->action[k].count;
+                    rangeOff++;
+                }
+                i = j - 1;
+            }
+            else
+                laik_actions_addSendBuf(as, ba->fromBuf, count, rank);
+            break;
+
+        case LAIK_AT_RecvBuf:
+            count = ba->count;
+            rank = ba->peer_rank;
+            for(j = i+1; j < oldAS->actionCount; j++) {
+                if (oldAS->action[j].type != LAIK_AT_RecvBuf) break;
+                if (oldAS->action[j].peer_rank != rank) break;
+                count += oldAS->action[j].count;
+            }
+            if (j - i > 1) {
+                laik_actions_addRecvBuf(as,
+                                        as->buf + bufOff * elemsize,
+                                        count, rank);
+                laik_actions_addCopyFromBuf(as,
+                                            as->ce + rangeOff,
+                                            as->buf + bufOff * elemsize,
+                                            j - i);
+                for(int k = i; k < j; k++) {
+                    assert(rangeOff < copyRanges);
+                    as->ce[rangeOff].ptr = oldAS->action[k].toBuf;
+                    as->ce[rangeOff].bytes = oldAS->action[k].count * elemsize;
+                    as->ce[rangeOff].offset = bufOff * elemsize;
+                    bufOff += oldAS->action[k].count;
+                    rangeOff++;
+                }
+                i = j - 1;
+            }
+            else
+                laik_actions_addRecvBuf(as, ba->toBuf, count, rank);
+            break;
+
+        case LAIK_AT_PackAndSend:
+            // pass trough
+            laik_actions_addPackAndSend(as, ba->map, ba->slc, ba->peer_rank);
+            break;
+
+        case LAIK_AT_RecvAndUnpack:
+            // pass trough
+            laik_actions_addRecvAndUnpack(as, ba->map, ba->slc, ba->peer_rank);
+            break;
+
+        case LAIK_AT_Reduce:
+            // pass trough
+            laik_actions_addReduce(as, ba->fromBuf, ba->toBuf, ba->count,
+                                   ba->peer_rank, ba->redOp);
+            break;
+
+        case LAIK_AT_GroupReduce:
+            // pass trough
+            laik_actions_addGroupReduce(as, ba->inputGroup, ba->outputGroup,
+                                        ba->fromBuf, ba->toBuf,
+                                        ba->count, ba->redOp);
+            break;
+
+        default: assert(0);
+        }
+    }
+    assert(rangeOff == copyRanges);
+    assert(bufSize == bufOff);
+}
 

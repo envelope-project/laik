@@ -342,6 +342,28 @@ void laik_log_Action(Laik_Action* a)
                         ba->count);
         break;
 
+    case LAIK_AT_CopyFromBuf:
+        laik_log_append("    copy from buffer (buf %p, ranges %d):",
+                        ba->fromBuf,
+                        ba->count);
+        for(int i = 0; i < ba->count; i++)
+            laik_log_append("\n        off %d, bytes %d => to %p",
+                            ba->ce[i].offset,
+                            ba->ce[i].bytes,
+                            ba->ce[i].ptr);
+        break;
+
+    case LAIK_AT_CopyToBuf:
+        laik_log_append("    copy to buffer (buf %p, ranges %d):",
+                        ba->toBuf,
+                        ba->count);
+        for(int i = 0; i < ba->count; i++)
+            laik_log_append("\n        %p => off %d, bytes %d",
+                            ba->ce[i].ptr,
+                            ba->ce[i].offset,
+                            ba->ce[i].bytes);
+        break;
+
     case LAIK_AT_Copy:
         laik_log_append("    copy(count %d)", ba->count);
         break;
