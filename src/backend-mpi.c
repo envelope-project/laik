@@ -439,7 +439,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
     for(int i = 0; i < as->actionCount; i++) {
         Laik_BackendAction* a = &(as->action[i]);
         if (laik_log_begin(1)) {
-            laik_log_Action((Laik_Action*) a);
+            laik_log_Action((Laik_Action*) a, tc);
             laik_log_flush(0);
         }
 
@@ -776,7 +776,7 @@ void laik_execOrRecord(bool record,
 
                 if (record)
                     laik_actions_addReduce(as, fromBase, toBase, to - from,
-                                                rootTask, op->redOp);
+                                           rootTask, op->redOp);
                 else {
                     if (rootTask == -1) {
                         if (fromBase == toBase)

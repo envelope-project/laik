@@ -56,12 +56,12 @@ typedef struct _Laik_BackendAction {
 } Laik_BackendAction;
 
 
-typedef struct _Laik_TransitionContext {
+struct _Laik_TransitionContext {
     Laik_Transition* transition;
     Laik_Data* data;
     Laik_MappingList *fromList;
     Laik_MappingList *toList;
-} Laik_TransitionContext;
+};
 
 struct _Laik_ActionSeq {
     Laik_Instance* inst;

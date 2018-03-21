@@ -99,6 +99,8 @@ typedef struct _Laik_Action {
     char len;
 } Laik_Action;
 
+// for actions refering to a transition
+typedef struct _Laik_TransitionContext Laik_TransitionContext;
 
 //
 // Laik_ActionSeq

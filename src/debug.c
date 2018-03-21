@@ -308,12 +308,12 @@ void laik_log_SwitchStat(Laik_SwitchStat* ss)
     }
 }
 
-void laik_log_Action(Laik_Action* a)
+void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 {
     Laik_BackendAction* ba = (Laik_BackendAction*) a;
     switch(ba->type) {
     case LAIK_AT_Send:
-        laik_log_append("    send (from map %d, off %d, count %d, to T%d)",
+        laik_log_append("    send: from map %d, off %d, count %d, to T%d",
                         ba->mapNo,
                         ba->offset,
                         ba->count,
@@ -321,14 +321,14 @@ void laik_log_Action(Laik_Action* a)
         break;
 
     case LAIK_AT_SendBuf:
-        laik_log_append("    send (from %p, count %d, to T%d)",
+        laik_log_append("    send: from %p, count %d, to T%d",
                         ba->fromBuf,
                         ba->count,
                         ba->peer_rank);
         break;
 
     case LAIK_AT_Recv:
-        laik_log_append("    recv (from T%d, to map %d, off %d, count %d)",
+        laik_log_append("    recv: from T%d, to map %d, off %d, count %d",
                         ba->peer_rank,
                         ba->mapNo,
                         ba->offset,
@@ -336,14 +336,14 @@ void laik_log_Action(Laik_Action* a)
         break;
 
     case LAIK_AT_RecvBuf:
-        laik_log_append("    recv (from T%d, to %p, count %d)",
+        laik_log_append("    recv: from T%d, to %p, count %d",
                         ba->peer_rank,
                         ba->toBuf,
                         ba->count);
         break;
 
     case LAIK_AT_CopyFromBuf:
-        laik_log_append("    copy from buffer (buf %p, ranges %d):",
+        laik_log_append("    copy from buffer: buf %p, ranges %d",
                         ba->fromBuf,
                         ba->count);
         for(int i = 0; i < ba->count; i++)
@@ -354,7 +354,7 @@ void laik_log_Action(Laik_Action* a)
         break;
 
     case LAIK_AT_CopyToBuf:
-        laik_log_append("    copy to buffer (buf %p, ranges %d):",
+        laik_log_append("    copy to buffer: buf %p, ranges %d",
                         ba->toBuf,
                         ba->count);
         for(int i = 0; i < ba->count; i++)
@@ -365,19 +365,24 @@ void laik_log_Action(Laik_Action* a)
         break;
 
     case LAIK_AT_Copy:
-        laik_log_append("    copy(count %d)", ba->count);
+        laik_log_append("    copy: count %d", ba->count);
         break;
     case LAIK_AT_Reduce:
-        laik_log_append("    reduce(count %d)", ba->count);
+        laik_log_append("    reduce: count %d, from %p, to %p, root %d",
+                        ba->count, ba->fromBuf, ba->toBuf, ba->peer_rank);
         break;
     case LAIK_AT_GroupReduce:
-        laik_log_append("    groupReduce(count %d)", ba->count);
+        laik_log_append("    groupReduce: count %d, from %p, to %p, input ",
+                        ba->count, ba->fromBuf, ba->toBuf);
+        laik_log_TransitionGroup(tc->transition, ba->inputGroup);
+        laik_log_append(", output ");
+        laik_log_TransitionGroup(tc->transition, ba->outputGroup);
         break;
     case LAIK_AT_PackAndSend:
-        laik_log_append("    packAndSend(count %d)", ba->count);
+        laik_log_append("    packAndSend: count %d", ba->count);
         break;
     case LAIK_AT_RecvAndUnpack:
-        laik_log_append("    recvAndUnpack(count %d)", ba->count);
+        laik_log_append("    recvAndUnpack: count %d", ba->count);
         break;
 
     default: assert(0);
@@ -392,7 +397,7 @@ void laik_log_ActionSeq(Laik_ActionSeq *as)
     laik_log_append(" on '%s':\n", tc->data->name);
 
     for(int i = 0; i < as->actionCount; i++) {
-        laik_log_Action((Laik_Action*) &(as->action[i]));
+        laik_log_Action((Laik_Action*) &(as->action[i]), tc);
         laik_log_append("\n");
     }
 }
