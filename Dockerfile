@@ -15,6 +15,7 @@ RUN env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
     "bear" \
     "clang" \
     "clang-tidy" \
+    "cmake" \
     "libglib2.0-dev" \
     "libmosquitto-dev" \
     "libopenmpi-dev" \
@@ -42,3 +43,11 @@ RUN CC="${CC}" CXX="${CXX}" ./configure
 RUN OMPI_CC="${CC}" bear make
 RUN make test
 RUN find 'src' -name '*.c' -print0 | xargs --null --max-args='1' clang-tidy -p 'compile_commands.json'
+
+# Build and test with CMake
+RUN mkdir "build"
+WORKDIR "build"
+RUN CC="${CC}" CXX="${CXX}" cmake -D "CMAKE_EXPORT_COMPILE_COMMANDS=1" -D "documentation=off" -D "skip-missing=off" ".."
+RUN make
+RUN ctest
+RUN find '../src' -name '*.c' -print0 | xargs --null --max-args='1' clang-tidy -p 'compile_commands.json'
