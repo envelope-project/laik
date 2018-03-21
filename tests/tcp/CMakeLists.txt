@@ -1,6 +1,6 @@
 get_target_property (definitions "laik" "COMPILE_DEFINITIONS")
 
-if ("LAIK_TCP_BACKEND_AVAILABLE" IN_LIST definitions)
+if ("USE_TCP" IN_LIST definitions)
     foreach (test
         "jac1d_1000_50_10.sh"
         "jac1d_100.sh"
