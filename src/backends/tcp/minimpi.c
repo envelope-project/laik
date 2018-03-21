@@ -395,7 +395,10 @@ int laik_tcp_minimpi_finalize (void) {
     laik_tcp_always (messenger);
 
     // Enforce global synchronization before going down
-    (void) laik_tcp_minimpi_barrier (LAIK_TCP_MINIMPI_COMM_WORLD);
+    const int barrier_result = laik_tcp_minimpi_barrier (LAIK_TCP_MINIMPI_COMM_WORLD);
+    if (barrier_result != LAIK_TCP_MINIMPI_SUCCESS) {
+        return barrier_result;
+    }
 
     LAIK_TCP_MINIMPI_COMM_WORLD = NULL;
 
