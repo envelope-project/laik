@@ -9,7 +9,6 @@
 #include "errors.h"         // for laik_tcp_errors_push, laik_tcp_errors_pre...
 #include "mpi.h"            // for MPI_Comm, MPI_Datatype, MPI_COMM_WORLD
 
-
 /* Internal functions */
 
 static void laik_tcp_backend_push_code (Laik_Tcp_Errors* errors, int code) {
@@ -412,28 +411,17 @@ static void laik_tcp_backend_reduce
 
 /* API functions */
 
-static void laik_tcp_backend_cleanup (Laik_ActionSeq* plan) {
-    // Check the parameters
-    laik_tcp_always (plan);
-
-    g_free (plan);
-}
-
 static void laik_tcp_backend_exec
     ( Laik_Data* data
     , Laik_Transition* transition
-    , Laik_ActionSeq* plan
+    , Laik_ActionSeq* plan __attribute__ ((unused))
     , Laik_MappingList* input_list
     , Laik_MappingList* output_list
     )
 {
     laik_tcp_always (data);
     laik_tcp_always (transition);
-
-    if (plan) {
-        laik_tcp_always (data       == plan->data);
-        laik_tcp_always (transition == plan->transition);
-    }
+    laik_tcp_always (!plan);
 
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
@@ -531,36 +519,6 @@ static void laik_tcp_backend_finalize () {
     }
 }
 
-//static Laik_TransitionPlan* laik_tcp_backend_prepare (Laik_Data* data, Laik_Transition* transition) {
-//    laik_tcp_always (data);
-//    laik_tcp_always (transition);
-//
-//    // Allocate a plan object
-//    Laik_TransitionPlan* plan = g_new0 (Laik_TransitionPlan, 1);
-//
-//    // Fill the plan object
-//    plan->data       = data;
-//    plan->transition = transition;
-//
-//    // Return the plan object
-//    return plan;
-//}
-
-static bool laik_tcp_backend_probe (Laik_ActionSeq* plan, const int map_number) {
-    laik_tcp_always (plan);
-
-    (void) plan;
-    (void) map_number;
-
-    return true;
-}
-
-static void laik_tcp_backend_sync (Laik_Instance* instance) {
-    laik_tcp_always (instance);
-
-    (void) instance;
-}
-
 static void laik_tcp_backend_update_group (Laik_Group* group) {
     laik_tcp_always (group);
 
@@ -592,13 +550,6 @@ static void laik_tcp_backend_update_group (Laik_Group* group) {
     }
 }
 
-static void laik_tcp_backend_wait (Laik_ActionSeq* plan, const int map_number) {
-    laik_tcp_always (plan);
-
-    (void) plan;
-    (void) map_number;
-}
-
 /* Public functions */
 
 Laik_Instance* laik_init_tcp (int* argc, char*** argv) {
@@ -606,15 +557,15 @@ Laik_Instance* laik_init_tcp (int* argc, char*** argv) {
 
     // Prepare our Laik_Backend struct which contains all the function pointers
     static const Laik_Backend backend = {
-        .cleanup     = laik_tcp_backend_cleanup,
+        .cleanup     = NULL,
         .exec        = laik_tcp_backend_exec,
         .finalize    = laik_tcp_backend_finalize,
         .name        = "TCP Backend",
-        .prepare     = 0, // laik_tcp_backend_prepare,
-        .probe       = laik_tcp_backend_probe,
-        .sync        = laik_tcp_backend_sync,
+        .prepare     = NULL,
+        .probe       = NULL,
+        .sync        = NULL,
         .updateGroup = laik_tcp_backend_update_group,
-        .wait        = laik_tcp_backend_wait,
+        .wait        = NULL,
     };
 
     // Determine if the MPI subsystem is already initialized
