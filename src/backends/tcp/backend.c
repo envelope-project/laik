@@ -13,13 +13,19 @@
 /* Internal functions */
 
 static void laik_tcp_backend_push_code (Laik_Tcp_Errors* errors, int code) {
-    if (code != MPI_SUCCESS) {
-        char message[MPI_MAX_ERROR_STRING];
-        int length;
+    laik_tcp_always (errors);
 
-        (void) MPI_Error_string (code, message, &length);
+    if (code == MPI_SUCCESS) {
+        return;
+    }
 
+    char message[MPI_MAX_ERROR_STRING];
+    int length;
+
+    if (MPI_Error_string (code, message, &length) == MPI_SUCCESS) {
         laik_tcp_errors_push (errors, __func__, 0, "An MPI operation failed, details below\n%s", message);
+    } else {
+        laik_tcp_errors_push (errors, __func__, 0, "An MPI operation failed and MPI_Error_string() failed to produce a detailed error message");
     }
 }
 
