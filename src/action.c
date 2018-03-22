@@ -270,12 +270,16 @@ void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     }
 }
 
-// merge send/recv actions from oldAS into as
+// merge send/recv/groupReduce actions from oldAS into as
 void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 {
+    int combineGroupReduce = 1;
+
     Laik_TransitionContext* tc = oldAS->context[0];
     Laik_Data* d = tc->data;
     int elemsize = d->elemsize;
+    // used for combining GroupReduce actions
+    int myid = tc->transition->group->myid;
 
     // first pass: how much buffer space?
     int bufSize = 0, copyRanges = 0;
@@ -284,6 +288,7 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
         Laik_BackendAction* ba = &(oldAS->action[i]);
         switch(ba->type) {
         case LAIK_AT_SendBuf:
+            // combine consecutive SendBuf actions with same target rank
             count = ba->count;
             rank = ba->peer_rank;
             for(j = i+1; j < oldAS->actionCount; j++) {
@@ -299,6 +304,7 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             break;
 
         case LAIK_AT_RecvBuf:
+            // combine consecutive RecvBuf actions with same source rank
             count = ba->count;
             rank = ba->peer_rank;
             for(j = i+1; j < oldAS->actionCount; j++) {
@@ -313,10 +319,37 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             }
             break;
 
+        case LAIK_AT_GroupReduce: {
+            if (!combineGroupReduce) break;
+
+            // combine consecutive GroupReduce actions with same
+            // inputGroup, outputGroup, and redOp
+            // TODO: combine all with same input/outputGroup
+            count = ba->count;
+            int inputGroup = ba->inputGroup;
+            int outputGroup = ba->outputGroup;
+            Laik_ReductionOperation redOp = ba->redOp;
+            for(j = i+1; j < oldAS->actionCount; j++) {
+                if (oldAS->action[j].type != LAIK_AT_GroupReduce) break;
+                if (oldAS->action[j].inputGroup != inputGroup) break;
+                if (oldAS->action[j].outputGroup != outputGroup) break;
+                if (oldAS->action[j].redOp != redOp) break;
+                count += oldAS->action[j].count;
+            }
+            if (j - i > 1) {
+                bufSize += count;
+                if (laik_isInGroup(tc->transition, inputGroup, myid))
+                    copyRanges += (j-i);
+                if (laik_isInGroup(tc->transition, outputGroup, myid))
+                    copyRanges += (j-i);
+                i = j - 1;
+            }
+            break;
+        }
+
         case LAIK_AT_PackAndSend:
         case LAIK_AT_RecvAndUnpack:
         case LAIK_AT_Reduce:
-        case LAIK_AT_GroupReduce:
             // nothing to merge for these actions
             break;
 
@@ -407,27 +440,89 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 laik_actions_addRecvBuf(as, ba->toBuf, count, rank);
             break;
 
+        case LAIK_AT_GroupReduce: {
+            if (!combineGroupReduce) {
+                // pass through
+                laik_actions_addGroupReduce(as, ba->inputGroup, ba->outputGroup,
+                                            ba->fromBuf, ba->toBuf,
+                                            ba->count, ba->redOp);
+                break;
+            }
+
+            count = ba->count;
+            int inputGroup = ba->inputGroup;
+            int outputGroup = ba->outputGroup;
+            Laik_ReductionOperation redOp = ba->redOp;
+            for(j = i+1; j < oldAS->actionCount; j++) {
+                if (oldAS->action[j].type != LAIK_AT_GroupReduce) break;
+                if (oldAS->action[j].inputGroup != inputGroup) break;
+                if (oldAS->action[j].outputGroup != outputGroup) break;
+                if (oldAS->action[j].redOp != redOp) break;
+                count += oldAS->action[j].count;
+            }
+            if (j - i > 1) {
+                // temporary buffer used as input and output for reduce
+                char* buf = as->buf + bufOff * elemsize;
+                int startBufOff = bufOff;
+                if (laik_isInGroup(tc->transition, inputGroup, myid)) {
+                    // if I provide input: copy pieces into temporary buffer
+                    laik_actions_addCopyToBuf(as,
+                                              as->ce + rangeOff,
+                                              buf, j - i);
+                    // ranges for input pieces
+                    for(int k = i; k < j; k++) {
+                        assert(rangeOff < copyRanges);
+                        as->ce[rangeOff].ptr = oldAS->action[k].fromBuf;
+                        as->ce[rangeOff].bytes = oldAS->action[k].count * elemsize;
+                        as->ce[rangeOff].offset = bufOff * elemsize;
+                        bufOff += oldAS->action[k].count;
+                        rangeOff++;
+                    }
+                }
+                // use temporary buffer for both input and output
+                laik_actions_addGroupReduce(as,
+                                            inputGroup, outputGroup,
+                                            buf, buf,
+                                            count, redOp);
+                if (laik_isInGroup(tc->transition, outputGroup, myid)) {
+                    // if I want output: copy pieces from temporary buffer
+                    laik_actions_addCopyFromBuf(as,
+                                                as->ce + rangeOff,
+                                                buf, j - i);
+                    bufOff = startBufOff;
+                    for(int k = i; k < j; k++) {
+                        assert(rangeOff < copyRanges);
+                        as->ce[rangeOff].ptr = oldAS->action[k].toBuf;
+                        as->ce[rangeOff].bytes = oldAS->action[k].count * elemsize;
+                        as->ce[rangeOff].offset = bufOff * elemsize;
+                        bufOff += oldAS->action[k].count;
+                        rangeOff++;
+                    }
+                }
+                bufOff = startBufOff + count;
+                i = j - 1;
+            }
+            else
+                laik_actions_addGroupReduce(as, ba->inputGroup, ba->outputGroup,
+                                            ba->fromBuf, ba->toBuf,
+                                            ba->count, ba->redOp);
+            break;
+        }
+
         case LAIK_AT_PackAndSend:
-            // pass trough
+            // pass through
             laik_actions_addPackAndSend(as, ba->map, ba->slc, ba->peer_rank);
             break;
 
         case LAIK_AT_RecvAndUnpack:
-            // pass trough
+            // pass through
             laik_actions_addRecvAndUnpack(as, ba->map, ba->slc, ba->peer_rank);
             break;
 
         case LAIK_AT_Reduce:
-            // pass trough
+            // pass through
             laik_actions_addReduce(as, ba->fromBuf, ba->toBuf, ba->count,
                                    ba->peer_rank, ba->redOp);
-            break;
-
-        case LAIK_AT_GroupReduce:
-            // pass trough
-            laik_actions_addGroupReduce(as, ba->inputGroup, ba->outputGroup,
-                                        ba->fromBuf, ba->toBuf,
-                                        ba->count, ba->redOp);
             break;
 
         default: assert(0);
