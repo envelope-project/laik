@@ -2,23 +2,20 @@
 #include <endian.h>       // for htole64, le64toh
 #include <errno.h>        // for errno
 #include <glib.h>         // for g_get_monotonic_time, g_malloc0_n, GPtrArray
-#include <netdb.h>        // for getaddrinfo, addrinfo, freeaddrinfo
+#include <netdb.h>        // for getaddrinfo
 #include <netinet/in.h>   // for IPPROTO_TCP
-#include <netinet/tcp.h>  // for TCP_NODELAY
+#include <netinet/tcp.h>  // for TCP_KEEPCNT, TCP_KEEPIDLE, TCP_KEEPINTVL
 #include <poll.h>         // for pollfd, poll, POLLNVAL
 #include <stdbool.h>      // for bool, true, false
 #include <stddef.h>       // for NULL, size_t
 #include <stdio.h>        // for snprintf
 #include <string.h>       // for strerror, strsep
-#include <sys/socket.h>   // for setsockopt, sockaddr, accept, bind, connect
+#include <sys/socket.h>   // for setsockopt, sockaddr, SOL_SOCKET, accept, bind
 #include <sys/un.h>       // for sockaddr_un, sa_family_t
 #include <unistd.h>       // for close, ssize_t
+#include "addressinfo.h"  // for Laik_Tcp_AddressInfo, Laik_Tcp_AddressInfo_...
 #include "debug.h"        // for laik_tcp_always, laik_tcp_debug
 #include "errors.h"       // for laik_tcp_errors_push, Laik_Tcp_Errors
-
-typedef struct addrinfo Laik_Tcp_AddrInfo;
-
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (Laik_Tcp_AddrInfo, freeaddrinfo)
 
 struct Laik_Tcp_Socket {
     int     fd;
@@ -119,12 +116,12 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
         laik_tcp_debug ("Trying to create a TCP socket with host %s and port %s", first_word, remainder);
 
         // Create a hints struct for getaddrinfo
-        struct addrinfo hints = {
+        Laik_Tcp_AddressInfo hints = {
             .ai_socktype = SOCK_STREAM,
         };
 
         // Create a result variable for getaddrinfo
-        g_autoptr (Laik_Tcp_AddrInfo) addresses = NULL;
+        g_autoptr (Laik_Tcp_AddressInfo) addresses = NULL;
 
         // Call getaddrinfo with the host and port extracted from the address
         int result = getaddrinfo (first_word, remainder, &hints, &addresses);
