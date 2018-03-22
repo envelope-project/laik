@@ -281,10 +281,14 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     // used for combining GroupReduce actions
     int myid = tc->transition->group->myid;
 
+    // unmark all actions
+    for(int i = 0; i < oldAS->actionCount; i++)
+        oldAS->action[i].mark = 0;
+
     // first pass: how much buffer space?
     int bufSize = 0, copyRanges = 0;
-    int rank, i, j, count;
-    for(i = 0; i < oldAS->actionCount; i++) {
+    int rank, j, count;
+    for(int i = 0; i < oldAS->actionCount; i++) {
         Laik_BackendAction* ba = &(oldAS->action[i]);
         switch(ba->type) {
         case LAIK_AT_SendBuf:
@@ -322,6 +326,9 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
         case LAIK_AT_GroupReduce: {
             if (!combineGroupReduce) break;
 
+            // skip already processed GroupReduce actions
+            if (ba->mark == 1) break;
+
             // combine consecutive GroupReduce actions with same
             // inputGroup, outputGroup, and redOp
             // TODO: combine all with same input/outputGroup
@@ -329,20 +336,24 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             int inputGroup = ba->inputGroup;
             int outputGroup = ba->outputGroup;
             Laik_ReductionOperation redOp = ba->redOp;
+            int actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
-                if (oldAS->action[j].type != LAIK_AT_GroupReduce) break;
-                if (oldAS->action[j].inputGroup != inputGroup) break;
-                if (oldAS->action[j].outputGroup != outputGroup) break;
-                if (oldAS->action[j].redOp != redOp) break;
+                if (oldAS->action[j].type != LAIK_AT_GroupReduce) continue;
+                if (oldAS->action[j].inputGroup != inputGroup) continue;
+                if (oldAS->action[j].outputGroup != outputGroup) continue;
+                if (oldAS->action[j].redOp != redOp) continue;
+                // should be unmarked
+                assert(oldAS->action[j].mark == 0);
+                oldAS->action[j].mark = 1;
                 count += oldAS->action[j].count;
+                actionCount++;
             }
-            if (j - i > 1) {
+            if (actionCount > 1) {
                 bufSize += count;
                 if (laik_isInGroup(tc->transition, inputGroup, myid))
-                    copyRanges += (j-i);
+                    copyRanges += actionCount;
                 if (laik_isInGroup(tc->transition, outputGroup, myid))
-                    copyRanges += (j-i);
-                i = j - 1;
+                    copyRanges += actionCount;
             }
             break;
         }
@@ -371,11 +382,15 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     laik_log(1, "Optimized action sequence: buf %p, length %d x %d, ranges %d",
         (void*) as->buf, bufSize, elemsize, copyRanges);
 
+    // unmark all actions: restart for finding same type of actions
+    for(int i = 0; i < oldAS->actionCount; i++)
+        oldAS->action[i].mark = 0;
+
     // second pass: add merged actions
     int bufOff = 0;
     int rangeOff = 0;
 
-    for(i = 0; i < oldAS->actionCount; i++) {
+    for(int i = 0; i < oldAS->actionCount; i++) {
         Laik_BackendAction* ba = &(oldAS->action[i]);
         switch(ba->type) {
         case LAIK_AT_SendBuf:
@@ -449,28 +464,43 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 break;
             }
 
+            // skip already processed GroupReduce actions
+            if (ba->mark == 1) break;
+
             count = ba->count;
             int inputGroup = ba->inputGroup;
             int outputGroup = ba->outputGroup;
             Laik_ReductionOperation redOp = ba->redOp;
+            int actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
-                if (oldAS->action[j].type != LAIK_AT_GroupReduce) break;
-                if (oldAS->action[j].inputGroup != inputGroup) break;
-                if (oldAS->action[j].outputGroup != outputGroup) break;
-                if (oldAS->action[j].redOp != redOp) break;
+                if (oldAS->action[j].type != LAIK_AT_GroupReduce) continue;
+                if (oldAS->action[j].inputGroup != inputGroup) continue;
+                if (oldAS->action[j].outputGroup != outputGroup) continue;
+                if (oldAS->action[j].redOp != redOp) continue;
+                // should be unmarked
+                assert(oldAS->action[j].mark == 0);
+                oldAS->action[j].mark = 1;
                 count += oldAS->action[j].count;
+                actionCount++;
             }
-            if (j - i > 1) {
+            if (actionCount > 1) {
                 // temporary buffer used as input and output for reduce
                 char* buf = as->buf + bufOff * elemsize;
                 int startBufOff = bufOff;
+
+                // if I provide input: copy pieces into temporary buffer
                 if (laik_isInGroup(tc->transition, inputGroup, myid)) {
-                    // if I provide input: copy pieces into temporary buffer
                     laik_actions_addCopyToBuf(as,
                                               as->ce + rangeOff,
-                                              buf, j - i);
+                                              buf, actionCount);
                     // ranges for input pieces
-                    for(int k = i; k < j; k++) {
+                    int oldRangeOff = rangeOff;
+                    for(int k = i; k < oldAS->actionCount; k++) {
+                        if (oldAS->action[k].type != LAIK_AT_GroupReduce) continue;
+                        if (oldAS->action[k].inputGroup != inputGroup) continue;
+                        if (oldAS->action[k].outputGroup != outputGroup) continue;
+                        if (oldAS->action[k].redOp != redOp) continue;
+
                         assert(rangeOff < copyRanges);
                         as->ce[rangeOff].ptr = oldAS->action[k].fromBuf;
                         as->ce[rangeOff].bytes = oldAS->action[k].count * elemsize;
@@ -478,19 +508,28 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                         bufOff += oldAS->action[k].count;
                         rangeOff++;
                     }
+                    assert(oldRangeOff + actionCount == rangeOff);
                 }
+
                 // use temporary buffer for both input and output
                 laik_actions_addGroupReduce(as,
                                             inputGroup, outputGroup,
                                             buf, buf,
                                             count, redOp);
+
+                // if I want output: copy pieces from temporary buffer
                 if (laik_isInGroup(tc->transition, outputGroup, myid)) {
-                    // if I want output: copy pieces from temporary buffer
                     laik_actions_addCopyFromBuf(as,
                                                 as->ce + rangeOff,
-                                                buf, j - i);
+                                                buf, actionCount);
                     bufOff = startBufOff;
-                    for(int k = i; k < j; k++) {
+                    int oldRangeOff = rangeOff;
+                    for(int k = i; k < oldAS->actionCount; k++) {
+                        if (oldAS->action[k].type != LAIK_AT_GroupReduce) continue;
+                        if (oldAS->action[k].inputGroup != inputGroup) continue;
+                        if (oldAS->action[k].outputGroup != outputGroup) continue;
+                        if (oldAS->action[k].redOp != redOp) continue;
+
                         assert(rangeOff < copyRanges);
                         as->ce[rangeOff].ptr = oldAS->action[k].toBuf;
                         as->ce[rangeOff].bytes = oldAS->action[k].count * elemsize;
@@ -498,9 +537,9 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                         bufOff += oldAS->action[k].count;
                         rangeOff++;
                     }
+                    assert(oldRangeOff + actionCount == rangeOff);
                 }
                 bufOff = startBufOff + count;
-                i = j - 1;
             }
             else
                 laik_actions_addGroupReduce(as, ba->inputGroup, ba->outputGroup,

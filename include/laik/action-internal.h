@@ -35,6 +35,9 @@ typedef struct _Laik_BackendAction {
     // transition context ID
     char tid;
 
+    // for marking processed actions (used for combining optimization)
+    char mark;
+
     int count;         // for Send, Recv, Copy, Reduce
 
     Laik_Mapping* map; // for Pack, Unpack, PackAndSend, RecvAndUnpack
