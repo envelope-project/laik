@@ -80,20 +80,23 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
         exit(1); // not actually needed, laik_panic never returns
     }
     d->didInit = false;
-    d->comm = MPI_COMM_WORLD;
 
     MPIGroupData* gd = malloc(sizeof(MPIGroupData));
     if (!gd) {
         laik_panic("Out of memory allocating MPIGroupData object");
         exit(1); // not actually needed, laik_panic never returns
     }
-    gd->comm = MPI_COMM_WORLD;
 
-
+    // eventually initialize MPI first before accessing MPI_COMM_WORLD
     if (argc) {
         MPI_Init(argc, argv);
         d->didInit = true;
     }
+
+    // now finish initilization of <gd>/<d>, as MPI_Init is run
+    gd->comm = MPI_COMM_WORLD;
+    d->comm = MPI_COMM_WORLD;
+
 
     int size, rank;
     MPI_Comm_size(d->comm, &size);
