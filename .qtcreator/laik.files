@@ -5,11 +5,10 @@
 ../README.md
 ../TODO.md
 
+../doc/Makefile
 ../doc/index.md
-../doc/Overview.md
 ../doc/TODO.md
 ../doc/Debugging.md
-../doc/tutorial-jacobi2d.md
 ../doc/design/Mapping.md
 
 ../src/action.c

@@ -4,7 +4,6 @@ if (documentation)
     if (pandoc)
         set (docs
             "index.md"
-            "tutorial-jacobi2d.md"
             "Debugging.md"
             "TODO.md"
         )

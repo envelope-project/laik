@@ -12,7 +12,7 @@
 # make pdf
 #   create doc.pdf
 
-SRCS = index.md tutorial-jacobi2d.md Debugging.md TODO.md
+SRCS = index.md Debugging.md TODO.md
 
 html: $(SRCS:.md=.html)
 
