@@ -210,8 +210,12 @@ struct redTOp {
     int myInputMapNo, myOutputMapNo;
 };
 
+// transition flags
+#define LAIK_TF_KEEP_REDUCTIONS 1
+
 struct _Laik_Transition {
     // data identifying this transition
+    int flags;
     Laik_Space* space;
     Laik_Group* group;
     Laik_Partitioning *fromPartitioning, *toPartitioning;

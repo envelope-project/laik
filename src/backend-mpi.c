@@ -550,9 +550,11 @@ void laik_execOrRecord(bool record,
             int64_t from = op->slc.from.i[0];
             int64_t to   = op->slc.to.i[0];
 
-            assert(op->myInputMapNo >= 0);
-            assert(op->myInputMapNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[op->myInputMapNo]);
+            Laik_Mapping* fromMap = 0;
+            if (fromList && (fromList->count > 0) && (op->myInputMapNo >= 0)) {
+                assert(op->myInputMapNo < fromList->count);
+                fromMap = &(fromList->map[op->myInputMapNo]);
+            }
 
             Laik_Mapping* toMap = 0;
             if (toList && (toList->count > 0) && (op->myOutputMapNo >= 0)) {
@@ -570,15 +572,16 @@ void laik_execOrRecord(bool record,
             uint64_t elemCount = to - from;
             uint64_t byteCount = elemCount * data->elemsize;
 
-            assert(fromBase != 0);
             // if current task is receiver, toBase should be allocated
             if (laik_isInGroup(t, op->outputGroup, myid))
                 assert(toBase != 0);
             else
                 toBase = 0; // no interest in receiving anything
 
-            assert(from >= fromMap->requiredSlice.from.i[0]);
-            fromBase += (from - fromMap->requiredSlice.from.i[0]) * data->elemsize;
+            if (fromBase) {
+                assert(from >= fromMap->requiredSlice.from.i[0]);
+                fromBase += (from - fromMap->requiredSlice.from.i[0]) * data->elemsize;
+            }
             if (toBase) {
                 assert(from >= toMap->requiredSlice.from.i[0]);
                 toBase += (from - toMap->requiredSlice.from.i[0]) * data->elemsize;

@@ -1122,7 +1122,8 @@ struct redTOp* appendRedTOp(Laik_Slice* slc,
 // TODO: we only support one mapping in each task for reductions
 //       better: support multiple mappings for same index in same task
 static
-void calcAddReductions(Laik_Group* group,
+void calcAddReductions(int tflags,
+                       Laik_Group* group,
                        Laik_ReductionOperation redOp,
                        Laik_Partitioning* fromP, Laik_Partitioning* toP)
 {
@@ -1192,8 +1193,8 @@ void calcAddReductions(Laik_Group* group,
         SliceBorder* sb = &(borderList[i]);
 
 #ifdef DEBUG_REDUCTIONSLICES
-        laik_log(1, "processing border %lld, task %d (%s, %s)",
-                 (long long int) sb->b, sb->task,
+        laik_log(1, "at border %lld, task %d (slice %d, map %d): %s for %s",
+                 (long long int) sb->b, sb->task, sb->sliceNo, sb->mapNo,
                  sb->isStart ? "start" : "end",
                  sb->isInput ? "input" : "output");
 #endif
@@ -1235,9 +1236,10 @@ void calcAddReductions(Laik_Group* group,
             int64_t nextBorder = borderList[i + 1].b;
 
 #ifdef DEBUG_REDUCTIONSLICES
-            laik_log(1, "  range (%lld - %lld), act %d",
+            char* act[] = {"(none)", "input", "output", "in & out"};
+            laik_log(1, "  range (%lld - %lld), my activity: %s",
                      (long long int) sb->b,
-                     (long long int) nextBorder, myActivity);
+                     (long long int) nextBorder, act[myActivity]);
 #endif
 
             if (myActivity > 0) {
@@ -1252,65 +1254,89 @@ void calcAddReductions(Laik_Group* group,
                     if (inputGroup.task[0] == myid) {
                         // only this task as input
 
-                        // TODO: broadcasts might be supported in backend
-                        for(int out = 0; out < outputGroup.count; out++) {
-                            if (outputGroup.task[out] == myid) {
-                                // local (copy) operation
+                        if ((outputGroup.count == 1) &&
+                            (outputGroup.task[0] == myid)) {
+
+                            // local (copy) operation
+                            assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
+                            appendLocalTOp(&slc,
+                                           myInputSliceNo, myOutputSliceNo,
+                                           myInputMapNo, myOutputMapNo);
+#ifdef DEBUG_REDUCTIONSLICES
+                            laik_log(1, "  adding local (special reduction)"
+                                        " (%lld - %lld) from %d/%d to %d/%d (slc/map)",
+                                     (long long int) slc.from.i[0],
+                                     (long long int) slc.to.i[0],
+                                     myInputSliceNo, myInputMapNo,
+                                     myOutputSliceNo, myOutputMapNo);
+#endif
+                            continue;
+                        }
+
+                        if (!(tflags & LAIK_TF_KEEP_REDUCTIONS)) {
+                            // TODO: broadcasts might be supported in backend
+                            for(int out = 0; out < outputGroup.count; out++) {
+                                if (outputGroup.task[out] == myid) {
+                                    // local (copy) operation
+                                    assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
+                                    appendLocalTOp(&slc,
+                                                   myInputSliceNo, myOutputSliceNo,
+                                                   myInputMapNo, myOutputMapNo);
+#ifdef DEBUG_REDUCTIONSLICES
+                                    laik_log(1, "  adding local (special reduction)"
+                                                " (%lld - %lld) from %d/%d to %d/%d (slc/map)",
+                                             (long long int) slc.from.i[0],
+                                            (long long int) slc.to.i[0],
+                                            myInputSliceNo, myInputMapNo,
+                                            myOutputSliceNo, myOutputMapNo);
+#endif
+                                    continue;
+                                }
+
+                                // send operation
                                 assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
-                                appendLocalTOp(&slc,
-                                               myInputSliceNo, myOutputSliceNo,
-                                               myInputMapNo, myOutputMapNo);
+                                appendSendTOp(&slc,
+                                              myInputSliceNo, myInputMapNo,
+                                              outputGroup.task[out]);
 #ifdef DEBUG_REDUCTIONSLICES
-                                laik_log(1, "  adding local (special reduction)"
-                                            " (%lld - %lld) from %d/%d to %d/%d (slc/map)",
+                                laik_log(1, "  adding send (special reduction)"
+                                            " (%lld - %lld) slc/map %d/%d to T%d",
                                          (long long int) slc.from.i[0],
-                                         (long long int) slc.to.i[0],
-                                         myInputSliceNo, myInputMapNo,
-                                         myOutputSliceNo, myOutputMapNo);
+                                        (long long int) slc.to.i[0],
+                                        myInputSliceNo, myInputMapNo,
+                                        outputGroup.task[out]);
 #endif
-                                continue;
                             }
-
-                            // send operation
-                            assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
-                            appendSendTOp(&slc,
-                                          myInputSliceNo, myInputMapNo,
-                                          outputGroup.task[out]);
-#ifdef DEBUG_REDUCTIONSLICES
-                            laik_log(1, "  adding send (special reduction)"
-                                        " (%lld - %lld) slc/map %d/%d to T%d",
-                                    (long long int) slc.from.i[0],
-                                    (long long int) slc.to.i[0],
-                                    myInputSliceNo, myInputMapNo,
-                                    outputGroup.task[out]);
-#endif
+                            continue;
                         }
-                    }
+                    } // only one input from this task
                     else {
-                        // one input from somebody else
-                        for(int out = 0; out < outputGroup.count; out++) {
-                            if (outputGroup.task[out] != myid) continue;
+                        if (!(tflags & LAIK_TF_KEEP_REDUCTIONS)) {
+                            // one input from somebody else
+                            for(int out = 0; out < outputGroup.count; out++) {
+                                if (outputGroup.task[out] != myid) continue;
 
-                            // receive operation
-                            assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
-                            appendRecvTOp(&slc,
-                                          myOutputSliceNo, myOutputMapNo,
-                                          inputGroup.task[0]);
+                                // receive operation
+                                assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
+                                appendRecvTOp(&slc,
+                                              myOutputSliceNo, myOutputMapNo,
+                                              inputGroup.task[0]);
 
 #ifdef DEBUG_REDUCTIONSLICES
-                            laik_log(1, "  adding recv (special reduction)"
-                                        " (%lld - %lld) slc/map %d/%d from T%d",
-                                    (long long int) slc.from.i[0],
-                                    (long long int) slc.to.i[0],
-                                    myOutputSliceNo, myOutputMapNo,
-                                    inputGroup.task[0]);
+                                laik_log(1, "  adding recv (special reduction)"
+                                            " (%lld - %lld) slc/map %d/%d from T%d",
+                                         (long long int) slc.from.i[0],
+                                        (long long int) slc.to.i[0],
+                                        myOutputSliceNo, myOutputMapNo,
+                                        inputGroup.task[0]);
 #endif
+                            }
+                            // handled cases with 1 input
+                            continue;
                         }
                     }
 
-                    // handled cases with 1 input
-                    continue;
-                }
+                } // one input
 
                 // add reduction operation
                 int in = getTaskGroup(&inputGroup);
@@ -1338,6 +1364,9 @@ void calcAddReductions(Laik_Group* group,
                 if (groupList[in].count == group->size) in = -1;
                 if (groupList[out].count == group->size) out = -1;
 
+                // TODO: also specify reduction if it's just copy/send/recv
+                redOp = LAIK_RO_Sum;
+
                 assert(redOp != LAIK_RO_None); // must be a real reduction
                 appendRedTOp(&slc, redOp, in, out,
                              myInputSliceNo, myOutputSliceNo,
@@ -1358,6 +1387,9 @@ laik_calc_transition(Laik_Space* space,
                      Laik_Partitioning* toP, Laik_DataFlow toFlow)
 {
     Laik_Slice* slc;
+
+    // flags for transition
+    int tflags = 0; //LAIK_TF_KEEP_REDUCTIONS; // no_sendrev_actions
 
     cleanTOpBufs(false);
     cleanGroupList();
@@ -1425,7 +1457,8 @@ laik_calc_transition(Laik_Space* space,
 
         // just check for reduction action
         // TODO: Do this always, remove other cases
-        calcAddReductions(group, laik_get_reduction(fromFlow),
+        calcAddReductions(tflags,
+                          group, laik_get_reduction(fromFlow),
                           fromP, toP);
     }
     else
@@ -1489,7 +1522,8 @@ laik_calc_transition(Laik_Space* space,
             }
             else {
                 assert(dims == 1);
-                calcAddReductions(group, laik_get_reduction(fromFlow),
+                calcAddReductions(tflags,
+                                  group, laik_get_reduction(fromFlow),
                                   fromP, toP);
             }
         }
@@ -1595,6 +1629,7 @@ laik_calc_transition(Laik_Space* space,
         exit(1); // not actually needed, laik_panic never returns
     }
 
+    t->flags = tflags;
     t->space = space;
     t->group = group;
     t->fromPartitioning = fromP;
