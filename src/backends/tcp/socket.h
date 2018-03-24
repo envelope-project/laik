@@ -2,7 +2,7 @@
 
 #include <glib.h>     // for GBytes, GPtrArray, G_DEFINE_AUTOPTR_CLEANUP_FUNC
 #include <stdbool.h>  // for bool
-#include <stdint.h>   // for int64_t, uint64_t
+#include <stdint.h>   // for uint64_t
 #include "errors.h"   // for Laik_Tcp_Errors
 
 typedef struct Laik_Tcp_Socket Laik_Tcp_Socket;
@@ -24,13 +24,13 @@ __attribute__ ((warn_unused_result))
 bool laik_tcp_socket_get_listening (const Laik_Tcp_Socket* this);
 
 __attribute__ ((warn_unused_result))
-int64_t laik_tcp_socket_get_timestamp (const Laik_Tcp_Socket* this);
+double laik_tcp_socket_get_timestamp (const Laik_Tcp_Socket* this);
 
 __attribute__ ((warn_unused_result))
 Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* address, Laik_Tcp_Errors* errors);
 
 __attribute__ ((warn_unused_result))
-Laik_Tcp_Socket* laik_tcp_socket_poll (GPtrArray* sockets, short events, int64_t microseconds);
+Laik_Tcp_Socket* laik_tcp_socket_poll (GPtrArray* sockets, short events, double seconds);
 
 __attribute__ ((warn_unused_result))
 GBytes* laik_tcp_socket_receive_bytes (Laik_Tcp_Socket* this);

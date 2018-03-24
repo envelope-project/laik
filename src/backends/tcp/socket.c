@@ -1,7 +1,7 @@
 #include "socket.h"
 #include <endian.h>       // for htole64, le64toh
 #include <errno.h>        // for errno
-#include <glib.h>         // for g_get_monotonic_time, g_malloc0_n, GPtrArray
+#include <glib.h>         // for g_malloc0_n, GPtrArray, g_autofree, g_new0
 #include <netdb.h>        // for getaddrinfo
 #include <netinet/in.h>   // for IPPROTO_TCP
 #include <netinet/tcp.h>  // for TCP_KEEPCNT, TCP_KEEPIDLE, TCP_KEEPINTVL
@@ -16,11 +16,12 @@
 #include "addressinfo.h"  // for Laik_Tcp_AddressInfo, Laik_Tcp_AddressInfo_...
 #include "debug.h"        // for laik_tcp_always, laik_tcp_debug
 #include "errors.h"       // for laik_tcp_errors_push, Laik_Tcp_Errors
+#include "time.h"         // for laik_tcp_time
 
 struct Laik_Tcp_Socket {
-    int     fd;
-    short   events;
-    int64_t timestamp;
+    int    fd;
+    short  events;
+    double timestamp;
 };
 
 __attribute__ ((warn_unused_result))
@@ -62,7 +63,7 @@ Laik_Tcp_Socket* laik_tcp_socket_accept (Laik_Tcp_Socket* this) {
     *new = (Laik_Tcp_Socket) {
         .fd        = fd,
         .events    = 0,
-        .timestamp = g_get_monotonic_time (),
+        .timestamp = laik_tcp_time (),
     };
 
     // Return the object
@@ -94,7 +95,7 @@ bool laik_tcp_socket_get_listening (const Laik_Tcp_Socket* this) {
     return optval;
 }
 
-int64_t laik_tcp_socket_get_timestamp (const Laik_Tcp_Socket* this) {
+double laik_tcp_socket_get_timestamp (const Laik_Tcp_Socket* this) {
     return this->timestamp;
 }
 
@@ -238,14 +239,14 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
     *this = (Laik_Tcp_Socket) {
         .fd        = fd,
         .events    = 0,
-        .timestamp = g_get_monotonic_time (),
+        .timestamp = laik_tcp_time (),
     };
 
     // Return the object
     return this;
 }
 
-Laik_Tcp_Socket* laik_tcp_socket_poll (GPtrArray* sockets, const short events, const int64_t microseconds) {
+Laik_Tcp_Socket* laik_tcp_socket_poll (GPtrArray* sockets, const short events, const double seconds) {
     laik_tcp_always (sockets);
 
     // Check if any of the sockets in the array already has the requested event
@@ -266,7 +267,7 @@ Laik_Tcp_Socket* laik_tcp_socket_poll (GPtrArray* sockets, const short events, c
     }
 
     // Call poll(2)
-    int result = poll (pollfds, sockets->len, microseconds / 1000);
+    int result = poll (pollfds, sockets->len, seconds * 1000);
     laik_tcp_always (result >= 0);
     (void) result;
 
@@ -352,7 +353,7 @@ bool laik_tcp_socket_send_uint64 (Laik_Tcp_Socket* this, uint64_t value) {
 Laik_Tcp_Socket* laik_tcp_socket_touch (Laik_Tcp_Socket* this) {
     laik_tcp_always (this);
 
-    this->timestamp = g_get_monotonic_time ();
+    this->timestamp = laik_tcp_time ();
 
     return this;
 }

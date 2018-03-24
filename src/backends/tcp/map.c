@@ -1,10 +1,10 @@
 #include "map.h"
-#include <glib.h>     // for g_bytes_ref, g_bytes_hash, g_mutex_locker_new
-#include <stdbool.h>  // for bool, true, false
-#include <stddef.h>   // for NULL, size_t
-#include <stdint.h>   // for int64_t, SIZE_MAX, intmax_t
-#include "debug.h"    // for laik_tcp_debug
-#include "errors.h"   // for laik_tcp_always
+#include <glib.h>     // for g_bytes_ref, g_mutex_locker_new, g_bytes_get_size
+#include <stdbool.h>  // for true, bool, false
+#include <stddef.h>   // for size_t, NULL
+#include <stdint.h>   // for SIZE_MAX
+#include "debug.h"    // for laik_tcp_always, laik_tcp_debug
+#include "time.h"     // for laik_tcp_time
 
 struct Laik_Tcp_Map {
     GMutex* mutex;
@@ -113,21 +113,21 @@ void laik_tcp_map_free (Laik_Tcp_Map* this) {
     g_free (this);
 }
 
-GBytes* laik_tcp_map_get (Laik_Tcp_Map* this, const GBytes* key, const int64_t microseconds) {
+GBytes* laik_tcp_map_get (Laik_Tcp_Map* this, const GBytes* key, const double seconds) {
     laik_tcp_always (this);
     laik_tcp_always (key);
 
     __attribute__ ((unused))
     g_autoptr (GMutexLocker) locker = g_mutex_locker_new (this->mutex);
 
-    laik_tcp_debug ("Looking up key 0x%08X with a time limit of %jd microseconds", g_bytes_hash (key), (intmax_t) microseconds);
+    laik_tcp_debug ("Looking up key 0x%08X with a time limit of %lf seconds", g_bytes_hash (key), seconds);
 
-    const int64_t timeout = g_get_monotonic_time () + microseconds;
+    const double timeout = laik_tcp_time () + seconds;
 
     GBytes* value = NULL;
 
     while (!g_hash_table_lookup_extended (this->hash, key, NULL, (void**) &value)) {
-        if (!g_cond_wait_until (this->changed, this->mutex, timeout)) {
+        if (!g_cond_wait_until (this->changed, this->mutex, timeout * G_TIME_SPAN_SECOND)) {
             return NULL;
         }
     }
