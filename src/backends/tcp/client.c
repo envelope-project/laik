@@ -1,11 +1,11 @@
 #include "client.h"
-#include <glib.h>     // for g_hash_table_size, g_free, g_hash_table_new_full
+#include <glib.h>     // for g_free, g_hash_table_new_full, g_hash_table_size
 #include <stdbool.h>  // for false, true
 #include <stddef.h>   // for NULL, size_t
-#include <stdint.h>   // for int64_t
-#include "debug.h"    // for laik_tcp_debug
-#include "errors.h"   // for laik_tcp_always, laik_tcp_errors_new, Laik_Tcp_...
+#include "debug.h"    // for laik_tcp_always, laik_tcp_debug
+#include "errors.h"   // for laik_tcp_errors_new, Laik_Tcp_Errors_autoptr
 #include "socket.h"   // for Laik_Tcp_Socket, laik_tcp_socket_destroy, laik_...
+#include "time.h"     // for laik_tcp_time
 
 struct Laik_Tcp_Client {
     GHashTable* connections;
@@ -20,7 +20,7 @@ static int laik_tcp_client_too_old (void* key, void* value, void* userdata) {
     __attribute__ ((unused))
     const char*            peer       = key;
     const Laik_Tcp_Socket* connection = value;
-    const int64_t          timestamp  = * (int64_t*) userdata;
+    const double           timestamp  = * (double*) userdata;
 
     if (laik_tcp_socket_get_timestamp (connection) < timestamp) {
         laik_tcp_debug ("Removing connection to %s because its timestamp is too old", peer);
@@ -78,7 +78,7 @@ void laik_tcp_client_store (Laik_Tcp_Client* this, const char* address, Laik_Tcp
     laik_tcp_debug ("Size before = %u/%zu", g_hash_table_size (this->connections), this->limit);
 
     if (g_hash_table_size (this->connections) >= this->limit) {
-        int64_t timestamp = g_get_monotonic_time () - G_TIME_SPAN_SECOND;
+        double timestamp = laik_tcp_time () - 1;
         g_hash_table_foreach_remove (this->connections, laik_tcp_client_too_old, &timestamp);
     }
 

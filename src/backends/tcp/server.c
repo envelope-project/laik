@@ -1,20 +1,20 @@
 #include "server.h"
-#include <glib.h>    // for g_ptr_array_add, GPtrArray, g_free, g_get_monoto...
+#include <glib.h>    // for g_ptr_array_add, GPtrArray, g_free, g_malloc0_n
 #include <poll.h>    // for POLLIN
 #include <stddef.h>  // for size_t, NULL
-#include "debug.h"   // for laik_tcp_debug
-#include "errors.h"  // for laik_tcp_always, laik_tcp_errors_present, laik_t...
+#include "debug.h"   // for laik_tcp_always, laik_tcp_debug
 #include "socket.h"  // for laik_tcp_socket_free, laik_tcp_socket_get_listening
+#include "time.h"    // for laik_tcp_time
 
 struct Laik_Tcp_Server {
     GPtrArray* connections;
     size_t     limit;
 };
 
-Laik_Tcp_Socket* laik_tcp_server_accept (Laik_Tcp_Server* this, int64_t microseconds) {
+Laik_Tcp_Socket* laik_tcp_server_accept (Laik_Tcp_Server* this, double seconds) {
     laik_tcp_always (this);
 
-    Laik_Tcp_Socket* socket = laik_tcp_socket_poll (this->connections, POLLIN, microseconds);
+    Laik_Tcp_Socket* socket = laik_tcp_socket_poll (this->connections, POLLIN, seconds);
 
     if (!socket) {
         return NULL;
@@ -66,7 +66,7 @@ void laik_tcp_server_store (Laik_Tcp_Server* this, Laik_Tcp_Socket* socket) {
 
     // Make sure we don't exceed the connection limit
     if (this->limit && this->connections->len >= this->limit) {
-        const int64_t timestamp = g_get_monotonic_time () - 10 * G_TIME_SPAN_MILLISECOND;
+        const double timestamp = laik_tcp_time () - 1;
         for (size_t index = 0; index < this->connections->len;) {
             Laik_Tcp_Socket* candidate = g_ptr_array_index (this->connections, index);
             if (laik_tcp_socket_get_listening (candidate) || laik_tcp_socket_get_timestamp (candidate) > timestamp) {

@@ -89,6 +89,7 @@ if (tcp-backend)
                 "backends/tcp/server.c"
                 "backends/tcp/socket.c"
                 "backends/tcp/task.c"
+                "backends/tcp/time.c"
         )
 
         target_compile_definitions ("laik"
