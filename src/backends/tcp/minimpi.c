@@ -4,14 +4,13 @@
 #include <stdbool.h>    // for false
 #include <stdint.h>     // for uint64_t, int64_t, SIZE_MAX
 #include <stdio.h>      // for snprintf
-#include <stdlib.h>     // for getenv, strtoull
-#include <string.h>     // for memcpy
-#include <unistd.h>     // for getpid
-#include "config.h"     // for laik_tcp_config, Laik_Tcp_Config, Laik_Tcp_Co...
+#include <string.h>     // for memcpy, strnlen
+#include <unistd.h>     // for gethostname, getpid
+#include "config.h"     // for Laik_Tcp_Config, laik_tcp_config, Laik_Tcp_Co...
 #include "debug.h"      // for laik_tcp_always, laik_tcp_debug
-#include "errors.h"     // for laik_tcp_errors_push, laik_tcp_errors_present
+#include "errors.h"     // for laik_tcp_errors_push, laik_tcp_errors_new
 #include "messenger.h"  // for laik_tcp_messenger_get, laik_tcp_messenger_push
-#include "socket.h"     // for laik_tcp_socket_new_server, Laik_Tcp_Socket_a...
+#include "socket.h"     // for laik_tcp_socket_new, ::LAIK_TCP_SOCKET_TYPE_S...
 
 // Type definitions
 
@@ -434,8 +433,20 @@ int laik_tcp_minimpi_get_processor_name (char* name, int* result_length) {
     laik_tcp_always (name);
     laik_tcp_always (result_length);
 
-    size_t bytes = snprintf (name, LAIK_TCP_MINIMPI_MAX_PROCESSOR_NAME, "%d", getpid ());
-    laik_tcp_always (bytes < LAIK_TCP_MINIMPI_MAX_PROCESSOR_NAME);
+    g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
+
+    char hostname[1024];
+    if (gethostname (hostname, sizeof (hostname)) != 0 || strnlen (name, sizeof (hostname)) == sizeof (hostname)) {
+        laik_tcp_errors_push (errors, __func__, 0, "Failed to determine hostname");
+        return laik_tcp_minimpi_error (errors);
+    }
+
+    const size_t bytes = snprintf (name, LAIK_TCP_MINIMPI_MAX_PROCESSOR_NAME, "%s:%d", hostname, getpid ());
+    if (bytes >= LAIK_TCP_MINIMPI_MAX_PROCESSOR_NAME) {
+        laik_tcp_errors_push (errors, __func__, 1, "Buffer to small to hold name");
+        return laik_tcp_minimpi_error (errors);
+    }
+
     *result_length = bytes;
 
     return LAIK_TCP_MINIMPI_SUCCESS;
