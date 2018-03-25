@@ -22,7 +22,7 @@
   - 'public'
 
 - include:
-  - '@.laik/(core|data|debug|ext|profiling|program|space).*'
+  - '@.laik/(action|core|data|debug|ext|profiling|program|space).*'
   - 'private'
   - '<laik.h>'
   - 'public'
