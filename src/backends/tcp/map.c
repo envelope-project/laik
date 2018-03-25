@@ -74,7 +74,7 @@ void laik_tcp_map_discard (Laik_Tcp_Map* this, GBytes* key) {
 
     laik_tcp_debug ("Discarding key 0x%08X", g_bytes_hash (key));
 
-    if (this->size == SIZE_MAX) {
+    if (this->limit == SIZE_MAX) {
         laik_tcp_debug ("Mapping may grow to infinite size, aborting");
         return;
     }
