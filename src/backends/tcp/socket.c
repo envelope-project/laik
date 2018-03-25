@@ -14,6 +14,7 @@
 #include <sys/un.h>       // for sockaddr_un, sa_family_t
 #include <unistd.h>       // for close, ssize_t
 #include "addressinfo.h"  // for Laik_Tcp_AddressInfo, Laik_Tcp_AddressInfo_...
+#include "config.h"       // for laik_tcp_config, Laik_Tcp_Config_autoptr
 #include "debug.h"        // for laik_tcp_always, laik_tcp_debug
 #include "errors.h"       // for laik_tcp_errors_push, Laik_Tcp_Errors
 #include "time.h"         // for laik_tcp_time
@@ -103,6 +104,8 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
     laik_tcp_always (address);
     laik_tcp_always (errors);
 
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
+
     // Create variables to store the sockaddr struct and its size
     g_autofree struct sockaddr* socket_address_data = NULL;
     socklen_t socket_address_size = 0;
@@ -190,19 +193,19 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
         }
 
         // Sent up to three keep alive probes before dropping the connection
-        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPCNT, & (int) { 3 }, sizeof (int)) != 0) {
+        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPCNT, & (int) { config->socket_keepcnt }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 7, "Failed to set TCP_KEEPCNT on socket: %s", strerror (errno));
             return NULL;
         }
 
         // Consider the connection idle after 1 second if inactivity
-        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPIDLE, & (int) { 1 }, sizeof (int)) != 0) {
+        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPIDLE, & (int) { config->socket_keepidle }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 8, "Failed to set TCP_KEEPIDLE on socket: %s", strerror (errno));
             return NULL;
         }
 
         // On idle connections, send a keep alive probe every second
-        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPINTVL, & (int) { 1 }, sizeof (int)) != 0) {
+        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPINTVL, & (int) { config->socket_keepintvl }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 9, "Failed to set TCP_KEEPINTVL on socket: %s", strerror (errno));
             return NULL;
         }
@@ -222,7 +225,7 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
             return NULL;
         }
 
-        if (listen (fd, 10) != 0) {
+        if (listen (fd, config->socket_backlog) != 0) {
             laik_tcp_errors_push (errors, __func__, 12, "Failed to listen on socket: %s", strerror (errno));
             close (fd);
             return NULL;
