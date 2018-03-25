@@ -13,6 +13,6 @@ void laik_tcp_server_free (Laik_Tcp_Server* this);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (Laik_Tcp_Server, laik_tcp_server_free)
 
 __attribute__  ((warn_unused_result))
-Laik_Tcp_Server* laik_tcp_server_new (Laik_Tcp_Socket* socket, size_t limit);
+Laik_Tcp_Server* laik_tcp_server_new (Laik_Tcp_Socket* socket);
 
 void laik_tcp_server_store (Laik_Tcp_Server* this, Laik_Tcp_Socket* socket);

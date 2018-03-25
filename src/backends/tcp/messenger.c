@@ -25,9 +25,6 @@ struct Laik_Tcp_Messenger {
     GThread* client_thread;
     GThread* server_thread;
 
-    double client_seconds;
-    double server_seconds;
-
     bool client_stop;
     bool server_stop;
 
@@ -49,34 +46,24 @@ typedef enum {
 
 #define CHECK(exp) { if (exp) { laik_tcp_debug ("[PASS] " #exp); } else { laik_tcp_debug ("[FAIL] " #exp); continue; } }
 
-static const char* laik_tcp_messenger_lookup (size_t id) {
-    g_autoptr (Laik_Tcp_Config) config =  laik_tcp_config ();
-
-    if (id < config->addresses->len) {
-        return g_ptr_array_index (config->addresses, id);
-    } else {
-        return NULL;
-    }
-}
-
 static void* laik_tcp_messenger_client_run (void* data) {
     laik_tcp_always (data);
 
     Laik_Tcp_Messenger* this = data;
 
     while (!this->client_stop) {
-        g_autoptr (Laik_Tcp_Task)   task     = NULL;
-        g_autoptr (Laik_Tcp_Socket) socket   = NULL;
         g_autoptr (GBytes)          body     = NULL;
+        g_autoptr (Laik_Tcp_Config) config   = laik_tcp_config ();
+        g_autoptr (Laik_Tcp_Socket) socket   = NULL;
+        g_autoptr (Laik_Tcp_Task)   task     = NULL;
         uint64_t                    response = 0;
-        const char*                 address  = NULL;
 
-        CHECK ((task = g_async_queue_timeout_pop (this->tasks, this->client_seconds * G_TIME_SPAN_SECOND)));
+        CHECK ((task = g_async_queue_timeout_pop (this->tasks, config->client_activation_timeout * G_TIME_SPAN_SECOND)));
 
         laik_tcp_debug ("Sending a message of type %d for header 0x%08X", task->type, g_bytes_hash (task->header));
 
-        CHECK ((address = laik_tcp_messenger_lookup (task->peer)));
-        CHECK ((socket = laik_tcp_client_connect (this->client, address)));
+        CHECK (task->peer < config->addresses->len);
+        CHECK ((socket = laik_tcp_client_connect (this->client, g_ptr_array_index (config->addresses, task->peer))));
         CHECK (laik_tcp_socket_send_uint64 (socket, task->type));
         CHECK (laik_tcp_socket_send_bytes (socket, task->header));
 
@@ -115,7 +102,7 @@ static void* laik_tcp_messenger_client_run (void* data) {
         laik_tcp_debug ("Message of type %d for header 0x%08X was %s", task->type, g_bytes_hash (task->header), response ? "accepted" : "refused");
 
         // Hand the socket back so it can be re-used later on
-        laik_tcp_client_store (this->client, address, g_steal_pointer (&socket));
+        laik_tcp_client_store (this->client, g_ptr_array_index (config->addresses, task->peer), g_steal_pointer (&socket));
     }
 
     return NULL;
@@ -127,12 +114,13 @@ static void* laik_tcp_messenger_server_run (void* data) {
     Laik_Tcp_Messenger* this = data;
 
     while (!this->server_stop) {
-        uint64_t                    type   = 0;
-        g_autoptr (GBytes)          header = NULL;
         g_autoptr (GBytes)          body   = NULL;
+        g_autoptr (GBytes)          header = NULL;
+        g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
         g_autoptr (Laik_Tcp_Socket) socket = NULL;
+        uint64_t                    type   = 0;
 
-        CHECK ((socket = laik_tcp_server_accept (this->server, this->server_seconds)));
+        CHECK ((socket = laik_tcp_server_accept (this->server, config->server_activation_timeout)));
         CHECK (laik_tcp_socket_receive_uint64 (socket, &type));
         CHECK ((header = laik_tcp_socket_receive_bytes (socket)));
 
@@ -203,44 +191,44 @@ GBytes* laik_tcp_messenger_get (Laik_Tcp_Messenger* this, size_t sender, GBytes*
     laik_tcp_always (this);
     laik_tcp_always (header);
 
-    GBytes* body    = NULL;
-    double  seconds = 0.1;
-
     laik_tcp_debug ("Getting message 0x%08X from peer %zu", g_bytes_hash (header), sender);
 
-    while (!(body = laik_tcp_map_get (this->inbox, header, seconds))) {
-        laik_tcp_debug ("Waiting for message 0x%08X from peer %zu for %lf seconds timed out, queuing request"
-              , g_bytes_hash (header)
-              , sender
-              , seconds
-              );
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
+    g_autoptr (GBytes)          body   = laik_tcp_map_get (this->inbox, header, config->get_first_timeout);
+
+    for (size_t try = 0; !body; try++) {
+        laik_tcp_debug ("Queuing GET #%zu for message 0x%08X from peer %zu and waiting %lf seconds for a response"
+                       , try
+                       , g_bytes_hash (header)
+                       , sender
+                       , config->get_retry_timeout
+                       );
 
         g_async_queue_push (this->tasks, laik_tcp_task_new (MESSAGE_GET, sender, header));
 
-        seconds = MIN (1, seconds * 2);
+        body = laik_tcp_map_get (this->inbox, header, config->get_retry_timeout);
     }
 
     laik_tcp_map_discard (this->inbox, header);
 
-    return body;
+    return g_steal_pointer (&body);
 }
 
 Laik_Tcp_Messenger* laik_tcp_messenger_new (Laik_Tcp_Socket* socket) {
     laik_tcp_always (socket);
 
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
+
     Laik_Tcp_Messenger* this = g_new0 (Laik_Tcp_Messenger, 1);
 
     *this = (Laik_Tcp_Messenger) {
-        .client = laik_tcp_client_new (3),
-        .server = laik_tcp_server_new (socket, 4),
+        .client = laik_tcp_client_new (),
+        .server = laik_tcp_server_new (socket),
 
-        .inbox   = laik_tcp_map_new (1<<24),
-        .outbox  = laik_tcp_map_new (1<<24),
+        .inbox  = laik_tcp_map_new (config->inbox_size_limit),
+        .outbox = laik_tcp_map_new (config->outbox_size_limit),
 
         .tasks = g_async_queue_new_full (laik_tcp_task_destroy),
-
-        .client_seconds = 1E-2,
-        .server_seconds = 1E-2,
     };
 
     this->client_thread = g_thread_new ("Client Thread", laik_tcp_messenger_client_run, this);
@@ -268,18 +256,26 @@ void laik_tcp_messenger_send (Laik_Tcp_Messenger* this, size_t receiver, GBytes*
     laik_tcp_always (header);
     laik_tcp_always (body);
 
-    const char*      address = NULL;
-    Laik_Tcp_Socket* socket  = NULL;
-
     laik_tcp_debug ("Sending message 0x%08X to peer %zu", g_bytes_hash (header), receiver);
 
-    while (true) {
+    for (size_t try = 0; ; try++) {
+        laik_tcp_debug ("Sending ADD #%zu for message 0x%08X to peer %zu"
+                       , try, g_bytes_hash (header)
+                       , receiver
+                       );
+
+        g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
         g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
+        g_autoptr (Laik_Tcp_Socket) socket = NULL;
+
+        if (try > 0) {
+            laik_tcp_sleep (config->add_retry_timeout);
+        }
 
         this->add_total++;
 
-        CHECK ((address = laik_tcp_messenger_lookup (receiver)));
-        CHECK ((socket = laik_tcp_socket_new (LAIK_TCP_SOCKET_TYPE_CLIENT, address, errors)));
+        CHECK (receiver < config->addresses->len);
+        CHECK ((socket = laik_tcp_socket_new (LAIK_TCP_SOCKET_TYPE_CLIENT, g_ptr_array_index (config->addresses, receiver), errors)));
         CHECK (laik_tcp_socket_send_uint64 (socket, MESSAGE_ADD));
         CHECK (laik_tcp_socket_send_bytes (socket, header));
         CHECK (laik_tcp_socket_send_bytes (socket, body));

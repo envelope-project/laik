@@ -2,13 +2,13 @@
 #include <glib.h>    // for g_ptr_array_add, GPtrArray, g_free, g_malloc0_n
 #include <poll.h>    // for POLLIN
 #include <stddef.h>  // for size_t, NULL
+#include "config.h"  // for laik_tcp_config, Laik_Tcp_Config, Laik_Tcp_Confi...
 #include "debug.h"   // for laik_tcp_always, laik_tcp_debug
 #include "socket.h"  // for laik_tcp_socket_free, laik_tcp_socket_get_listening
 #include "time.h"    // for laik_tcp_time
 
 struct Laik_Tcp_Server {
     GPtrArray* connections;
-    size_t     limit;
 };
 
 Laik_Tcp_Socket* laik_tcp_server_accept (Laik_Tcp_Server* this, double seconds) {
@@ -44,17 +44,16 @@ void laik_tcp_server_free (Laik_Tcp_Server* this) {
     g_free (this);
 }
 
-Laik_Tcp_Server* laik_tcp_server_new (Laik_Tcp_Socket* socket, const size_t limit) {
+Laik_Tcp_Server* laik_tcp_server_new (Laik_Tcp_Socket* socket) {
     laik_tcp_always (socket);
 
-    g_autoptr (GPtrArray) connections = g_ptr_array_sized_new (1 + limit);
+    g_autoptr (GPtrArray) connections = g_ptr_array_new ();
     g_ptr_array_add (connections, socket);
 
     Laik_Tcp_Server* this = g_new0 (Laik_Tcp_Server, 1);
 
     *this = (Laik_Tcp_Server) {
         .connections = g_steal_pointer (&connections),
-        .limit       = limit,
     };
 
     return this;
@@ -64,9 +63,13 @@ void laik_tcp_server_store (Laik_Tcp_Server* this, Laik_Tcp_Socket* socket) {
     laik_tcp_always (this);
     laik_tcp_always (socket);
 
-    // Make sure we don't exceed the connection limit
-    if (this->limit && this->connections->len >= this->limit) {
-        const double timestamp = laik_tcp_time () - 1;
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
+
+    laik_tcp_debug ("%u/%zu connections used before insertion", this->connections->len, config->server_connection_limit);
+
+    // If we have reached the connection limit, remove all stale connections
+    if (this->connections->len >= config->server_connection_limit) {
+        const double timestamp = laik_tcp_time () - config->server_connection_timeout;
         for (size_t index = 0; index < this->connections->len;) {
             Laik_Tcp_Socket* candidate = g_ptr_array_index (this->connections, index);
             if (laik_tcp_socket_get_listening (candidate) || laik_tcp_socket_get_timestamp (candidate) > timestamp) {
@@ -80,9 +83,12 @@ void laik_tcp_server_store (Laik_Tcp_Server* this, Laik_Tcp_Socket* socket) {
         }
     }
 
-    if (this->limit && this->connections->len < this->limit) {
+    // If we have room left, add the connection, otherwise close it
+    if (this->connections->len < config->server_connection_limit) {
         g_ptr_array_add (this->connections, laik_tcp_socket_touch (socket));
     } else {
         laik_tcp_socket_free (socket);
     }
+
+    laik_tcp_debug ("%u/%zu connections used after insertion", this->connections->len, config->server_connection_limit);
 }
