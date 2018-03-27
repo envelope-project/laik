@@ -21,7 +21,6 @@ RUN env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
     "libpapi-dev" \
     "libprotobuf-c-dev" \
     "make" \
-    "openmpi-bin" \
     "openssh-client" \
     "pkg-config" \
     "protobuf-c-compiler" \
