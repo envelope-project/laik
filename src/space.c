@@ -1441,7 +1441,7 @@ laik_calc_transition(Laik_Space* space,
         for(int o = toP->off[myid]; o < toP->off[myid+1]; o++) {
             if (laik_slice_isEmpty(dims, &(toP->tslice[o].s))) continue;
 
-            int redOp = laik_get_reduction(toFlow);
+            Laik_ReductionOperation redOp = laik_get_reduction(toFlow);
             assert(redOp != LAIK_RO_None);
             appendInitTOp( &(toP->tslice[o].s),
                            o - toP->off[myid],
