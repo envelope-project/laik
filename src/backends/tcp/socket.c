@@ -205,22 +205,28 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
         }
 
         // Sent up to three keep alive probes before dropping the connection
+        #ifdef TCP_KEEPCNT
         if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPCNT, & (int) { config->socket_keepcnt }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 7, "Failed to set TCP_KEEPCNT on socket: %s", strerror (errno));
             return NULL;
         }
+        #endif 
 
         // Consider the connection idle after 1 second if inactivity
+        #ifdef TCP_KEEPIDLE
         if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPIDLE, & (int) { config->socket_keepidle }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 8, "Failed to set TCP_KEEPIDLE on socket: %s", strerror (errno));
             return NULL;
         }
+        #endif
 
         // On idle connections, send a keep alive probe every second
+        #ifdef TCP_KEEPINTVL
         if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPINTVL, & (int) { config->socket_keepintvl }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 9, "Failed to set TCP_KEEPINTVL on socket: %s", strerror (errno));
             return NULL;
         }
+        #endif
     }
 
     // Handle the different socket types
