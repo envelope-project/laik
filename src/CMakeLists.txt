@@ -32,6 +32,23 @@ if (mpi-backend)
     if (NOT TARGET "mpi")
         find_package (MPI)
         if (MPI_C_FOUND)
+            # MPI_C_COMPILE_FLAGS and MPI_C_LINK_FLAGS really ought to be be
+            # semicolon-separated lists (the documentation [0] unfortunately
+            # isn't quite clear in this point), but for at least CMake 3.5 - 3.9
+            # these are space-separated strings instead (see e.g. [1]).
+            #
+            # While this bug was fixed with the rewrite of the FindMPI module in
+            # CMake 3.10 [2], we unfortunately have to support the older CMake
+            # versions too, so split the variables manually here.
+            #
+            # [0] https://cmake.org/cmake/help/v3.5/module/FindMPI.html
+            # [1] https://github.com/Kitware/CMake/blob/v3.5.0/Modules/FindMPI.cmake#L325
+            # [2] https://github.com/Kitware/CMake/commit/9a58e69cc8a9eea2e4f4ff0e65e7b1df909221ac
+            if("${CMAKE_VERSION}" VERSION_LESS "3.10.0")
+                separate_arguments (MPI_C_COMPILE_FLAGS)
+                separate_arguments (MPI_C_LINK_FLAGS)
+            endif ()
+
             add_library ("mpi" INTERFACE)
             target_include_directories ("mpi" INTERFACE "${MPI_C_INCLUDE_PATH}")
             target_compile_options     ("mpi" INTERFACE "${MPI_C_COMPILE_FLAGS}")
