@@ -1,5 +1,4 @@
 #include "minimpi.h"
-#include <endian.h>     // for htole64, htobe64
 #include <glib.h>       // for g_autoptr, g_bytes_get_size, GBytes_autoptr
 #include <stdbool.h>    // for false
 #include <stdint.h>     // for uint64_t, int64_t, SIZE_MAX
@@ -72,12 +71,12 @@ static GBytes* laik_tcp_minimpi_header (uint64_t generation, uint64_t type, uint
     laik_tcp_always (flows);
 
     const uint64_t data[] = {
-        htole64 (generation),
-        htole64 (type),
-        htole64 (sender),
-        htole64 (receiver),
-        htole64 (tag),
-        htole64 (0),
+        GUINT64_TO_LE (generation),
+        GUINT64_TO_LE (type),
+        GUINT64_TO_LE (sender),
+        GUINT64_TO_LE (receiver),
+        GUINT64_TO_LE (tag),
+        GUINT64_TO_LE (0),
     };
 
     GBytes* result = g_bytes_new (&data, sizeof (data));
@@ -85,7 +84,7 @@ static GBytes* laik_tcp_minimpi_header (uint64_t generation, uint64_t type, uint
     uint64_t* serial = g_hash_table_lookup (flows, result);
 
     if (serial) {
-        ((uint64_t*) g_bytes_get_data (result, NULL))[5] = htobe64 (++*serial);
+        ((uint64_t*) g_bytes_get_data (result, NULL))[5] = GUINT64_TO_LE (++*serial);
     } else {
         g_hash_table_insert (flows, g_bytes_ref (result), g_new0 (uint64_t, 1));
     }
