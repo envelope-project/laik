@@ -408,7 +408,7 @@ void updatePartitioningOffsetsSI(Laik_Partitioning* p)
         idx = p->tss1d[i].idx;
         count++;
     }
-    laik_log(1, "Merging single indexes: %d original, %d merged",
+    laik_log(LAIK_LL_Debug, "Merging single indexes: %d original, %d merged",
              p->count, count);
 
     p->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * count);
@@ -429,9 +429,9 @@ void updatePartitioningOffsetsSI(Laik_Partitioning* p)
                 continue;
             }
         }
-        laik_log(1, "  adding slice for offsets %d - %d: task %d, [%lld;%lld[",
-                 j, i-1, task,
-                 (long long) idx0, (long long) (idx + 1) );
+        laik_log(LAIK_LL_Debug,
+                 "  adding slice for offsets %d - %d: task %d, [%lld;%lld[",
+                 j, i - 1, task, (long long)idx0, (long long)(idx + 1));
 
         Laik_TaskSlice_Gen* ts = &(p->tslice[off]);
         ts->type = TS_Generic;
@@ -647,7 +647,7 @@ bool laik_partitioning_coversSpace(Laik_Partitioning* p)
         Laik_Slice* toRemove = &(list[i].s);
 
 #ifdef DEBUG_COVERSPACE
-        if (laik_log_begin(1)) {
+        if (laik_log_begin(LAIK_LL_Debug)) {
             laik_log_append("coversSpace - ");
             log_Notcovered(dims, toRemove);
             laik_log_flush(0);
@@ -699,7 +699,7 @@ bool laik_partitioning_coversSpace(Laik_Partitioning* p)
     }
 
 #ifdef DEBUG_COVERSPACE
-    if (laik_log_begin(1)) {
+    if (laik_log_begin(LAIK_LL_Debug)) {
         laik_log_append("coversSpace - remaining ");
         log_Notcovered(dims, 0);
         laik_log_flush(0);
@@ -771,7 +771,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
         updatePartitioningOffsets(p);
     }
 
-    if (laik_log_begin(1)) {
+    if (laik_log_begin(LAIK_LL_Debug)) {
         laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
                         pr->name, g->gid, g->myid, space->name);
         laik_log_append("\n  other: ");
@@ -781,7 +781,8 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
         laik_log_flush(0);
     }
     else
-        laik_log(2, "run partitioner '%s' (group %d, space '%s'): %d slices",
+        laik_log(LAIK_LL_Info,
+                 "run partitioner '%s' (group %d, space '%s'): %d slices",
                  pr->name, g->gid, space->name, p->count);
 
 

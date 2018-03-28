@@ -113,8 +113,9 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
     sprintf(inst->guid, "%d", rank);
 
-    laik_log(1, "MPI backend initialized (location '%s', pid %d)\n",
-             inst->mylocation, (int) getpid());
+    laik_log(LAIK_LL_Debug,
+             "MPI backend initialized (location '%s', pid %d)\n",
+             inst->mylocation, (int)getpid());
 
     // for intentionally buggy MPI backend behavior
     char* str = getenv("LAIK_MPI_BUG");
@@ -160,10 +161,10 @@ static void laik_mpi_updateGroup(Laik_Group* g)
     assert(g->parent->size > g->size);
 
 
-    laik_log(1, "MPI backend updateGroup: parent %d (size %d, myid %d) "
-             "=> group %d (size %d, myid %d)",
-             g->parent->gid, g->parent->size, g->parent->myid,
-             g->gid, g->size, g->myid);
+    laik_log(LAIK_LL_Debug,
+             "MPI backend updateGroup: parent %d (size %d, myid %d) " "=> group %d (size %d, myid %d)",
+             g->parent->gid, g->parent->size, g->parent->myid, g->gid,
+             g->size, g->myid);
 
     // only interesting if this task is still part of parent
     if (g->parent->myid < 0) return;
@@ -180,7 +181,7 @@ static void laik_mpi_updateGroup(Laik_Group* g)
     }
     g->backend_data = gd;
 
-    laik_log(1, "MPI Comm_split: old myid %d => new myid %d",
+    laik_log(LAIK_LL_Debug, "MPI Comm_split: old myid %d => new myid %d",
              g->parent->myid, g->fromParent[g->parent->myid]);
 
     MPI_Comm_split(gdParent->comm, g->myid < 0 ? MPI_UNDEFINED : 0, g->myid,
@@ -288,7 +289,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
     // do the manual reduction on smallest rank of output group
     int reduceTask = t->subgroup[a->outputGroup].task[0];
-    laik_log(1, "reduce at T%d", reduceTask);
+    laik_log(LAIK_LL_Debug, "reduce at T%d", reduceTask);
 
     uint64_t byteCount = a->count * data->elemsize;
     int myid = t->group->myid;
@@ -314,28 +315,28 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 #ifdef LOG_DOUBLE_VALUES
                 assert(d->elemsize == 8);
                 for(uint64_t i = 0; i < elemCount; i++)
-                    laik_log(1, "    have at %d: %f", from + i,
-                             ((double*)fromBase)[i]);
+                    laik_log(LAIK_LL_Debug, "    have at %d: %f", from + i,
+                             ((double *)fromBase)[i]);
 #endif
 #ifdef LOG_FLOAT_VALUES
                 assert(d->elemsize == 4);
                 for(uint64_t i = 0; i < elemCount; i++)
-                    laik_log(1, "    have at %d: %f", from + i,
-                             (double) ((float*)fromBase)[i] );
+                    laik_log(LAIK_LL_Debug, "    have at %d: %f", from + i,
+                             (double)((float *)fromBase)[i]);
 #endif
                 continue;
             }
 
-            laik_log(1, "  MPI_Recv from T%d (buf off %lld)",
-                     tg->task[i], (long long int) (p - packbuf));
+            laik_log(LAIK_LL_Debug, "  MPI_Recv from T%d (buf off %lld)",
+                     tg->task[i], (long long int)(p - packbuf));
 
             ptr[i] = p;
             MPI_Recv(p, a->count, dataType, tg->task[i], 1, comm, &st);
 #ifdef LOG_DOUBLE_VALUES
             assert(d->elemsize == 8);
             for(uint64_t i = 0; i < elemCount; i++)
-                laik_log(1, "    got at %d: %f", from + i,
-                         ((double*)p)[i]);
+                laik_log(LAIK_LL_Debug, "    got at %d: %f", from + i,
+                         ((double *)p)[i]);
 #endif
             p += byteCount;
         }
@@ -370,8 +371,8 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 #ifdef LOG_DOUBLE_VALUES
         assert(d->elemsize == 8);
         for(uint64_t i = 0; i < elemCount; i++)
-            laik_log(1, "    sum at %d: %f", from + i,
-                     ((double*)toBase)[i]);
+            laik_log(LAIK_LL_Debug, "    sum at %d: %f", from + i,
+                     ((double *)toBase)[i]);
 #endif
 
         // send result to tasks in output group
@@ -382,7 +383,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                 continue;
             }
 
-            laik_log(1, "  MPI_Send result to T%d", tg->task[i]);
+            laik_log(LAIK_LL_Debug, "  MPI_Send result to T%d", tg->task[i]);
 
             MPI_Send(a->toBuf, a->count, dataType,
                      tg->task[i], 1, comm);
@@ -390,28 +391,28 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     }
     else {
         if (laik_isInGroup(t, a->inputGroup, myid)) {
-            laik_log(1, "  MPI_Send to T%d", reduceTask);
+            laik_log(LAIK_LL_Debug, "  MPI_Send to T%d", reduceTask);
 
 #ifdef LOG_DOUBLE_VALUES
             assert(d->elemsize == 8);
             for(uint64_t i = 0; i < elemCount; i++)
-                laik_log(1, "    at %d: %f", from + i,
-                         ((double*)fromBase)[i]);
+                laik_log(LAIK_LL_Debug, "    at %d: %f", from + i,
+                         ((double *)fromBase)[i]);
 #endif
 
             MPI_Send(a->fromBuf, a->count, dataType,
                      reduceTask, 1, comm);
         }
         if (laik_isInGroup(t, a->outputGroup, myid)) {
-            laik_log(1, "  MPI_Recv from T%d", reduceTask);
+            laik_log(LAIK_LL_Debug, "  MPI_Recv from T%d", reduceTask);
 
             MPI_Recv(a->toBuf, a->count, dataType,
                      reduceTask, 1, comm, &st);
 #ifdef LOG_DOUBLE_VALUES
             assert(d->elemsize == 8);
             for(uint64_t i = 0; i < elemCount; i++)
-                laik_log(1, "    at %d: %f", from + i,
-                         ((double*)toBase)[i]);
+                laik_log(LAIK_LL_Debug, "    at %d: %f", from + i,
+                         ((double *)toBase)[i]);
 #endif
         }
     }
@@ -422,7 +423,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
 {
     assert(as->actionCount > 0);
 
-    laik_log(1, "MPI backend: exec %d actions\n", as->actionCount);
+    laik_log(LAIK_LL_Debug, "MPI backend: exec %d actions\n", as->actionCount);
 
     // TODO: use transition context given by each action
     Laik_TransitionContext* tc = as->context[0];
@@ -441,7 +442,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
 
     for(int i = 0; i < as->actionCount; i++) {
         Laik_BackendAction* a = &(as->action[i]);
-        if (laik_log_begin(1)) {
+        if (laik_log_begin(LAIK_LL_Debug)) {
             laik_log_Action((Laik_Action*) a, tc);
             laik_log_flush(0);
         }
@@ -525,11 +526,10 @@ void laik_execOrRecord(bool record,
     int dims = data->space->dims;
     Laik_SwitchStat* ss = data->stat;
 
-    laik_log(1, "MPI backend: %s transition (data '%s', group %d:%d/%d)\n"
-             "    actions: %d reductions, %d sends, %d recvs",
-             record ? "record":"execute",
-             data->name, group->gid, myid, group->size,
-             t->redCount, t->sendCount, t->recvCount);
+    laik_log(LAIK_LL_Debug,
+             "MPI backend: %s transition (data '%s', group %d:%d/%d)\n" "    actions: %d reductions, %d sends, %d recvs",
+             record ? "record" : "execute", data->name, group->gid, myid,
+             group->size, t->redCount, t->sendCount, t->recvCount);
 
     if (myid < 0) {
         // this task is not part of the communicator to use
@@ -598,7 +598,7 @@ void laik_execOrRecord(bool record,
             // if neither input nor output are all-groups: manual reduction
             if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
 
-                if (laik_log_begin(1)) {
+                if (laik_log_begin(LAIK_LL_Debug)) {
                     laik_log_append("    %s manual reduction: (%lld - %lld) slc/map %d/%d",
                                     record ? "record":"execute",
                                     (long long int) from, (long long int) to,
@@ -613,7 +613,7 @@ void laik_execOrRecord(bool record,
                 else {
                     // do the manual reduction on smallest rank of output group
                     int reduceTask = t->subgroup[op->outputGroup].task[0];
-                    laik_log(1, "reduce at T%d", reduceTask);
+                    laik_log(LAIK_LL_Debug, "reduce at T%d", reduceTask);
 
 
                     if (reduceTask == myid) {
@@ -636,20 +636,24 @@ void laik_execOrRecord(bool record,
 #ifdef LOG_DOUBLE_VALUES
                                 assert(d->elemsize == 8);
                                 for(uint64_t i = 0; i < elemCount; i++)
-                                    laik_log(1, "    have at %d: %f", from + i,
-                                             ((double*)fromBase)[i]);
+                                    laik_log(LAIK_LL_Debug,
+                                             "    have at %d: %f", from + i,
+                                             ((double *)fromBase)[i]);
 #endif
 #ifdef LOG_FLOAT_VALUES
                                 assert(d->elemsize == 4);
                                 for(uint64_t i = 0; i < elemCount; i++)
-                                    laik_log(1, "    have at %d: %f", from + i,
-                                             (double) ((float*)fromBase)[i] );
+                                    laik_log(LAIK_LL_Debug,
+                                             "    have at %d: %f", from + i,
+                                             (double)((float *)fromBase)[i]);
 #endif
                                 continue;
                             }
 
-                            laik_log(1, "  MPI_Recv from T%d (buf off %lld)",
-                                     tg->task[i], (long long int) (p - packbuf));
+                            laik_log(LAIK_LL_Debug,
+                                     "  MPI_Recv from T%d (buf off %lld)",
+                                     tg->task[i],
+                                     (long long int)(p - packbuf));
 
                             ptr[i] = p;
                             MPI_Recv(p, elemCount, mpiDataType,
@@ -657,8 +661,8 @@ void laik_execOrRecord(bool record,
 #ifdef LOG_DOUBLE_VALUES
                             assert(d->elemsize == 8);
                             for(uint64_t i = 0; i < elemCount; i++)
-                                laik_log(1, "    got at %d: %f", from + i,
-                                         ((double*)p)[i]);
+                                laik_log(LAIK_LL_Debug, "    got at %d: %f",
+                                         from + i, ((double *)p)[i]);
 #endif
                             p += byteCount;
                         }
@@ -693,8 +697,8 @@ void laik_execOrRecord(bool record,
 #ifdef LOG_DOUBLE_VALUES
                         assert(d->elemsize == 8);
                         for(uint64_t i = 0; i < elemCount; i++)
-                            laik_log(1, "    sum at %d: %f", from + i,
-                                     ((double*)toBase)[i]);
+                            laik_log(LAIK_LL_Debug, "    sum at %d: %f",
+                                     from + i, ((double *)toBase)[i]);
 #endif
 
                         // send result to tasks in output group
@@ -705,7 +709,8 @@ void laik_execOrRecord(bool record,
                                 continue;
                             }
 
-                            laik_log(1, "  MPI_Send result to T%d", tg->task[i]);
+                            laik_log(LAIK_LL_Debug,
+                                     "  MPI_Send result to T%d", tg->task[i]);
 
                             MPI_Send(toBase, elemCount, mpiDataType,
                                      tg->task[i], 1, comm);
@@ -713,28 +718,30 @@ void laik_execOrRecord(bool record,
                     }
                     else {
                         if (laik_isInGroup(t, op->inputGroup, myid)) {
-                            laik_log(1, "  MPI_Send to T%d", reduceTask);
+                            laik_log(LAIK_LL_Debug, "  MPI_Send to T%d",
+                                     reduceTask);
 
 #ifdef LOG_DOUBLE_VALUES
                             assert(d->elemsize == 8);
                             for(uint64_t i = 0; i < elemCount; i++)
-                                laik_log(1, "    at %d: %f", from + i,
-                                         ((double*)fromBase)[i]);
+                                laik_log(LAIK_LL_Debug, "    at %d: %f",
+                                         from + i, ((double *)fromBase)[i]);
 #endif
 
                             MPI_Send(fromBase, elemCount, mpiDataType,
                                      reduceTask, 1, comm);
                         }
                         if (laik_isInGroup(t, op->outputGroup, myid)) {
-                            laik_log(1, "  MPI_Recv from T%d", reduceTask);
+                            laik_log(LAIK_LL_Debug, "  MPI_Recv from T%d",
+                                     reduceTask);
 
                             MPI_Recv(toBase, elemCount, mpiDataType,
                                      reduceTask, 1, comm, &status);
 #ifdef LOG_DOUBLE_VALUES
                             assert(d->elemsize == 8);
                             for(uint64_t i = 0; i < elemCount; i++)
-                                laik_log(1, "    at %d: %f", from + i,
-                                         ((double*)toBase)[i]);
+                                laik_log(LAIK_LL_Debug, "    at %d: %f",
+                                         from + i, ((double *)toBase)[i]);
 #endif
                         }
                     }
@@ -754,7 +761,7 @@ void laik_execOrRecord(bool record,
                     rootTask = t->subgroup[op->outputGroup].task[0];
                 }
 
-                if (laik_log_begin(1)) {
+                if (laik_log_begin(LAIK_LL_Debug)) {
                     laik_log_append("    %s reduce (root ",
                                     record ? "record":"execute");
                     if (rootTask == -1)
@@ -775,8 +782,8 @@ void laik_execOrRecord(bool record,
                 if (fromBase) {
                     assert(d->elemsize == 8);
                     for(uint64_t i = 0; i < elemCount; i++)
-                        laik_log(1, "    before at %d: %f", from + i,
-                                 ((double*)fromBase)[i]);
+                        laik_log(LAIK_LL_Debug, "    before at %d: %f",
+                                 from + i, ((double *)fromBase)[i]);
                 }
 #endif
 
@@ -805,8 +812,8 @@ void laik_execOrRecord(bool record,
                     if (toBase) {
                         assert(d->elemsize == 8);
                         for(uint64_t i = 0; i < elemCount; i++)
-                            laik_log(1, "    after at %d: %f", from + i,
-                                     ((double*)toBase)[i]);
+                            laik_log(LAIK_LL_Debug, "    after at %d: %f",
+                                     from + i, ((double *)toBase)[i]);
                     }
 #endif
                 }
@@ -844,7 +851,7 @@ void laik_execOrRecord(bool record,
             if (recvFromLower  && (myid < task)) continue;
             if (recvFromHigher && (myid > task)) continue;
 
-            if (laik_log_begin(1)) {
+            if (laik_log_begin(LAIK_LL_Debug)) {
                 laik_log_append("    %s recv ", record ? "record":"execute");
                 laik_log_Slice(dims, &(op->slc));
                 laik_log_flush(" from T%d", op->fromTask);
@@ -880,11 +887,10 @@ void laik_execOrRecord(bool record,
                 assert(to > from);
                 count = to - from;
 
-                laik_log(1, "  direct recv to local [%lld;%lld[, slc/map %d/%d, "
-                         "elemsize %d, baseptr %p\n",
-                         (long long int) from, (long long int) to,
-                         op->sliceNo, op->mapNo,
-                         data->elemsize, (void*) toMap->base);
+                laik_log(LAIK_LL_Debug,
+                         "  direct recv to local [%lld;%lld[, slc/map %d/%d, " "elemsize %d, baseptr %p\n",
+                         (long long int)from, (long long int)to, op->sliceNo,
+                         op->mapNo, data->elemsize, (void *)toMap->base);
 
                 if (mpi_bug > 0) {
                     // intentional bug: ignore small amounts of data received
@@ -950,7 +956,7 @@ void laik_execOrRecord(bool record,
             if (sendToLower  && (myid < task)) continue;
             if (sendToHigher && (myid > task)) continue;
 
-            if (laik_log_begin(1)) {
+            if (laik_log_begin(LAIK_LL_Debug)) {
                 laik_log_append("    %s send ", record ? "record":"execute");
                 laik_log_Slice(dims, &(op->slc));
                 laik_log_flush(" to T%d", op->toTask);
@@ -985,11 +991,10 @@ void laik_execOrRecord(bool record,
                 assert(to > from);
                 count = to - from;
 
-                laik_log(1, "  direct send: from local [%lld;%lld[, slice/map %d/%d, "
-                            "elemsize %d, baseptr %p\n",
-                         (long long int) from, (long long int) to,
-                         op->sliceNo, op->mapNo,
-                         data->elemsize, (void*) fromMap->base);
+                laik_log(LAIK_LL_Debug,
+                         "  direct send: from local [%lld;%lld[, slice/map %d/%d, " "elemsize %d, baseptr %p\n",
+                         (long long int)from, (long long int)to, op->sliceNo,
+                         op->mapNo, data->elemsize, (void *)fromMap->base);
 
                 if (record)
                     laik_actions_addSendBuf(as, fromMap->base + from * data->elemsize,
@@ -1047,7 +1052,7 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     laik_actions_addTContext(as, d, t, fromList, toList);
     laik_execOrRecord(true, d, t, as, fromList, toList);
 
-    if (laik_log_begin(1)) {
+    if (laik_log_begin(LAIK_LL_Debug)) {
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
@@ -1058,7 +1063,7 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     //laik_actions_copySeq(as, as2);
     laik_actions_free(as);
 
-    if (laik_log_begin(1)) {
+    if (laik_log_begin(LAIK_LL_Debug)) {
         laik_log_append("After optimization:\n");
         laik_log_ActionSeq(as2);
         laik_log_flush(0);

@@ -82,7 +82,7 @@ int laik_myid(Laik_Group* g)
 
 void laik_finalize(Laik_Instance* inst)
 {
-    laik_log(1, "finalizing...");
+    laik_log(LAIK_LL_Debug, "finalizing...");
     if (inst->backend && inst->backend->finalize)
         (*inst->backend->finalize)(inst);
 
@@ -90,7 +90,7 @@ void laik_finalize(Laik_Instance* inst)
         laik_ext_cleanup(inst);
     }
 
-    if (laik_log_begin(2)) {
+    if (laik_log_begin(LAIK_LL_Info)) {
         laik_log_append("switch statistics (this task):\n");
         for(int i=0; i<inst->data_count; i++) {
             Laik_Data* d = inst->data[i];
@@ -335,7 +335,7 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
     if (g->inst->backend->updateGroup)
         (g->inst->backend->updateGroup)(g2);
 
-    if (laik_log_begin(1)) {
+    if (laik_log_begin(LAIK_LL_Debug)) {
         laik_log_append("shrink group: "
                         "%d (size %d, myid %d) => %d (size %d, myid %d):",
                         g->gid, g->size, g->myid, g2->gid, g2->size, g2->myid);

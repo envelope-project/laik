@@ -81,7 +81,7 @@ void print(MGraph* mg)
     double* pm = mg->pm;
 
     for(int i = 0; i < n; i++) {
-        laik_log_begin(2);
+        laik_log_begin(LAIK_LL_Info);
         laik_log_append("State %2d: stay %.3f ", i, pm[i * (out + 1)]);
         for(int j = 1; j <= out; j++)
             laik_log_append("=(%.3f)=>%-2d  ",
@@ -145,12 +145,12 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto_phase(dWrite, pWrite,
-                      LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                      (Laik_DataFlow)((int)LAIK_DF_Init | (int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         dstFrom = laik_local2global_1d(dWrite, 0);
 
         if (doPrint) {
-            laik_log_begin(2);
+            laik_log_begin(LAIK_LL_Info);
             laik_log_append("Src values before iter %d:\n", iter);
             for(int i = srcFrom; i < srcTo; i++)
                 laik_log_append("  %d: %f", i, src[i - srcFrom]);
@@ -162,18 +162,18 @@ Laik_Data* runSparse(MGraph* mg, int miter,
             int off = i * (out + 1);
             for(int j = 0; j <= out; j++) {
                 if (doPrint)
-                    laik_log(2,
+                    laik_log(LAIK_LL_Info,
                              "  adding %f from state %d to state %d: before %f, after %f",
                              src[i - srcFrom] * pm[off + j], i, cm[off + j],
-                            dst[cm[off + j] - dstFrom],
-                            dst[cm[off + j] - dstFrom] + src[i - srcFrom] * pm[off + j]);
+                             dst[cm[off + j] - dstFrom],
+                             dst[cm[off + j] - dstFrom] + src[i - srcFrom] * pm[off + j]);
 
                 dst[cm[off + j] - dstFrom] += src[i - srcFrom] * pm[off + j];
             }
         }
 
         if (doPrint) {
-            laik_log_begin(2);
+            laik_log_begin(LAIK_LL_Info);
             laik_log_append("Src values after after %d:\n", iter);
             for(int64_t i = srcFrom; i < srcTo; i++)
                 laik_log_append("  %d: %f", i, dst[i - dstFrom]);
@@ -225,11 +225,11 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto_phase(dWrite, pWrite,
-                      LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                      (Laik_DataFlow)((int)LAIK_DF_Init | (int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
 
         if (doPrint) {
-            laik_log_begin(2);
+            laik_log_begin(LAIK_LL_Info);
             laik_log_append("Src values at iter %d:\n", iter);
             for(int i = srcFrom; i < srcTo; i++)
                 laik_log_append("  %d: %f", i, src[i - srcFrom]);
@@ -353,9 +353,7 @@ int main(int argc, char* argv[])
     pRead = laik_new_accessphase(world, space,
                                   laik_new_block_partitioner1(), 0);
     pr = laik_new_partitioner("markov-out", run_markovPartitioner, &mg,
-                              LAIK_PF_Merge |
-                              (useSingleIndex ? LAIK_PF_SingleIndex : 0) |
-                              (doCompact ? LAIK_PF_Compact : 0));
+                              (Laik_PartitionerFlag)((int)LAIK_PF_Merge | (useSingleIndex ? LAIK_PF_SingleIndex : 0) | (doCompact ? LAIK_PF_Compact : 0)));
     pWrite = laik_new_accessphase(world, space, pr, pRead);
     pMaster = laik_new_accessphase(world, space, laik_Master, 0);
 
@@ -367,7 +365,7 @@ int main(int argc, char* argv[])
         // register initialization function for global-to-local index data
         // this is called whenever the partitioning is changing
         // FIXME: add API to specify function for init
-        laik_switchto_phase(idata, pRead, 0);
+        laik_switchto_phase(idata, pRead, LAIK_DF_None);
         // TODO: move to inititialization function
         int* iarray;
         uint64_t icount, ioff;
@@ -435,7 +433,7 @@ int main(int argc, char* argv[])
         assert((int)count == n);
 
         if (doPrint) {
-            laik_log_begin(2);
+            laik_log_begin(LAIK_LL_Info);
             laik_log_append("Result values:\n");
             for(int i = 0; i < n; i++)
                 laik_log_append("  %d: %f", i, v[i]);

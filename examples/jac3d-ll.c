@@ -239,7 +239,7 @@ int main(int argc, char* argv[])
                         (double) ((gx1 + x + gy1 + y + gz1 + z) & 6);
 
     setBoundary(size, paWrite, dWrite);
-    laik_log(2, "Init done\n");
+    laik_log(LAIK_LL_Info, "Init done\n");
 
     // set data2 to read to make exec_transtion happy (this is a no-op)
     laik_switchto_partitioning(dRead,  paRead,  LAIK_DF_CopyIn);
@@ -348,7 +348,8 @@ int main(int argc, char* argv[])
             res_iters++;
 
             // calculate global residuum
-            laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+            laik_switchto_flow(sumD,
+                               (Laik_DataFlow)((int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
             laik_map_def1(sumD, (void**) &sumPtr, 0);
             *sumPtr = res;
             laik_switchto_flow(sumD, LAIK_DF_CopyIn);
@@ -361,10 +362,10 @@ int main(int argc, char* argv[])
                 int diter = (iter + 1) - last_iter;
                 double dt = t - t2;
                 double gUpdates = 0.000000001 * size * size * size; // per iteration
-                laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
-                         diter, dt,
+                laik_log(LAIK_LL_Info,
+                         "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s", diter,
                          // 6 Flops per update in reg iters, with res 9 (once)
-                         gUpdates * (9 + 6 * (diter-1)) / dt,
+                         dt, gUpdates * (9 + 6 * (diter - 1)) / dt,
                          // per update 48 bytes read + 8 byte written
                          gUpdates * diter * 56 / dt);
                 last_iter = iter + 1;
@@ -402,12 +403,12 @@ int main(int argc, char* argv[])
 
     // statistics for all iterations and reductions
     // using work load in all tasks
-    if (laik_logshown(2)) {
+    if (laik_logshown(LAIK_LL_Info)) {
         t = laik_wtime();
         int diter = iter;
         double dt = t - t1;
         double gUpdates = 0.000000001 * size * size * size; // per iteration
-        laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
+        laik_log(LAIK_LL_Info, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
                  diter, dt,
                  // 6 Flops per update in reg iters, with res 4
                  gUpdates * (9 * res_iters + 6 * (diter - res_iters)) / dt,
