@@ -1,0 +1,5 @@
+@@
+expression a, b;
+@@
+- LAIK_PF_Merge | (a ? LAIK_PF_SingleIndex : 0) | (b ? LAIK_PF_Compact : 0)
++ (Laik_PartitionerFlag) ((int) LAIK_PF_Merge | (a ? LAIK_PF_SingleIndex : 0) | (b ? LAIK_PF_Compact : 0))

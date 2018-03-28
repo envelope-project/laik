@@ -1,0 +1,24 @@
+@@
+@@
+- laik_log_begin (0)
++ laik_log_begin (LAIK_LL_None)
+@@
+@@
+- laik_log_begin (1)
++ laik_log_begin (LAIK_LL_Debug)
+@@
+@@
+- laik_log_begin (2)
++ laik_log_begin (LAIK_LL_Info)
+@@
+@@
+- laik_log_begin (3)
++ laik_log_begin (LAIK_LL_Warning)
+@@
+@@
+- laik_log_begin (4)
++ laik_log_begin (LAIK_LL_Error)
+@@
+@@
+- laik_log_begin (5)
++ laik_log_begin (LAIK_LL_Panic)

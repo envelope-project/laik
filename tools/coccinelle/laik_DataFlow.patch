@@ -1,0 +1,12 @@
+@@
+@@
+- LAIK_DF_CopyIn | LAIK_DF_CopyOut
++ (Laik_DataFlow) ((int) LAIK_DF_CopyIn | (int) LAIK_DF_CopyOut)
+@@
+@@
+- LAIK_DF_ReduceOut | LAIK_DF_Sum
++ (Laik_DataFlow) ((int) LAIK_DF_ReduceOut | (int) LAIK_DF_Sum)
+@@
+@@
+- LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum
++ (Laik_DataFlow) ((int) LAIK_DF_Init | (int) LAIK_DF_ReduceOut | (int) LAIK_DF_Sum)
