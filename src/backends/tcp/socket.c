@@ -171,6 +171,15 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
         return NULL;
     }
 
+    // If we can (e.g. on FreeBSD [0]), disable SIGPIPE for this socket entirely
+    // [0] https://www.freebsd.org/cgi/man.cgi?query=setsockopt
+    #ifdef SO_NOSIGPIPE
+    if (setsockopt (fd, SOL_SOCKET, SO_NOSIGPIPE, & (int) { 1 }, sizeof (int)) != 0) {
+        laik_tcp_errors_push (errors, __func__, 4, "Failed to set SO_NOSIGPIPE on socket: %s", strerror (errno));
+        return NULL;
+    }
+    #endif
+
     // On TCP server sockets, set some extra options 
     if (socket_address_data->sa_family == AF_INET || socket_address_data->sa_family == AF_INET6) {
         // Enable reuse of recently freed ports
