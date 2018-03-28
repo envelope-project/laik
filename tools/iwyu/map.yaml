@@ -1,7 +1,7 @@
 # IWYU mapping file for LAIK, see [0] for details on the format!
 # [0] https://github.com/include-what-you-use/include-what-you-use/blob/master/docs/IWYUMappings.md
 
-# IWYU somehow doesn't get these two right...
+# IWYU somehow doesn't get these includes right automatically, so fix them here
 - include:
   - '<bits/stdint-intn.h>'
   - 'private'
@@ -12,6 +12,12 @@
   - '<bits/stdint-uintn.h>'
   - 'private'
   - '<stdint.h>'
+  - 'public'
+
+- include:
+  - '<glib/gtypes.h>'
+  - 'private'
+  - '<glib.h>'
   - 'public'
 
 # Accessing the public API is only allowed via "#include <laik.h>"
