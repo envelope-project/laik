@@ -70,8 +70,8 @@ endif ()
 
 # Optional TCP backend
 if (tcp-backend)
-    find_pkgconfig ("gio"  "gio-2.0")
-    find_pkgconfig ("glib" "glib-2.0")
+    find_pkgconfig ("gio"  "gio-2.0>=2.44")
+    find_pkgconfig ("glib" "glib-2.0>=2.44")
 
     if (TARGET "gio" AND TARGET "glib")
         message (STATUS "Dependency check for option 'tcp-backend' succeeded, building!")
@@ -93,8 +93,8 @@ if (tcp-backend)
         )
 
         target_compile_definitions ("laik"
-            PRIVATE "GLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_48"
-            PRIVATE "GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_48"
+            PRIVATE "GLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_44"
+            PRIVATE "GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_44"
             PRIVATE "USE_TCP"
             # PRIVATE "LAIK_TCP_DEBUG"
         )
