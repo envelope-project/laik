@@ -1,8 +1,8 @@
 if (failure-simulator)
-    find_pkgconfig ("libprotobuf-c")
+    find_pkgconfig ("protobuf" "libprotobuf-c")
     find_program (protoc "protoc-c")
 
-    if (TARGET "libprotobuf-c" AND protoc)
+    if (TARGET "protobuf" AND protoc)
         message (STATUS "Dependency check for option 'failure-simulator' succeeded, building!")
 
         compile_protobuf_module ("laik_ext")
@@ -17,7 +17,7 @@ if (failure-simulator)
         )
 
         target_link_libraries ("laikfti"
-            PRIVATE "libprotobuf-c"
+            PRIVATE "protobuf"
         )
     elseif (skip-missing)
         message (STATUS "Dependency check for option 'failure-simulator' failed, skipping!")
