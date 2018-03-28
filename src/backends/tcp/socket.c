@@ -42,7 +42,11 @@ static bool laik_tcp_socket_send_raw (Laik_Tcp_Socket* this, const void* data, s
     laik_tcp_always (data || !size);
 
     if (size) {
-        return send (this->fd, data, size, MSG_NOSIGNAL) == (ssize_t) size;
+        #ifdef MSG_NOSIGNAL
+            return send (this->fd, data, size, MSG_NOSIGNAL) == (ssize_t) size;
+        #else
+            return send (this->fd, data, size, 0) == (ssize_t) size;
+        #endif
     } else {
         return true;
     }
