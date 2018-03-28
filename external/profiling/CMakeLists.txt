@@ -1,5 +1,5 @@
 if (profiling-agent)
-    find_pkgconfig ("papi")
+    find_pkgconfig ("papi" "papi")
 
     if (TARGET "papi")
         message (STATUS "Dependency check for option 'profiling-agent' succeeded, building!")

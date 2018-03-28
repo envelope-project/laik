@@ -25,7 +25,7 @@ target_link_libraries ("laik"
 
 # Optional MPI backend
 if (mpi-backend)
-    find_pkgconfig ("mpi")
+    find_pkgconfig ("mpi" "mpi")
 
     # If pkg-config didn't find MPI above, also try CMake's native FindMPI
     # module since we really want to enable MPI support whenever possible!
@@ -70,10 +70,10 @@ endif ()
 
 # Optional TCP backend
 if (tcp-backend)
-    find_pkgconfig ("gio-2.0")
-    find_pkgconfig ("glib-2.0")
+    find_pkgconfig ("gio"  "gio-2.0")
+    find_pkgconfig ("glib" "glib-2.0")
 
-    if (TARGET "gio-2.0" AND TARGET "glib-2.0")
+    if (TARGET "gio" AND TARGET "glib")
         message (STATUS "Dependency check for option 'tcp-backend' succeeded, building!")
 
         target_sources ("laik"
@@ -100,8 +100,8 @@ if (tcp-backend)
         )
 
         target_link_libraries ("laik"
-            PRIVATE "gio-2.0"
-            PRIVATE "glib-2.0"
+            PRIVATE "gio"
+            PRIVATE "glib"
         )
     elseif (skip-missing)
         message (STATUS "Dependency check for option 'tcp-backend' failed, skipping!")
