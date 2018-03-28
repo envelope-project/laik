@@ -28,7 +28,7 @@
   - 'public'
 
 - include:
-  - '@.laik/(action|core|data|debug|ext|profiling|program|space).*'
+  - '@.laik/(action|core|data|debug|ext|profiling|program|space)\.h.'
   - 'private'
   - '<laik.h>'
   - 'public'
@@ -41,7 +41,7 @@
   - 'public'
 
 - include:
-  - '@.laik/(agent|backend|definitions|.*-internal).*'
+  - '@.laik/(agent|backend|definitions|.*-internal)\.h.'
   - 'private'
   - '<laik-internal.h>'
   - 'public'
