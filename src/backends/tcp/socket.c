@@ -1,5 +1,4 @@
 #include "socket.h"
-#include <endian.h>       // for htole64, le64toh
 #include <errno.h>        // for errno
 #include <glib.h>         // for g_malloc0_n, GPtrArray, g_autofree, g_new0
 #include <netdb.h>        // for getaddrinfo
@@ -14,7 +13,7 @@
 #include <sys/un.h>       // for sockaddr_un, sa_family_t
 #include <unistd.h>       // for close, ssize_t
 #include "addressinfo.h"  // for Laik_Tcp_AddressInfo, Laik_Tcp_AddressInfo_...
-#include "config.h"       // for laik_tcp_config, Laik_Tcp_Config_autoptr
+#include "config.h"       // for Laik_Tcp_Config, laik_tcp_config, Laik_Tcp_...
 #include "debug.h"        // for laik_tcp_always, laik_tcp_debug
 #include "errors.h"       // for laik_tcp_errors_push, Laik_Tcp_Errors
 #include "time.h"         // for laik_tcp_time
@@ -322,7 +321,7 @@ bool laik_tcp_socket_receive_uint64 (Laik_Tcp_Socket* this, uint64_t* value) {
         return false;
     }
 
-    *value = le64toh (*value);
+    *value = GUINT64_FROM_LE (*value);
 
     return true;
 }
@@ -348,7 +347,7 @@ bool laik_tcp_socket_send_bytes (Laik_Tcp_Socket* this, GBytes* bytes) {
 bool laik_tcp_socket_send_uint64 (Laik_Tcp_Socket* this, uint64_t value) {
     laik_tcp_always (this);
 
-    value = htole64 (value);
+    value = GUINT64_TO_LE (value);
 
     return laik_tcp_socket_send_raw (this, &value, sizeof (value));
 }
