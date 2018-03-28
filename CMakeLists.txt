@@ -9,10 +9,10 @@ enable_testing ()
 
 # Set some global defaults
 add_compile_options (
+    "-pedantic"
     "-Wall"
     "-Werror"
     "-Wextra"
-    "-Wpedantic"
 )
 set (CMAKE_C_STANDARD            11)
 set (CMAKE_C_EXTENSIONS          ON)
