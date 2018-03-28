@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 // default log level
-static Laik_LogLevel laik_loglevel = LAIK_LL_Error;
+static int laik_loglevel = LAIK_LL_Error;
 static FILE* laik_logfile = NULL;
 static Laik_Instance* laik_loginst = 0;
 // filter
@@ -360,13 +360,13 @@ char* laik_get_guid(Laik_Instance* i){
 
 
 // to overwrite environment variable LAIK_LOG
-void laik_set_loglevel(Laik_LogLevel l)
+void laik_set_loglevel(int l)
 {
     laik_loglevel = l;
 }
 
 // check for log level: return true if given log level will be shown
-bool laik_logshown(Laik_LogLevel l)
+bool laik_logshown(int l)
 {
     return (l >= laik_loglevel);
 }
@@ -394,12 +394,12 @@ bool laik_logshown(Laik_LogLevel l)
 
 // buffered logging, not thread-safe
 
-static Laik_LogLevel current_logLevel = LAIK_LL_None;
+static int current_logLevel = LAIK_LL_None;
 static char* current_logBuffer = 0;
 static int current_logSize = 0;
 static int current_logPos = 0;
 
-bool laik_log_begin(Laik_LogLevel l)
+bool laik_log_begin(int l)
 {
     // if nothing should be logged, set level to none and return
     if (l < laik_loglevel) {
@@ -583,7 +583,7 @@ void laik_log_flush(const char* msg, ...)
     log_flush();
 }
 
-void laik_log(Laik_LogLevel l, const char* msg, ...)
+void laik_log(int l, const char* msg, ...)
 {
     if (!laik_log_begin(l)) return;
 

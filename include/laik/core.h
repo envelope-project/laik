@@ -133,23 +133,23 @@ typedef enum _Laik_LogLevel {
 } Laik_LogLevel;
 
 // log a message, similar to printf
-void laik_log(Laik_LogLevel l, const char* msg, ...) __attribute__ ((format (printf, 2, 3)));
+void laik_log(int level, const char* msg, ...) __attribute__ ((format (printf, 2, 3)));
 
 // panic: terminate application
 void laik_panic(const char* msg);
 
 // check for log level: return true if given log level will be shown
 // use this to guard possibly complex calculations for debug output
-bool laik_logshown(Laik_LogLevel l);
+bool laik_logshown(int level);
 
 // to overwrite environment variable LAIK_LOG
-void laik_set_loglevel(Laik_LogLevel l);
+void laik_set_loglevel(int level);
 
 // buffered log API: same as laik_log, but allows to build message in steps
 
 // begin a new log message with log level <l>
 // returns true if message will be shown; can be used instead of laik_logshown
-bool laik_log_begin(Laik_LogLevel l);
+bool laik_log_begin(int level);
 // append to a log message started before with laik_log_begin
 void laik_log_append(const char* msg, ...);
 // finalize the log message build with laik_log_begin/append and print it
