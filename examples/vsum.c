@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
 
     // distribute data equally among all
     laik_switchto_new_phase(a, world, laik_new_block_partitioner1(),
-                            LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+                            (Laik_DataFlow)((int)LAIK_DF_CopyIn | (int)LAIK_DF_CopyOut));
     // partial sum using equally-sized blocks
     laik_map_def1(a, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];
@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
 
     // distribution using element-wise weights equal to index
     laik_switchto_new_phase(a, world, laik_new_block_partitioner_iw1(getEW, 0),
-                            LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+                            (Laik_DataFlow)((int)LAIK_DF_CopyIn | (int)LAIK_DF_CopyOut));
     // partial sum using blocks sized by element weights
     laik_map_def1(a, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[2] += base[i];
@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
         Laik_AccessPhase* p;
         p = laik_switchto_new_phase(a, world,
                                     laik_new_block_partitioner_tw1(getTW, 0),
-                                    LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+                                    (Laik_DataFlow)((int)LAIK_DF_CopyIn | (int)LAIK_DF_CopyOut));
         // partial sum using blocks sized by task weights
         laik_map_def1(a, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
@@ -119,7 +119,7 @@ int main(int argc, char* argv[])
     // aggregation functionality when switching to new partitioning
     Laik_Data* sum = laik_new_data_1d(inst, laik_Double, 4);
     laik_switchto_new_phase(sum, world, laik_All,
-                            LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                            (Laik_DataFlow)((int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
     laik_map_def1(sum, (void**) &base, &count);
     assert(count == 4);
     for(int i = 0; i < 4; i++) base[i] = mysum[i];

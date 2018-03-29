@@ -1,0 +1,30 @@
+@@
+expression list a;
+@@
+- laik_log (0, a)
++ laik_log (LAIK_LL_None, a)
+@@
+expression list a;
+@@
+- laik_log (1, a)
++ laik_log (LAIK_LL_Debug, a)
+@@
+expression list a;
+@@
+- laik_log (2, a)
++ laik_log (LAIK_LL_Info, a)
+@@
+expression list a;
+@@
+- laik_log (3, a)
++ laik_log (LAIK_LL_Warning, a)
+@@
+expression list a;
+@@
+- laik_log (4, a)
++ laik_log (LAIK_LL_Error, a)
+@@
+expression list a;
+@@
+- laik_log (5, a)
++ laik_log (LAIK_LL_Panic, a)

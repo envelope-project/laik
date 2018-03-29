@@ -31,7 +31,7 @@ Laik_Instance* laik_init_single()
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_single, 1, 0, "local", 0, 0);
 
-    laik_log(1, "Single backend initialized\n");
+    laik_log(LAIK_LL_Debug, "Single backend initialized\n");
 
     single_instance = inst;
     return inst;
@@ -70,10 +70,10 @@ void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
             assert(toBase != 0);
             assert(to > from);
 
-            laik_log(1, "Single reduce: "
-                        "from %lld, to %lld, elemsize %d, base from/to %p/%p\n",
-                     (long long int) from, (long long int) to,
-                     d->elemsize, (void*) fromBase, (void*) toBase);
+            laik_log(LAIK_LL_Debug,
+                     "Single reduce: " "from %lld, to %lld, elemsize %d, base from/to %p/%p\n",
+                     (long long int)from, (long long int)to, d->elemsize,
+                     (void *)fromBase, (void *)toBase);
 
             memcpy(toBase, fromBase, (to-from) * fromMap->data->elemsize);
         }

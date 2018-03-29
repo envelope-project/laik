@@ -303,9 +303,7 @@ int main(int argc, char* argv[])
     pWrite = laik_new_accessphase(world, space,
                                    laik_new_block_partitioner1(), 0);
     pr = laik_new_partitioner("markovin", run_markovPartitioner, &mg,
-                              LAIK_PF_Merge |
-                              (useSingleIndex ? LAIK_PF_SingleIndex : 0) |
-                              (doCompact ? LAIK_PF_Compact : 0));
+                              (Laik_PartitionerFlag)((int)LAIK_PF_Merge | (useSingleIndex ? LAIK_PF_SingleIndex : 0) | (doCompact ? LAIK_PF_Compact : 0)));
     pRead = laik_new_accessphase(world, space, pr, pWrite);
     pMaster = laik_new_accessphase(world, space, laik_Master, 0);
 
@@ -318,7 +316,7 @@ int main(int argc, char* argv[])
         // register initialization function for global-to-local index data
         // this is called whenever the partitioning is changing
         // FIXME: add API to specify function for init
-        laik_switchto_phase(idata, pWrite, 0);
+        laik_switchto_phase(idata, pWrite, LAIK_DF_None);
         // TODO: move to inititialization function
         int* iarray;
         uint64_t icount, ioff;

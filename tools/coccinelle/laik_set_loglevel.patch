@@ -1,0 +1,24 @@
+@@
+@@
+- laik_set_loglevel (0)
++ laik_set_loglevel (LAIK_LL_None)
+@@
+@@
+- laik_set_loglevel (1)
++ laik_set_loglevel (LAIK_LL_Debug)
+@@
+@@
+- laik_set_loglevel (2)
++ laik_set_loglevel (LAIK_LL_Info)
+@@
+@@
+- laik_set_loglevel (3)
++ laik_set_loglevel (LAIK_LL_Warning)
+@@
+@@
+- laik_set_loglevel (4)
++ laik_set_loglevel (LAIK_LL_Error)
+@@
+@@
+- laik_set_loglevel (5)
++ laik_set_loglevel (LAIK_LL_Panic)

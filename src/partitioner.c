@@ -66,7 +66,7 @@ void runAllPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_all_partitioner()
 {
-    return laik_new_partitioner("all", runAllPartitioner, 0, 0);
+    return laik_new_partitioner("all", runAllPartitioner, 0, LAIK_PF_None);
 }
 
 // master-partitioner: only task 0 has access to all indexes
@@ -83,7 +83,8 @@ void runMasterPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_master_partitioner()
 {
-    return laik_new_partitioner("master", runMasterPartitioner, 0, 0);
+    return laik_new_partitioner("master", runMasterPartitioner, 0,
+                                LAIK_PF_None);
 }
 
 // copy-partitioner: copy the borders from base partitioning
@@ -132,7 +133,8 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
     data->fromDim = fromDim;
     data->toDim = toDim;
 
-    return laik_new_partitioner("copy", runCopyPartitioner, data, 0);
+    return laik_new_partitioner("copy", runCopyPartitioner, data,
+                                LAIK_PF_None);
 }
 
 
@@ -182,8 +184,8 @@ Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth)
     assert(data);
     *data = depth;
 
-    return laik_new_partitioner("cornerhalo",
-                                runCornerHaloPartitioner, data, 0);
+    return laik_new_partitioner("cornerhalo", runCornerHaloPartitioner, data,
+                                LAIK_PF_None);
 }
 
 
@@ -261,7 +263,8 @@ Laik_Partitioner* laik_new_halo_partitioner(int depth)
     assert(data);
     *data = depth;
 
-    return laik_new_partitioner("halo", runHaloPartitioner, data, 0);
+    return laik_new_partitioner("halo", runHaloPartitioner, data,
+                                LAIK_PF_None);
 }
 
 
@@ -324,7 +327,8 @@ void runBisectionPartitioner(Laik_Partitioner* pr,
 
 Laik_Partitioner* laik_new_bisection_partitioner()
 {
-    return laik_new_partitioner("bisection", runBisectionPartitioner, 0, 0);
+    return laik_new_partitioner("bisection", runBisectionPartitioner, 0,
+                                LAIK_PF_None);
 }
 
 
@@ -465,7 +469,8 @@ Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
     data->userData = userData;
     data->getTaskW = tfunc;
 
-    return laik_new_partitioner("block", runBlockPartitioner, data, 0);
+    return laik_new_partitioner("block", runBlockPartitioner, data,
+                                LAIK_PF_None);
 }
 
 Laik_Partitioner* laik_new_block_partitioner1()
@@ -573,7 +578,8 @@ void runReassignPartitioner(Laik_Partitioner* pr,
     double weight = 0;
     int curTask = 0; // task in new group which gets the next indexes
 
-    laik_log(1, "reassign: re-distribute weight %.3f to %d tasks (%.3f per task)",
+    laik_log(LAIK_LL_Debug,
+             "reassign: re-distribute weight %.3f to %d tasks (%.3f per task)",
              totalWeight, newg->size, weightPerTask);
 
     Laik_Slice slc;
@@ -581,11 +587,11 @@ void runReassignPartitioner(Laik_Partitioner* pr,
         int origTask = oldP->tslice[sliceNo].task;
         if (newg->fromParent[origTask] >= 0) {
             // move over to new borders
-            laik_log(1, "reassign: take over slice %d of task %d "
-                     "(new task %d, indexes [%lld;%lld[)",
+            laik_log(LAIK_LL_Debug,
+                     "reassign: take over slice %d of task %d " "(new task %d, indexes [%lld;%lld[)",
                      sliceNo, origTask, newg->fromParent[origTask],
-                     (long long int) oldP->tslice[sliceNo].s.from.i[0],
-                     (long long int) oldP->tslice[sliceNo].s.to.i[0]);
+                     (long long int)oldP->tslice[sliceNo].s.from.i[0],
+                     (long long int)oldP->tslice[sliceNo].s.to.i[0]);
 
             laik_append_slice(p, origTask, &(oldP->tslice[sliceNo].s), 0, 0);
             continue;
@@ -609,10 +615,10 @@ void runReassignPartitioner(Laik_Partitioner* pr,
                 slc.to.i[0] = i + 1;
                 laik_append_slice(p, newg->toParent[curTask], &slc, 0, 0);
 
-                laik_log(1, "reassign: re-distribute [%lld;%lld[ "
-                         "of slice %d to task %d (new task %d)",
-                         (long long int) slc.from.i[0],
-                         (long long int) slc.to.i[0], sliceNo,
+                laik_log(LAIK_LL_Debug,
+                         "reassign: re-distribute [%lld;%lld[ " "of slice %d to task %d (new task %d)",
+                         (long long int)slc.from.i[0],
+                         (long long int)slc.to.i[0], sliceNo,
                          newg->toParent[curTask], curTask);
 
                 // start new slice
@@ -629,11 +635,10 @@ void runReassignPartitioner(Laik_Partitioner* pr,
             slc.to.i[0] = to;
             laik_append_slice(p, newg->toParent[curTask], &slc, 0, 0);
 
-            laik_log(1, "reassign: re-distribute remaining [%lld;%lld[ "
-                     "of slice %d to task %d (new task %d)",
-                     (long long int) slc.from.i[0],
-                     (long long int) slc.to.i[0], sliceNo,
-                     newg->toParent[curTask], curTask);
+            laik_log(LAIK_LL_Debug,
+                     "reassign: re-distribute remaining [%lld;%lld[ " "of slice %d to task %d (new task %d)",
+                     (long long int)slc.from.i[0], (long long int)slc.to.i[0],
+                     sliceNo, newg->toParent[curTask], curTask);
         }
     }
 }
@@ -653,6 +658,6 @@ laik_new_reassign_partitioner(Laik_Group* newg,
     data->getIdxW = getIdxW;
     data->userData = userData;
 
-    return laik_new_partitioner("reassign", runReassignPartitioner,
-                                data, 0);
+    return laik_new_partitioner("reassign", runReassignPartitioner, data,
+                                LAIK_PF_None);
 }

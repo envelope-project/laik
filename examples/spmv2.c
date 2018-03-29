@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
             else if (argv[arg][1] == 'i')
                 useIncremental = true;
             else if (argv[arg][1] == 'v')
-                laik_set_loglevel(1);
+                laik_set_loglevel(LAIK_LL_Debug);
             else if (argv[arg][1] == 's') {
                 arg++;
                 if (arg < argc)
@@ -200,7 +200,7 @@ int main(int argc, char* argv[])
     SpM* m = newSpM(size);
 
     tt2 = wtime();
-    laik_log(2, "Init done (%.3fs)\n", tt2 - tt);
+    laik_log(LAIK_LL_Info, "Init done (%.3fs)\n", tt2 - tt);
 
     // 1d space to partition matrix rows and result vector
     Laik_Space* s = laik_new_space_1d(inst, size);
@@ -283,7 +283,8 @@ int main(int argc, char* argv[])
         // only done by tasks which still take part in SPMV
         assert(laik_myid(laik_data_get_group(sumD)) >= 0);
 
-        laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        laik_switchto_flow(sumD,
+                           (Laik_DataFlow)((int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
         laik_map_def1(sumD, (void**) &sumPtr, 0);
         *sumPtr = sum;
         laik_switchto_flow(sumD, LAIK_DF_CopyIn);
@@ -297,14 +298,14 @@ int main(int argc, char* argv[])
         tt = wtime();
         t2 += tt - tt2;
         tt2 = tt;
-        laik_log(2, "Timing: %.3fs comp / %.3fs total\n", t1, t2);
+        laik_log(LAIK_LL_Info, "Timing: %.3fs comp / %.3fs total\n", t1, t2);
 
         // scale owns results by global sum and write into input partitions
         if (useReduction) {
             // varian 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
             laik_switchto_phase(inpD, allVec,
-                          LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                          (Laik_DataFlow)((int)LAIK_DF_Init | (int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
             laik_map_def1(inpD, (void**) &inp, 0);
 
             // loop over all local slices of result vector
@@ -332,7 +333,7 @@ int main(int argc, char* argv[])
         if ((iter == nextshrink) &&
             (laik_size(g) > 1) && (laik_size(g) >= removeTask)) {
             int removeList[1] = {removeTask};
-            laik_log(2, "Shrinking: remove task %d (orig size %d)",
+            laik_log(LAIK_LL_Info, "Shrinking: remove task %d (orig size %d)",
                      removeTask, laik_size(g));
             Laik_Group* g2 = laik_new_shrinked_group(g, 1, removeList);
 
@@ -372,10 +373,11 @@ int main(int argc, char* argv[])
     }
 
     t2 += wtime() - tt2;
-    laik_log(2, "Timing: %.3fs comp/iter, %.3fs total/iter, %.3fs total\n",
+    laik_log(LAIK_LL_Info,
+             "Timing: %.3fs comp/iter, %.3fs total/iter, %.3fs total\n",
              t1 / maxiter, t2 / maxiter, t2);
 
-    laik_log(2, "Timing: Laik total: %.3fs, backend: %.3fs\n",
+    laik_log(LAIK_LL_Info, "Timing: Laik total: %.3fs, backend: %.3fs\n",
              laik_get_total_time(), laik_get_backend_time());
 
     laik_finalize(inst);

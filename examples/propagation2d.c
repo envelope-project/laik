@@ -157,9 +157,9 @@ void print_data(Laik_Data* d, Laik_AccessPhase *p)
         laik_map_def(d, s, (void**) &base, &count);
         for (uint64_t i = 0; i < count; i++)
         {
-            laik_log(1,"%f\n", base[i]);
+            laik_log(LAIK_LL_Debug, "%f\n", base[i]);
         }
-        laik_log(1,"\n");
+        laik_log(LAIK_LL_Debug, "\n");
     }
 }
 
@@ -180,7 +180,7 @@ double data_check_sum(Laik_Data* d, Laik_AccessPhase *p, Laik_Group* world)
 
     Laik_Data* laik_sum = laik_new_data_1d(laik_inst(world), laik_Double, 1);
     laik_switchto_new_phase(laik_sum, world, laik_All,
-                            LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                            (Laik_DataFlow)((int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
     laik_map_def1(laik_sum, (void**) &base, &count);
     *base=sum;
     laik_switchto_new_phase(laik_sum, world, laik_All,
@@ -312,7 +312,8 @@ int main(int argc, char* argv[])
     laik_switchto_phase(element, pElements, LAIK_DF_CopyIn);
 
     // distribution of the nodes
-    laik_switchto_phase(node, pNodes, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_phase(node, pNodes,
+                        (Laik_DataFlow)((int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
     //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
     int nSlicesNodes = laik_phase_my_slicecount(pNodes);
     for (int n = 0; n < nSlicesNodes; ++n)
@@ -328,12 +329,12 @@ int main(int argc, char* argv[])
     apply_boundary_condition(node,pNodes,Rx,Ry,rx,ry,0);
 
     // for debug only
-    laik_log(1,"print elements:");
+    laik_log(LAIK_LL_Debug, "print elements:");
     print_data(element, pElements);
-    laik_log(1,"print nodes:");
+    laik_log(LAIK_LL_Debug, "print nodes:");
     print_data(node,pNodes);
 
-    laik_log(1,"Initialization done.\n");
+    laik_log(LAIK_LL_Debug, "Initialization done.\n");
 
     // propagate the values from elements to the nodes
     // perform the propagation maxIt times
@@ -386,7 +387,8 @@ int main(int argc, char* argv[])
         // update the nodes using elements
         // go through all the elements and refere
         // to their neighbouring nodes and update them
-        laik_switchto_phase(node, pNodes, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        laik_switchto_phase(node, pNodes,
+                            (Laik_DataFlow)((int)LAIK_DF_Init | (int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
         for(int m = 0; m < nMapsElements; m++) {
             laik_map_def(element, m, (void **)&baseE, &countE);
 
@@ -425,9 +427,9 @@ int main(int argc, char* argv[])
         apply_boundary_condition(node,pNodes,Rx,Ry,rx,ry,pow(2,it));
     }
     // for debug only
-    laik_log(1,"print elements:");
+    laik_log(LAIK_LL_Debug, "print elements:");
     print_data(element, pElements);
-    laik_log(1,"print nodes:");
+    laik_log(LAIK_LL_Debug, "print nodes:");
     print_data(node,pNodes);
     // print check_sum for test
     double sum;

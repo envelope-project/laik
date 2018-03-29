@@ -1,0 +1,5 @@
+@@
+expression a, b;
+@@
+- laik_switchto_phase (a, b, 0)
++ laik_switchto_phase (a, b, LAIK_DF_None)

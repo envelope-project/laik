@@ -78,7 +78,8 @@ int main(int argc, char* argv[])
 
     // distribute data equally among all
     part2 = laik_new_partitioning(laik_new_block_partitioner1(), world, space, 0);
-    laik_switchto_partitioning(array, part2, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+    laik_switchto_partitioning(array, part2,
+                               (Laik_DataFlow)((int)LAIK_DF_CopyIn | (int)LAIK_DF_CopyOut));
 
     // partial sum using equally-sized blocks
     laik_map_def1(array, (void**) &base, &count);
@@ -89,7 +90,8 @@ int main(int argc, char* argv[])
     // distribution using element-wise weights equal to index
     part3 = laik_new_partitioning(laik_new_block_partitioner_iw1(getEW, 0),
                                   world, space, 0);
-    laik_switchto_partitioning(array, part3, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+    laik_switchto_partitioning(array, part3,
+                               (Laik_DataFlow)((int)LAIK_DF_CopyIn | (int)LAIK_DF_CopyOut));
 
     // partial sum using blocks sized by element weights
     laik_map_def1(array, (void**) &base, &count);
@@ -101,7 +103,8 @@ int main(int argc, char* argv[])
         // distribution using task-wise weights: without master
         part4 = laik_new_partitioning(laik_new_block_partitioner_tw1(getTW, 0),
                                       world, space, 0);
-        laik_switchto_partitioning(array, part4, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+        laik_switchto_partitioning(array, part4,
+                                   (Laik_DataFlow)((int)LAIK_DF_CopyIn | (int)LAIK_DF_CopyOut));
 
         // partial sum using blocks sized by task weights
         laik_map_def1(array, (void**) &base, &count);
@@ -139,7 +142,7 @@ int main(int argc, char* argv[])
     sumdata  = laik_new_data(sumspace, laik_Double);
     sumpart1 = laik_new_partitioning(laik_All, world, sumspace, 0);
     laik_switchto_partitioning(sumdata, sumpart1,
-                               LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                               (Laik_DataFlow)((int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
 
     laik_map_def1(sumdata, (void**) &base, &count);
     assert(count == 4);

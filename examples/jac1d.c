@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
         assert(off == countW - 1);
         baseW[off] = hiValue;
     }
-    laik_log(2, "Init done\n");
+    laik_log(LAIK_LL_Info, "Init done\n");
 
     // for statistics (with LAIK_LOG=2)
     double t, t1 = laik_wtime(), t2 = t1;
@@ -168,7 +168,8 @@ int main(int argc, char* argv[])
             res_iters++;
 
             // calculate global residuum
-            laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+            laik_switchto_flow(sumD,
+                               (Laik_DataFlow)((int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
             laik_map_def1(sumD, (void**) &sumPtr, 0);
             *sumPtr = res;
             laik_switchto_flow(sumD, LAIK_DF_CopyIn);
@@ -181,10 +182,10 @@ int main(int argc, char* argv[])
                 int diter = (iter + 1) - last_iter;
                 double dt = t - t2;
                 double gUpdates = 0.000000001 * size; // per iteration
-                laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
-                         diter, dt,
+                laik_log(LAIK_LL_Info,
+                         "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s", diter,
                          // 2 Flops per update in reg iters, with res 5 (once)
-                         gUpdates * (5 + 2 * (diter-1)) / dt,
+                         dt, gUpdates * (5 + 2 * (diter - 1)) / dt,
                          // per update 16 bytes read + 8 byte written
                          gUpdates * diter * 24 / dt);
                 last_iter = iter + 1;
@@ -229,7 +230,8 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < countW; i++) sum += baseW[i];
 
     // global reduction of local sum values
-    laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_flow(sumD,
+                       (Laik_DataFlow)((int)LAIK_DF_ReduceOut | (int)LAIK_DF_Sum));
     laik_map_def1(sumD, (void**) &sumPtr, 0);
     *sumPtr = sum;
     laik_switchto_flow(sumD, LAIK_DF_CopyIn);
@@ -238,12 +240,12 @@ int main(int argc, char* argv[])
 
     // statistics for all iterations and reductions
     // using work load in all tasks
-    if (laik_logshown(2)) {
+    if (laik_logshown(LAIK_LL_Info)) {
         t = laik_wtime();
         int diter = iter;
         double dt = t - t1;
         double gUpdates = 0.000000001 * size; // per iteration
-        laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
+        laik_log(LAIK_LL_Info, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
                  diter, dt,
                  // 2 Flops per update in reg iters, with res 5
                  gUpdates * (5 * res_iters + 2 * (diter - res_iters)) / dt,

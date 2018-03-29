@@ -370,7 +370,7 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
     if (bufSize == 0) {
         assert(copyRanges == 0);
-        laik_log(1, "Optimized action sequence: nothing to do.");
+        laik_log(LAIK_LL_Debug, "Optimized action sequence: nothing to do.");
         laik_actions_copySeq(oldAS, as);
         return;
     }
@@ -379,8 +379,9 @@ void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     as->buf = malloc(bufSize * elemsize);
     as->ce = malloc(copyRanges * sizeof(Laik_CopyEntry));
 
-    laik_log(1, "Optimized action sequence: buf %p, length %d x %d, ranges %d",
-        (void*) as->buf, bufSize, elemsize, copyRanges);
+    laik_log(LAIK_LL_Debug,
+             "Optimized action sequence: buf %p, length %d x %d, ranges %d",
+             (void *)as->buf, bufSize, elemsize, copyRanges);
 
     // unmark all actions: restart for finding same type of actions
     for(int i = 0; i < oldAS->actionCount; i++)

@@ -1,0 +1,5 @@
+@@
+expression a, b, c;
+@@
+- laik_new_partitioner (a, b, c, 0)
++ laik_new_partitioner (a, b, c, LAIK_PF_None)
