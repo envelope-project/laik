@@ -16,6 +16,10 @@ done
 
 include-what-you-use \
     -Xiwyu --mapping_file="${DIR}/map.yaml" \
+    -D LAIK_TCP_DEBUG \
+    -D LAIK_TCP_STATS \
+    -D USE_MPI \
+    -D USE_TCP \
     -I "${SRC}/include" \
     -I "${SRC}/src" \
     "${@}"
