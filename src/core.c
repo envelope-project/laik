@@ -154,7 +154,7 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     if (str) {
         int l = atoi(str);
         if (l > 0)
-            laik_loglevel = (Laik_LogLevel) l;
+            laik_loglevel = l;
         char* p = index(str, ':');
         if (p) {
             p++;
