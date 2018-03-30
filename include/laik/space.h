@@ -194,6 +194,10 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
                                          Laik_Group* g, Laik_Space* space,
                                          Laik_Partitioning* otherP);
 
+// free resources allocated for a partitioning object
+void laik_free_partitioning(Laik_Partitioning* p);
+
+
 // give an access phase a name, for debug output
 void laik_partitioning_set_name(Laik_Partitioning* p, char* n);
 

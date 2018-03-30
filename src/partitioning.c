@@ -523,7 +523,7 @@ void laik_clear_partitioning(Laik_Partitioning* p)
     p->count = 0;
 }
 
-// internal: free resources allocated for a partitioning object
+// free resources allocated for a partitioning object
 void laik_free_partitioning(Laik_Partitioning* p)
 {
     free(p->off);

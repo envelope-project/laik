@@ -62,42 +62,49 @@ int main(int argc, char* argv[])
 
     double *baseR, *baseW, *sumPtr;
     uint64_t countR, countW, off;
-    int64_t from, to;
+    int64_t gx1, gx2;
+    int64_t x1, x2;
 
     // two 1d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_1d(inst, size);
     Laik_Data* data1 = laik_new_data(space, laik_Double);
     Laik_Data* data2 = laik_new_data(space, laik_Double);
 
-    // two types of access phases into data1 and data2:
-    // - pWrite: distributes the cells to update
-    // - pRead : extends pWrite partitions to allow reading neighbor values
-    // data1/2 are alternativly accessed using pRead/pWrite, exchanged after
-    // every iteration
-    Laik_AccessPhase *pWrite, *pRead;
-    pWrite = laik_new_accessphase(world, space,
-                                  laik_new_block_partitioner1(), 0);
-    // this extends pWrite partitions at borders by 1 index on inner borders
-    // (the coupling is dynamic: any change in pWrite changes pRead)
-    pRead = laik_new_accessphase(world, space,
-                                  laik_new_cornerhalo_partitioner(1), pWrite);
+    // we use two types of partitioners algorithms:
+    // - prWrite: cells to update (disjunctive partitioning)
+    // - prRead : extends partitionings by haloes, to read neighbor values
+    Laik_Partitioner *prWrite, *prRead;
+    prWrite = laik_new_block_partitioner1();
+    prRead = laik_new_cornerhalo_partitioner(1);
 
-    // for global sum, used for residuum and value sum at end
-    Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);
+    // run partitioners to get partitionings over 2d space and <world> group
+    // data1/2 are then alternately accessed using pRead/pWrite
+    Laik_Partitioning *pWrite, *pRead;
+    pWrite = laik_new_partitioning(prWrite, world, space, 0);
+    pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+    laik_partitioning_set_name(pWrite, "pWrite");
+    laik_partitioning_set_name(pRead, "pRead");
+
+    // for global sum, used for residuum: 1 double accessible by all
+    Laik_Space* sp1 = laik_new_space_1d(inst, 1);
+    Laik_Partitioning* sumP = laik_new_partitioning(laik_All, world, sp1, 0);
+    Laik_Data* sumD = laik_new_data(sp1, laik_Double);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new_phase(sumD, world, laik_All, LAIK_DF_None);
+    laik_switchto_partitioning(sumD, sumP, LAIK_DF_None);
 
     // start with writing (= initialization) data1
     Laik_Data* dWrite = data1;
     Laik_Data* dRead = data2;
 
     // distributed initialization
-    laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
-    laik_map_def1(dWrite, (void**) &baseW, &countW);
+    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
+    laik_my_slice_1d(pWrite, 0, &gx1, &gx2);
+
     // arbitrary non-zero values based on global indexes to detect bugs
-    uint64_t glbase = laik_local2global_1d(dWrite, 0);
+    laik_map_def1(dWrite, (void**) &baseW, &countW);
     for(uint64_t i = 0; i < countW; i++)
-        baseW[i] = (double) ((i + glbase) & 6);
+        baseW[i] = (double) ((gx1 + i) & 6);
+
     // set fixed boundary values
     if (laik_global2local_1d(dWrite, 0, &off)) {
         // if global index 0 is local, it must be at local index 0
@@ -124,19 +131,19 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn);
-        laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
+        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn);
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
         laik_map_def1(dRead,  (void**) &baseR, &countR);
         laik_map_def1(dWrite, (void**) &baseW, &countW);
 
         // local range for which to do 1d stencil, adjust at borders
-        from = 0;
-        to = countW;
+        x1 = 0;
+        x2 = countW;
         if (laik_global2local_1d(dWrite, 0, &off)) {
             // global index 0 is local
             assert(off == 0);
             baseW[off] = loValue;
-            from++;
+            x1++;
         }
         else {
             // start at inner border: adjust baseR such that
@@ -149,7 +156,7 @@ int main(int argc, char* argv[])
             // last global index is local
             assert(off == countW - 1);
             baseW[off] = hiValue;
-            to--;
+            x2--;
         }
 
         // do jacobi
@@ -159,7 +166,7 @@ int main(int argc, char* argv[])
             // using work load in all tasks
             double newValue, diff, res;
             res = 0.0;
-            for(int64_t i = from; i < to; i++) {
+            for(int64_t i = x1; i < x2; i++) {
                 newValue = 0.5 * (baseR[i-1] + baseR[i+1]);
                 diff = baseR[i] - newValue;
                 res += diff * diff;
@@ -198,16 +205,8 @@ int main(int argc, char* argv[])
             if (res < .001) break;
         }
         else {
-            for(int64_t i = from; i < to; i++) {
+            for(int64_t i = x1; i < x2; i++) {
                 baseW[i] = 0.5 * (baseR[i-1] + baseR[i+1]);
-#if 0
-                printf( "I%d at G%02d / L%02d T%d: %10.6f "
-                        "<== %10.6f (G%02d %2d) + %10.6f (G%02d %2d)\n",
-                        iter, (int) laik_local2global1(dWrite, i),
-                        (int) i, laik_myid(world), baseW[i],
-                        baseR[i-1], (int) laik_local2global1(dWrite, i)-1, (int) (i - 1),
-                        baseR[i+1], (int) laik_local2global1(dWrite, i)+1, (int) (i + 1) );
-#endif
             }
         }
 
@@ -215,26 +214,24 @@ int main(int argc, char* argv[])
         if ((repart > 0) && (iter > 0) && ((iter % repart) == 0)) {
             static int userData;
             userData = iter / repart;
-            Laik_Partitioner* pr = laik_get_partitioner(pWrite);
-            laik_set_task_weight(pr, getTW, (void*) &userData);
-            laik_phase_run_partitioner(pWrite);
+            laik_set_task_weight(prWrite, getTW, (void*) &userData);
+
+            // calculate new partitionings, switch to them, free old
+            // only need to preserve data written into dWrite
+            Laik_Partitioning *pWriteNew, *pReadNew;
+            pWriteNew = laik_new_partitioning(prWrite, world, space, 0);
+            pReadNew  = laik_new_partitioning(prRead, world, space, pWriteNew);
+            laik_switchto_partitioning(dWrite, pWriteNew,
+                                       LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+            laik_switchto_partitioning(dRead, pReadNew, LAIK_DF_None);
+            laik_free_partitioning(pWrite);
+            laik_free_partitioning(pRead);
+            pWrite = pWriteNew;
+            pRead = pReadNew;
         }
 
         // TODO: allow repartitioning
     }
-
-    // for check at end: sum up all just written values
-    double sum = 0.0;
-    laik_map_def1(dWrite, (void**) &baseW, &countW);
-    for(uint64_t i = 0; i < countW; i++) sum += baseW[i];
-
-    // global reduction of local sum values
-    laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
-    laik_map_def1(sumD, (void**) &sumPtr, 0);
-    *sumPtr = sum;
-    laik_switchto_flow(sumD, LAIK_DF_CopyIn);
-    laik_map_def1(sumD, (void**) &sumPtr, 0);
-    sum = *sumPtr;
 
     // statistics for all iterations and reductions
     // using work load in all tasks
@@ -250,6 +247,19 @@ int main(int argc, char* argv[])
                  // per update 16 bytes read + 8 byte written
                  gUpdates * diter * 24 / dt);
     }
+
+    // for check at end: sum up all just written values
+    double sum = 0.0;
+    laik_map_def1(dWrite, (void**) &baseW, &countW);
+    for(uint64_t i = 0; i < countW; i++) sum += baseW[i];
+
+    // global reduction of local sum values
+    laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_map_def1(sumD, (void**) &sumPtr, 0);
+    *sumPtr = sum;
+    laik_switchto_flow(sumD, LAIK_DF_CopyIn);
+    laik_map_def1(sumD, (void**) &sumPtr, 0);
+    sum = *sumPtr;
 
     if (laik_myid(laik_data_get_group(sumD)) == 0) {
         printf("Global value sum after %d iterations: %f\n",
