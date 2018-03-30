@@ -29,6 +29,43 @@
 double loRowValue = -5.0, hiRowValue = 10.0;
 double loColValue = -10.0, hiColValue = 5.0;
 
+void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
+{
+    double *baseW;
+    uint64_t ysizeW, ystrideW, xsizeW;
+    int64_t gx1, gx2, gy1, gy2;
+
+    // global index ranges of the slice of this process
+    laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+
+    // default mapping order for 2d:
+    //   with y in [0;ysize[, x in [0;xsize[
+    //   base[y][x] is at (base + y * ystride + x)
+    laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+
+    // set fixed boundary values at the 4 edges
+    if (gy1 == 0) {
+        // top row
+        for(uint64_t x = 0; x < xsizeW; x++)
+            baseW[x] = loRowValue;
+    }
+    if (gy2 == size) {
+        // bottom row
+        for(uint64_t x = 0; x < xsizeW; x++)
+            baseW[(ysizeW - 1) * ystrideW + x] = hiRowValue;
+    }
+    if (gx1 == 0) {
+        // left column, may overwrite global (0,0) and (0,size-1)
+        for(uint64_t y = 0; y < ysizeW; y++)
+            baseW[y * ystrideW] = loColValue;
+    }
+    if (gx2 == size) {
+        // right column, may overwrite global (size-1,0) and (size-1,size-1)
+        for(uint64_t y = 0; y < ysizeW; y++)
+            baseW[y * ystrideW + xsizeW - 1] = hiColValue;
+    }
+}
+
 // to deliberately change block partitioning (if arg 3 provided)
 double getTW(int rank, const void* userData)
 {
@@ -90,39 +127,45 @@ int main(int argc, char* argv[])
     double *baseR, *baseW, *sumPtr;
     uint64_t ysizeR, ystrideR, xsizeR;
     uint64_t ysizeW, ystrideW, xsizeW;
-    int64_t gx1, gx2, gy1, gy2, x1, x2, y1, y2;
+    int64_t gx1, gx2, gy1, gy2;
+    int64_t x1, x2, y1, y2;
 
     // two 2d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_2d(inst, size, size);
     Laik_Data* data1 = laik_new_data(space, laik_Double);
     Laik_Data* data2 = laik_new_data(space, laik_Double);
 
-    // two types of access phases into data1 and data2:
-    // - pWrite: distributes the cells to update
-    // - pRead : extends pWrite partitions to allow reading neighbor values
-    // data1/2 are alternativly accessed using pRead/pWrite, exchanged after
-    // every iteration
-    Laik_AccessPhase *pWrite, *pRead;
-    pWrite = laik_new_accessphase(world, space,
-                                  laik_new_bisection_partitioner(), 0);
-    // this extends pWrite partitions at borders by 1 index on inner borders
-    // (the coupling is dynamic: any change in pWrite changes pRead)
-    Laik_Partitioner* pr = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
-                                            laik_new_halo_partitioner(1);
-    pRead = laik_new_accessphase(world, space, pr, pWrite);
+    // we use two types of partitioners algorithms:
+    // - prWrite: cells to update (disjunctive partitioning)
+    // - prRead : extends partitionings by haloes, to read neighbor values
+    Laik_Partitioner *prWrite, *prRead;
+    prWrite = laik_new_bisection_partitioner();
+    prRead = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
+                              laik_new_halo_partitioner(1);
 
-    // for global sum, used for residuum and value sum at end
-    Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);
+    // run partitioners to get partitionings over 2d space and <world> group
+    // data1/2 are then alternately accessed using pRead/pWrite
+    Laik_Partitioning *pWrite, *pRead;
+    pWrite = laik_new_partitioning(prWrite, world, space, 0);
+    pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+    laik_partitioning_set_name(pWrite, "pWrite");
+    laik_partitioning_set_name(pRead, "pRead");
+
+    // for global sum, used for residuum: 1 double accessible by all
+    Laik_Space* sp1 = laik_new_space_1d(inst, 1);
+    Laik_Partitioning* sumP = laik_new_partitioning(laik_All, world, sp1, 0);
+    Laik_Data* sumD = laik_new_data(sp1, laik_Double);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new_phase(sumD, world, laik_All, LAIK_DF_None);
+    laik_switchto_partitioning(sumD, sumP, LAIK_DF_None);
 
     // start with writing (= initialization) data1
     Laik_Data* dWrite = data1;
     Laik_Data* dRead = data2;
 
     // distributed initialization
-    laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
-    laik_phase_myslice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
+    laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+
     // default mapping order for 2d:
     //   with y in [0;ysize], x in [0;xsize[
     //   base[y][x] is at (base + y * ystride + x)
@@ -131,27 +174,8 @@ int main(int argc, char* argv[])
     for(uint64_t y = 0; y < ysizeW; y++)
         for(uint64_t x = 0; x < xsizeW; x++)
             baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
-    // set fixed boundary values at the 4 edges
-    if (gy1 == 0) {
-        // top row
-        for(uint64_t x = 0; x < xsizeW; x++)
-            baseW[x] = loRowValue;
-    }
-    if (gy2 == size) {
-        // bottom row
-        for(uint64_t x = 0; x < xsizeW; x++)
-            baseW[(ysizeW - 1) * ystrideW + x] = hiRowValue;
-    }
-    if (gx1 == 0) {
-        // left column, may overwrite global (0,0) and (0,size-1)
-        for(uint64_t y = 0; y < ysizeW; y++)
-            baseW[y * ystrideW] = loColValue;
-    }
-    if (gx2 == size) {
-        // right column, may overwrite global (size-1,0) and (size-1,size-1)
-        for(uint64_t y = 0; y < ysizeW; y++)
-            baseW[y * ystrideW + xsizeW - 1] = hiColValue;
-    }
+
+    setBoundary(size, pWrite, dWrite);
     laik_log(2, "Init done\n");
 
     // for statistics (with LAIK_LOG=2)
@@ -167,41 +191,20 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn);
-        laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
+        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn);
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
         laik_map_def1_2d(dRead,  (void**) &baseR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
+        setBoundary(size, pWrite, dWrite);
+
         // local range for which to do 2d stencil, without global edges
-        laik_phase_myslice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
-        y1 = 0;
-        if (gy1 == 0) {
-            // top row
-            for(uint64_t x = 0; x < xsizeW; x++)
-                baseW[x] = loRowValue;
-            y1 = 1;
-        }
-        y2 = ysizeW;
-        if (gy2 == size) {
-            // bottom row
-            for(uint64_t x = 0; x < xsizeW; x++)
-                baseW[(ysizeW - 1) * ystrideW + x] = hiRowValue;
-            y2 = ysizeW - 1;
-        }
-        x1 = 0;
-        if (gx1 == 0) {
-            // left column, may overwrite global (0,0) and (0,size-1)
-            for(uint64_t y = 0; y < ysizeW; y++)
-                baseW[y * ystrideW] = loColValue;
-            x1 = 1;
-        }
-        x2 = xsizeW;
-        if (gx2 == size) {
-            // right column, may overwrite global (size-1,0) and (size-1,size-1)
-            for(uint64_t y = 0; y < ysizeW; y++)
-                baseW[y * ystrideW + xsizeW - 1] = hiColValue;
-            x2 = xsizeW - 1;
-        }
+        laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+        y1 = (gy1 == 0)    ? 1 : 0;
+        x1 = (gx1 == 0)    ? 1 : 0;
+        y2 = (gy2 == size) ? (ysizeW - 1) : ysizeW;
+        x2 = (gx2 == size) ? (xsizeW - 1) : xsizeW;
+
         // relocate baseR to be able to use same indexing as with baseW
         if (gx1 > 0) {
             // ghost cells from left neighbor at x=0, move that to -1
@@ -294,11 +297,14 @@ int main(int argc, char* argv[])
     }
 
     if (do_sum) {
-        // for check at end: sum up all just written values
-        laik_switchto_new_phase(dWrite, laik_data_get_group(dWrite),
-                                laik_Master, LAIK_DF_CopyIn);
+        Laik_Group* activeGroup = laik_data_get_group(dWrite);
 
-        if (laik_myid(laik_data_get_group(dWrite)) == 0) {
+        // for check at end: sum up all just written values
+        Laik_Partitioning* pMaster;
+        pMaster = laik_new_partitioning(laik_Master, activeGroup, space, 0);
+        laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_CopyIn);
+
+        if (laik_myid(activeGroup) == 0) {
             double sum = 0.0;
             laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
             for(uint64_t y = 0; y < ysizeW; y++)

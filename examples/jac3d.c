@@ -36,7 +36,9 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
     uint64_t zsizeW, zstrideW, ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2, gz1, gz2;
 
+    // global index ranges of the slice of this process
     laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
@@ -150,21 +152,17 @@ int main(int argc, char* argv[])
     Laik_Data* data1 = laik_new_data(space, laik_Double);
     Laik_Data* data2 = laik_new_data(space, laik_Double);
 
-    // we need two types of partitioners/partitionings for data1 and data2:
-    // - pWrite: distributes the cells to update (disjunctive partitioning)
-    // - pRead : extends paWrite to allow reading neighbor values
-    // data1/2 are alternativly accessed using pRead/pWrite, exchanged after
-    // every iteration
-
+    // we use two types of partitioners algorithms:
+    // - prWrite: cells to update (disjunctive partitioning)
+    // - prRead : extends partitionings by haloes, to read neighbor values
     Laik_Partitioner *prWrite, *prRead;
-    Laik_Partitioning *pWrite, *pRead;
-
-    // the partitioners used to calculate the partitionings
     prWrite = laik_new_bisection_partitioner();
     prRead = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
                               laik_new_halo_partitioner(1);
 
-    // now calculate all partitionings we need for current <world> group
+    // run partitioners to get partitionings over 3d space and <world> group
+    // data1/2 are then alternately accessed using pRead/pWrite
+    Laik_Partitioning *pWrite, *pRead;
     pWrite = laik_new_partitioning(prWrite, world, space, 0);
     pRead  = laik_new_partitioning(prRead, world, space, pWrite);
     laik_partitioning_set_name(pWrite, "pWrite");
@@ -214,10 +212,12 @@ int main(int argc, char* argv[])
         }
     }
 
-    // for global sum, used for residuum
-    Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);
+    // for global sum, used for residuum: 1 double accessible by all
+    Laik_Space* sp1 = laik_new_space_1d(inst, 1);
+    Laik_Partitioning* sumP = laik_new_partitioning(laik_All, world, sp1, 0);
+    Laik_Data* sumD = laik_new_data(sp1, laik_Double);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new_phase(sumD, world, laik_All, LAIK_DF_None);
+    laik_switchto_partitioning(sumD, sumP, LAIK_DF_None);
 
     // start with writing (= initialization) data1
     Laik_Data* dWrite = data1;
@@ -226,6 +226,7 @@ int main(int argc, char* argv[])
     // distributed initialization
     laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
     laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
@@ -251,9 +252,11 @@ int main(int argc, char* argv[])
 
     int iter = 0;
     for(; iter < maxiter; iter++) {
-        laik_reset_profiling(inst);
         laik_set_iteration(inst, iter + 1);
+
+        laik_reset_profiling(inst);
         laik_profile_user_start(inst);
+
         // switch roles: data written before now is read
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
@@ -395,8 +398,10 @@ int main(int argc, char* argv[])
                 }
             }
         }
+
         laik_profile_user_stop(inst);
         laik_writeout_profile();
+
         // TODO: allow repartitioning
     }
 
@@ -416,12 +421,14 @@ int main(int argc, char* argv[])
     }
 
     if (do_sum) {
+        Laik_Group* activeGroup = laik_data_get_group(dWrite);
+
         // for check at end: sum up all just written values
         Laik_Partitioning* pMaster;
-        pMaster = laik_new_partitioning(laik_Master, world, space, 0);
+        pMaster = laik_new_partitioning(laik_Master, activeGroup, space, 0);
         laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_CopyIn);
 
-        if (laik_myid(laik_data_get_group(dWrite)) == 0) {
+        if (laik_myid(activeGroup) == 0) {
             double sum = 0.0;
             laik_map_def1_3d(dWrite, (void**) &baseW,
                              &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
