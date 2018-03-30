@@ -30,13 +30,13 @@ double loColValue = -10.0, hiColValue = 5.0;
 double loPlaneValue = -20.0, hiPlaneValue = 15.0;
 
 
-void setBoundary(int size, Laik_Partitioning *paWrite, Laik_Data* dWrite)
+void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
 {
     double *baseW;
     uint64_t zsizeW, zstrideW, ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2, gz1, gz2;
 
-    laik_my_slice_3d(paWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
@@ -151,13 +151,13 @@ int main(int argc, char* argv[])
     Laik_Data* data2 = laik_new_data(space, laik_Double);
 
     // we need two types of partitioners/partitionings for data1 and data2:
-    // - paWrite: distributes the cells to update (disjunctive partitioning)
-    // - paRead : extends paWrite to allow reading neighbor values
+    // - pWrite: distributes the cells to update (disjunctive partitioning)
+    // - pRead : extends paWrite to allow reading neighbor values
     // data1/2 are alternativly accessed using pRead/pWrite, exchanged after
     // every iteration
 
     Laik_Partitioner *prWrite, *prRead;
-    Laik_Partitioning *paWrite, *paRead;
+    Laik_Partitioning *pWrite, *pRead;
 
     // the partitioners used to calculate the partitionings
     prWrite = laik_new_bisection_partitioner();
@@ -165,10 +165,10 @@ int main(int argc, char* argv[])
                               laik_new_halo_partitioner(1);
 
     // now calculate all partitionings we need for current <world> group
-    paWrite = laik_new_partitioning(prWrite, world, space, 0);
-    paRead  = laik_new_partitioning(prRead, world, space, paWrite);
-    laik_partitioning_set_name(paWrite, "paWrite");
-    laik_partitioning_set_name(paRead, "paRead");
+    pWrite = laik_new_partitioning(prWrite, world, space, 0);
+    pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+    laik_partitioning_set_name(pWrite, "pWrite");
+    laik_partitioning_set_name(pRead, "pRead");
 
     Laik_Reservation* r1 = 0;
     Laik_Reservation* r2 = 0;
@@ -181,14 +181,14 @@ int main(int argc, char* argv[])
         // re-partitioning.
 
         r1 = laik_reservation_new(data1);
-        laik_reservation_add(r1, paRead);
-        laik_reservation_add(r1, paWrite);
+        laik_reservation_add(r1, pRead);
+        laik_reservation_add(r1, pWrite);
         laik_reservation_alloc(r1);
         laik_data_use_reservation(data1, r1);
 
         r2 = laik_reservation_new(data2);
-        laik_reservation_add(r2, paRead);
-        laik_reservation_add(r2, paWrite);
+        laik_reservation_add(r2, pRead);
+        laik_reservation_add(r2, pWrite);
         laik_reservation_alloc(r2);
         laik_data_use_reservation(data2, r2);
     }
@@ -201,11 +201,11 @@ int main(int argc, char* argv[])
     Laik_ActionSeq* data2_toExclActions = 0;
     if (do_exec || do_actions) {
         toHaloTransition = laik_calc_transition(space,
-                                                paWrite, LAIK_DF_CopyOut,
-                                                paRead, LAIK_DF_CopyIn);
+                                                pWrite, LAIK_DF_CopyOut,
+                                                pRead, LAIK_DF_CopyIn);
         toExclTransition = laik_calc_transition(space,
-                                                paRead, LAIK_DF_CopyIn,
-                                                paWrite, LAIK_DF_CopyOut);
+                                                pRead, LAIK_DF_CopyIn,
+                                                pWrite, LAIK_DF_CopyOut);
         if (do_actions) {
             data1_toHaloActions = laik_calc_actions(data1, toHaloTransition, r1, r1);
             data1_toExclActions = laik_calc_actions(data1, toExclTransition, r1, r1);
@@ -224,8 +224,8 @@ int main(int argc, char* argv[])
     Laik_Data* dRead = data2;
 
     // distributed initialization
-    laik_switchto_partitioning(dWrite, paWrite, LAIK_DF_CopyOut);
-    laik_my_slice_3d(paWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
+    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
@@ -238,11 +238,11 @@ int main(int argc, char* argv[])
                 baseW[z * zstrideW + y * ystrideW + x] =
                         (double) ((gx1 + x + gy1 + y + gz1 + z) & 6);
 
-    setBoundary(size, paWrite, dWrite);
+    setBoundary(size, pWrite, dWrite);
     laik_log(2, "Init done\n");
 
     // set data2 to read to make exec_transtion happy (this is a no-op)
-    laik_switchto_partitioning(dRead,  paRead,  LAIK_DF_CopyIn);
+    laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn);
 
     // for statistics (with LAIK_LOG=2)
     double t, t1 = laik_wtime(), t2 = t1;
@@ -287,8 +287,8 @@ int main(int argc, char* argv[])
         }
         else {
             // no pre-calculation: switch to partitionings
-            laik_switchto_partitioning(dRead,  paRead,  LAIK_DF_CopyIn);
-            laik_switchto_partitioning(dWrite, paWrite, LAIK_DF_CopyOut);
+            laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn);
+            laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
         }
 
         laik_map_def1_3d(dRead,  (void**) &baseR,
@@ -296,10 +296,10 @@ int main(int argc, char* argv[])
         laik_map_def1_3d(dWrite, (void**) &baseW,
                          &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
 
-        setBoundary(size, paWrite, dWrite);
+        setBoundary(size, pWrite, dWrite);
 
         // determine local range for which to do 3d stencil, without global edges
-        laik_my_slice_3d(paWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+        laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
         z1 = (gz1 == 0)    ? 1 : 0;
         y1 = (gy1 == 0)    ? 1 : 0;
         x1 = (gx1 == 0)    ? 1 : 0;
@@ -417,9 +417,9 @@ int main(int argc, char* argv[])
 
     if (do_sum) {
         // for check at end: sum up all just written values
-        Laik_Partitioning* paMaster;
-        paMaster = laik_new_partitioning(laik_Master, world, space, 0);
-        laik_switchto_partitioning(dWrite, paMaster, LAIK_DF_CopyIn);
+        Laik_Partitioning* pMaster;
+        pMaster = laik_new_partitioning(laik_Master, world, space, 0);
+        laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_CopyIn);
 
         if (laik_myid(laik_data_get_group(dWrite)) == 0) {
             double sum = 0.0;
