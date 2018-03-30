@@ -30,13 +30,13 @@ double loColValue = -10.0, hiColValue = 5.0;
 double loPlaneValue = -20.0, hiPlaneValue = 15.0;
 
 
-void setBoundary(int size, Laik_AccessPhase *pWrite, Laik_Data* dWrite)
+void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
 {
     double *baseW;
     uint64_t zsizeW, zstrideW, ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2, gz1, gz2;
 
-    laik_phase_myslice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
@@ -94,6 +94,8 @@ int main(int argc, char* argv[])
     bool do_profiling = false;
     bool do_sum = false;
     bool do_reservation = false;
+    bool do_exec = false;
+    bool do_actions = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
@@ -101,6 +103,8 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'p') do_profiling = true;
         if (argv[arg][1] == 's') do_sum = true;
         if (argv[arg][1] == 'r') do_reservation = true;
+        if (argv[arg][1] == 'e') do_exec = true;
+        if (argv[arg][1] == 'a') do_actions = true;
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
@@ -108,6 +112,8 @@ int main(int argc, char* argv[])
                    " -p : write profiling data to 'jac3d_profiling.txt'\n"
                    " -s : print value sum at end (warning: sum done at master)\n"
                    " -r : do space reservation before iteration loop\n"
+                   " -e : pre-calculate transitions to exec in iteration loop\n"
+                   " -a : pre-calculate action sequence to exec (includes -e)\n"
                    " -h : print this help text and exit\n",
                    argv[0]);
             exit(1);
@@ -144,20 +150,28 @@ int main(int argc, char* argv[])
     Laik_Data* data1 = laik_new_data(space, laik_Double);
     Laik_Data* data2 = laik_new_data(space, laik_Double);
 
-    // two types of access phases into data1 and data2:
-    // - pWrite: distributes the cells to update
-    // - pRead : extends pWrite partitions to allow reading neighbor values
+    // we need two types of partitioners/partitionings for data1 and data2:
+    // - pWrite: distributes the cells to update (disjunctive partitioning)
+    // - pRead : extends paWrite to allow reading neighbor values
     // data1/2 are alternativly accessed using pRead/pWrite, exchanged after
     // every iteration
-    Laik_AccessPhase *pWrite, *pRead;
-    pWrite = laik_new_accessphase(world, space,
-                                  laik_new_bisection_partitioner(), 0);
-    // this extends pWrite partitions at borders by 1 index on inner borders
-    // (the coupling is dynamic: any change in pWrite changes pRead)
-    Laik_Partitioner* pr = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
-                                            laik_new_halo_partitioner(1);
-    pRead = laik_new_accessphase(world, space, pr, pWrite);
 
+    Laik_Partitioner *prWrite, *prRead;
+    Laik_Partitioning *pWrite, *pRead;
+
+    // the partitioners used to calculate the partitionings
+    prWrite = laik_new_bisection_partitioner();
+    prRead = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
+                              laik_new_halo_partitioner(1);
+
+    // now calculate all partitionings we need for current <world> group
+    pWrite = laik_new_partitioning(prWrite, world, space, 0);
+    pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+    laik_partitioning_set_name(pWrite, "pWrite");
+    laik_partitioning_set_name(pRead, "pRead");
+
+    Laik_Reservation* r1 = 0;
+    Laik_Reservation* r2 = 0;
     if (do_reservation) {
         // reserve and pre-allocate memory for data1/2
         // this is purely optional, and the application still works when we
@@ -165,25 +179,39 @@ int main(int argc, char* argv[])
         // However, this makes sure that no allocation happens in the main
         // iteration, and reservation/allocation should be done again on
         // re-partitioning.
-        //
-        // notes:
-        // - both data will be switched to pWrite and pRead
-        // - now run partitioners to get actual partitioning for reservation
-        // - order is important, as calculating baRead needs baWrite
-        Laik_Partitioning* paWrite = laik_phase_run_partitioner(pWrite);
-        Laik_Partitioning* paRead  = laik_phase_get_partitioning(pRead);
 
-        Laik_Reservation* r1 = laik_reservation_new(data1);
-        laik_reservation_add(r1, paRead);
-        laik_reservation_add(r1, paWrite);
+        r1 = laik_reservation_new(data1);
+        laik_reservation_add(r1, pRead);
+        laik_reservation_add(r1, pWrite);
         laik_reservation_alloc(r1);
         laik_data_use_reservation(data1, r1);
 
-        Laik_Reservation* r2 = laik_reservation_new(data2);
-        laik_reservation_add(r2, paRead);
-        laik_reservation_add(r2, paWrite);
+        r2 = laik_reservation_new(data2);
+        laik_reservation_add(r2, pRead);
+        laik_reservation_add(r2, pWrite);
         laik_reservation_alloc(r2);
         laik_data_use_reservation(data2, r2);
+    }
+
+    Laik_Transition* toHaloTransition = 0;
+    Laik_Transition* toExclTransition = 0;
+    Laik_ActionSeq* data1_toHaloActions = 0;
+    Laik_ActionSeq* data1_toExclActions = 0;
+    Laik_ActionSeq* data2_toHaloActions = 0;
+    Laik_ActionSeq* data2_toExclActions = 0;
+    if (do_exec || do_actions) {
+        toHaloTransition = laik_calc_transition(space,
+                                                pWrite, LAIK_DF_CopyOut,
+                                                pRead, LAIK_DF_CopyIn);
+        toExclTransition = laik_calc_transition(space,
+                                                pRead, LAIK_DF_CopyIn,
+                                                pWrite, LAIK_DF_CopyOut);
+        if (do_actions) {
+            data1_toHaloActions = laik_calc_actions(data1, toHaloTransition, r1, r1);
+            data1_toExclActions = laik_calc_actions(data1, toExclTransition, r1, r1);
+            data2_toHaloActions = laik_calc_actions(data2, toHaloTransition, r2, r2);
+            data2_toExclActions = laik_calc_actions(data2, toExclTransition, r2, r2);
+        }
     }
 
     // for global sum, used for residuum
@@ -196,8 +224,8 @@ int main(int argc, char* argv[])
     Laik_Data* dRead = data2;
 
     // distributed initialization
-    laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
-    laik_phase_myslice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
+    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
@@ -213,6 +241,9 @@ int main(int argc, char* argv[])
     setBoundary(size, pWrite, dWrite);
     laik_log(2, "Init done\n");
 
+    // set data2 to read to make exec_transtion happy (this is a no-op)
+    laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn);
+
     // for statistics (with LAIK_LOG=2)
     double t, t1 = laik_wtime(), t2 = t1;
     int last_iter = 0;
@@ -227,8 +258,39 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn);
-        laik_switchto_phase(dWrite, pWrite, LAIK_DF_CopyOut);
+        // we show 3 different ways of switching containers among partitionings
+        // (1) no preparation: directly switch to another partitioning
+        // (2) with pre-calculated transitions between partitiongs: execute it
+        // (3) with pre-calculated action sequence for transitions: execute it
+        // with (3), it is especially beneficial to use a reservation, as
+        // the actions usually directly refer to e.g. MPI calls
+
+        if (do_exec || do_actions) {
+            // we did pre-calculation to speed up switches
+            if (do_actions) {
+                // we pre-calculated the communication action sequences
+                if (dRead == data1) {
+                    // switch data 1 to halo partitioning
+                    laik_exec_actions(data1_toHaloActions);
+                    laik_exec_actions(data2_toExclActions);
+                }
+                else {
+                    laik_exec_actions(data2_toHaloActions);
+                    laik_exec_actions(data1_toExclActions);
+                }
+            }
+            else {
+                // pre-calculation of transitions
+                laik_exec_transition(dRead, toHaloTransition);
+                laik_exec_transition(dWrite, toExclTransition);
+            }
+        }
+        else {
+            // no pre-calculation: switch to partitionings
+            laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn);
+            laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
+        }
+
         laik_map_def1_3d(dRead,  (void**) &baseR,
                          &zsizeR, &zstrideR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_3d(dWrite, (void**) &baseW,
@@ -237,7 +299,7 @@ int main(int argc, char* argv[])
         setBoundary(size, pWrite, dWrite);
 
         // determine local range for which to do 3d stencil, without global edges
-        laik_phase_myslice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+        laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
         z1 = (gz1 == 0)    ? 1 : 0;
         y1 = (gy1 == 0)    ? 1 : 0;
         x1 = (gx1 == 0)    ? 1 : 0;
@@ -355,8 +417,9 @@ int main(int argc, char* argv[])
 
     if (do_sum) {
         // for check at end: sum up all just written values
-        laik_switchto_new_phase(dWrite, laik_data_get_group(dWrite),
-                                laik_Master,  LAIK_DF_CopyIn);
+        Laik_Partitioning* pMaster;
+        pMaster = laik_new_partitioning(laik_Master, world, space, 0);
+        laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_CopyIn);
 
         if (laik_myid(laik_data_get_group(dWrite)) == 0) {
             double sum = 0.0;
