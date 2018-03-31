@@ -308,6 +308,7 @@ void laik_log_SwitchStat(Laik_SwitchStat* ss)
     }
 }
 
+
 void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 {
     Laik_BackendAction* ba = (Laik_BackendAction*) a;
@@ -400,4 +401,13 @@ void laik_log_ActionSeq(Laik_ActionSeq *as)
         laik_log_Action((Laik_Action*) &(as->action[i]), tc);
         laik_log_append("\n");
     }
+}
+
+void laik_log_Checksum(char* buf, int count, Laik_Type* t)
+{
+    assert(t == laik_Double);
+    double sum = 0.0;
+    for(int i = 0; i < count; i++)
+        sum += ((double*)buf)[i];
+    laik_log_append("checksum %f", sum);
 }

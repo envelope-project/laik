@@ -35,5 +35,6 @@ void laik_log_Partitioning(Laik_Partitioning* p);
 void laik_log_SwitchStat(Laik_SwitchStat* ss);
 void laik_log_Action(Laik_Action* a, Laik_TransitionContext *tc);
 void laik_log_ActionSeq(Laik_ActionSeq* as);
+void laik_log_Checksum(char* buf, int count, Laik_Type* t);
 
 #endif // _LAIK_DEBUG_H_
