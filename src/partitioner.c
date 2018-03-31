@@ -316,8 +316,8 @@ static void doBisection(Laik_Partitioning* p,
 void runBisectionPartitioner(Laik_Partitioner* pr,
                              Laik_Partitioning* p, Laik_Partitioning* otherP)
 {
-    (void) pr;      /* FIXME: Why have this parameter if it's never used */
-    (void) otherP; /* FIXME: Why have this parameter if it's never used */
+    (void) pr;     /* not used: no parameters for this partitioner */
+    (void) otherP; /* not used: not derived from another partitioning */
 
     doBisection(p, &(p->space->s), 0, p->group->size);
 }
@@ -328,6 +328,87 @@ Laik_Partitioner* laik_new_bisection_partitioner()
 }
 
 
+//-------------------------------------------------------------------
+// 3d grid partitioner
+
+typedef struct _Laik_GridPartitionerData {
+    int xblocks, yblocks, zblocks;
+} Laik_GridPartitionerData;
+
+
+void runGridPartitioner(Laik_Partitioner* pr,
+                        Laik_Partitioning* p, Laik_Partitioning* otherP)
+{
+    (void) otherP; /* not used: not derived from another partitioning */
+    Laik_GridPartitionerData* data;
+    data = (Laik_GridPartitionerData*) pr->data;
+
+    int tag = 1;
+
+    assert(p->space->dims == 3);
+    int blocks = data->xblocks * data->yblocks * data->zblocks;
+    assert(p->group->size >= blocks);
+
+    Laik_Slice* ss = &(p->space->s);
+    double xStep = (ss->to.i[0] - ss->from.i[0]) / (double) data->xblocks;
+    double yStep = (ss->to.i[1] - ss->from.i[1]) / (double) data->yblocks;
+    double zStep = (ss->to.i[2] - ss->from.i[2]) / (double) data->zblocks;
+
+    Laik_Slice slc;
+    int64_t from, to;
+    int task = 0;
+    for(int z = 0; z < data->zblocks; z++) {
+        from = ss->from.i[2] + z * zStep;
+        to   = ss->from.i[2] + (z+1) * zStep;
+        if (from == to) continue;
+        if (to > ss->to.i[2]) to = ss->to.i[2];
+        slc.from.i[2] = from;
+        slc.to.i[2]   = to;
+
+        for(int y = 0; y < data->yblocks; y++) {
+            from = ss->from.i[1] + y * yStep;
+            to   = ss->from.i[1] + (y+1) * yStep;
+            if (from == to) continue;
+            if (to > ss->to.i[1]) to = ss->to.i[1];
+            slc.from.i[1] = from;
+            slc.to.i[1]   = to;
+
+            for(int x = 0; x < data->xblocks; x++) {
+                from = ss->from.i[0] + x * xStep;
+                to   = ss->from.i[0] + (x+1) * xStep;
+                if (from == to) continue;
+                if (to > ss->to.i[0]) to = ss->to.i[0];
+                slc.from.i[0] = from;
+                slc.to.i[0]   = to;
+
+                laik_append_slice(p, task, &slc, tag, 0);
+                task++;
+                if (task == p->group->size) return;
+            }
+        }
+    }
+}
+
+Laik_Partitioner*
+laik_new_grid_partitioner(int xblocks, int yblocks, int zblocks)
+{
+    Laik_GridPartitionerData* data;
+    data = malloc(sizeof(Laik_GridPartitionerData));
+    if (!data) {
+        laik_panic("Out of memory allocating Laik_GridPartitionerData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
+    data->xblocks = xblocks;
+    data->yblocks = yblocks;
+    data->zblocks = zblocks;
+
+    return laik_new_partitioner("grid", runGridPartitioner, data, 0);
+}
+
+
+
+//-------------------------------------------------------------------
 // block partitioner: split one dimension of space into blocks
 //
 // this partitioner supports:

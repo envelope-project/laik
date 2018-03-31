@@ -98,6 +98,8 @@ int main(int argc, char* argv[])
     bool do_reservation = false;
     bool do_exec = false;
     bool do_actions = false;
+    bool do_grid = false;
+    int xblocks, yblocks, zblocks; // for grid partitioner
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
@@ -107,10 +109,12 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'r') do_reservation = true;
         if (argv[arg][1] == 'e') do_exec = true;
         if (argv[arg][1] == 'a') do_actions = true;
+        if (argv[arg][1] == 'g') do_grid = true;
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
+                   " -g : use regular grid instead of bisection partitioner\n"
                    " -p : write profiling data to 'jac3d_profiling.txt'\n"
                    " -s : print value sum at end (warning: sum done at master)\n"
                    " -r : do space reservation before iteration loop\n"
@@ -128,10 +132,27 @@ int main(int argc, char* argv[])
     if (size == 0) size = 200; // 8 mio entries
     if (maxiter == 0) maxiter = 50;
 
+    if (do_grid) {
+        // find grid partitioning with less or equal blocks than processes
+        int pcount = laik_size(world);
+        int mind = 2 * pcount;
+        for(int x = 1; x < pcount; x++)
+            for(int y = x; y < pcount; y++) {
+                int z = ((double) pcount) / x / y;
+                if ((z == 0) || (x * y * z > pcount)) continue;
+                int d = abs(y-x) + abs(z-x) + abs(z-y);
+                if (mind <= d) continue;
+                mind = d;
+                zblocks = z; yblocks = y; xblocks = x;
+            }
+    }
+
     if (laik_myid(world) == 0) {
         printf("%d x %d x %d cells (mem %.1f MB), running %d iterations with %d tasks",
                size, size, size, .000016 * size * size * size,
                maxiter, laik_size(world));
+        if (do_grid)
+            printf(" (grid %d x %d x %d)", zblocks, yblocks, xblocks);
         if (!use_cornerhalo)
             printf(" (halo without corners)");
         printf("\n");
@@ -156,7 +177,8 @@ int main(int argc, char* argv[])
     // - prWrite: cells to update (disjunctive partitioning)
     // - prRead : extends partitionings by haloes, to read neighbor values
     Laik_Partitioner *prWrite, *prRead;
-    prWrite = laik_new_bisection_partitioner();
+    prWrite = do_grid ? laik_new_grid_partitioner(xblocks, yblocks, zblocks) :
+                        laik_new_bisection_partitioner();
     prRead = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
                               laik_new_halo_partitioner(1);
 

@@ -1699,8 +1699,9 @@ Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
 {
     Laik_Mapping* m = laik_map(d, 0, 0);
     if (!m) {
-        laik_log(LAIK_LL_Error, "laik_map: could not map slice 0 of data '%s'",
-                 d->name);
+        if (base) *base = 0;
+        if (xsize) *xsize = 0;
+        if (ysize) *ysize = 0;
         return 0;
     }
 
@@ -1729,8 +1730,10 @@ Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
 {
     Laik_Mapping* m = laik_map(d, 0, 0);
     if (!m) {
-        laik_log(LAIK_LL_Error, "laik_map: could not map slice 0 of data '%s'",
-                 d->name);
+        if (base) *base = 0;
+        if (xsize) *xsize = 0;
+        if (ysize) *ysize = 0;
+        if (zsize) *zsize = 0;
         return 0;
     }
 
