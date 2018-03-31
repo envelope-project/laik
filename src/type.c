@@ -54,8 +54,8 @@ static int type_id = 0;
 
 void laik_char_init(void* base, int count, Laik_ReductionOperation o)
 {
-    unsigned char* p = base;
-    unsigned char v;
+    signed char* p = base;
+    signed char v;
     switch(o) {
     case LAIK_RO_Sum:
     case LAIK_RO_Or:   v = 0; break;
@@ -78,11 +78,12 @@ void laik_char_reduce(void* out, void* in1, void* in2,
     if (!in1 || !in2) {
         // for all supported reductions, only one input is copied as output
         if (in1)
-            memcpy(out, in1, count);
+            memcpy(out, in1, count * sizeof(char));
         else if (in2)
-            memcpy(out, in2, count);
+            memcpy(out, in2, count * sizeof(char));
         else
             laik_char_init(out, count, o);
+        return;
     }
 
     signed char* pin1 = in1;
@@ -125,7 +126,7 @@ void laik_char_reduce(void* out, void* in1, void* in2,
 }
 
 
-// laik_Char
+// laik_UChar
 
 void laik_uchar_init(void* base, int count, Laik_ReductionOperation o)
 {
@@ -152,11 +153,12 @@ void laik_uchar_reduce(void* out, void* in1, void* in2,
     if (!in1 || !in2) {
         // for all supported reductions, only one input is copied as output
         if (in1)
-            memcpy(out, in1, count);
+            memcpy(out, in1, count * sizeof(unsigned char));
         else if (in2)
-            memcpy(out, in2, count);
+            memcpy(out, in2, count * sizeof(unsigned char));
         else
             laik_char_init(out, count, o);
+        return;
     }
 
     unsigned char* pin1 = in1;
@@ -226,11 +228,12 @@ void laik_int32_reduce(void* out, void* in1, void* in2,
     if (!in1 || !in2) {
         // for all supported reductions, only one input is copied as output
         if (in1)
-            memcpy(out, in1, count);
+            memcpy(out, in1, count * sizeof(int32_t));
         else if (in2)
-            memcpy(out, in2, count);
+            memcpy(out, in2, count * sizeof(int32_t));
         else
             laik_char_init(out, count, o);
+        return;
     }
 
     int32_t* pin1 = in1;
@@ -300,11 +303,12 @@ void laik_uint32_reduce(void* out, void* in1, void* in2,
     if (!in1 || !in2) {
         // for all supported reductions, only one input is copied as output
         if (in1)
-            memcpy(out, in1, count);
+            memcpy(out, in1, count * sizeof(uint32_t));
         else if (in2)
-            memcpy(out, in2, count);
+            memcpy(out, in2, count * sizeof(uint32_t));
         else
             laik_char_init(out, count, o);
+        return;
     }
 
     uint32_t* pin1 = in1;
@@ -374,11 +378,12 @@ void laik_int64_reduce(void* out, void* in1, void* in2,
     if (!in1 || !in2) {
         // for all supported reductions, only one input is copied as output
         if (in1)
-            memcpy(out, in1, count);
+            memcpy(out, in1, count * sizeof(int64_t));
         else if (in2)
-            memcpy(out, in2, count);
+            memcpy(out, in2, count * sizeof(int64_t));
         else
             laik_char_init(out, count, o);
+        return;
     }
 
     int64_t* pin1 = in1;
@@ -448,11 +453,12 @@ void laik_uint64_reduce(void* out, void* in1, void* in2,
     if (!in1 || !in2) {
         // for all supported reductions, only one input is copied as output
         if (in1)
-            memcpy(out, in1, count);
+            memcpy(out, in1, count * sizeof(uint64_t));
         else if (in2)
-            memcpy(out, in2, count);
+            memcpy(out, in2, count * sizeof(uint64_t));
         else
             laik_char_init(out, count, o);
+        return;
     }
 
     uint64_t* pin1 = in1;
@@ -520,11 +526,12 @@ void laik_double_reduce(void* out, void* in1, void* in2,
     if (!in1 || !in2) {
         // for all supported reductions, only one input is copied as output
         if (in1)
-            memcpy(out, in1, count);
+            memcpy(out, in1, count * sizeof(double));
         else if (in2)
-            memcpy(out, in2, count);
+            memcpy(out, in2, count * sizeof(double));
         else
             laik_double_init(out, count, o);
+        return;
     }
 
     double* pin1 = in1;
@@ -582,11 +589,12 @@ void laik_float_reduce(void* out, void* in1, void* in2,
     if (!in1 || !in2) {
         // for all supported reductions, only one input is copied as output
         if (in1)
-            memcpy(out, in1, count);
+            memcpy(out, in1, count * sizeof(float));
         else if (in2)
-            memcpy(out, in2, count);
+            memcpy(out, in2, count * sizeof(float));
         else
             laik_float_init(out, count, o);
+        return;
     }
 
     float* pin1 = in1;
