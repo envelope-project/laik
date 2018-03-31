@@ -21,6 +21,8 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <float.h>
 
 /**
  * LAIK data types
@@ -48,7 +50,7 @@ Laik_Type *laik_Double;
 
 static int type_id = 0;
 
-// laik_Char
+// laik_Char (signed)
 
 void laik_char_init(void* base, int count, Laik_ReductionOperation o)
 {
@@ -58,7 +60,9 @@ void laik_char_init(void* base, int count, Laik_ReductionOperation o)
     case LAIK_RO_Sum:
     case LAIK_RO_Or:   v = 0; break;
     case LAIK_RO_Prod: v = 1; break;
-    case LAIK_RO_And:  v = 255; break;
+    case LAIK_RO_And:  v = ~0; break;
+    case LAIK_RO_Min:  v = INT8_MIN; break;
+    case LAIK_RO_Max:  v = INT8_MAX; break;
     default:
         assert(0);
     }
@@ -70,7 +74,9 @@ void laik_char_reduce(void* out, void* in1, void* in2,
                       int count, Laik_ReductionOperation o)
 {
     assert(out);
-    if (!in1 || ! in2) {
+
+    if (!in1 || !in2) {
+        // for all supported reductions, only one input is copied as output
         if (in1)
             memcpy(out, in1, count);
         else if (in2)
@@ -103,6 +109,16 @@ void laik_char_reduce(void* out, void* in1, void* in2,
             pout[i] = pin1[i] & pin2[i];
         break;
 
+    case LAIK_RO_Min:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] < pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
+    case LAIK_RO_Max:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] > pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
     default:
         assert(0);
     }
@@ -120,6 +136,8 @@ void laik_uchar_init(void* base, int count, Laik_ReductionOperation o)
     case LAIK_RO_Or:   v = 0; break;
     case LAIK_RO_Prod: v = 1; break;
     case LAIK_RO_And:  v = 255; break;
+    case LAIK_RO_Min:  v = 0; break;
+    case LAIK_RO_Max:  v = UINT8_MAX; break;
     default:
         assert(0);
     }
@@ -131,7 +149,8 @@ void laik_uchar_reduce(void* out, void* in1, void* in2,
                        int count, Laik_ReductionOperation o)
 {
     assert(out);
-    if (!in1 || ! in2) {
+    if (!in1 || !in2) {
+        // for all supported reductions, only one input is copied as output
         if (in1)
             memcpy(out, in1, count);
         else if (in2)
@@ -164,13 +183,23 @@ void laik_uchar_reduce(void* out, void* in1, void* in2,
             pout[i] = pin1[i] & pin2[i];
         break;
 
+    case LAIK_RO_Min:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] < pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
+    case LAIK_RO_Max:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] > pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
     default:
         assert(0);
     }
 }
 
 
-// laik_Int32
+// laik_Int32 (signed)
 
 void laik_int32_init(void* base, int count, Laik_ReductionOperation o)
 {
@@ -181,6 +210,8 @@ void laik_int32_init(void* base, int count, Laik_ReductionOperation o)
     case LAIK_RO_Or:   v = 0; break;
     case LAIK_RO_Prod: v = 1; break;
     case LAIK_RO_And:  v = ~0; break;
+    case LAIK_RO_Min:  v = INT32_MIN; break;
+    case LAIK_RO_Max:  v = INT32_MAX; break;
     default:
         assert(0);
     }
@@ -192,7 +223,8 @@ void laik_int32_reduce(void* out, void* in1, void* in2,
                        int count, Laik_ReductionOperation o)
 {
     assert(out);
-    if (!in1 || ! in2) {
+    if (!in1 || !in2) {
+        // for all supported reductions, only one input is copied as output
         if (in1)
             memcpy(out, in1, count);
         else if (in2)
@@ -225,6 +257,16 @@ void laik_int32_reduce(void* out, void* in1, void* in2,
             pout[i] = pin1[i] & pin2[i];
         break;
 
+    case LAIK_RO_Min:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] < pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
+    case LAIK_RO_Max:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] > pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
     default:
         assert(0);
     }
@@ -242,6 +284,8 @@ void laik_uint32_init(void* base, int count, Laik_ReductionOperation o)
     case LAIK_RO_Or:   v = 0; break;
     case LAIK_RO_Prod: v = 1; break;
     case LAIK_RO_And:  v = ~0; break;
+    case LAIK_RO_Min:  v = 0; break;
+    case LAIK_RO_Max:  v = UINT32_MAX; break;
     default:
         assert(0);
     }
@@ -253,7 +297,8 @@ void laik_uint32_reduce(void* out, void* in1, void* in2,
                         int count, Laik_ReductionOperation o)
 {
     assert(out);
-    if (!in1 || ! in2) {
+    if (!in1 || !in2) {
+        // for all supported reductions, only one input is copied as output
         if (in1)
             memcpy(out, in1, count);
         else if (in2)
@@ -286,13 +331,23 @@ void laik_uint32_reduce(void* out, void* in1, void* in2,
             pout[i] = pin1[i] & pin2[i];
         break;
 
+    case LAIK_RO_Min:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] < pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
+    case LAIK_RO_Max:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] > pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
     default:
         assert(0);
     }
 }
 
 
-// laik_Int64
+// laik_Int64 (signed)
 
 void laik_int64_init(void* base, int count, Laik_ReductionOperation o)
 {
@@ -303,6 +358,8 @@ void laik_int64_init(void* base, int count, Laik_ReductionOperation o)
     case LAIK_RO_Or:   v = 0l; break;
     case LAIK_RO_Prod: v = 1l; break;
     case LAIK_RO_And:  v = ~0l; break;
+    case LAIK_RO_Min:  v = INT64_MIN; break;
+    case LAIK_RO_Max:  v = INT64_MAX; break;
     default:
         assert(0);
     }
@@ -314,7 +371,8 @@ void laik_int64_reduce(void* out, void* in1, void* in2,
                        int count, Laik_ReductionOperation o)
 {
     assert(out);
-    if (!in1 || ! in2) {
+    if (!in1 || !in2) {
+        // for all supported reductions, only one input is copied as output
         if (in1)
             memcpy(out, in1, count);
         else if (in2)
@@ -347,6 +405,16 @@ void laik_int64_reduce(void* out, void* in1, void* in2,
             pout[i] = pin1[i] & pin2[i];
         break;
 
+    case LAIK_RO_Min:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] < pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
+    case LAIK_RO_Max:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] > pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
     default:
         assert(0);
     }
@@ -364,6 +432,8 @@ void laik_uint64_init(void* base, int count, Laik_ReductionOperation o)
     case LAIK_RO_Or:   v = 0l; break;
     case LAIK_RO_Prod: v = 1l; break;
     case LAIK_RO_And:  v = ~0l; break;
+    case LAIK_RO_Min:  v = 0; break;
+    case LAIK_RO_Max:  v = UINT64_MAX; break;
     default:
         assert(0);
     }
@@ -375,7 +445,8 @@ void laik_uint64_reduce(void* out, void* in1, void* in2,
                         int count, Laik_ReductionOperation o)
 {
     assert(out);
-    if (!in1 || ! in2) {
+    if (!in1 || !in2) {
+        // for all supported reductions, only one input is copied as output
         if (in1)
             memcpy(out, in1, count);
         else if (in2)
@@ -408,6 +479,16 @@ void laik_uint64_reduce(void* out, void* in1, void* in2,
             pout[i] = pin1[i] & pin2[i];
         break;
 
+    case LAIK_RO_Min:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] < pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
+    case LAIK_RO_Max:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] > pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
     default:
         assert(0);
     }
@@ -423,6 +504,8 @@ void laik_double_init(void* base, int count, Laik_ReductionOperation o)
     switch(o) {
     case LAIK_RO_Sum:  v = 0.0; break;
     case LAIK_RO_Prod: v = 1.0; break;
+    case LAIK_RO_Min:  v = -DBL_MAX; break;
+    case LAIK_RO_Max:  v = DBL_MAX; break;
     default:
         assert(0);
     }
@@ -434,7 +517,8 @@ void laik_double_reduce(void* out, void* in1, void* in2,
                         int count, Laik_ReductionOperation o)
 {
     assert(out);
-    if (!in1 || ! in2) {
+    if (!in1 || !in2) {
+        // for all supported reductions, only one input is copied as output
         if (in1)
             memcpy(out, in1, count);
         else if (in2)
@@ -457,6 +541,16 @@ void laik_double_reduce(void* out, void* in1, void* in2,
             pout[i] = pin1[i] * pin2[i];
         break;
 
+    case LAIK_RO_Min:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] < pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
+    case LAIK_RO_Max:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] > pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
     default:
         assert(0);
     }
@@ -472,6 +566,8 @@ void laik_float_init(void* base, int count, Laik_ReductionOperation o)
     switch(o) {
     case LAIK_RO_Sum:  v = 0.0; break;
     case LAIK_RO_Prod: v = 1.0; break;
+    case LAIK_RO_Min:  v = -FLT_MAX; break;
+    case LAIK_RO_Max:  v = FLT_MAX; break;
     default:
         assert(0);
     }
@@ -483,7 +579,8 @@ void laik_float_reduce(void* out, void* in1, void* in2,
                        int count, Laik_ReductionOperation o)
 {
     assert(out);
-    if (!in1 || ! in2) {
+    if (!in1 || !in2) {
+        // for all supported reductions, only one input is copied as output
         if (in1)
             memcpy(out, in1, count);
         else if (in2)
@@ -504,6 +601,16 @@ void laik_float_reduce(void* out, void* in1, void* in2,
     case LAIK_RO_Prod:
         for(int i = 0; i < count; i++)
             pout[i] = pin1[i] * pin2[i];
+        break;
+
+    case LAIK_RO_Min:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] < pin2[i]) ? pin1[i] : pin2[i];
+        break;
+
+    case LAIK_RO_Max:
+        for(int i = 0; i < count; i++)
+            pout[i] = (pin1[i] > pin2[i]) ? pin1[i] : pin2[i];
         break;
 
     default:
