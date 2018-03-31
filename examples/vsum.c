@@ -47,6 +47,10 @@ int main(int argc, char* argv[])
     Laik_Instance* inst = laik_init (&argc, &argv);
     Laik_Group* world = laik_world(inst);
 
+    int size = 0;
+    if (argc > 1) size = atoi(argv[1]);
+    if (size == 0) size = 1000000;
+
     laik_set_phase(inst, 0, "init", NULL);
 
     double *base;
@@ -56,7 +60,7 @@ int main(int argc, char* argv[])
     double mysum[4] = { 0.0, 0.0, 0.0, 0.0 };
 
     // allocate global 1d double array: 1 mio entries
-    Laik_Data* a = laik_new_data_1d(inst, laik_Double, 1000000);
+    Laik_Data* a = laik_new_data_1d(inst, laik_Double, size);
 
     // initialize at master (others do nothing, empty partition)
     laik_switchto_new_phase(a, world, laik_Master, LAIK_DF_CopyOut);
