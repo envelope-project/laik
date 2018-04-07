@@ -146,7 +146,6 @@ Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
     ts->tag = tag;
     ts->data = data;
     ts->mapNo = 0;
-    ts->compactStart = 0;
 
     return (Laik_TaskSlice*) ts;
 }
@@ -345,9 +344,8 @@ void updatePartitioningOffsets(Laik_Partitioning* p)
 
     // we assume that the slices where sorted with sortSlices()
 
-    int task, mapNo, lastTag, off, compactStart;
+    int task, mapNo, lastTag, off;
     off = 0;
-    compactStart = 0;
     for(task = 0; task < p->group->size; task++) {
         p->off[task] = off;
         mapNo = -1; // for numbering of mappings according to tags
@@ -358,12 +356,9 @@ void updatePartitioningOffsets(Laik_Partitioning* p)
             assert(ts->task == task);
             if ((ts->tag == 0) || (ts->tag != lastTag)) {
                 mapNo++;
-                compactStart = 0;
                 lastTag = ts->tag;
             }
             ts->mapNo = mapNo;
-            ts->compactStart = compactStart;
-            compactStart += laik_slice_size(p->space->dims, &(ts->s));
             off++;
         }
     }

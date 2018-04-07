@@ -80,7 +80,6 @@ typedef struct _Laik_TaskSlice_Gen {
 
     // calculated from <tag> after partitioner run
     int mapNo;
-    int compactStart; // for compact mapping: offset of slice in mapping
 } Laik_TaskSlice_Gen;
 
 // for single-index slices in 1d

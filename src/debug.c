@@ -248,14 +248,14 @@ void laik_log_Partitioning(Laik_Partitioning* p)
     laik_log_append("partitioning '%s': %d slices in %d tasks on ",
                     p->name, p->count, p->group->size);
     laik_log_Space(p->space);
-    laik_log_append(": (task:slice:tag/mapNo/start)\n    ");
+    laik_log_append(": (task:slice:tag/mapNo)\n    ");
     for(int i = 0; i < p->count; i++) {
         Laik_TaskSlice_Gen* ts = &(p->tslice[i]);
         if (i>0)
             laik_log_append(", ");
         laik_log_append("%d:", ts->task);
         laik_log_Slice(p->space->dims, &(ts->s));
-        laik_log_append(":%d/%d/%d", ts->tag, ts->mapNo, ts->compactStart);
+        laik_log_append(":%d/%d", ts->tag, ts->mapNo);
     }
 }
 
