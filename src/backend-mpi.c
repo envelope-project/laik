@@ -60,6 +60,15 @@ struct _MPIGroupData {
 // useful to ensure that a test is sentitive to backend bugs
 static int mpi_bug = 0;
 
+//----------------------------------------------------------------
+// MPI backend behavior configurable by environment variables
+
+// LAIK_MPI_REDUCE: make use of MPI_(All)Reduce? Default: Yes
+// If not, we do own algorithm with send/recv.
+static int mpi_reduce = 1;
+
+
+//----------------------------------------------------------------
 // buffer space for messages if packing/unpacking from/to not-1d layout
 // is necessary
 // TODO: if we go to asynchronous messages, this needs to be dynamic per data
@@ -116,6 +125,10 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     // for intentionally buggy MPI backend behavior
     char* str = getenv("LAIK_MPI_BUG");
     if (str) mpi_bug = atoi(str);
+
+    // do own reduce algorithm?
+    str = getenv("LAIK_MPI_REDUCE");
+    if (str) mpi_reduce = atoi(str);
 
     // wait for debugger to attach?
     char* rstr = getenv("LAIK_DEBUG_RANK");
@@ -256,6 +269,8 @@ static
 void laik_mpi_exec_reduce(Laik_BackendAction* a,
                           MPI_Datatype dataType, MPI_Comm comm)
 {
+    assert(mpi_reduce > 0);
+
     MPI_Op mpiRedOp = getMPIOp(a->redOp);
     int rootTask = a->peer_rank;
 
@@ -659,8 +674,11 @@ void laik_execOrRecord(bool record,
             if (op->inputGroup >= 0)
                 assert(t->subgroup[op->inputGroup].count < group->size);
 
-            // if neither input nor output are all-groups: manual reduction
-            if ((op->inputGroup >= 0) && (op->outputGroup >= 0)) {
+            // do our own reduce algorithm ?
+            // either if forced by LAIK_MPI_REDUCE=0, or when both input and
+            // output groups are real subgroups
+            if ((mpi_reduce == 0) ||
+                ((op->inputGroup >= 0) && (op->outputGroup >= 0))) {
 
                 if (laik_log_begin(1)) {
                     laik_log_append("    %s manual reduction: (%lld - %lld) slc/map %d/%d",
