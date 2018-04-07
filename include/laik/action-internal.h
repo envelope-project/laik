@@ -38,11 +38,14 @@ typedef struct _Laik_BackendAction {
     // for marking processed actions (used for combining optimization)
     char mark;
 
+    int round;         // order specification into rounds
     int count;         // for Send, Recv, Copy, Reduce
+    int bufID;         // for BufReserve, RBufSend, RBufRecv
+    Laik_Type* dtype;  // for RBufReduce, BufInit
 
     Laik_Mapping* map; // for Pack, Unpack, PackAndSend, RecvAndUnpack
-    int mapNo;         // for Send, Recv
-    uint64_t offset;   // for Send, Recv
+    int mapNo;         // for MapSend, MapRecv
+    uint64_t offset;   // for MapSend, MapRecv, RBufSend, RBufRecv
 
     char* fromBuf;     // for SendBuf, Pack, Copy, Reduce
     char* toBuf;       // for RecvBuf, Unpack, Copy, Reduce
@@ -75,6 +78,7 @@ struct _Laik_ActionSeq {
 
     // buffer space
     char* buf;
+    int bufReserveCount; // current number of BufReserve actions
 
     // for copy actions
     Laik_CopyEntry* ce;
@@ -117,17 +121,60 @@ void laik_actions_initGroupReduce(Laik_BackendAction* a,
                                   char* fromBuf, char* toBuf, int count,
                                   Laik_ReductionOperation redOp);
 
-// append specific actions
-void laik_actions_addSend(Laik_ActionSeq* as,
-                          int fromMapNo, uint64_t off,
-                          int count, int to);
-void laik_actions_addSendBuf(Laik_ActionSeq* as,
+// append action to reserve buffer space
+Laik_BackendAction* laik_actions_addBufReserve(Laik_ActionSeq* as,
+                                               int size, int bufID);
+
+// append send action to buffer referencing a previous reserve action
+void laik_actions_addRBufSend(Laik_ActionSeq* as,
+                              int round, int bufID, int byteOffset,
+                              int count, int to);
+
+// append recv action into buffer referencing a previous reserve action
+void laik_actions_addRBufRecv(Laik_ActionSeq* as,
+                              int round, int bufID, int byteOffset,
+                              int count, int from);
+
+// append send action from a mapping with offset
+void laik_actions_addMapSend(Laik_ActionSeq* as,
+                             int fromMapNo, uint64_t off,
+                             int count, int to);
+
+// append send action from a buffer
+void laik_actions_addBufSend(Laik_ActionSeq* as,
                              char* fromBuf, int count, int to);
-void laik_actions_addRecv(Laik_ActionSeq* as,
-                          int toMapNo, uint64_t off,
-                          int count, int from);
-void laik_actions_addRecvBuf(Laik_ActionSeq* as,
+
+// append recv action into a mapping with offset
+void laik_actions_addMapRecv(Laik_ActionSeq* as,
+                             int toMapNo, uint64_t off,
+                             int count, int from);
+
+// append recv action into a buffer
+void laik_actions_addBufRecv(Laik_ActionSeq* as,
                              char* toBuf, int count, int from);
+
+// append action to call a reduce operation
+void laik_actions_addRBufReduce(Laik_ActionSeq* as,
+                                int round, Laik_Type *dtype,
+                                Laik_ReductionOperation redOp,
+                                char* fromBuf, char* toBuf, int count,
+                                int fromBufID, int fromByteOffset);
+
+// append action to call a init operation
+void laik_actions_addBufInit(Laik_ActionSeq* as,
+                             int round, Laik_Type *dtype,
+                             Laik_ReductionOperation redOp,
+                             char* toBuf, int count);
+
+// append action to call a copy operation from/to a buffer
+void laik_actions_addBufCopy(Laik_ActionSeq* as,
+                             int round, char* fromBuf, char* toBuf, int count);
+
+// append action to call a copy operation from/to a buffer
+void laik_actions_addRBufCopy(Laik_ActionSeq* as,
+                              int round, char* fromBuf, char* toBuf, int count,
+                              int fromBufID, int fromByteOffset);
+
 void laik_actions_addPackAndSend(Laik_ActionSeq* as,
                                  Laik_Mapping* fromMap,
                                  Laik_Slice* slc, int to);

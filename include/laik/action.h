@@ -57,10 +57,16 @@ typedef enum _Laik_ActionType {
 
     // low-level, independent from backend
 
+    // reserve buffer space
+    LAIK_AT_BufReserve,
+
     // send items from a buffer (or directly from container)
-    LAIK_AT_Send, LAIK_AT_SendBuf,
+    LAIK_AT_MapSend, LAIK_AT_BufSend, LAIK_AT_RBufSend,
     // receive items into a buffer (or directly into container)
-    LAIK_AT_Recv, LAIK_AT_RecvBuf,
+    LAIK_AT_MapRecv, LAIK_AT_BufRecv, LAIK_AT_RBufRecv,
+
+    // call to a reduce/init operation
+    LAIK_AT_RBufReduce, LAIK_AT_BufInit,
 
     // copy from buffer to container and vice versa
     LAIK_AT_CopyFromBuf, LAIK_AT_CopyToBuf,
@@ -82,6 +88,9 @@ typedef enum _Laik_ActionType {
 
     // copy 1d data from container into buffer or from buffer into container
     LAIK_AT_Copy,
+
+    // copy between buffers
+    LAIK_AT_BufCopy, LAIK_AT_RBufCopy,
 
     // low-level, backend-specific
     LAIK_AT_Backend = 50
