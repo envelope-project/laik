@@ -65,16 +65,24 @@ Laik_BackendAction* laik_actions_addAction(Laik_ActionSeq* as)
     return a;
 }
 
+void laik_actions_initTContext(Laik_TransitionContext* tc,
+                               Laik_Data* data, Laik_Transition* transition,
+                               Laik_MappingList* fromList,
+                               Laik_MappingList* toList)
+{
+    tc->data = data;
+    tc->transition = transition;
+    tc->fromList = fromList;
+    tc->toList = toList;
+}
+
 int laik_actions_addTContext(Laik_ActionSeq* as,
                              Laik_Data* data, Laik_Transition* transition,
                              Laik_MappingList* fromList,
                              Laik_MappingList* toList)
 {
     Laik_TransitionContext* tc = malloc(sizeof(Laik_TransitionContext));
-    tc->data = data;
-    tc->transition = transition;
-    tc->fromList = fromList;
-    tc->toList = toList;
+    laik_actions_initTContext(tc, data, transition, fromList, toList);
 
     assert(as->context[0] == 0);
     as->context[0] = tc;
@@ -166,20 +174,44 @@ void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as,
     as->recvCount += a->count;
 }
 
-void laik_actions_addReduce(Laik_ActionSeq* as,
+void laik_actions_initReduce(Laik_BackendAction* a,
                             char* fromBuf, char* toBuf, int count,
                             int rootTask, Laik_ReductionOperation redOp)
 {
-    Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_Reduce;
+
     a->fromBuf = fromBuf;
     a->toBuf = toBuf;
     a->count = count;
     a->peer_rank = rootTask;
     a->redOp = redOp;
+}
 
-    assert(a->count > 0);
-    as->reduceCount += a->count;
+
+void laik_actions_addReduce(Laik_ActionSeq* as,
+                            char* fromBuf, char* toBuf, int count,
+                            int rootTask, Laik_ReductionOperation redOp)
+{
+    Laik_BackendAction* a = laik_actions_addAction(as);
+    laik_actions_initReduce(a, fromBuf, toBuf, count, rootTask, redOp);
+
+    assert(count > 0);
+    as->reduceCount += count;
+}
+
+void laik_actions_initGroupReduce(Laik_BackendAction* a,
+                                  int inputGroup, int outputGroup,
+                                  char* fromBuf, char* toBuf, int count,
+                                  Laik_ReductionOperation redOp)
+{
+    a->type = LAIK_AT_GroupReduce;
+
+    a->inputGroup = inputGroup;
+    a->outputGroup = outputGroup;
+    a->fromBuf = fromBuf;
+    a->toBuf = toBuf;
+    a->count = count;
+    a->redOp = redOp;
 }
 
 void laik_actions_addGroupReduce(Laik_ActionSeq* as,
@@ -188,16 +220,11 @@ void laik_actions_addGroupReduce(Laik_ActionSeq* as,
                                  Laik_ReductionOperation redOp)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
-    a->type = LAIK_AT_GroupReduce;
-    a->inputGroup = inputGroup;
-    a->outputGroup = outputGroup;
-    a->fromBuf = fromBuf;
-    a->toBuf = toBuf;
-    a->count = count;
-    a->redOp = redOp;
+    laik_actions_initGroupReduce(a, inputGroup, outputGroup,
+                                 fromBuf, toBuf, count, redOp);
 
-    assert(a->count > 0);
-    as->reduceCount += a->count;
+    assert(count > 0);
+    as->reduceCount += count;
 }
 
 void laik_actions_addCopyToBuf(Laik_ActionSeq* as,
