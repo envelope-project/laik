@@ -356,16 +356,19 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         // check that bufsize is enough
         assert(inCount * byteCount < PACKBUFSIZE);
 
-        char* ptr[32], *p;
+        int bufOff[32], off = 0;
         assert(inCount <= 32);
-        p = packbuf;
-        int myIdx = -1;
+
+        // always put this task in front: we use toBuf to calculate
+        // our results, but there may be input from us, which would
+        // be overwritten if not starting with our input
+        int ii = 0;
+        bool inputFromMe = laik_isInGroup(t, a->inputGroup, myid);
+        if (inputFromMe)
+            ii++; // slot 0 reserved for this task (use a->fromBuf)
         for(int i = 0; i< inCount; i++) {
             int inTask = taskInSubgroup(t, a->inputGroup, i);
             if (inTask == myid) {
-                ptr[i] = a->fromBuf;
-                myIdx = i;
-
 #ifdef LOG_EXEC_DOUBLE_VALUES
                 assert(data->elemsize == 8);
                 for(int i = 0; i < a->count; i++)
@@ -381,47 +384,37 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                 continue;
             }
 
-            laik_log(1, "  MPI_Recv from T%d (buf off %lld, count %d)",
-                     inTask, (long long int) (p - packbuf), a->count);
+            laik_log(1, "  MPI_Recv from T%d (buf off %d, count %d)",
+                     inTask, off, a->count);
 
-            ptr[i] = p;
-            MPI_Recv(p, a->count, dataType, inTask, 1, comm, &st);
+            bufOff[ii++] = off;
+            MPI_Recv(packbuf + off, a->count, dataType, inTask, 1, comm, &st);
 
 #ifdef LOG_EXEC_DOUBLE_VALUES
             if (laik_log_begin(1)) {
-                laik_log_Checksum(p, a->count, data->type);
+                laik_log_Checksum(packbuf + off, a->count, data->type);
                 laik_log_flush(0);
             }
 
             assert(data->elemsize == 8);
             for(int i = 0; i < a->count; i++)
                 laik_log(1, "    got at %d: %f", i,
-                         ((double*)p)[i]);
+                         ((double*)(packbuf + off))[i]);
 #endif
-            p += byteCount;
+            off += byteCount;
         }
-
-        // toBase may be same as fromBase (= our values).
-        // e.g. when we are 3rd task (ptr[3] == fromBase), we
-        // would overwrite our values. Swap ptr[0] with ptr[3].
-        if (myIdx >= 0) {
-            assert(ptr[myIdx] == a->fromBuf);
-            ptr[myIdx] = ptr[0];
-            ptr[0] = a->fromBuf;
-        }
+        assert(ii == inCount);
 
         // do the reduction, put result back to my input buffer
         if (data->type->reduce) {
-            // reduce with 0/1 inputs should be implemented by types
-            if (inCount < 2) {
-                ptr[1] = 0;
-                if (inCount == 0) ptr[0] = 0;
-            }
-
-            (data->type->reduce)(a->toBuf, ptr[0], ptr[1],
+            // reduce with 0/1 inputs by setting input pointer to 0
+            char* buf0 = (inCount < 1) ? 0 :
+                         inputFromMe   ? a->fromBuf : (packbuf + bufOff[0]);
+            (data->type->reduce)(a->toBuf, buf0,
+                                 (inCount < 2) ? 0 : (packbuf + bufOff[1]),
                                  a->count, a->redOp);
             for(int t = 2; t < inCount; t++)
-                (data->type->reduce)(a->toBuf, a->toBuf, ptr[t],
+                (data->type->reduce)(a->toBuf, a->toBuf, packbuf + bufOff[t],
                                      a->count, a->redOp);
         }
         else {
