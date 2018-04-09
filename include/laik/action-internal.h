@@ -136,21 +136,21 @@ void laik_actions_addRBufRecv(Laik_ActionSeq* as,
                               int count, int from);
 
 // append send action from a mapping with offset
-void laik_actions_addMapSend(Laik_ActionSeq* as,
+void laik_actions_addMapSend(Laik_ActionSeq* as, int round,
                              int fromMapNo, uint64_t off,
                              int count, int to);
 
 // append send action from a buffer
-void laik_actions_addBufSend(Laik_ActionSeq* as,
+void laik_actions_addBufSend(Laik_ActionSeq* as, int round,
                              char* fromBuf, int count, int to);
 
 // append recv action into a mapping with offset
-void laik_actions_addMapRecv(Laik_ActionSeq* as,
+void laik_actions_addMapRecv(Laik_ActionSeq* as, int round,
                              int toMapNo, uint64_t off,
                              int count, int from);
 
 // append recv action into a buffer
-void laik_actions_addBufRecv(Laik_ActionSeq* as,
+void laik_actions_addBufRecv(Laik_ActionSeq* as, int round,
                              char* toBuf, int count, int from);
 
 // append action to call a reduce operation
@@ -175,10 +175,10 @@ void laik_actions_addRBufCopy(Laik_ActionSeq* as,
                               int round, char* fromBuf, char* toBuf, int count,
                               int fromBufID, int fromByteOffset);
 
-void laik_actions_addPackAndSend(Laik_ActionSeq* as,
+void laik_actions_addPackAndSend(Laik_ActionSeq* as, int round,
                                  Laik_Mapping* fromMap,
                                  Laik_Slice* slc, int to);
-void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as,
+void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as, int round,
                                    Laik_Mapping* toMap,
                                    Laik_Slice* slc, int from);
 void laik_actions_addReduce(Laik_ActionSeq* as,
@@ -188,9 +188,9 @@ void laik_actions_addGroupReduce(Laik_ActionSeq* as,
                                  int inputGroup, int outputGroup,
                                  char* fromBuf, char* toBuf, int count,
                                  Laik_ReductionOperation redOp);
-void laik_actions_addCopyToBuf(Laik_ActionSeq* as,
+void laik_actions_addCopyToBuf(Laik_ActionSeq* as, int round,
                                Laik_CopyEntry* ce, char* toBuf, int count);
-void laik_actions_addCopyFromBuf(Laik_ActionSeq* as,
+void laik_actions_addCopyFromBuf(Laik_ActionSeq* as, int round,
                                  Laik_CopyEntry* ce, char* fromBuf, int count);
 
 

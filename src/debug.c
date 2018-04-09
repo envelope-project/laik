@@ -320,7 +320,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_MapSend:
-        laik_log_append("    send: from map %d, off %d, count %d, to T%d",
+        laik_log_append("    send (R %d): from map %d, off %d, count %d, to T%d",
+                        ba->round,
                         ba->mapNo,
                         ba->offset,
                         ba->count,
@@ -328,14 +329,16 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_BufSend:
-        laik_log_append("    send: from %p, count %d, to T%d",
+        laik_log_append("    send (R %d): from %p, count %d, to T%d",
+                        ba->round,
                         ba->fromBuf,
                         ba->count,
                         ba->peer_rank);
         break;
 
     case LAIK_AT_RBufSend:
-        laik_log_append("    send: from buf %d, off %lld, count %d, to T%d",
+        laik_log_append("    send (R %d): from buf %d, off %lld, count %d, to T%d",
+                        ba->round,
                         ba->bufID, (long long int) ba->offset,
                         ba->count,
                         ba->peer_rank);
@@ -343,7 +346,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 
 
     case LAIK_AT_MapRecv:
-        laik_log_append("    recv: from T%d, to map %d, off %d, count %d",
+        laik_log_append("    recv (R %d): from T%d, to map %d, off %d, count %d",
+                        ba->round,
                         ba->peer_rank,
                         ba->mapNo,
                         ba->offset,
@@ -351,21 +355,24 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_BufRecv:
-        laik_log_append("    recv: from T%d, to %p, count %d",
+        laik_log_append("    recv (R %d): from T%d, to %p, count %d",
+                        ba->round,
                         ba->peer_rank,
                         ba->toBuf,
                         ba->count);
         break;
 
     case LAIK_AT_RBufRecv:
-        laik_log_append("    recv: from T%d, to buf %d, off %lld, count %d",
+        laik_log_append("    recv (R %d): from T%d, to buf %d, off %lld, count %d",
+                        ba->round,
                         ba->peer_rank,
                         ba->bufID, (long long int) ba->offset,
                         ba->count);
         break;
 
     case LAIK_AT_CopyFromBuf:
-        laik_log_append("    copy from buffer: buf %p, ranges %d",
+        laik_log_append("    copy from buffer (R %d): buf %p, ranges %d",
+                        ba->round,
                         ba->fromBuf,
                         ba->count);
         for(int i = 0; i < ba->count; i++)
@@ -376,7 +383,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_CopyToBuf:
-        laik_log_append("    copy to buffer: buf %p, ranges %d",
+        laik_log_append("    copy to buffer (R %d): buf %p, ranges %d",
+                        ba->round,
                         ba->toBuf,
                         ba->count);
         for(int i = 0; i < ba->count; i++)
@@ -387,7 +395,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_BufCopy:
-        laik_log_append("    copy (round %d): from %p, to %p, count %d",
+        laik_log_append("    copy (R %d): from %p, to %p, count %d",
                         ba->round,
                         ba->fromBuf,
                         ba->toBuf,
@@ -395,7 +403,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_RBufCopy:
-        laik_log_append("    copy (round %d): from %p (buf %d off %lld), to %p, count %d",
+        laik_log_append("    copy (R %d): from %p (buf %d off %lld), to %p, count %d",
                         ba->round,
                         ba->fromBuf,
                         ba->bufID, (long long int) ba->offset,
@@ -421,7 +429,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_RBufReduce:
-        laik_log_append("    reduce (round %d): type %s, redOp ",
+        laik_log_append("    reduce (R %d): type %s, redOp ",
                         ba->round, ba->dtype->name);
         laik_log_Reduction(ba->redOp);
         laik_log_append(", from %p (%d off %lld), to %p, count %d",
@@ -432,7 +440,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_BufInit:
-        laik_log_append("    init (round %d): type %s, redOp ",
+        laik_log_append("    init (R %d): type %s, redOp ",
                         ba->round, ba->dtype->name);
         laik_log_Reduction(ba->redOp);
         laik_log_append(", to %p, count %d",
@@ -441,11 +449,13 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_PackAndSend:
-        laik_log_append("    packAndSend: count %d", ba->count);
+        laik_log_append("    packAndSend (R %d): count %d",
+                        ba->round, ba->count);
         break;
 
     case LAIK_AT_RecvAndUnpack:
-        laik_log_append("    recvAndUnpack: count %d", ba->count);
+        laik_log_append("    recvAndUnpack (R %d): count %d",
+                        ba->round, ba->count);
         break;
 
     default:

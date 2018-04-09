@@ -348,6 +348,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                                MPI_Datatype dataType, MPI_Comm comm,
                                Laik_ActionSeq* as)
 {
+    assert(a->type == LAIK_AT_GroupReduce);
     Laik_Transition* t = tc->transition;
     Laik_Data* data = tc->data;
     bool record = (as != 0);
@@ -368,7 +369,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                      as ? "record" : "exec", reduceTask);
 
             if (record)
-                laik_actions_addBufSend(as, a->fromBuf, a->count, reduceTask);
+                laik_actions_addBufSend(as, 0, a->fromBuf, a->count, reduceTask);
             else
                 MPI_Send(a->fromBuf, a->count, dataType, reduceTask, 1, comm);
         }
@@ -377,7 +378,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                      record ? "record" : "exec", reduceTask);
 
             if (record)
-                laik_actions_addBufRecv(as, a->toBuf, a->count, reduceTask);
+                laik_actions_addBufRecv(as, 2, a->toBuf, a->count, reduceTask);
             else
                 MPI_Recv(a->toBuf, a->count, dataType, reduceTask, 1, comm, &st);
         }
@@ -438,7 +439,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
         bufOff[ii++] = off;
         if (record)
-            laik_actions_addRBufRecv(as, 1, bufID, off, a->count, inTask);
+            laik_actions_addRBufRecv(as, 0, bufID, off, a->count, inTask);
         else {
             MPI_Recv(packbuf + off, a->count, dataType, inTask, 1, comm, &st);
 
@@ -463,7 +464,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
         if (inCount == 0) {
             laik_log(1, "  record call to init (count %d)", a->count);
-            laik_actions_addBufInit(as, 2, data->type, a->redOp,
+            laik_actions_addBufInit(as, 1, data->type, a->redOp,
                                     a->toBuf, a->count);
         }
         else {
@@ -471,13 +472,13 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
             // TODO: check that this is really a copy!
             laik_log(1, "  record call to copy (count %d)", a->count);
-            laik_actions_addRBufCopy(as, 2, inputFromMe ? a->fromBuf : 0,
+            laik_actions_addRBufCopy(as, 1, inputFromMe ? a->fromBuf : 0,
                                      a->toBuf, a->count, bufID, bufOff[0]);
 
             laik_log(1, "  record %d calls to reduce (count %d)",
                      inCount - 1, a->count);
             for(int t = 1; t < inCount; t++)
-                laik_actions_addRBufReduce(as, 2, data->type, a->redOp,
+                laik_actions_addRBufReduce(as, 1, data->type, a->redOp,
                                            0, a->toBuf, a->count,
                                            bufID, bufOff[t]);
         }
@@ -527,7 +528,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         laik_log(1, "  %s MPI_Send result to T%d",
                  record ? "record" : "exec", outTask);
         if (record)
-            laik_actions_addBufSend(as, a->toBuf, a->count, outTask);
+            laik_actions_addBufSend(as, 2, a->toBuf, a->count, outTask);
         else
             MPI_Send(a->toBuf, a->count, dataType, outTask, 1, comm);
     }
@@ -886,7 +887,8 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record)
-                    laik_actions_addBufRecv(as, toMap->base + from * data->elemsize,
+                    laik_actions_addBufRecv(as, 0,
+                                            toMap->base + from * data->elemsize,
                                             count, op->fromTask);
                 else {
                     // TODO: tag 1 may conflict with application
@@ -901,7 +903,7 @@ void laik_execOrRecord(bool record,
                 assert(toMap->layout->unpack);
 
                 if (record)
-                    laik_actions_addRecvAndUnpack(as, toMap,
+                    laik_actions_addRecvAndUnpack(as, 0, toMap,
                                                   &(op->slc), op->fromTask);
                 else {
                     Laik_Index idx = op->slc.from;
@@ -981,7 +983,8 @@ void laik_execOrRecord(bool record,
                          data->elemsize, (void*) fromMap->base);
 
                 if (record)
-                    laik_actions_addBufSend(as, fromMap->base + from * data->elemsize,
+                    laik_actions_addBufSend(as, 0,
+                                            fromMap->base + from * data->elemsize,
                                             count, op->toTask);
                 else {
                     // TODO: tag 1 may conflict with application
@@ -996,7 +999,7 @@ void laik_execOrRecord(bool record,
                 assert(fromMap->layout->pack);
 
                 if (record)
-                    laik_actions_addPackAndSend(as, fromMap,
+                    laik_actions_addPackAndSend(as, 0, fromMap,
                                                 &(op->slc), op->toTask);
                 else {
                     Laik_Index idx = op->slc.from;
