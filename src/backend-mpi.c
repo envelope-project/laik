@@ -906,23 +906,11 @@ void laik_execOrRecord(bool record,
                     laik_actions_addRecvAndUnpack(as, 0, toMap,
                                                   &(op->slc), op->fromTask);
                 else {
-                    Laik_Index idx = op->slc.from;
-                    uint64_t size = laik_slice_size(dims, &(op->slc));
-                    assert(size > 0);
-                    int recvCount, unpacked;
-                    count = 0;
-                    while(1) {
-                        MPI_Recv(packbuf, PACKBUFSIZE / data->elemsize,
-                                 mpiDataType, op->fromTask, 1, comm, &s);
-                        MPI_Get_count(&s, mpiDataType, &recvCount);
-                        unpacked = (toMap->layout->unpack)(toMap, &(op->slc), &idx,
-                                                           packbuf,
-                                                           recvCount * data->elemsize);
-                        assert(recvCount == unpacked);
-                        count += unpacked;
-                        if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
-                    }
-                    assert(count == size);
+                    Laik_BackendAction a;
+                    laik_actions_initRecvAndUnpack(&a, 0, toMap,
+                                                   dims, &(op->slc), op->fromTask);
+                    laik_mpi_exec_recvAndUnpack(&a, dims, data->elemsize,
+                                                mpiDataType, 1, comm);
                 }
             }
 
@@ -1002,21 +990,10 @@ void laik_execOrRecord(bool record,
                     laik_actions_addPackAndSend(as, 0, fromMap,
                                                 &(op->slc), op->toTask);
                 else {
-                    Laik_Index idx = op->slc.from;
-                    uint64_t size = laik_slice_size(dims, &(op->slc));
-                    assert(size > 0);
-                    int packed;
-                    count = 0;
-                    while(1) {
-                        packed = (fromMap->layout->pack)(fromMap, &(op->slc), &idx,
-                                                         packbuf, PACKBUFSIZE);
-                        assert(packed > 0);
-                        MPI_Send(packbuf, packed,
-                                 mpiDataType, op->toTask, 1, comm);
-                        count += packed;
-                        if (laik_index_isEqual(dims, &idx, &(op->slc.to))) break;
-                    }
-                    assert(count == size);
+                    Laik_BackendAction a;
+                    laik_actions_initPackAndSend(&a, 0, fromMap,
+                                                 dims, &(op->slc), op->toTask);
+                    laik_mpi_exec_packAndSend(&a, dims, mpiDataType, 1, comm);
                 }
             }
 

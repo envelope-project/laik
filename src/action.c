@@ -282,21 +282,44 @@ void laik_actions_addBufRecv(Laik_ActionSeq* as, int round,
 }
 
 
+void laik_actions_initPackAndSend(Laik_BackendAction* a, int round,
+                                  Laik_Mapping* fromMap, int dims, Laik_Slice* slc,
+                                  int to)
+{
+    a->type = LAIK_AT_PackAndSend;
+    a->round = round;
+    a->map = fromMap;
+    a->dims = dims;
+    a->slc = slc;
+    a->peer_rank = to;
+    a->count = laik_slice_size(dims, slc);
+    assert(a->count > 0);
+}
+
 void laik_actions_addPackAndSend(Laik_ActionSeq* as, int round,
                                  Laik_Mapping* fromMap, Laik_Slice* slc, int to)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
 
-    a->type = LAIK_AT_PackAndSend;
-    a->round = round;
-    a->map = fromMap;
-    a->slc = slc;
-    a->peer_rank = to;
-
     Laik_TransitionContext* tc = as->context[0];
-    a->count = laik_slice_size(tc->transition->space->dims, slc);
-    assert(a->count > 0);
+    int dims = tc->transition->space->dims;
+    laik_actions_initPackAndSend(a, round, fromMap, dims, slc, to);
+
     as->sendCount += a->count;
+}
+
+void laik_actions_initRecvAndUnpack(Laik_BackendAction* a, int round,
+                                    Laik_Mapping* toMap, int dims, Laik_Slice* slc,
+                                    int from)
+{
+    a->type = LAIK_AT_RecvAndUnpack;
+    a->round = round;
+    a->map = toMap;
+    a->dims = dims;
+    a->slc = slc;
+    a->peer_rank = from;
+    a->count = laik_slice_size(dims, slc);
+    assert(a->count > 0);
 }
 
 void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as, int round,
@@ -304,15 +327,10 @@ void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
 
-    a->type = LAIK_AT_RecvAndUnpack;
-    a->round = round;
-    a->map = toMap;
-    a->slc = slc;
-    a->peer_rank = from;
-
     Laik_TransitionContext* tc = as->context[0];
-    a->count = laik_slice_size(tc->transition->space->dims, slc);
-    assert(a->count > 0);
+    int dims = tc->transition->space->dims;
+    laik_actions_initRecvAndUnpack(a, round, toMap, dims, slc, from);
+
     as->recvCount += a->count;
 }
 

@@ -449,13 +449,17 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_PackAndSend:
-        laik_log_append("    packAndSend (R %d): count %d",
-                        ba->round, ba->count);
+        laik_log_append("    packAndSend (R %d): ", ba->round);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" => T%d, count %d",
+                        ba->peer_rank, ba->count);
         break;
 
     case LAIK_AT_RecvAndUnpack:
-        laik_log_append("    recvAndUnpack (R %d): count %d",
-                        ba->round, ba->count);
+        laik_log_append("    recvAndUnpack (R %d): T%d => ",
+                        ba->round, ba->peer_rank);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(", count %d", ba->count);
         break;
 
     default:

@@ -53,6 +53,7 @@ typedef struct _Laik_BackendAction {
     Laik_CopyEntry* ce; // for CopyFromBuf, CopyToBuf
 
     // points to slice given in operation of transition
+    int dims;          // for Pack, Unpack, PackAndSend, RecvAndUnpack
     Laik_Slice* slc;   // for Pack, Unpack, PackAndSend, RecvAndUnpack
 
     // subgroup IDs defined in transition
@@ -120,6 +121,14 @@ void laik_actions_initGroupReduce(Laik_BackendAction* a,
                                   int inputGroup, int outputGroup,
                                   char* fromBuf, char* toBuf, int count,
                                   Laik_ReductionOperation redOp);
+
+void laik_actions_initPackAndSend(Laik_BackendAction* a, int round,
+                                  Laik_Mapping* fromMap, int dims, Laik_Slice* slc,
+                                  int to);
+
+void laik_actions_initRecvAndUnpack(Laik_BackendAction* a, int round,
+                                    Laik_Mapping* toMap, int dims, Laik_Slice* slc,
+                                    int from);
 
 // append action to reserve buffer space
 Laik_BackendAction* laik_actions_addBufReserve(Laik_ActionSeq* as,
