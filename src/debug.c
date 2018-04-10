@@ -313,6 +313,10 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 {
     Laik_BackendAction* ba = (Laik_BackendAction*) a;
     switch(ba->type) {
+    case LAIK_AT_Nop:
+        laik_log_append("    NOP");
+        break;
+
     case LAIK_AT_BufReserve:
         laik_log_append("    reserve: buf id %d, size %d",
                         ba->bufID,
@@ -474,7 +478,9 @@ void laik_log_ActionSeq(Laik_ActionSeq *as)
     Laik_TransitionContext* tc = as->context[0];
     laik_log_append("actions for ");
     laik_log_Transition(tc->transition, false);
-    laik_log_append(" on '%s':\n", tc->data->name);
+    laik_log_append(" on '%s', bufsize %d\n", tc->data->name);
+
+
 
     for(int i = 0; i < as->actionCount; i++) {
         laik_log_Action((Laik_Action*) &(as->action[i]), tc);

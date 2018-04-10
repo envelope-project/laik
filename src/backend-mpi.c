@@ -413,8 +413,10 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     // be overwritten if not starting with our input
     int ii = 0;
     bool inputFromMe = laik_isInGroup(t, a->inputGroup, myid);
-    if (inputFromMe)
+    if (inputFromMe) {
         ii++; // slot 0 reserved for this task (use a->fromBuf)
+        bufOff[0] = 0;
+    }
     for(int i = 0; i< inCount; i++) {
         int inTask = taskInSubgroup(t, a->inputGroup, i);
         if (inTask == myid) {
@@ -565,8 +567,18 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         }
 
         switch(a->type) {
+        case LAIK_AT_Nop:
+            // no need to do anything
+            break;
+
         case LAIK_AT_MapSend:
             MPI_Send(fromList->map[a->mapNo].base + a->offset, a->count,
+                     dataType, a->peer_rank, tag, comm);
+            break;
+
+        case LAIK_AT_RBufSend:
+            assert(a->bufID == 0);
+            MPI_Send(as->buf + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm);
             break;
 
@@ -577,6 +589,12 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
 
         case LAIK_AT_MapRecv:
             MPI_Recv(toList->map[a->mapNo].base + a->offset, a->count,
+                     dataType, a->peer_rank, tag, comm, &st);
+            break;
+
+        case LAIK_AT_RBufRecv:
+            assert(a->bufID == 0);
+            MPI_Recv(as->buf + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
             break;
 
@@ -613,6 +631,18 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
 
         case LAIK_AT_GroupReduce:
             laik_mpi_exec_groupReduce(tc, a, dataType, comm, 0);
+            break;
+
+        case LAIK_AT_RBufReduce:
+            assert(a->dtype->reduce != 0);
+            (a->dtype->reduce)(a->toBuf, a->toBuf,
+                               a->fromBuf ? a->fromBuf : (as->buf + a->offset),
+                               a->count, a->redOp);
+            break;
+
+        case LAIK_AT_RBufCopy:
+            memcpy(a->toBuf, a->fromBuf ? a->fromBuf : (as->buf + a->offset),
+                   a->count * elemsize);
             break;
 
         default:
@@ -1020,20 +1050,21 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
-    //return as;
 
     Laik_ActionSeq* as2 = laik_actions_cloneSeq(as);
-    laik_actions_optSeq(as, as2);
-    //laik_actions_copySeq(as, as2);
+    laik_actions_combineActions(as, as2);
     laik_actions_free(as);
+    as = as2;
+
+    //laik_actions_allocBuffer(as);
 
     if (laik_log_begin(1)) {
         laik_log_append("After optimization:\n");
-        laik_log_ActionSeq(as2);
+        laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
 
-    return as2;
+    return as;
 }
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)

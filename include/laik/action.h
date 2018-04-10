@@ -52,6 +52,9 @@
 typedef enum _Laik_ActionType {
     LAIK_AT_Invalid = 0,
 
+    // NOP action.
+    LAIK_AT_Nop,
+
     // high-level
     LAIK_AT_Transition,
 

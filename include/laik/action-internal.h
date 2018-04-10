@@ -79,6 +79,7 @@ struct _Laik_ActionSeq {
 
     // buffer space
     char* buf;
+    int bufSize;
     int bufReserveCount; // current number of BufReserve actions
 
     // for copy actions
@@ -202,6 +203,9 @@ void laik_actions_addCopyToBuf(Laik_ActionSeq* as, int round,
 void laik_actions_addCopyFromBuf(Laik_ActionSeq* as, int round,
                                  Laik_CopyEntry* ce, char* fromBuf, int count);
 
+// collect buffer reservation actions and update actions referencing them
+// works in-place, only call once
+void laik_actions_allocBuffer(Laik_ActionSeq* as);
 
 // returns a new empty action sequence with same transition context
 Laik_ActionSeq* laik_actions_cloneSeq(Laik_ActionSeq* oldAS);
@@ -210,7 +214,7 @@ Laik_ActionSeq* laik_actions_cloneSeq(Laik_ActionSeq* oldAS);
 void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 
 // merge send/recv actions from oldAS into as
-void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
+void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 
 
 #endif // _LAIK_ACTION_INTERNAL_H_

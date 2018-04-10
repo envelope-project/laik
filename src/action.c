@@ -18,6 +18,7 @@ Laik_ActionSeq* laik_actions_new(Laik_Instance *inst)
         as->context[i] = 0;
 
     as->buf = 0;
+    as->bufSize = 0;
     as->bufReserveCount = 0;
     as->ce = 0;
 
@@ -410,6 +411,59 @@ void laik_actions_addCopyFromBuf(Laik_ActionSeq* as, int round,
 }
 
 
+// collect buffer reservation actions and update actions referencing them
+// works in-place, only call once
+void laik_actions_allocBuffer(Laik_ActionSeq* as)
+{
+    uint64_t currSize, off;
+    int currID;
+    int rCount = 0, rActions = 0;
+    assert(as->buf == 0); // nothing allocated yet
+
+    Laik_TransitionContext* tc = as->context[0];
+    int elemsize = tc->data->elemsize;
+
+    // TODO: expects that actions reference previous reservation
+    currSize = 0;
+    off = 0;
+    for(int i = 0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+        switch(ba->type) {
+        case LAIK_AT_BufReserve:
+            off += currSize;
+            currSize = ba->count;
+            currID = ba->bufID;
+            ba->type = LAIK_AT_Nop;
+            rCount++;
+            break;
+
+        case LAIK_AT_RBufSend:
+        case LAIK_AT_RBufRecv:
+        case LAIK_AT_RBufCopy:
+        case LAIK_AT_RBufReduce:
+            assert(ba->bufID == currID);
+            assert(ba->count > 0);
+            assert(ba->offset + (uint64_t)(ba->count * elemsize) <= currSize);
+
+            ba->offset += off;
+            ba->bufID = 0; // reference into allocated buffer
+            rActions++;
+            break;
+
+        default:
+            break;
+        }
+    }
+    as->bufSize = off + currSize;
+    if (as->bufSize > 0)
+        as->buf = malloc(as->bufSize);
+
+    laik_log(1, "RBuf alloc: %d reservations, %d RBuf actions => %d bytes",
+             rCount, rActions, as->bufSize);
+    assert(rCount == as->bufReserveCount);
+}
+
+
 // returns a new empty action sequence with same transition context
 Laik_ActionSeq* laik_actions_cloneSeq(Laik_ActionSeq* oldAS)
 {
@@ -425,6 +479,10 @@ Laik_ActionSeq* laik_actions_cloneSeq(Laik_ActionSeq* oldAS)
 void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
 {
     switch(ba->type) {
+    case LAIK_AT_Nop:
+        // no need to copy a NOP operation
+        break;
+
     case LAIK_AT_BufReserve:
         laik_actions_addBufReserve(as, ba->count, ba->bufID);
         break;
@@ -520,7 +578,7 @@ void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 }
 
 // merge send/recv/groupReduce actions from oldAS into as
-void laik_actions_optSeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
+void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 {
     int combineGroupReduce = 1;
 
