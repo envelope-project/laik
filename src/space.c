@@ -1173,7 +1173,7 @@ void calcAddReductions(int tflags,
     // order by border to travers in border order
     qsort(borderList, borderListCount, sizeof(SliceBorder), sb_cmp);
 
-#define MAX_TASKS 32
+#define MAX_TASKS 256
     int inputTask[MAX_TASKS], outputTask[MAX_TASKS];
     TaskGroup inputGroup, outputGroup;
     inputGroup.count = 0;
