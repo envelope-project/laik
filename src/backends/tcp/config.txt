@@ -48,6 +48,9 @@
 # The amount of seconds to wait for a message before sending another GET
 # get_retry_timeout = 0.1
 
+# Whether to to use asynchronous sends in the MPI_Comm_split operation
+# minimpi_async_split = true;
+
 [addresses]
 # Where task 0 shall be located (TCP socket)
 # 0 = localhost 4444

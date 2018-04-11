@@ -22,6 +22,7 @@ typedef struct {
     double     add_retry_timeout;
     double     get_first_timeout;
     double     get_retry_timeout;
+    bool       minimpi_async_split;
 
     int references;
 } Laik_Tcp_Config;
