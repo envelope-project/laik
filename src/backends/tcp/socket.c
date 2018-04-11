@@ -1,5 +1,6 @@
 #include "socket.h"
 #include <errno.h>        // for errno
+#include <fcntl.h>        // for fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 #include <glib.h>         // for g_malloc0_n, GPtrArray, g_autofree, g_new0
 #include <netdb.h>        // for getaddrinfo
 #include <netinet/in.h>   // for IPPROTO_TCP
@@ -30,54 +31,19 @@ static const int laik_tcp_socket_send_flags = MSG_NOSIGNAL;
 static const int laik_tcp_socket_send_flags = 0;
 #endif
 
-__attribute__ ((warn_unused_result))
-static bool laik_tcp_socket_receive_raw (Laik_Tcp_Socket* this, void* data, size_t size) {
-    laik_tcp_always (this);
-    laik_tcp_always (data || !size);
-
-    if (size) {
-        return recv (this->fd, data, size, MSG_WAITALL) == (ssize_t) size;
-    } else {
-        return true;
-    }
-}
-
-__attribute__ ((warn_unused_result))
-static bool laik_tcp_socket_send_raw (Laik_Tcp_Socket* this, const void* data, size_t size) {
-    laik_tcp_always (this);
-    laik_tcp_always (data || !size);
-
-    if (size) {
-        #ifdef MSG_NOSIGNAL
-            return send (this->fd, data, size, MSG_NOSIGNAL) == (ssize_t) size;
-        #else
-            return send (this->fd, data, size, 0) == (ssize_t) size;
-        #endif
-    } else {
-        return true;
-    }
-}
-
 Laik_Tcp_Socket* laik_tcp_socket_accept (Laik_Tcp_Socket* this) {
     laik_tcp_always (this);
     laik_tcp_always (laik_tcp_socket_get_listening (this));
 
-    // Accept the connection
+    // Try to accept a new connection
     int fd = accept (this->fd, NULL, NULL);
-    laik_tcp_always (fd >= 0);
 
-    // Create the object
-    Laik_Tcp_Socket* new = g_new0 (Laik_Tcp_Socket, 1);
-
-    // Initialize the object
-    *new = (Laik_Tcp_Socket) {
-        .fd        = fd,
-        .events    = 0,
-        .timestamp = laik_tcp_time (),
-    };
-
-    // Return the object
-    return new;
+    // If we succeeded, wrap and return the FD, otherwise return failure
+    if (fd >= 0) {
+        return laik_tcp_socket_new_from_fd (fd);
+    } else {
+        return NULL;
+    }
 }
 
 void laik_tcp_socket_destroy (void* this) {
@@ -223,41 +189,11 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
             return NULL;
         }
 
-        // Enable TCP keep alives
-        if (setsockopt (fd, SOL_SOCKET, SO_KEEPALIVE, & (int) { 1 }, sizeof (int)) != 0) {
-            laik_tcp_errors_push (errors, __func__, 5, "Failed to set SO_KEEPALIVETCP_KEEPCNT on socket: %s", strerror (errno));
-            return NULL;
-        }
-
         // Disable Nagle's algorithm so messages are sent without delays
         if (setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, & (int) { 1 }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 6, "Failed to set TCP_NODELAY on socket: %s", strerror (errno));
             return NULL;
         }
-
-        // Sent up to three keep alive probes before dropping the connection
-        #ifdef TCP_KEEPCNT
-        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPCNT, & (int) { config->socket_keepcnt }, sizeof (int)) != 0) {
-            laik_tcp_errors_push (errors, __func__, 7, "Failed to set TCP_KEEPCNT on socket: %s", strerror (errno));
-            return NULL;
-        }
-        #endif 
-
-        // Consider the connection idle after 1 second if inactivity
-        #ifdef TCP_KEEPIDLE
-        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPIDLE, & (int) { config->socket_keepidle }, sizeof (int)) != 0) {
-            laik_tcp_errors_push (errors, __func__, 8, "Failed to set TCP_KEEPIDLE on socket: %s", strerror (errno));
-            return NULL;
-        }
-        #endif
-
-        // On idle connections, send a keep alive probe every second
-        #ifdef TCP_KEEPINTVL
-        if (setsockopt (fd, IPPROTO_TCP, TCP_KEEPINTVL, & (int) { config->socket_keepintvl }, sizeof (int)) != 0) {
-            laik_tcp_errors_push (errors, __func__, 9, "Failed to set TCP_KEEPINTVL on socket: %s", strerror (errno));
-            return NULL;
-        }
-        #endif
     }
 
     // Handle the different socket types
@@ -284,22 +220,18 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
         return NULL;
     }
 
-    // Create the object
-    Laik_Tcp_Socket* this = g_new0 (Laik_Tcp_Socket, 1);
-
-    // Initialize the object
-    *this = (Laik_Tcp_Socket) {
-        .fd        = fd,
-        .events    = 0,
-        .timestamp = laik_tcp_time (),
-    };
-
-    // Return the object
-    return this;
+    // Wrap the FD and return it
+    return laik_tcp_socket_new_from_fd (fd);
 }
 
 Laik_Tcp_Socket* laik_tcp_socket_new_from_fd (int fd) {
     laik_tcp_always (fd >= 0);
+
+    // Disable blocking
+    int flags = fcntl (fd, F_GETFL, 0);
+    laik_tcp_always (flags >= 0);
+    __attribute__ ((unused)) int result = fcntl (fd, F_SETFL, flags | O_NONBLOCK);
+    laik_tcp_always (result >= 0);
 
     // Create the object
     Laik_Tcp_Socket* this = g_new (Laik_Tcp_Socket, 1);
@@ -373,7 +305,7 @@ GBytes* laik_tcp_socket_receive_bytes (Laik_Tcp_Socket* this) {
 
     g_autofree void* data = g_malloc (size);
 
-    if (!laik_tcp_socket_receive_raw (this, data, size)) {
+    if (!laik_tcp_socket_receive_data (this, data, size)) {
         return NULL;
     }
 
@@ -383,6 +315,9 @@ GBytes* laik_tcp_socket_receive_bytes (Laik_Tcp_Socket* this) {
 bool laik_tcp_socket_receive_data (Laik_Tcp_Socket* this, void* data, const size_t size) {
     laik_tcp_always (this);
     laik_tcp_always (data || !size);
+
+    // Get the configuration
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
 
     // Initialize the loop variables
     char*   pointer   = data;
@@ -396,6 +331,10 @@ bool laik_tcp_socket_receive_data (Laik_Tcp_Socket* this, void* data, const size
             remaining -= result;
         } else if (result == 0) {
             return false;
+        } else if (result == -EAGAIN || result == -EWOULDBLOCK) {
+            if (!laik_tcp_socket_wait (this, POLLIN, config->socket_timeout)) {
+                return false;
+            }
         } else {
             return false;
         }
@@ -408,7 +347,7 @@ bool laik_tcp_socket_receive_uint64 (Laik_Tcp_Socket* this, uint64_t* value) {
     laik_tcp_always (this);
     laik_tcp_always (value);
 
-    if (!laik_tcp_socket_receive_raw (this, value, sizeof (*value))) {
+    if (!laik_tcp_socket_receive_data (this, value, sizeof (*value))) {
         return false;
     }
 
@@ -428,7 +367,7 @@ bool laik_tcp_socket_send_bytes (Laik_Tcp_Socket* this, GBytes* bytes) {
         return false;
     }
 
-    if (!laik_tcp_socket_send_raw (this, data, size)) {
+    if (!laik_tcp_socket_send_data (this, data, size)) {
         return false;
     }
 
@@ -438,6 +377,9 @@ bool laik_tcp_socket_send_bytes (Laik_Tcp_Socket* this, GBytes* bytes) {
 bool laik_tcp_socket_send_data (Laik_Tcp_Socket* this, const void* data, const size_t size) {
     laik_tcp_always (this);
     laik_tcp_always (data || !size);
+
+    // Get the configuration
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
 
     // Initialize the loop variables
     const char* pointer   = data;
@@ -449,6 +391,10 @@ bool laik_tcp_socket_send_data (Laik_Tcp_Socket* this, const void* data, const s
         if (result >= 0) {
             pointer   += result;
             remaining -= result;
+        } else if (result == -EAGAIN || result == -EWOULDBLOCK) {
+            if (!laik_tcp_socket_wait (this, POLLOUT, config->socket_timeout)) {
+                return false;
+            }
         } else {
             return false;
         }
@@ -462,7 +408,7 @@ bool laik_tcp_socket_send_uint64 (Laik_Tcp_Socket* this, uint64_t value) {
 
     value = GUINT64_TO_LE (value);
 
-    return laik_tcp_socket_send_raw (this, &value, sizeof (value));
+    return laik_tcp_socket_send_data (this, &value, sizeof (value));
 }
 
 Laik_Tcp_Socket* laik_tcp_socket_touch (Laik_Tcp_Socket* this) {

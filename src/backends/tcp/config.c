@@ -164,10 +164,8 @@ static Laik_Tcp_Config* laik_tcp_config_new_default (void) {
         .server_activation_timeout = 0.01,
         .server_connection_limit   = 10,
         .server_connection_timeout = 1.0,
-        .socket_backlog            = 10,
-        .socket_keepcnt            = 3,
-        .socket_keepidle           = 1.0,
-        .socket_keepintvl          = 1.0,
+        .socket_backlog            = 64,
+        .socket_timeout            = 10.0,
         .inbox_size_limit          = 1<<24,
         .outbox_size_limit         = 1<<24,
         .add_retry_timeout         = 0.1,
@@ -225,9 +223,7 @@ static Laik_Tcp_Config* laik_tcp_config_new_custom (Laik_Tcp_Errors* errors) {
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "server_connection_limit",   &this->server_connection_limit,   errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "server_connection_timeout", &this->server_connection_timeout, errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "socket_backlog",            &this->socket_backlog,            errors)) { return NULL; };
-        if (!laik_tcp_config_parse_size      (keyfile, "general",  "socket_keepcnt",            &this->socket_keepcnt,            errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "socket_keepidle",           &this->socket_keepidle,           errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "socket_keepintvl",          &this->socket_keepintvl,          errors)) { return NULL; };
+        if (!laik_tcp_config_parse_time      (keyfile, "general",  "socket_timeout",            &this->socket_timeout,            errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "inbox_size_limit",          &this->inbox_size_limit,          errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "outbox_size_limit",         &this->outbox_size_limit,         errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "add_retry_timeout",         &this->add_retry_timeout,         errors)) { return NULL; };

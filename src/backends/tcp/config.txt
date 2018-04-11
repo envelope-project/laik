@@ -24,14 +24,8 @@
 # How many connections the kernel is allowed to buffer for us
 # socket_backlog = 10
 
-# How many TCP keep-alive messages to send before dropping the connection
-# socket_keepcnt = 3
-
-# The amount of seconds after which TCP keep-alive message should be sent
-# socket_keepidle = 1.0
-
-# The amount of seconds between two repeated TCP keep-alive messages
-# socket_keepintvl = 1.0
+# How long a socket may be unavailable for I/O before it is considered broken
+# socket_timeout = 10.0
 
 # How big our inbox may grow in bytes
 # inbox_size_limit = 16777216
