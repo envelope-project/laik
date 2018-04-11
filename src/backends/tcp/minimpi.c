@@ -11,6 +11,7 @@
 #include "lock.h"       // for LAIK_TCP_LOCK, Laik_Tcp_Lock
 #include "messenger.h"  // for laik_tcp_messenger_get, laik_tcp_messenger_push
 #include "socket.h"     // for laik_tcp_socket_new, ::LAIK_TCP_SOCKET_TYPE_S...
+#include "stats.h"      // for laik_tcp_stats_store
 
 // Type definitions
 
@@ -407,6 +408,9 @@ int laik_tcp_minimpi_finalize (void) {
     if (barrier_result != LAIK_TCP_MINIMPI_SUCCESS) {
         return barrier_result;
     }
+
+    // If enabled, dump the stats
+    laik_tcp_stats_store ("laik-tcp-stats-for-rank-%zu.txt", LAIK_TCP_MINIMPI_COMM_WORLD->rank);
 
     LAIK_TCP_MINIMPI_COMM_WORLD = NULL;
 
