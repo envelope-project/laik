@@ -6,6 +6,7 @@
 #include "client.h"   // for laik_tcp_client_connect, laik_tcp_client_push
 #include "config.h"   // for laik_tcp_config, Laik_Tcp_Config, Laik_Tcp_Conf...
 #include "debug.h"    // for laik_tcp_debug, laik_tcp_always
+#include "errors.h"   // for Laik_Tcp_Errors
 #include "map.h"      // for laik_tcp_map_discard, laik_tcp_map_get, laik_tc...
 #include "server.h"   // for laik_tcp_server_free, laik_tcp_server_new, Laik...
 #include "socket.h"   // for laik_tcp_socket_send_uint64, laik_tcp_socket_se...
@@ -175,7 +176,7 @@ void laik_tcp_messenger_free (Laik_Tcp_Messenger* this) {
     g_free (this);
 }
 
-GBytes* laik_tcp_messenger_get (Laik_Tcp_Messenger* this, size_t sender, GBytes* header) {
+GBytes* laik_tcp_messenger_get (Laik_Tcp_Messenger* this, size_t sender, GBytes* header, Laik_Tcp_Errors* errors) {
     laik_tcp_always (this);
     laik_tcp_always (header);
 
@@ -185,7 +186,7 @@ GBytes* laik_tcp_messenger_get (Laik_Tcp_Messenger* this, size_t sender, GBytes*
     g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
 
     // Attempt to receive the message
-    for (size_t attempt = 0; ; attempt++) {
+    for (size_t attempt = 0; attempt < config->receive_attempts; attempt++) {
         laik_tcp_debug ("Starting attempt #%zu to receive message 0x%08X from peer %zu", attempt, g_bytes_hash (header), sender);
 
         // Wait for the message
@@ -202,6 +203,10 @@ GBytes* laik_tcp_messenger_get (Laik_Tcp_Messenger* this, size_t sender, GBytes*
             laik_tcp_client_push (this->client, laik_tcp_task_new (MESSAGE_GET, sender, header));
         }
     }
+
+    // Maximum number of attempts exceeded, error out
+    laik_tcp_errors_push (errors, __func__, 0, "Maximum number of attempts exceeded while attempting to receive message from rank %zu", sender);
+    return NULL;
 }
 
 Laik_Tcp_Messenger* laik_tcp_messenger_new (Laik_Tcp_Socket* socket) {
@@ -246,7 +251,7 @@ void laik_tcp_messenger_push (Laik_Tcp_Messenger* this, size_t receiver, GBytes*
     laik_tcp_map_block (this->outbox);
 }
 
-void laik_tcp_messenger_send (Laik_Tcp_Messenger* this, size_t receiver, GBytes* header, GBytes* body) {
+void laik_tcp_messenger_send (Laik_Tcp_Messenger* this, size_t receiver, GBytes* header, GBytes* body, Laik_Tcp_Errors* errors) {
     laik_tcp_always (this);
     laik_tcp_always (header);
     laik_tcp_always (body);
@@ -260,7 +265,7 @@ void laik_tcp_messenger_send (Laik_Tcp_Messenger* this, size_t receiver, GBytes*
     laik_tcp_map_add (this->outbox, header, body);
 
     // Attempt to send the message
-    for (size_t attempt = 0; ; attempt++) {
+    for (size_t attempt = 0; attempt < config->send_attempts; attempt++) {
         laik_tcp_debug ("Starting attempt #%zu to send message 0x%08X to peer %zu", attempt, g_bytes_hash (header), receiver);
 
         // First, try to deliver the message via an ADD ourselves. If this
@@ -281,4 +286,7 @@ void laik_tcp_messenger_send (Laik_Tcp_Messenger* this, size_t receiver, GBytes*
         // Finally, if nothing worked, go to sleep for some time and try again.
         laik_tcp_sleep (config->send_delay);
     }
+
+    // Maximum number of attempts exceeded, error out
+    laik_tcp_errors_push (errors, __func__, 0, "Maximum number of attempts exceeded while attempting to synchronously send message to rank %zu", receiver);
 }

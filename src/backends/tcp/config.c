@@ -166,7 +166,9 @@ static Laik_Tcp_Config* laik_tcp_config_new_default (void) {
         .socket_timeout            = 10.0,
         .inbox_size                = 1<<24,
         .outbox_size               = 1<<24,
+        .send_attempts             = 100,
         .send_delay                = 0.1,
+        .receive_attempts          = 100,
         .receive_timeout           = 0.0,
         .receive_delay             = 0.1,
         .minimpi_async_split       = true,
@@ -222,7 +224,9 @@ static Laik_Tcp_Config* laik_tcp_config_new_custom (Laik_Tcp_Errors* errors) {
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "socket_timeout",            &this->socket_timeout,            errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "inbox_size",                &this->inbox_size,                errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "outbox_size",               &this->outbox_size,               errors)) { return NULL; };
+        if (!laik_tcp_config_parse_size      (keyfile, "general",  "send_attempts",             &this->send_attempts,             errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "send_delay",                &this->send_delay,                errors)) { return NULL; };
+        if (!laik_tcp_config_parse_size      (keyfile, "general",  "receive_attempts",          &this->receive_attempts,          errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "receive_timeout",           &this->receive_timeout,           errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "receive_delay",             &this->receive_delay,             errors)) { return NULL; };
         if (!laik_tcp_config_parse_bool      (keyfile, "general",  "minimpi_async_split",       &this->minimpi_async_split,       errors)) { return NULL; };
