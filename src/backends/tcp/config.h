@@ -15,7 +15,9 @@ typedef struct {
     double     socket_timeout;
     size_t     inbox_size;
     size_t     outbox_size;
+    size_t     send_attempts;
     double     send_delay;
+    size_t     receive_attempts;
     double     receive_timeout;
     double     receive_delay;
     bool       minimpi_async_split;

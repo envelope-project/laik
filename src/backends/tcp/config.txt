@@ -27,8 +27,14 @@
 # How big our outbox may grow in bytes
 # outbox_size = 16777216
 
+# How often a synchronous message send should be attempted giving up
+# send_attempts = 100
+
 # How long to wait after a failed synchronous message send before retrying
 # send_delay = 0.1
+
+# How often a message receive should be attempted before giving up
+# receive_attempts = 100
 
 # How long to wait for a message receive before sending an active request
 # receive_timeout = 0.0

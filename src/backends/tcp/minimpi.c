@@ -224,14 +224,21 @@ int laik_tcp_minimpi_barrier (const Laik_Tcp_MiniMpiComm* comm) {
 
     laik_tcp_debug ("MPI_Barrier entered by task %zu", comm->rank);
 
+    g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
+
     const size_t master = 0;
 
     if (comm->rank == master) {
         // Receive the ping message from all slaves
         for (size_t slave = 1; slave < comm->tasks->len; slave++) {
             g_autoptr (GBytes) ping_header = laik_tcp_minimpi_header (comm->generation, TYPE_BARRIER, slave, master, 0);
-            g_autoptr (GBytes) ping_body   = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, slave), ping_header);
-            (void) ping_body;
+
+            __attribute__ ((unused)) g_autoptr (GBytes) ping_body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, slave), ping_header, errors);
+            if (laik_tcp_errors_present (errors)) {
+                laik_tcp_errors_push (errors, __func__, 0, "Failed to receive ping from slave task %zu", slave);
+                return laik_tcp_minimpi_error (errors);
+            }
+
             laik_tcp_debug ("Master got ping from slave %zu", slave);
         }
 
@@ -239,7 +246,13 @@ int laik_tcp_minimpi_barrier (const Laik_Tcp_MiniMpiComm* comm) {
         for (size_t slave = 1; slave < comm->tasks->len; slave++) {
             g_autoptr (GBytes) pong_header = laik_tcp_minimpi_header (comm->generation, TYPE_BARRIER, master, slave, 0);
             g_autoptr (GBytes) pong_body   = g_bytes_new (NULL, 0);
-            laik_tcp_messenger_send (messenger, laik_tcp_minimpi_lookup (comm, slave), pong_header, pong_body);
+
+            laik_tcp_messenger_send (messenger, laik_tcp_minimpi_lookup (comm, slave), pong_header, pong_body, errors);
+            if (laik_tcp_errors_present (errors)) {
+                laik_tcp_errors_push (errors, __func__, 0, "Failed to send pong to slave task %zu", slave);
+                return laik_tcp_minimpi_error (errors);
+            }
+
             laik_tcp_debug ("Master sent pong to slave %zu", slave);
         }
     } else {
@@ -251,8 +264,13 @@ int laik_tcp_minimpi_barrier (const Laik_Tcp_MiniMpiComm* comm) {
 
         // Receive the pong message from the master
         g_autoptr (GBytes) pong_header = laik_tcp_minimpi_header (comm->generation, TYPE_BARRIER, master, comm->rank, 0);
-        g_autoptr (GBytes) pong_body   = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, master), pong_header);
-        (void) pong_body;
+
+        __attribute__ ((unused)) g_autoptr (GBytes) pong_body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, master), pong_header, errors);
+        if (laik_tcp_errors_present (errors)) {
+            laik_tcp_errors_push (errors, __func__, 0, "Failed to receive pong from master task %zu", master);
+            return laik_tcp_minimpi_error (errors);
+        }
+
         laik_tcp_debug ("Slave %zu got pong from master", comm->rank);
     }
 
@@ -288,10 +306,15 @@ int laik_tcp_minimpi_bcast (void* buffer, const int elements, const Laik_Tcp_Min
         }
     } else {
         g_autoptr (GBytes) header = laik_tcp_minimpi_header (comm->generation, TYPE_BROADCAST, root, comm->rank, 0);
-        g_autoptr (GBytes) body   = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, root), header);
+
+        g_autoptr (GBytes) body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, root), header, errors);
+        if (laik_tcp_errors_present (errors)) {
+            laik_tcp_errors_push (errors, __func__, 1, "Failed to receive broadcast message from task %zu", root);
+            return laik_tcp_minimpi_error (errors);
+        }
 
         if (g_bytes_get_size (body) != size) {
-            laik_tcp_errors_push (errors, __func__, 1, "Broadcast from root task %zu was %zu bytes, expected %zu bytes", root, g_bytes_get_size (body), size);
+            laik_tcp_errors_push (errors, __func__, 2, "Broadcast from root task %zu was %zu bytes, expected %zu bytes", root, g_bytes_get_size (body), size);
             return laik_tcp_minimpi_error (errors);
         }
 
@@ -366,10 +389,15 @@ int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int col
             if (sender != comm->rank) {
                 // It's not our turn to send, instead we should receive data
                 g_autoptr (GBytes) header = laik_tcp_minimpi_header (comm->generation, TYPE_SPLIT, sender, comm->rank, 0);
-                g_autoptr (GBytes) body   = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header);
+
+                g_autoptr (GBytes) body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header, errors);
+                if (laik_tcp_errors_present (errors)) {
+                    laik_tcp_errors_push (errors, __func__, 0, "Failed to receive split info from task %zu", sender);
+                    return laik_tcp_minimpi_error (errors);
+                }
 
                 if (g_bytes_get_size (body) != sizeof (Laik_Tcp_Split)) {
-                    laik_tcp_errors_push (errors, __func__, 0, "Task %zu sent %zu bytes when splitting, expected %zu bytes", sender, g_bytes_get_size (body), sizeof (Laik_Tcp_Split));
+                    laik_tcp_errors_push (errors, __func__, 1, "Task %zu sent %zu bytes when splitting, expected %zu bytes", sender, g_bytes_get_size (body), sizeof (Laik_Tcp_Split));
                     return laik_tcp_minimpi_error (errors);
                 }
 
@@ -380,7 +408,7 @@ int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int col
         // Wait for the asynchronous send operations to complete
         __attribute__ ((unused)) void* result = laik_tcp_async_wait (async, errors);
         if (laik_tcp_errors_present (errors)) {
-            laik_tcp_errors_push (errors, __func__, 1, "Asynchronous send operation failed");
+            laik_tcp_errors_push (errors, __func__, 2, "Asynchronous send operation failed");
             return laik_tcp_minimpi_error (errors);
         }
     } else {
@@ -397,10 +425,15 @@ int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int col
             } else {
                 // It's not our turn to send, instead we should receive data
                 g_autoptr (GBytes) header = laik_tcp_minimpi_header (comm->generation, TYPE_SPLIT, sender, comm->rank, 0);
-                g_autoptr (GBytes) body   = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header);
+
+                g_autoptr (GBytes) body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header, errors);
+                if (laik_tcp_errors_present (errors)) {
+                    laik_tcp_errors_push (errors, __func__, 3, "Failed to receive split info from task %zu", sender);
+                    return laik_tcp_minimpi_error (errors);
+                }
 
                 if (g_bytes_get_size (body) != sizeof (Laik_Tcp_Split)) {
-                    laik_tcp_errors_push (errors, __func__, 0, "Task %zu sent %zu bytes when splitting, expected %zu bytes", sender, g_bytes_get_size (body), sizeof (Laik_Tcp_Split));
+                    laik_tcp_errors_push (errors, __func__, 4, "Task %zu sent %zu bytes when splitting, expected %zu bytes", sender, g_bytes_get_size (body), sizeof (Laik_Tcp_Split));
                     return laik_tcp_minimpi_error (errors);
                 }
 
@@ -607,10 +640,15 @@ int laik_tcp_minimpi_recv (void* buffer, const int elements, Laik_Tcp_MiniMpiTyp
     }
 
     g_autoptr (GBytes) header = laik_tcp_minimpi_header (comm->generation, TYPE_SEND_RECEIVE, sender, comm->rank, tag);
-    g_autoptr (GBytes) body   = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header);
+
+    g_autoptr (GBytes) body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header, errors);
+    if (laik_tcp_errors_present (errors)) {
+        laik_tcp_errors_push (errors, __func__, 1, "Failed to receive message from task %zu", sender);
+        return laik_tcp_minimpi_error (errors);
+    }
 
     if (g_bytes_get_size (body) > size) {
-        laik_tcp_errors_push (errors, __func__, 1, "Message contains %zu bytes, but supplied buffer holds only %zu bytes", g_bytes_get_size (body), size);
+        laik_tcp_errors_push (errors, __func__, 2, "Message contains %zu bytes, but supplied buffer holds only %zu bytes", g_bytes_get_size (body), size);
         return laik_tcp_minimpi_error (errors);
     }
 
@@ -645,16 +683,21 @@ int laik_tcp_minimpi_reduce (const void* input_buffer, void* output_buffer, cons
         for (size_t sender = 0; sender < comm->tasks->len; sender++) {
             if (sender != comm->rank) {
                 g_autoptr (GBytes) header = laik_tcp_minimpi_header (comm->generation, TYPE_REDUCE, sender, root, 0);
-                g_autoptr (GBytes) body   = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header);
+
+                g_autoptr (GBytes) body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header, errors);
+                if (laik_tcp_errors_present (errors)) {
+                    laik_tcp_errors_push (errors, __func__, 1, "Failed to receive reduction input from task %zu", sender);
+                    return laik_tcp_minimpi_error (errors);
+                }
 
                 if (g_bytes_get_size (body) != size) {
-                    laik_tcp_errors_push (errors, __func__, 1, "Task %zu sent %zu bytes when reducing %zu bytes", sender, g_bytes_get_size (body), size);
+                    laik_tcp_errors_push (errors, __func__, 2, "Task %zu sent %zu bytes when reducing %zu bytes", sender, g_bytes_get_size (body), size);
                     return laik_tcp_minimpi_error (errors);
                 }
 
                 laik_tcp_minimpi_combine (output_buffer, g_bytes_get_data (body, NULL), elements, datatype, op, errors);
                 if (laik_tcp_errors_present (errors)) {
-                    laik_tcp_errors_push (errors, __func__, 2, "Failed to reduce buffers");
+                    laik_tcp_errors_push (errors, __func__, 3, "Failed to reduce buffers");
                     return laik_tcp_minimpi_error (errors);
                 }
             }
