@@ -95,16 +95,22 @@ if (tcp-backend)
 
         target_sources ("laik"
             PRIVATE
+                "backends/tcp/async.c"
                 "backends/tcp/backend.c"
                 "backends/tcp/client.c"
+                "backends/tcp/condition.c"
                 "backends/tcp/config.c"
                 "backends/tcp/debug.c"
                 "backends/tcp/errors.c"
+                "backends/tcp/lock.c"
                 "backends/tcp/map.c"
                 "backends/tcp/messenger.c"
                 "backends/tcp/minimpi.c"
                 "backends/tcp/server.c"
                 "backends/tcp/socket.c"
+                "backends/tcp/socketpair.c"
+                "backends/tcp/socketqueue.c"
+                "backends/tcp/stats.c"
                 "backends/tcp/task.c"
                 "backends/tcp/time.c"
         )
@@ -114,6 +120,7 @@ if (tcp-backend)
             PRIVATE "GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_44"
             PRIVATE "USE_TCP"
             # PRIVATE "LAIK_TCP_DEBUG"
+            # PRIVATE "LAIK_TCP_STATS"
         )
 
         target_link_libraries ("laik"

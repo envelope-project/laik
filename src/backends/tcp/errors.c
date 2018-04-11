@@ -80,6 +80,18 @@ void laik_tcp_errors_push_direct (Laik_Tcp_Errors* this, GError* error) {
     g_queue_push_head (this, error);
 }
 
+void laik_tcp_errors_push_other (Laik_Tcp_Errors* this, Laik_Tcp_Errors* other) {
+    laik_tcp_always (this);
+    laik_tcp_always (other);
+
+    size_t size = g_queue_get_length (other);
+
+    for (ssize_t i = size - 1; i >= 0; i--) {
+        GError* error = g_queue_peek_nth (other, i);
+        laik_tcp_errors_push_direct (this, g_error_copy (error));
+    }
+}
+
 char* laik_tcp_errors_show (Laik_Tcp_Errors* this) {
     GString* result = g_string_new (NULL);
 

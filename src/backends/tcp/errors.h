@@ -27,5 +27,7 @@ void laik_tcp_errors_push (Laik_Tcp_Errors* this, const char* domain, int code, 
 
 void laik_tcp_errors_push_direct (Laik_Tcp_Errors* this, GError* error);
 
+void laik_tcp_errors_push_other (Laik_Tcp_Errors* this, Laik_Tcp_Errors* other);
+
 __attribute__ ((warn_unused_result))
 char* laik_tcp_errors_show (Laik_Tcp_Errors* this);
