@@ -1,10 +1,12 @@
 #pragma once
 
-#include <glib.h>    // for GPtrArray, G_DEFINE_AUTOPTR_CLEANUP_FUNC
-#include <stddef.h>  // for size_t
+#include <glib.h>     // for GPtrArray, G_DEFINE_AUTOPTR_CLEANUP_FUNC
+#include <stdbool.h>  // for bool
+#include <stddef.h>   // for size_t
 
 typedef struct {
     GPtrArray* addresses;
+    bool       backend_async_send;
     double     client_activation_timeout;
     size_t     client_connection_limit;
     double     client_connection_timeout;

@@ -1,5 +1,8 @@
 [general]
 
+# Whether the backend should do the sends in parallel to the receive operations
+# backend_async_send = true
+
 # How long for block while waiting for an outgoing message
 # client_activation_timeout = 0.01
 

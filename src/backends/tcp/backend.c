@@ -1,13 +1,23 @@
 #include <glib.h>           // for g_malloc0_n, g_malloc, g_autoptr, g_new0
 #include <laik-internal.h>  // for _Laik_Data, _Laik_Group, redTOp, _Laik_Ma...
 #include <laik.h>           // for Laik_Data, Laik_Group, Laik_Mapping, Laik...
-#include <stdbool.h>        // for true, false, bool
+#include <stdbool.h>        // for false, true, bool
 #include <stdint.h>         // for int64_t
 #include <stdio.h>          // for NULL, size_t, sprintf
 #include <string.h>         // for memcpy
+#include "async.h"          // for laik_tcp_async_new, laik_tcp_async_wait
+#include "config.h"         // for laik_tcp_config, Laik_Tcp_Config, Laik_Tc...
 #include "debug.h"          // for laik_tcp_always
 #include "errors.h"         // for laik_tcp_errors_push, laik_tcp_errors_pre...
 #include "mpi.h"            // for MPI_Comm, MPI_Datatype, MPI_COMM_WORLD
+
+/* Internal structs */
+
+typedef struct {
+    const Laik_Data*        data;
+    const Laik_Transition*  transition;
+    const Laik_MappingList* input_list;
+} Laik_Tcp_Backend_AsyncSendInfo;
 
 /* Internal functions */
 
@@ -409,6 +419,28 @@ static void laik_tcp_backend_reduce
     }
 }
 
+static void* laik_tcp_backend_run_async_sends (void* data, Laik_Tcp_Errors* errors) {
+    laik_tcp_always (data);
+    laik_tcp_always (errors);
+
+    const Laik_Tcp_Backend_AsyncSendInfo* info = data;
+
+    for (int i = 0; i < info->transition->sendCount; i++) {
+        const struct sendTOp* op = info->transition->send + i;
+
+        laik_tcp_always (info->input_list);
+        laik_tcp_always (op->mapNo >= 0 && op->mapNo < info->input_list->count);
+
+        laik_tcp_backend_send (info->data, info->input_list->map + op->mapNo, op->slc, op->toTask, errors);
+        if (laik_tcp_errors_present (errors)) {
+            laik_tcp_errors_push (errors, __func__, 1, "Send operation failed");
+            return NULL;
+        }
+    }
+
+    return NULL;
+}
+
 /* API functions */
 
 static void laik_tcp_backend_exec
@@ -423,10 +455,12 @@ static void laik_tcp_backend_exec
     laik_tcp_always (transition);
     laik_tcp_always (!plan);
 
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
     const Laik_Group* group = data->activePartitioning->group;
 
+    // Handle the reduce operations
     for (int i = 0; i < transition->redCount; i++) {
         const struct redTOp* op = transition->red + i;
 
@@ -463,35 +497,68 @@ static void laik_tcp_backend_exec
         }
     }
 
-    for (int sender = 0; sender < group->size; sender++) {
-        if (sender == group->myid) {
-            // It's our turn to send data, so do all our send operations.
-            for (int i = 0; i < transition->sendCount; i++) {
-                const struct sendTOp* op = transition->send + i;
+    // Decide whether we want asynchronous sends
+    if (config->backend_async_send) {
+        // Start an asynchrounous operation which will do all the send operations
+        Laik_Tcp_Backend_AsyncSendInfo info = {
+            .data       = data,
+            .transition = transition,
+            .input_list = input_list,
+        };
+        Laik_Tcp_Async* async = laik_tcp_async_new (laik_tcp_backend_run_async_sends, &info);
 
-                laik_tcp_always (input_list);
-                laik_tcp_always (op->mapNo >= 0 && op->mapNo < input_list->count);
+        // Handle the receive operations
+        for (int i = 0; i < transition->recvCount; i++) {
+            const struct recvTOp* op = transition->recv + i;
 
-                laik_tcp_backend_send (data, input_list->map + op->mapNo    , op->slc, op->toTask, errors);
-                if (laik_tcp_errors_present (errors)) {
-                    laik_tcp_errors_push (errors, __func__, 1, "Send operation failed");
-                    laik_tcp_errors_abort (errors);
-                }
+            laik_tcp_always (output_list);
+            laik_tcp_always (op->mapNo >= 0 && op->mapNo < output_list->count);
+
+            laik_tcp_backend_receive (data, output_list->map + op->mapNo, op->slc, op->fromTask, errors);
+            if (laik_tcp_errors_present (errors)) {
+                laik_tcp_errors_push (errors, __func__, 1, "Receive operation failed");
+                laik_tcp_errors_abort (errors);
             }
-        } else {
-            // It's not our turn to send data, instead we should receive from
-            // the current "sender" task.
-            for (int i = 0; i < transition->recvCount; i++) {
-                const struct recvTOp* op = transition->recv + i;
+        }
 
-                if (sender == op->fromTask) {
-                    laik_tcp_always (output_list);
-                    laik_tcp_always (op->mapNo >= 0 && op->mapNo < output_list->count);
+        // Wait for the asynchronous send operations to complete
+        __attribute__ ((unused)) void* result = laik_tcp_async_wait (async, errors);
+        if (laik_tcp_errors_present (errors)) {
+            laik_tcp_errors_push (errors, __func__, 2, "Asynchronous send operation failed");
+            laik_tcp_errors_abort (errors);
+        }
+    } else {
+        // Iterate over all the task in group order
+        for (int sender = 0; sender < group->size; sender++) {
+            if (sender == group->myid) {
+                // It's our turn to send data, so do all our send operations.
+                for (int i = 0; i < transition->sendCount; i++) {
+                    const struct sendTOp* op = transition->send + i;
 
-                    laik_tcp_backend_receive (data, output_list->map + op->mapNo, op->slc, op->fromTask, errors);
+                    laik_tcp_always (input_list);
+                    laik_tcp_always (op->mapNo >= 0 && op->mapNo < input_list->count);
+
+                    laik_tcp_backend_send (data, input_list->map + op->mapNo    , op->slc, op->toTask, errors);
                     if (laik_tcp_errors_present (errors)) {
-                        laik_tcp_errors_push (errors, __func__, 2, "Receive operation failed");
+                        laik_tcp_errors_push (errors, __func__, 3, "Send operation failed");
                         laik_tcp_errors_abort (errors);
+                    }
+                }
+            } else {
+                // It's not our turn to send data, instead we should receive
+                // from the current "sender" task.
+                for (int i = 0; i < transition->recvCount; i++) {
+                    const struct recvTOp* op = transition->recv + i;
+
+                    if (sender == op->fromTask) {
+                        laik_tcp_always (output_list);
+                        laik_tcp_always (op->mapNo >= 0 && op->mapNo < output_list->count);
+
+                        laik_tcp_backend_receive (data, output_list->map + op->mapNo, op->slc, op->fromTask, errors);
+                        if (laik_tcp_errors_present (errors)) {
+                            laik_tcp_errors_push (errors, __func__, 4, "Receive operation failed");
+                            laik_tcp_errors_abort (errors);
+                        }
                     }
                 }
             }
