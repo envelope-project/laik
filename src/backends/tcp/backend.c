@@ -85,8 +85,13 @@ static void laik_tcp_backend_receive
     laik_tcp_always (output);
     laik_tcp_always (errors);
 
-    // Get our group
-    const Laik_Group* group = data->activePartitioning->group;
+    // Calculate some variables we are going to need later on
+    const Laik_Group* group    = data->activePartitioning->group;
+    const MPI_Comm    comm     = *((MPI_Comm*) group->backend_data);
+    const size_t      elements = laik_slice_size (data->space->dims, &slice);
+    const size_t      bytes    = elements * data->elemsize;
+    g_autofree void*  buffer   = g_malloc (bytes);
+    Laik_Index        start    = slice.from;
 
     // Make sure we aren't talking to ourselves
     laik_tcp_always (group->myid != sender);
@@ -97,7 +102,7 @@ static void laik_tcp_backend_receive
     }
 
     // Make sure the mapping supports deserialization
-    laik_tcp_always (output->layout->pack);
+    laik_tcp_always (output->layout->unpack);
 
     // Determine the MPI data type
     const MPI_Datatype mpi_type = laik_tcp_backend_get_mpi_type (data, errors);
@@ -106,42 +111,41 @@ static void laik_tcp_backend_receive
         return;
     }
 
-    const MPI_Comm comm = *((MPI_Comm*) group->backend_data);
-    size_t elements = 0;
-
-    for (Laik_Index i = slice.from; !laik_index_isEqual (data->space->dims, &i, &(slice.to));) {
-        // Receive the next chunk of bytes
-        char buffer[1<<20];
-        MPI_Status status;
-        laik_tcp_backend_push_code (errors, MPI_Recv (buffer, sizeof (buffer) / data->elemsize, mpi_type, sender, 10, comm, &status));
-        if (laik_tcp_errors_present (errors)) {
-            laik_tcp_errors_push (errors, __func__, 1, "Failed to receive MPI message from task %d", sender);
-            return;
-        }
-
-        // Determine how many logical elements we have received
-        int received;
-        laik_tcp_backend_push_code (errors, MPI_Get_count (&status, mpi_type, &received));
-        if (laik_tcp_errors_present (errors)) {
-            laik_tcp_errors_push (errors, __func__, 2, "Failed to determine how many elements were received");
-            return;
-        }
-
-        // Unpack the received bytes
-        int unpacked = output->layout->unpack (output, &slice, &i, buffer, received * data->elemsize);
-
-        // Make sure that we unpacked everything
-        laik_tcp_always (received == unpacked);
-
-        elements += unpacked;
+    // Receive the data
+    MPI_Status status;
+    laik_tcp_backend_push_code (errors, MPI_Recv (buffer, elements, mpi_type, sender, 10, comm, &status));
+    if (laik_tcp_errors_present (errors)) {
+        laik_tcp_errors_push (errors, __func__, 1, "Failed to receive MPI message from task %d", sender);
+        return;
     }
 
-    laik_tcp_always (elements == laik_slice_size (data->space->dims, &slice));
+    // Determine how many logical elements we have received
+    int received;
+    laik_tcp_backend_push_code (errors, MPI_Get_count (&status, mpi_type, &received));
+    if (laik_tcp_errors_present (errors)) {
+        laik_tcp_errors_push (errors, __func__, 2, "Failed to determine how many elements were received");
+        return;
+    }
+
+    // Check that we received exactly as many elements as expected
+    if (received != (ssize_t) elements) {
+        laik_tcp_errors_push (errors, __func__, 3, "Received %d elements, but expected %zu elements", received, elements);
+        return;
+    }
+
+    // Unpack the data
+    int unpacked = output->layout->unpack (output, &slice, &start, buffer, bytes);
+
+    // Check that we unpacked exactly as many elements as expected
+    if (unpacked != (ssize_t) elements) {
+        laik_tcp_errors_push (errors, __func__, 4, "Unpacked %d elements, but expected %zu elements", unpacked, elements);
+        return;
+    }
 
     // Update the statistics
     if (data->stat) {
         data->stat->recvCount++;
-        data->stat->receivedBytes += elements * data->elemsize;
+        data->stat->receivedBytes += bytes;
     }
 }
 
@@ -157,8 +161,13 @@ static void laik_tcp_backend_send
     laik_tcp_always (input);
     laik_tcp_always (errors);
 
-    // Get our group
-    const Laik_Group* group = data->activePartitioning->group;
+    // Calculate some variables we are going to need later on
+    const Laik_Group* group    = data->activePartitioning->group;
+    const MPI_Comm    comm     = *((MPI_Comm*) group->backend_data);
+    const size_t      elements = laik_slice_size (data->space->dims, &slice);
+    const size_t      bytes    = elements * data->elemsize;
+    g_autofree void*  buffer   = g_malloc (bytes);
+    Laik_Index        start    = slice.from;
 
     // Make sure we aren't talking to ourselves
     laik_tcp_always (group->myid != receiver);
@@ -176,31 +185,24 @@ static void laik_tcp_backend_send
         return;
     }
 
-    const MPI_Comm comm = *((MPI_Comm*) group->backend_data);
-    size_t elements = 0;
-
-    for (Laik_Index i = slice.from; !laik_index_isEqual (data->space->dims, &i, &(slice.to));) {
-        // Pack the next chunk
-        char buffer[1<<20];
-        int packed = input->layout->pack (input, &slice, &i, buffer, sizeof (buffer));
-        laik_tcp_always (packed > 0);
-
-        // Send the next chunk
-        laik_tcp_backend_push_code (errors, MPI_Send (buffer, packed, mpi_type, receiver, 10, comm));
-        if (laik_tcp_errors_present (errors)) {
-            laik_tcp_errors_push (errors, __func__, 1, "Failed to send MPI message to task %d", receiver);
-            return;
-        }
-
-        elements += packed;
+    // Pack the data
+    int packed = input->layout->pack (input, &slice, &start, buffer, bytes);
+    if (packed != (ssize_t) elements) {
+        laik_tcp_errors_push (errors, __func__, 1, "Packed %d elements, but expected %zu", packed, elements);
+        return;
     }
 
-    laik_tcp_always (elements == laik_slice_size (data->space->dims, &slice));
+    // Send the data
+    laik_tcp_backend_push_code (errors, MPI_Send (buffer, elements, mpi_type, receiver, 10, comm));
+    if (laik_tcp_errors_present (errors)) {
+        laik_tcp_errors_push (errors, __func__, 1, "Failed to send MPI message to task %d", receiver);
+        return;
+    }
 
     // Update the statistics
     if (data->stat) {
         data->stat->sendCount++;
-        data->stat->sentBytes += elements * data->elemsize;
+        data->stat->sentBytes += bytes;
     }
 }
 
