@@ -227,8 +227,8 @@ static Laik_Tcp_Config* laik_tcp_config_new_custom (Laik_Tcp_Errors* errors) {
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "inbox_size_limit",          &this->inbox_size_limit,          errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "outbox_size_limit",         &this->outbox_size_limit,         errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "add_retry_timeout",         &this->add_retry_timeout,         errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "get_first_timeout",         &this->add_retry_timeout,         errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "get_retry_timeout",         &this->add_retry_timeout,         errors)) { return NULL; };
+        if (!laik_tcp_config_parse_time      (keyfile, "general",  "get_first_timeout",         &this->get_first_timeout,         errors)) { return NULL; };
+        if (!laik_tcp_config_parse_time      (keyfile, "general",  "get_retry_timeout",         &this->get_retry_timeout,         errors)) { return NULL; };
     }
 
     // Return the object
