@@ -2,16 +2,16 @@
 
 #include "minimpi.h"  // for LAIK_TCP_MINIMPI_COMM_WORLD, LAIK_TCP_MINIMPI_IN_PLACE, LAIK_TCP_MINIMPI_M...
 
-#define MPI_DOUBLE             LAIK_TCP_MINIMPI_DOUBLE
-#define MPI_FLOAT              LAIK_TCP_MINIMPI_FLOAT
+#define MPI_DOUBLE LAIK_TCP_MINIMPI_DOUBLE
+#define MPI_FLOAT  LAIK_TCP_MINIMPI_FLOAT
 typedef Laik_Tcp_MiniMpiType MPI_Datatype;
 
-#define MPI_SUM                LAIK_TCP_MINIMPI_SUM
+#define MPI_SUM LAIK_TCP_MINIMPI_SUM
 typedef Laik_Tcp_MiniMpiOp MPI_Op;
 
-typedef struct Laik_Tcp_MiniMpiComm* MPI_Comm;
+typedef Laik_Tcp_MiniMpiStatus MPI_Status;
 
-#define MPI_Status             Laik_Tcp_MiniMpiStatus
+typedef Laik_Tcp_MiniMpiComm* MPI_Comm;
 
 #define MPI_COMM_WORLD         LAIK_TCP_MINIMPI_COMM_WORLD
 #define MPI_IN_PLACE           LAIK_TCP_MINIMPI_IN_PLACE
