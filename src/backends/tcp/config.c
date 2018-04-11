@@ -50,6 +50,34 @@ static bool laik_tcp_config_parse_addresses (GKeyFile* keyfile, const char* grou
     return true;
 }
 
+__attribute__ ((unused))
+__attribute__ ((warn_unused_result))
+static bool laik_tcp_config_parse_bool (GKeyFile* keyfile, const char* group, const char* key, bool* result, Laik_Tcp_Errors* errors) {
+    laik_tcp_always (keyfile);
+    laik_tcp_always (group);
+    laik_tcp_always (key);
+    laik_tcp_always (result);
+    laik_tcp_always (errors);
+
+    // If the keyfile doesn't have the specified key, do nothing
+    if (g_key_file_has_key (keyfile, group, key, NULL)) {
+        // Initialiaze a GError variable for the various GKeyfile function calls
+        g_autoptr (GError) error = NULL;
+
+        // Get the value from the configuration file
+        bool boolean = g_key_file_get_boolean (keyfile, group, key, &error);
+        if (error) {
+            laik_tcp_errors_push (errors, __func__, 0, "Failed to parse the configuration file: (%s, %s) is not a valid boolean", group, key);
+            return false;
+        }
+
+        // Set the result variable
+        *result = boolean;
+    }
+
+    return true;
+}
+
 __attribute__ ((warn_unused_result))
 static bool laik_tcp_config_parse_size (GKeyFile* keyfile, const char* group, const char* key, size_t* result, Laik_Tcp_Errors* errors) {
     laik_tcp_always (keyfile);

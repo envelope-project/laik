@@ -24,6 +24,12 @@ struct Laik_Tcp_Socket {
     double timestamp;
 };
 
+#ifdef MSG_NOSIGNAL
+static const int laik_tcp_socket_send_flags = MSG_NOSIGNAL;
+#else
+static const int laik_tcp_socket_send_flags = 0;
+#endif
+
 __attribute__ ((warn_unused_result))
 static bool laik_tcp_socket_receive_raw (Laik_Tcp_Socket* this, void* data, size_t size) {
     laik_tcp_always (this);
@@ -88,6 +94,19 @@ void laik_tcp_socket_free (Laik_Tcp_Socket* this) {
     g_free (this);
 }
 
+bool laik_tcp_socket_get_closed (Laik_Tcp_Socket* this) {
+    laik_tcp_always (this);
+
+    // Allocate a dummy buffer
+    char dummy;
+
+    // Try to peek 1 byte from the stream, but only if it's immediatly available
+    const ssize_t result = recv (this->fd, &dummy, sizeof (dummy), MSG_PEEK | MSG_DONTWAIT);
+
+    // If we successfully read data (result >= 0), but only 0 bytes, we have EOF
+    return result == 0;
+}
+
 bool laik_tcp_socket_get_listening (const Laik_Tcp_Socket* this) {
     int       optval = 0;
     socklen_t optlen = sizeof (optval);
@@ -101,6 +120,18 @@ bool laik_tcp_socket_get_listening (const Laik_Tcp_Socket* this) {
 
 double laik_tcp_socket_get_timestamp (const Laik_Tcp_Socket* this) {
     return this->timestamp;
+}
+
+struct pollfd laik_tcp_socket_get_pollfd (Laik_Tcp_Socket* this, short events) {
+    laik_tcp_always (this);
+
+    const struct pollfd result = {
+        .fd      = this->fd,
+        .events  = events,
+        .revents = 0,
+    };
+
+    return result;
 }
 
 Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* address, Laik_Tcp_Errors* errors) {
@@ -267,6 +298,23 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
     return this;
 }
 
+Laik_Tcp_Socket* laik_tcp_socket_new_from_fd (int fd) {
+    laik_tcp_always (fd >= 0);
+
+    // Create the object
+    Laik_Tcp_Socket* this = g_new (Laik_Tcp_Socket, 1);
+
+    // Initialize the object
+    *this = (Laik_Tcp_Socket) {
+        .fd        = fd,
+        .events    = 0,
+        .timestamp = laik_tcp_time (),
+    };
+
+    // Return the object
+    return this;
+}
+
 Laik_Tcp_Socket* laik_tcp_socket_poll (GPtrArray* sockets, const short events, const double seconds) {
     laik_tcp_always (sockets);
 
@@ -332,6 +380,30 @@ GBytes* laik_tcp_socket_receive_bytes (Laik_Tcp_Socket* this) {
     return g_bytes_new_take (g_steal_pointer (&data), size);
 }
 
+bool laik_tcp_socket_receive_data (Laik_Tcp_Socket* this, void* data, const size_t size) {
+    laik_tcp_always (this);
+    laik_tcp_always (data || !size);
+
+    // Initialize the loop variables
+    char*   pointer   = data;
+    ssize_t remaining = size;
+
+    // Receive until we are done or an error occurs
+    while (remaining > 0) {
+        ssize_t result = laik_tcp_socket_try_receive (this, pointer, remaining);
+        if (result > 0) {
+            pointer   += result;
+            remaining -= result;
+        } else if (result == 0) {
+            return false;
+        } else {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool laik_tcp_socket_receive_uint64 (Laik_Tcp_Socket* this, uint64_t* value) {
     laik_tcp_always (this);
     laik_tcp_always (value);
@@ -363,6 +435,28 @@ bool laik_tcp_socket_send_bytes (Laik_Tcp_Socket* this, GBytes* bytes) {
     return true;
 }
 
+bool laik_tcp_socket_send_data (Laik_Tcp_Socket* this, const void* data, const size_t size) {
+    laik_tcp_always (this);
+    laik_tcp_always (data || !size);
+
+    // Initialize the loop variables
+    const char* pointer   = data;
+    ssize_t     remaining = size;
+
+    // Send until we are done or an error occurs
+    while (remaining > 0) {
+        ssize_t result = laik_tcp_socket_try_send (this, pointer, remaining);
+        if (result >= 0) {
+            pointer   += result;
+            remaining -= result;
+        } else {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool laik_tcp_socket_send_uint64 (Laik_Tcp_Socket* this, uint64_t value) {
     laik_tcp_always (this);
 
@@ -377,4 +471,30 @@ Laik_Tcp_Socket* laik_tcp_socket_touch (Laik_Tcp_Socket* this) {
     this->timestamp = laik_tcp_time ();
 
     return this;
+}
+
+ssize_t laik_tcp_socket_try_receive (Laik_Tcp_Socket* this, void* data, const size_t size) {
+    laik_tcp_always (this);
+    laik_tcp_always (data || !size);
+
+    ssize_t result = recv (this->fd, data, size, 0);
+
+    return result >= 0 ? result : -errno;
+}
+
+ssize_t laik_tcp_socket_try_send (Laik_Tcp_Socket* this, const void* data, const size_t size) {
+    laik_tcp_always (this);
+    laik_tcp_always (data || !size);
+
+    ssize_t result = send (this->fd, data, size, laik_tcp_socket_send_flags);
+
+    return result >= 0 ? result : -errno;
+}
+
+bool laik_tcp_socket_wait (Laik_Tcp_Socket* this, const short events, const double seconds) {
+    laik_tcp_always (this);
+
+    struct pollfd pollfd = laik_tcp_socket_get_pollfd (this, events);
+
+    return poll (&pollfd, 1, seconds * 1000) == 1;
 }
