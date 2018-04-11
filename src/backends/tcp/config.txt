@@ -3,23 +3,17 @@
 # Whether the backend should do the sends in parallel to the receive operations
 # backend_async_send = true
 
-# How long for block while waiting for an outgoing message
-# client_activation_timeout = 0.01
+# How many connections to keep open concurrently
+# client_connections = 16
+
+# How many threads the client can use to send/receive messages
+# client_threads = 4
 
 # How many connections to keep open concurrently
-# client_connection_limit = 10
+# server_connections = 16
 
-# The amount of seconds after which a connection can be removed if necessary
-# client_connection_timeout = 1.0
-
-# How long to block while looking for an incoming message
-# server_activation_timeout = 0.01
-
-# How many connections to keep open concurrently
-# server_connection_limit = 10
-
-# The amount of seconds after which a connection can be removed if necessary
-# server_connection_timeout = 1.0
+# How many threads the server can use to send/receive messages
+# server_threads = 4
 
 # How many connections the kernel is allowed to buffer for us
 # socket_backlog = 10
@@ -28,19 +22,19 @@
 # socket_timeout = 10.0
 
 # How big our inbox may grow in bytes
-# inbox_size_limit = 16777216
+# inbox_size = 16777216
 
 # How big our outbox may grow in bytes
-# outbox_size_limit = 16777216
+# outbox_size = 16777216
 
-# The amount of seconds to wait before retrying a failed ADD
-# add_retry_timeout = 0.1
+# How long to wait after a failed synchronous message send before retrying
+# send_delay = 0.1
 
-# The amount of seconds to wait for a message before sending the first GET
-# get_first_timeout = 0.0
+# How long to wait for a message receive before sending an active request
+# receive_timeout = 0.0
 
-# The amount of seconds to wait for a message before sending another GET
-# get_retry_timeout = 0.1
+# How long to wait after the first active request before sending another
+# receive_delay = 0.1
 
 # Whether to to use asynchronous sends in the MPI_Comm_split operation
 # minimpi_async_split = true;
