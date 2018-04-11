@@ -72,14 +72,8 @@ Laik_Tcp_Socket* laik_tcp_client_connect (Laik_Tcp_Client* this, size_t address)
     }
 
     // No established connection found, create a new connection
-    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
-
-    if (address < config->addresses->len) {
-        return laik_tcp_socket_new (LAIK_TCP_SOCKET_TYPE_CLIENT, g_ptr_array_index (config->addresses, address), errors);
-    } else {
-        return NULL;
-    }
+    return laik_tcp_socket_new (LAIK_TCP_SOCKET_TYPE_CLIENT, address, errors);
 }
 
 void laik_tcp_client_free (Laik_Tcp_Client* this) {

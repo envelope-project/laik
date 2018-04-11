@@ -29,7 +29,7 @@ __attribute__ ((warn_unused_result))
 struct pollfd laik_tcp_socket_get_pollfd (Laik_Tcp_Socket* this, short events);
 
 __attribute__ ((warn_unused_result))
-Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* address, Laik_Tcp_Errors* errors);
+Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, size_t rank, Laik_Tcp_Errors* errors);
 
 __attribute__ ((warn_unused_result))
 Laik_Tcp_Socket* laik_tcp_socket_new_from_fd (int fd);
