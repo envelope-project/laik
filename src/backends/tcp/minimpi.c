@@ -8,6 +8,7 @@
 #include "config.h"     // for Laik_Tcp_Config, laik_tcp_config, Laik_Tcp_Co...
 #include "debug.h"      // for laik_tcp_always, laik_tcp_debug
 #include "errors.h"     // for laik_tcp_errors_push, laik_tcp_errors_new
+#include "lock.h"       // for LAIK_TCP_LOCK, Laik_Tcp_Lock
 #include "messenger.h"  // for laik_tcp_messenger_get, laik_tcp_messenger_push
 #include "socket.h"     // for laik_tcp_socket_new, ::LAIK_TCP_SOCKET_TYPE_S...
 
@@ -69,6 +70,11 @@ static size_t laik_tcp_minimpi_lookup (const Laik_Tcp_MiniMpiComm* comm, size_t 
 __attribute__ ((warn_unused_result))
 static GBytes* laik_tcp_minimpi_header (uint64_t generation, uint64_t type, uint64_t sender, uint64_t receiver, uint64_t tag) {
     laik_tcp_always (flows);
+
+    // We are mutating a global variable here, so let's make sure that there's
+    // only ever one thread reading and writing the flows hash table
+    static Laik_Tcp_Lock lock;
+    LAIK_TCP_LOCK (&lock);
 
     const uint64_t data[] = {
         GUINT64_TO_LE (generation),
