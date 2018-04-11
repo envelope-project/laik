@@ -1,28 +1,25 @@
 #include "socket.h"
-#include <errno.h>        // for errno
+#include <errno.h>        // for errno, EAGAIN, EWOULDBLOCK
 #include <fcntl.h>        // for fcntl, F_GETFL, F_SETFL, O_NONBLOCK
-#include <glib.h>         // for g_malloc0_n, GPtrArray, g_autofree, g_new0
+#include <glib.h>         // for g_malloc0_n, g_autofree, g_autoptr, g_bytes...
 #include <netdb.h>        // for getaddrinfo
 #include <netinet/in.h>   // for IPPROTO_TCP
-#include <netinet/tcp.h>  // for TCP_KEEPCNT, TCP_KEEPIDLE, TCP_KEEPINTVL
-#include <poll.h>         // for pollfd, poll, POLLNVAL
-#include <stdbool.h>      // for bool, true, false
+#include <netinet/tcp.h>  // for TCP_NODELAY
+#include <poll.h>         // for poll, pollfd, POLLIN, POLLOUT
+#include <stdbool.h>      // for false, bool, true
 #include <stddef.h>       // for NULL, size_t
 #include <stdio.h>        // for snprintf
 #include <string.h>       // for strerror, strsep
-#include <sys/socket.h>   // for setsockopt, sockaddr, SOL_SOCKET, accept, bind
+#include <sys/socket.h>   // for recv, setsockopt, sockaddr, accept, bind
 #include <sys/un.h>       // for sockaddr_un, sa_family_t
 #include <unistd.h>       // for close, ssize_t
 #include "addressinfo.h"  // for Laik_Tcp_AddressInfo, Laik_Tcp_AddressInfo_...
-#include "config.h"       // for Laik_Tcp_Config, laik_tcp_config, Laik_Tcp_...
+#include "config.h"       // for laik_tcp_config, Laik_Tcp_Config, Laik_Tcp_...
 #include "debug.h"        // for laik_tcp_always, laik_tcp_debug
 #include "errors.h"       // for laik_tcp_errors_push, Laik_Tcp_Errors
-#include "time.h"         // for laik_tcp_time
 
 struct Laik_Tcp_Socket {
-    int    fd;
-    short  events;
-    double timestamp;
+    int fd;
 };
 
 #ifdef MSG_NOSIGNAL
@@ -33,7 +30,6 @@ static const int laik_tcp_socket_send_flags = 0;
 
 Laik_Tcp_Socket* laik_tcp_socket_accept (Laik_Tcp_Socket* this) {
     laik_tcp_always (this);
-    laik_tcp_always (laik_tcp_socket_get_listening (this));
 
     // Try to accept a new connection
     int fd = accept (this->fd, NULL, NULL);
@@ -71,21 +67,6 @@ bool laik_tcp_socket_get_closed (Laik_Tcp_Socket* this) {
 
     // If we successfully read data (result >= 0), but only 0 bytes, we have EOF
     return result == 0;
-}
-
-bool laik_tcp_socket_get_listening (const Laik_Tcp_Socket* this) {
-    int       optval = 0;
-    socklen_t optlen = sizeof (optval);
-
-    int result = getsockopt (this->fd, SOL_SOCKET, SO_ACCEPTCONN, &optval, &optlen);
-    laik_tcp_always (result == 0);
-    (void) result;
-
-    return optval;
-}
-
-double laik_tcp_socket_get_timestamp (const Laik_Tcp_Socket* this) {
-    return this->timestamp;
 }
 
 struct pollfd laik_tcp_socket_get_pollfd (Laik_Tcp_Socket* this, short events) {
@@ -238,60 +219,11 @@ Laik_Tcp_Socket* laik_tcp_socket_new_from_fd (int fd) {
 
     // Initialize the object
     *this = (Laik_Tcp_Socket) {
-        .fd        = fd,
-        .events    = 0,
-        .timestamp = laik_tcp_time (),
+        .fd = fd,
     };
 
     // Return the object
     return this;
-}
-
-Laik_Tcp_Socket* laik_tcp_socket_poll (GPtrArray* sockets, const short events, const double seconds) {
-    laik_tcp_always (sockets);
-
-    // Check if any of the sockets in the array already has the requested event
-    for (size_t i = 0; i < sockets->len; i++) {
-        Laik_Tcp_Socket* current = g_ptr_array_index (sockets, i);
-        if (current->events & events) {
-            laik_tcp_debug ("Found a socket with the requested event already cached");
-            current->events = 0;
-            return current;
-        }
-    }
-
-    // We have to do a poll(2) call, so create and fill a pollfd buffer
-    g_autofree struct pollfd* pollfds = g_new0 (struct pollfd, sockets->len);
-    for (size_t i = 0; i < sockets->len; i++) {
-        const Laik_Tcp_Socket* current = g_ptr_array_index (sockets, i);
-        pollfds[i] = (struct pollfd) { .fd = current->fd, .events = events, .revents = 0 };
-    }
-
-    // Call poll(2)
-    int result = poll (pollfds, sockets->len, seconds * 1000);
-    laik_tcp_always (result >= 0);
-    (void) result;
-
-    // Store the results of the poll(2) call back into the sockets
-    for (size_t i = 0; i < sockets->len; i++) {
-        laik_tcp_always (!(pollfds[i].revents & POLLNVAL));
-        Laik_Tcp_Socket* current = g_ptr_array_index (sockets, i);
-        current->events = pollfds[i].revents;
-    }
-
-    // Now, check again if we have a matching socket
-    for (size_t i = 0; i < sockets->len; i++) {
-        Laik_Tcp_Socket* current = g_ptr_array_index (sockets, i);
-        if (current->events & events) {
-            laik_tcp_debug ("Found a socket with the requested event after poll(2)-ing");
-            current->events = 0;
-            return current;
-        }
-    }
-
-    // No luck, return failure
-    laik_tcp_debug ("Found no socket with the requested event");
-    return NULL;
 }
 
 GBytes* laik_tcp_socket_receive_bytes (Laik_Tcp_Socket* this) {
@@ -409,14 +341,6 @@ bool laik_tcp_socket_send_uint64 (Laik_Tcp_Socket* this, uint64_t value) {
     value = GUINT64_TO_LE (value);
 
     return laik_tcp_socket_send_data (this, &value, sizeof (value));
-}
-
-Laik_Tcp_Socket* laik_tcp_socket_touch (Laik_Tcp_Socket* this) {
-    laik_tcp_always (this);
-
-    this->timestamp = laik_tcp_time ();
-
-    return this;
 }
 
 ssize_t laik_tcp_socket_try_receive (Laik_Tcp_Socket* this, void* data, const size_t size) {
