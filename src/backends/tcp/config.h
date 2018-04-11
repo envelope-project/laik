@@ -7,19 +7,17 @@
 typedef struct {
     GPtrArray* addresses;
     bool       backend_async_send;
-    double     client_activation_timeout;
-    size_t     client_connection_limit;
-    double     client_connection_timeout;
-    double     server_activation_timeout;
-    size_t     server_connection_limit;
-    double     server_connection_timeout;
+    size_t     client_connections;
+    size_t     client_threads;
+    size_t     server_connections;
+    size_t     server_threads;
     size_t     socket_backlog;
     double     socket_timeout;
-    size_t     inbox_size_limit;
-    size_t     outbox_size_limit;
-    double     add_retry_timeout;
-    double     get_first_timeout;
-    double     get_retry_timeout;
+    size_t     inbox_size;
+    size_t     outbox_size;
+    double     send_delay;
+    double     receive_timeout;
+    double     receive_delay;
     bool       minimpi_async_split;
 
     int references;

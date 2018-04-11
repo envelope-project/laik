@@ -158,19 +158,17 @@ static Laik_Tcp_Config* laik_tcp_config_new_default (void) {
     *this = (Laik_Tcp_Config) {
         .addresses                 = g_steal_pointer (&addresses),
         .backend_async_send        = true,
-        .client_activation_timeout = 0.01,
-        .client_connection_limit   = 10,
-        .client_connection_timeout = 1.0,
-        .server_activation_timeout = 0.01,
-        .server_connection_limit   = 10,
-        .server_connection_timeout = 1.0,
+        .client_connections        = 64,
+        .client_threads            = 4,
+        .server_connections        = 64,
+        .server_threads            = 4,
         .socket_backlog            = 64,
         .socket_timeout            = 10.0,
-        .inbox_size_limit          = 1<<24,
-        .outbox_size_limit         = 1<<24,
-        .add_retry_timeout         = 0.1,
-        .get_first_timeout         = 0.0,
-        .get_retry_timeout         = 0.1,
+        .inbox_size                = 1<<24,
+        .outbox_size               = 1<<24,
+        .send_delay                = 0.1,
+        .receive_timeout           = 0.0,
+        .receive_delay             = 0.1,
         .minimpi_async_split       = true,
 
         .references = 1,
@@ -216,19 +214,17 @@ static Laik_Tcp_Config* laik_tcp_config_new_custom (Laik_Tcp_Errors* errors) {
         // Load the individual settings
         if (!laik_tcp_config_parse_addresses (keyfile, "addresses",                             &this->addresses,                 errors)) { return NULL; };
         if (!laik_tcp_config_parse_bool      (keyfile, "general",  "backend_async_send",        &this->backend_async_send,        errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "client_activation_timeout", &this->client_activation_timeout, errors)) { return NULL; };
-        if (!laik_tcp_config_parse_size      (keyfile, "general",  "client_connection_limit",   &this->client_connection_limit,   errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "client_connection_timeout", &this->client_connection_timeout, errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "server_activation_timeout", &this->server_activation_timeout, errors)) { return NULL; };
-        if (!laik_tcp_config_parse_size      (keyfile, "general",  "server_connection_limit",   &this->server_connection_limit,   errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "server_connection_timeout", &this->server_connection_timeout, errors)) { return NULL; };
+        if (!laik_tcp_config_parse_size      (keyfile, "general",  "client_connections",        &this->client_connections,        errors)) { return NULL; };
+        if (!laik_tcp_config_parse_size      (keyfile, "general",  "client_threads",            &this->client_threads,            errors)) { return NULL; };
+        if (!laik_tcp_config_parse_size      (keyfile, "general",  "server_connections",        &this->server_connections,        errors)) { return NULL; };
+        if (!laik_tcp_config_parse_size      (keyfile, "general",  "server_threads",            &this->server_threads,            errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "socket_backlog",            &this->socket_backlog,            errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "socket_timeout",            &this->socket_timeout,            errors)) { return NULL; };
-        if (!laik_tcp_config_parse_size      (keyfile, "general",  "inbox_size_limit",          &this->inbox_size_limit,          errors)) { return NULL; };
-        if (!laik_tcp_config_parse_size      (keyfile, "general",  "outbox_size_limit",         &this->outbox_size_limit,         errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "add_retry_timeout",         &this->add_retry_timeout,         errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "get_first_timeout",         &this->get_first_timeout,         errors)) { return NULL; };
-        if (!laik_tcp_config_parse_time      (keyfile, "general",  "get_retry_timeout",         &this->get_retry_timeout,         errors)) { return NULL; };
+        if (!laik_tcp_config_parse_size      (keyfile, "general",  "inbox_size",                &this->inbox_size,                errors)) { return NULL; };
+        if (!laik_tcp_config_parse_size      (keyfile, "general",  "outbox_size",               &this->outbox_size,               errors)) { return NULL; };
+        if (!laik_tcp_config_parse_time      (keyfile, "general",  "send_delay",                &this->send_delay,                errors)) { return NULL; };
+        if (!laik_tcp_config_parse_time      (keyfile, "general",  "receive_timeout",           &this->receive_timeout,           errors)) { return NULL; };
+        if (!laik_tcp_config_parse_time      (keyfile, "general",  "receive_delay",             &this->receive_delay,             errors)) { return NULL; };
         if (!laik_tcp_config_parse_bool      (keyfile, "general",  "minimpi_async_split",       &this->minimpi_async_split,       errors)) { return NULL; };
     }
 
