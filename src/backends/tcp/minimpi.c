@@ -241,6 +241,8 @@ int laik_tcp_minimpi_bcast (void* buffer, const int elements, const Laik_Tcp_Min
     laik_tcp_always (comm);
     laik_tcp_always (root < comm->tasks->len);
 
+    laik_tcp_debug ("Broadcasting %d elements of type %d from root %zu (I am task %zu)", elements, datatype, root, comm->rank);
+
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
     const size_t size = elements * laik_tcp_minimpi_sizeof (datatype, errors);
@@ -304,6 +306,8 @@ int laik_tcp_minimpi_comm_size (const Laik_Tcp_MiniMpiComm* comm, int* size) {
 // https://www.mpich.org/static/docs/v3.2/www3/MPI_Comm_split.html
 int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int color, const int hint, Laik_Tcp_MiniMpiComm** new_communicator) {
     laik_tcp_always (comm);
+
+    laik_tcp_debug ("Splitting with color %d and hint %d (I am task %zu)", color, hint, comm->rank);
 
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
@@ -534,6 +538,8 @@ int laik_tcp_minimpi_recv (void* buffer, const int elements, Laik_Tcp_MiniMpiTyp
     laik_tcp_always (sender < comm->tasks->len);
     laik_tcp_always (sender != comm->rank);
 
+    laik_tcp_debug ("Receiving %d elements of type %d and with tag %d from task %zu (I am task %zu)", elements, datatype, tag, sender, comm->rank);
+
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
     const size_t size = elements * laik_tcp_minimpi_sizeof (datatype, errors);
@@ -560,6 +566,8 @@ int laik_tcp_minimpi_recv (void* buffer, const int elements, Laik_Tcp_MiniMpiTyp
 int laik_tcp_minimpi_reduce (const void* input_buffer, void* output_buffer, const int elements, const Laik_Tcp_MiniMpiType datatype, const Laik_Tcp_MiniMpiOp op, const size_t root, const Laik_Tcp_MiniMpiComm* comm) {
     laik_tcp_always (comm);
     laik_tcp_always (root < comm->tasks->len);
+
+    laik_tcp_debug ("Reducing %d elements of type %d with root %zu (I am task %zu)", elements, datatype, root, comm->rank);
 
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
@@ -610,6 +618,8 @@ int laik_tcp_minimpi_send (const void* buffer, const int elements, const Laik_Tc
     laik_tcp_always (comm);
     laik_tcp_always (receiver < comm->tasks->len);
     laik_tcp_always (receiver != comm->rank);
+
+    laik_tcp_debug ("Sending %d elements of type %d and with tag %d to task %zu (I am task %zu)", elements, datatype, tag, receiver, comm->rank);
 
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
