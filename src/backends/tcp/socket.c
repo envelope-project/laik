@@ -81,8 +81,7 @@ struct pollfd laik_tcp_socket_get_pollfd (Laik_Tcp_Socket* this, short events) {
     return result;
 }
 
-Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* address, Laik_Tcp_Errors* errors) {
-    laik_tcp_always (address);
+Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const size_t rank, Laik_Tcp_Errors* errors) {
     laik_tcp_always (errors);
 
     g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
@@ -90,6 +89,13 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const char* addr
     // Create variables to store the sockaddr struct and its size
     g_autofree struct sockaddr* socket_address_data = NULL;
     socklen_t socket_address_size = 0;
+
+    // Get the requested address from the configuration
+    if (rank >= config->addresses->len) {
+        laik_tcp_errors_push (errors, __func__, -1, "Address for rank %zu not present in configuration", rank);
+        return NULL;
+    }
+    const char* address = g_ptr_array_index (config->addresses, rank);
 
     // Split the address on the first white space
     g_autofree char* duplicate = g_strdup (address);

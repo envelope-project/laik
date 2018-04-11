@@ -548,15 +548,12 @@ int laik_tcp_minimpi_init (int* argc, char*** argv) {
 
     // Iterate over all ranks and see if we can create a socket for one
     for (rank = 0; rank < config->addresses->len; rank++) {
-        // Retrieve the address assigned to the current rank
-        const char* address = g_ptr_array_index (config->addresses, rank);
-
         // Try to create the server socket for this address
-        socket = laik_tcp_socket_new (LAIK_TCP_SOCKET_TYPE_SERVER, address, errors);
+        socket = laik_tcp_socket_new (LAIK_TCP_SOCKET_TYPE_SERVER, rank, errors);
 
         // Check if there was an error
         if (laik_tcp_errors_present (errors)) {
-            laik_tcp_debug ("Failed to bind socket to address %s", address);
+            laik_tcp_debug ("Failed to bind socket for rank %zu", rank);
 
             // There was an error, check if there are other addresses to try
             if (rank + 1 < config->addresses->len) {
@@ -569,7 +566,7 @@ int laik_tcp_minimpi_init (int* argc, char*** argv) {
 
             }
         } else {
-            laik_tcp_debug ("Successfully bound socket to address %s", address);
+            laik_tcp_debug ("Successfully bound socket for rank %zu", rank);
 
             // There was no error, break from the loop since we found our socket
             break;
