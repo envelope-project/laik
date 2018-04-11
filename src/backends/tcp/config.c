@@ -7,14 +7,15 @@
 #include <unistd.h>       // for getppid, getpid
 #include "debug.h"        // for laik_tcp_always, laik_tcp_debug
 #include "errors.h"       // for laik_tcp_errors_push, laik_tcp_errors_new
+#include "lock.h"         // for LAIK_TCP_LOCK, Laik_Tcp_Lock
 #include "stringarray.h"  // for Laik_Tcp_StringArray, Laik_Tcp_StringArray_...
 #include "time.h"         // for laik_tcp_time, laik_tcp_sleep
 
-static GMutex           mutex;
-static Laik_Tcp_Config* config    = NULL;
+static bool             running   = false;
 static double           timestamp = 0;
 static GThread*         thread    = NULL;
-static bool             running   = false;
+static Laik_Tcp_Config* config    = NULL;
+static Laik_Tcp_Lock    lock;
 
 __attribute__ ((warn_unused_result))
 static bool laik_tcp_config_parse_addresses (GKeyFile* keyfile, const char* group, GPtrArray** result, Laik_Tcp_Errors* errors) {
@@ -240,9 +241,7 @@ static void* laik_tcp_config_update (void* data) {
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
     g_autoptr (Laik_Tcp_Config) update = laik_tcp_config_new_custom (errors);
 
-    // Take the lock
-    __attribute__ ((unused))
-    g_autoptr (GMutexLocker) locker = g_mutex_locker_new (&mutex);
+    LAIK_TCP_LOCK (&lock);
 
     // If we got a new configuration object, replace the old one
     if (!laik_tcp_errors_present (errors)) {
@@ -258,9 +257,7 @@ static void* laik_tcp_config_update (void* data) {
 }
 
 Laik_Tcp_Config* laik_tcp_config () {
-    // Take the lock
-    __attribute__ ((unused))
-    g_autoptr (GMutexLocker) locker = g_mutex_locker_new (&mutex);
+    LAIK_TCP_LOCK (&lock);
 
     // If we don't have a configuration yet, try to get it a number of times
     for (size_t try = 0; config == NULL; try++) {
