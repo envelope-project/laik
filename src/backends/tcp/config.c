@@ -173,6 +173,7 @@ static Laik_Tcp_Config* laik_tcp_config_new_default (void) {
         .add_retry_timeout         = 0.1,
         .get_first_timeout         = 0.0,
         .get_retry_timeout         = 0.1,
+        .minimpi_async_split       = true,
 
         .references = 1,
     };
@@ -232,6 +233,7 @@ static Laik_Tcp_Config* laik_tcp_config_new_custom (Laik_Tcp_Errors* errors) {
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "add_retry_timeout",         &this->add_retry_timeout,         errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "get_first_timeout",         &this->get_first_timeout,         errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "get_retry_timeout",         &this->get_retry_timeout,         errors)) { return NULL; };
+        if (!laik_tcp_config_parse_bool      (keyfile, "general",  "minimpi_async_split",       &this->minimpi_async_split,       errors)) { return NULL; };
     }
 
     // Return the object
