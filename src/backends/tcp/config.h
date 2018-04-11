@@ -14,9 +14,7 @@ typedef struct {
     size_t     server_connection_limit;
     double     server_connection_timeout;
     size_t     socket_backlog;
-    size_t     socket_keepcnt;
-    double     socket_keepidle;
-    double     socket_keepintvl;
+    double     socket_timeout;
     size_t     inbox_size_limit;
     size_t     outbox_size_limit;
     double     add_retry_timeout;
