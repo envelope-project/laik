@@ -157,6 +157,7 @@ static Laik_Tcp_Config* laik_tcp_config_new_default (void) {
     // Initialize the object
     *this = (Laik_Tcp_Config) {
         .addresses                 = g_steal_pointer (&addresses),
+        .backend_async_send        = true,
         .client_activation_timeout = 0.01,
         .client_connection_limit   = 10,
         .client_connection_timeout = 1.0,
@@ -215,6 +216,7 @@ static Laik_Tcp_Config* laik_tcp_config_new_custom (Laik_Tcp_Errors* errors) {
 
         // Load the individual settings
         if (!laik_tcp_config_parse_addresses (keyfile, "addresses",                             &this->addresses,                 errors)) { return NULL; };
+        if (!laik_tcp_config_parse_bool      (keyfile, "general",  "backend_async_send",        &this->backend_async_send,        errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "client_activation_timeout", &this->client_activation_timeout, errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "client_connection_limit",   &this->client_connection_limit,   errors)) { return NULL; };
         if (!laik_tcp_config_parse_time      (keyfile, "general",  "client_connection_timeout", &this->client_connection_timeout, errors)) { return NULL; };
