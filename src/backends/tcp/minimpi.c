@@ -581,29 +581,19 @@ int laik_tcp_minimpi_init (int* argc, char*** argv) {
 
     // Iterate over all ranks and see if we can create a socket for one
     for (rank = 0; rank < config->addresses->len; rank++) {
-        // Try to create the server socket for this address
+        // Try to create a server socket for this rank
         socket = laik_tcp_socket_new (LAIK_TCP_SOCKET_TYPE_SERVER, rank, errors);
-
-        // Check if there was an error
-        if (laik_tcp_errors_present (errors)) {
-            laik_tcp_debug ("Failed to bind socket for rank %zu", rank);
-
-            // There was an error, check if there are other addresses to try
-            if (rank + 1 < config->addresses->len) {
-                // There are still addresses left to try, continue
-                laik_tcp_errors_clear (errors);
-            } else {
-                // There are no more addresses left to try, abort
-                laik_tcp_errors_push (errors, __func__, 1, "Could not bind any task address");
-                return laik_tcp_minimpi_error (errors);
-
-            }
-        } else {
-            laik_tcp_debug ("Successfully bound socket for rank %zu", rank);
-
-            // There was no error, break from the loop since we found our socket
+        if (socket) {
             break;
         }
+    }
+
+    // Check if we were able to create a socket for any rank
+    if (socket) {
+        laik_tcp_errors_clear (errors);
+    } else {
+        laik_tcp_errors_push (errors, __func__, 0, "Could not bind any task address");
+        return laik_tcp_minimpi_error (errors);
     }
 
     // Create the flow database shared by all communicators
