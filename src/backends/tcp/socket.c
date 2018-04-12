@@ -164,6 +164,7 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const size_t ran
     #ifdef SO_NOSIGPIPE
     if (setsockopt (fd, SOL_SOCKET, SO_NOSIGPIPE, & (int) { 1 }, sizeof (int)) != 0) {
         laik_tcp_errors_push (errors, __func__, 4, "Failed to set SO_NOSIGPIPE on socket: %s", strerror (errno));
+        close (fd);
         return NULL;
     }
     #endif
@@ -173,12 +174,14 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const size_t ran
         // Enable reuse of recently freed ports
         if (setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, & (int) { 1 }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 4, "Failed to set SO_REUSEADDR on socket: %s", strerror (errno));
+            close (fd);
             return NULL;
         }
 
         // Disable Nagle's algorithm so messages are sent without delays
         if (setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, & (int) { 1 }, sizeof (int)) != 0) {
             laik_tcp_errors_push (errors, __func__, 6, "Failed to set TCP_NODELAY on socket: %s", strerror (errno));
+            close (fd);
             return NULL;
         }
     }
