@@ -201,7 +201,7 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const size_t ran
         }
 
         if (listen (fd, config->socket_backlog) != 0) {
-            laik_tcp_errors_push (errors, __func__, 12, "Failed to listen on socket: %s", strerror (errno));
+            laik_tcp_errors_push (errors, __func__, 12, "Failed to listen on socket bound to address '%s': %s", address, strerror (errno));
             close (fd);
             return NULL;
         }
