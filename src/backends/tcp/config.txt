@@ -16,7 +16,7 @@
 # server_threads = 4
 
 # How many connections the kernel is allowed to buffer for us
-# socket_backlog = 10
+# socket_backlog = 64
 
 # How long a socket may be unavailable for I/O before it is considered broken
 # socket_timeout = 10.0
