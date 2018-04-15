@@ -10,6 +10,7 @@ enable_testing ()
 # Set some global defaults
 add_compile_options (
     "-pedantic"
+    "-UNDEBUG" # Work around https://github.com/envelope-project/laik/issues/92
     "-Wall"
     "-Werror"
     "-Wextra"
