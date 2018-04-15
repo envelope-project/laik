@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
     bool do_exec = false;
     bool do_actions = false;
     bool do_grid = false;
-    int xblocks, yblocks, zblocks; // for grid partitioner
+    int xblocks = 0, yblocks = 0, zblocks = 0; // for grid partitioner
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
