@@ -28,7 +28,9 @@ static void free_backbuffer(
     pthread_mutex_lock(mutex);
     for(int i=0; i<num_failed; i++) free(failed_nodes[i]);
     num_failed = 0;
-    memset(failed_nodes, 0x0, MAX_FAILED_BUFFER*sizeof(node_uid_t*));
+    if (failed_nodes != NULL) {
+        memset(failed_nodes, 0x0, MAX_FAILED_BUFFER*sizeof(node_uid_t*));
+    }
     pthread_mutex_unlock(mutex);
 }
 
