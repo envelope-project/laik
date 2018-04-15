@@ -882,7 +882,7 @@ void laik_execOrRecord(bool record,
             }
 
             MPI_Status s;
-            uint64_t count;
+            uint64_t count = 0;
 
             MPI_Datatype mpiDataType = getMPIDataType(data);
 
@@ -981,7 +981,7 @@ void laik_execOrRecord(bool record,
                 assert(0);
             }
 
-            uint64_t count;
+            uint64_t count = 0;
             MPI_Datatype mpiDataType = getMPIDataType(data);
 
             if (dims == 1) {
