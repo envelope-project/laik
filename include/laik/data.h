@@ -51,7 +51,7 @@ extern Laik_Type *laik_Double;
 Laik_Type* laik_type_register(char* name, int size);
 
 typedef void (*laik_init_t)(void* base, int count, Laik_ReductionOperation o);
-typedef void (*laik_reduce_t)(void* out, void* in1, void* in2,
+typedef void (*laik_reduce_t)(void* out, const void* in1, const void* in2,
                               int count, Laik_ReductionOperation o);
 
 // provide an initialization function for this type

@@ -70,7 +70,7 @@ void laik_char_init(void* base, int count, Laik_ReductionOperation o)
         p[i] = v;
 }
 
-void laik_char_reduce(void* out, void* in1, void* in2,
+void laik_char_reduce(void* out, const void* in1, const void* in2,
                       int count, Laik_ReductionOperation o)
 {
     assert(out);
@@ -86,8 +86,8 @@ void laik_char_reduce(void* out, void* in1, void* in2,
         return;
     }
 
-    signed char* pin1 = in1;
-    signed char* pin2 = in2;
+    const signed char* pin1 = in1;
+    const signed char* pin2 = in2;
     signed char* pout = out;
     switch(o) {
     case LAIK_RO_Sum:
@@ -146,7 +146,7 @@ void laik_uchar_init(void* base, int count, Laik_ReductionOperation o)
         p[i] = v;
 }
 
-void laik_uchar_reduce(void* out, void* in1, void* in2,
+void laik_uchar_reduce(void* out, const void* in1, const void* in2,
                        int count, Laik_ReductionOperation o)
 {
     assert(out);
@@ -161,8 +161,8 @@ void laik_uchar_reduce(void* out, void* in1, void* in2,
         return;
     }
 
-    unsigned char* pin1 = in1;
-    unsigned char* pin2 = in2;
+    const unsigned char* pin1 = in1;
+    const unsigned char* pin2 = in2;
     unsigned char* pout = out;
     switch(o) {
     case LAIK_RO_Sum:
@@ -221,7 +221,7 @@ void laik_int32_init(void* base, int count, Laik_ReductionOperation o)
         p[i] = v;
 }
 
-void laik_int32_reduce(void* out, void* in1, void* in2,
+void laik_int32_reduce(void* out, const void* in1, const void* in2,
                        int count, Laik_ReductionOperation o)
 {
     assert(out);
@@ -236,8 +236,8 @@ void laik_int32_reduce(void* out, void* in1, void* in2,
         return;
     }
 
-    int32_t* pin1 = in1;
-    int32_t* pin2 = in2;
+    const int32_t* pin1 = in1;
+    const int32_t* pin2 = in2;
     int32_t* pout = out;
     switch(o) {
     case LAIK_RO_Sum:
@@ -296,7 +296,7 @@ void laik_uint32_init(void* base, int count, Laik_ReductionOperation o)
         p[i] = v;
 }
 
-void laik_uint32_reduce(void* out, void* in1, void* in2,
+void laik_uint32_reduce(void* out, const void* in1, const void* in2,
                         int count, Laik_ReductionOperation o)
 {
     assert(out);
@@ -311,8 +311,8 @@ void laik_uint32_reduce(void* out, void* in1, void* in2,
         return;
     }
 
-    uint32_t* pin1 = in1;
-    uint32_t* pin2 = in2;
+    const uint32_t* pin1 = in1;
+    const uint32_t* pin2 = in2;
     uint32_t* pout = out;
     switch(o) {
     case LAIK_RO_Sum:
@@ -371,7 +371,7 @@ void laik_int64_init(void* base, int count, Laik_ReductionOperation o)
         p[i] = v;
 }
 
-void laik_int64_reduce(void* out, void* in1, void* in2,
+void laik_int64_reduce(void* out, const void* in1, const void* in2,
                        int count, Laik_ReductionOperation o)
 {
     assert(out);
@@ -386,8 +386,8 @@ void laik_int64_reduce(void* out, void* in1, void* in2,
         return;
     }
 
-    int64_t* pin1 = in1;
-    int64_t* pin2 = in2;
+    const int64_t* pin1 = in1;
+    const int64_t* pin2 = in2;
     int64_t* pout = out;
     switch(o) {
     case LAIK_RO_Sum:
@@ -446,7 +446,7 @@ void laik_uint64_init(void* base, int count, Laik_ReductionOperation o)
         p[i] = v;
 }
 
-void laik_uint64_reduce(void* out, void* in1, void* in2,
+void laik_uint64_reduce(void* out, const void* in1, const void* in2,
                         int count, Laik_ReductionOperation o)
 {
     assert(out);
@@ -461,8 +461,8 @@ void laik_uint64_reduce(void* out, void* in1, void* in2,
         return;
     }
 
-    uint64_t* pin1 = in1;
-    uint64_t* pin2 = in2;
+    const uint64_t* pin1 = in1;
+    const uint64_t* pin2 = in2;
     uint64_t* pout = out;
     switch(o) {
     case LAIK_RO_Sum:
@@ -519,7 +519,7 @@ void laik_double_init(void* base, int count, Laik_ReductionOperation o)
         p[i] = v;
 }
 
-void laik_double_reduce(void* out, void* in1, void* in2,
+void laik_double_reduce(void* out, const void* in1, const void* in2,
                         int count, Laik_ReductionOperation o)
 {
     assert(out);
@@ -534,8 +534,8 @@ void laik_double_reduce(void* out, void* in1, void* in2,
         return;
     }
 
-    double* pin1 = in1;
-    double* pin2 = in2;
+    const double* pin1 = in1;
+    const double* pin2 = in2;
     double* pout = out;
     switch(o) {
     case LAIK_RO_Sum:
@@ -582,7 +582,7 @@ void laik_float_init(void* base, int count, Laik_ReductionOperation o)
         p[i] = v;
 }
 
-void laik_float_reduce(void* out, void* in1, void* in2,
+void laik_float_reduce(void* out, const void* in1, const void* in2,
                        int count, Laik_ReductionOperation o)
 {
     assert(out);
@@ -597,8 +597,8 @@ void laik_float_reduce(void* out, void* in1, void* in2,
         return;
     }
 
-    float* pin1 = in1;
-    float* pin2 = in2;
+    const float* pin1 = in1;
+    const float* pin2 = in2;
     float* pout = out;
     switch(o) {
     case LAIK_RO_Sum:
