@@ -3,6 +3,9 @@
 # Whether the backend should do the sends in parallel to the receive operations
 # backend_async_send = true
 
+# Whether reductions should be done on all output tasks instead of just one
+# backend_peer_reduce = true
+
 # How many connections to keep open concurrently
 # client_connections = 16
 
