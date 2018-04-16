@@ -247,6 +247,14 @@ static bool laik_tcp_backend_native_reduce
 {
     laik_tcp_always (errors);
 
+    // Get the configuration
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
+
+    // If native reductions are disabled, return immediatly
+    if (!config->backend_native_reduce) {
+        return false;
+    }
+
     MPI_Op mpi_operation;
     switch (op) {
         case LAIK_RO_Sum:

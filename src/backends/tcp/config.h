@@ -24,6 +24,7 @@
 typedef struct {
     GPtrArray* addresses;
     bool       backend_async_send;
+    bool       backend_native_reduce;
     bool       backend_peer_reduce;
     size_t     client_connections;
     size_t     client_threads;
