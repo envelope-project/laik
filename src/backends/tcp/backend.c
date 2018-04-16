@@ -36,6 +36,15 @@ typedef struct {
     const Laik_MappingList* input_list;
 } Laik_Tcp_Backend_AsyncSendInfo;
 
+typedef struct {
+    const Laik_Group* group;
+    MPI_Comm          communicator;
+    MPI_Datatype      mpi_type;
+    size_t            elements;
+    const TaskGroup*  output_group;
+    const void*       input_buffer;
+} Laik_Tcp_Backend_AsyncReduceInfo;
+
 /* Internal functions */
 
 static void laik_tcp_backend_push_code (Laik_Tcp_Errors* errors, int code) {
@@ -276,6 +285,30 @@ static bool laik_tcp_backend_native_reduce
     }
 }
 
+static void* laik_tcp_backend_run_async_reduces (void* data, Laik_Tcp_Errors* errors) {
+    laik_tcp_always (data);
+    laik_tcp_always (errors);
+
+    Laik_Tcp_Backend_AsyncReduceInfo* info = data;
+
+    // If we have input to contribute to the reduction...
+    if (info->input_buffer) {
+        // ... send it to all tasks ...
+        for (int receiver = 0; receiver < info->group->size; receiver++) {
+            // .. which are in the output group, but not to ourselves.
+            if (receiver != info->group->myid && laik_tcp_backend_task_group_contains (info->output_group, receiver)) {
+                laik_tcp_backend_push_code (errors, MPI_Send (info->input_buffer, info->elements, info->mpi_type, receiver, 11, info->communicator));
+                if (laik_tcp_errors_present (errors)) {
+                    laik_tcp_errors_push (errors, __func__, 0, "Failed to send MPI message to output task %d", receiver);
+                    return NULL;
+                }
+            }
+        }
+    }
+
+    return NULL;
+}
+
 static void laik_tcp_backend_reduce
     ( const Laik_Data* data
     , const TaskGroup* input_group
@@ -289,6 +322,9 @@ static void laik_tcp_backend_reduce
     laik_tcp_always (data);
     laik_tcp_always (op);
     laik_tcp_always (errors);
+
+    // Get the configuration
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
 
     laik_tcp_always (data->space->dims == 1);
 
@@ -330,102 +366,179 @@ static void laik_tcp_backend_reduce
     }
 
     if (!native_reduce) {
-        // Let one task from the output group to do the reduction for everybody.
-        int reduction_task = -1;
-        for (int task = 0; task < group->size; task++) {
-            if (laik_tcp_backend_task_group_contains (output_group, task)) {
-                reduction_task = task;
-                break;
-            }
-        }
-        laik_tcp_always (reduction_task >= 0);
+        if (config->backend_peer_reduce) {
+            // Since input_buffer and output_buffer may be the same, dup it here
+            g_autofree const void* input_buffer_copy = g_memdup (input_buffer, bytes);
 
-        if (reduction_task == group->myid) {
-            // Allocate a buffer where MPI_Recv can store the reduce data from
-            // the other tasks. Using a smaller buffer would mean we have to do
-            // do multiple MPI_Recv calls, so we essentially chose speed over
-            // memory consumption here.
-            g_autofree void* receive_buffer = g_malloc (bytes);
+            // Asynchronously send the reduction input to all output tasks
+            Laik_Tcp_Backend_AsyncReduceInfo info = {
+                .group        = group,
+                .communicator = communicator,
+                .mpi_type     = mpi_type,
+                .elements     = elements,
+                .output_group = output_group,
+                .input_buffer = input_buffer_copy,
+            };
+            Laik_Tcp_Async* async = laik_tcp_async_new (laik_tcp_backend_run_async_reduces, &info);
 
-            // Allocate a buffer where we can incrementally construct the result
-            // of the reduction. We can't use the output buffer here, since it
-            // may point to the same memory as the input buffer and we don't
-            // want to enforce that the local data must always the first element
-            // in the reduction.
-            g_autofree void* result_buffer = g_malloc (bytes);
+            // If we are an output task, receive the input from all input tasks
+            if (output_buffer) {
+                // Allocate a buffer where MPI_Recv can store the reduce data from
+                // the other tasks. Using a smaller buffer would mean we have to do
+                // do multiple MPI_Recv calls, so we essentially chose speed over
+                // memory consumption here.
+                g_autofree void* receive_buffer = g_malloc (bytes);
 
-            // Keep track of whether we already have a base element and can
-            // therefore do a reduce operation with a new element.
-            bool have_base_element = false;
+                // Keep track of whether we already have a base element and can
+                // therefore do a reduce operation with a new element.
+                bool have_base_element = false;
 
-            // Iterate over our the tasks in our group in order...
-            for (int sender = 0; sender < group->size; sender++) {
-                // ... and include the data from all tasks which have been
-                // marked as input tasks for this reduction.
-                if (laik_tcp_backend_task_group_contains (input_group, sender)) {
-                    if (sender == group->myid) {
-                        if (have_base_element) {
-                            data->type->reduce (result_buffer, result_buffer, input_buffer, elements, op->redOp);
-                        } else {
-                            memcpy (result_buffer, input_buffer, bytes);
-                            have_base_element = true;
-                        }
-                    } else {
-                        if (have_base_element) {
-                            MPI_Status status;
-
-                            laik_tcp_backend_push_code (errors, MPI_Recv (receive_buffer, elements, mpi_type, sender, 11, communicator, &status));
-                            if (laik_tcp_errors_present (errors)) {
-                                laik_tcp_errors_push (errors, __func__, 2, "Failed to receive reduction input from task %d", sender);
-                                return;
+                // Iterate over our the tasks in our group in order...
+                for (int sender = 0; sender < group->size; sender++) {
+                    // ... and include the data from all tasks which have been
+                    // marked as input tasks for this reduction.
+                    if (laik_tcp_backend_task_group_contains (input_group, sender)) {
+                        if (sender == group->myid) {
+                            if (have_base_element) {
+                                data->type->reduce (output_buffer, output_buffer, input_buffer_copy, elements, op->redOp);
+                            } else {
+                                memcpy (output_buffer, input_buffer_copy, bytes);
+                                have_base_element = true;
                             }
-
-                            data->type->reduce (result_buffer, result_buffer, receive_buffer, elements, op->redOp);
                         } else {
-                            MPI_Status status;
+                            if (have_base_element) {
+                                MPI_Status status;
 
-                            laik_tcp_backend_push_code (errors, MPI_Recv (result_buffer, elements, mpi_type, sender, 11, communicator, &status));
-                            if (laik_tcp_errors_present (errors)) {
-                                laik_tcp_errors_push (errors, __func__, 3, "Failed to receive reduction input from task %d", sender);
-                                return;
+                                laik_tcp_backend_push_code (errors, MPI_Recv (receive_buffer, elements, mpi_type, sender, 11, communicator, &status));
+                                if (laik_tcp_errors_present (errors)) {
+                                    laik_tcp_errors_push (errors, __func__, 2, "Failed to receive reduction input from task %d", sender);
+                                    return;
+                                }
+
+                                data->type->reduce (output_buffer, output_buffer, receive_buffer, elements, op->redOp);
+                            } else {
+                                MPI_Status status;
+
+                                laik_tcp_backend_push_code (errors, MPI_Recv (output_buffer, elements, mpi_type, sender, 11, communicator, &status));
+                                if (laik_tcp_errors_present (errors)) {
+                                    laik_tcp_errors_push (errors, __func__, 3, "Failed to receive reduction input from task %d", sender);
+                                    return;
+                                }
+
+                                have_base_element = true;
                             }
-
-                            have_base_element = true;
                         }
                     }
                 }
+
+                // Check that we wrote to the result buffer at least once
+                laik_tcp_always (have_base_element);
             }
 
-            // Check that we wrote to the result buffer at least once and
-            // then copy it to the output buffer.
-            laik_tcp_always (have_base_element);
-            memcpy (output_buffer, result_buffer, bytes);
+            // Wait for the asynchronous send operations to complete
+            __attribute__ ((unused)) void* result = laik_tcp_async_wait (async, errors);
+            if (laik_tcp_errors_present (errors)) {
+                laik_tcp_errors_push (errors, __func__, 4, "Asynchronous send of reduction input to all tasks in the output group failed");
+                return;
+            }
+        } else {
+            // Let one task from the output group to do the reduction for everybody.
+            int reduction_task = -1;
+            for (int task = 0; task < group->size; task++) {
+                if (laik_tcp_backend_task_group_contains (output_group, task)) {
+                    reduction_task = task;
+                    break;
+                }
+            }
+            laik_tcp_always (reduction_task >= 0);
 
-            // Send the reduction result to all the tasks in the output group.
-            for (int receiver = 0; receiver < group->size; receiver++) {
-                if (receiver != group->myid && laik_tcp_backend_task_group_contains (output_group, receiver)) {
-                    laik_tcp_backend_push_code (errors, MPI_Send (output_buffer, elements, mpi_type, receiver, 12, communicator));
+            if (reduction_task == group->myid) {
+                // Allocate a buffer where MPI_Recv can store the reduce data from
+                // the other tasks. Using a smaller buffer would mean we have to do
+                // do multiple MPI_Recv calls, so we essentially chose speed over
+                // memory consumption here.
+                g_autofree void* receive_buffer = g_malloc (bytes);
+
+                // Allocate a buffer where we can incrementally construct the result
+                // of the reduction. We can't use the output buffer here, since it
+                // may point to the same memory as the input buffer and we don't
+                // want to enforce that the local data must always the first element
+                // in the reduction.
+                g_autofree void* result_buffer = g_malloc (bytes);
+
+                // Keep track of whether we already have a base element and can
+                // therefore do a reduce operation with a new element.
+                bool have_base_element = false;
+
+                // Iterate over our the tasks in our group in order...
+                for (int sender = 0; sender < group->size; sender++) {
+                    // ... and include the data from all tasks which have been
+                    // marked as input tasks for this reduction.
+                    if (laik_tcp_backend_task_group_contains (input_group, sender)) {
+                        if (sender == group->myid) {
+                            if (have_base_element) {
+                                data->type->reduce (result_buffer, result_buffer, input_buffer, elements, op->redOp);
+                            } else {
+                                memcpy (result_buffer, input_buffer, bytes);
+                                have_base_element = true;
+                            }
+                        } else {
+                            if (have_base_element) {
+                                MPI_Status status;
+
+                                laik_tcp_backend_push_code (errors, MPI_Recv (receive_buffer, elements, mpi_type, sender, 11, communicator, &status));
+                                if (laik_tcp_errors_present (errors)) {
+                                    laik_tcp_errors_push (errors, __func__, 5, "Failed to receive reduction input from task %d", sender);
+                                    return;
+                                }
+
+                                data->type->reduce (result_buffer, result_buffer, receive_buffer, elements, op->redOp);
+                            } else {
+                                MPI_Status status;
+
+                                laik_tcp_backend_push_code (errors, MPI_Recv (result_buffer, elements, mpi_type, sender, 11, communicator, &status));
+                                if (laik_tcp_errors_present (errors)) {
+                                    laik_tcp_errors_push (errors, __func__, 6, "Failed to receive reduction input from task %d", sender);
+                                    return;
+                                }
+
+                                have_base_element = true;
+                            }
+                        }
+                    }
+                }
+
+                // Check that we wrote to the result buffer at least once and
+                // then copy it to the output buffer.
+                laik_tcp_always (have_base_element);
+                memcpy (output_buffer, result_buffer, bytes);
+
+                // Send the reduction result to all the tasks in the output group.
+                for (int receiver = 0; receiver < group->size; receiver++) {
+                    if (receiver != group->myid && laik_tcp_backend_task_group_contains (output_group, receiver)) {
+                        laik_tcp_backend_push_code (errors, MPI_Send (output_buffer, elements, mpi_type, receiver, 12, communicator));
+                        if (laik_tcp_errors_present (errors)) {
+                            laik_tcp_errors_push (errors, __func__, 7, "Failed to send out reduction result back to task %d", reduction_task);
+                            return;
+                        }
+                    }
+                }
+            } else {
+                if (input_mapping) {
+                    laik_tcp_backend_push_code (errors, MPI_Send (input_buffer, elements, mpi_type, reduction_task, 11, communicator));
                     if (laik_tcp_errors_present (errors)) {
-                        laik_tcp_errors_push (errors, __func__, 4, "Failed to send out reduction result back to task %d", reduction_task);
+                        laik_tcp_errors_push (errors, __func__, 8, "Failed to send MPI message to reduction task %d", reduction_task);
                         return;
                     }
                 }
-            }
-        } else {
-            if (input_mapping) {
-                laik_tcp_backend_push_code (errors, MPI_Send (input_buffer, elements, mpi_type, reduction_task, 11, communicator));
-                if (laik_tcp_errors_present (errors)) {
-                    laik_tcp_errors_push (errors, __func__, 5, "Failed to send MPI message to reduction task %d", reduction_task);
-                    return;
-                }
-            }
 
-            if (output_mapping) {
-                MPI_Status status;
-                laik_tcp_backend_push_code (errors, MPI_Recv (output_buffer, elements, mpi_type, reduction_task, 12, communicator, &status));
-                if (laik_tcp_errors_present (errors)) {
-                    laik_tcp_errors_push (errors, __func__, 6, "Failed to receive MPI message from reduction task %d", reduction_task);
-                    return;
+                if (output_mapping) {
+                    MPI_Status status;
+                    laik_tcp_backend_push_code (errors, MPI_Recv (output_buffer, elements, mpi_type, reduction_task, 12, communicator, &status));
+                    if (laik_tcp_errors_present (errors)) {
+                        laik_tcp_errors_push (errors, __func__, 9, "Failed to receive MPI message from reduction task %d", reduction_task);
+                        return;
+                    }
                 }
             }
         }

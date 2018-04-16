@@ -175,6 +175,7 @@ static Laik_Tcp_Config* laik_tcp_config_new_default (void) {
     *this = (Laik_Tcp_Config) {
         .addresses                 = g_steal_pointer (&addresses),
         .backend_async_send        = true,
+        .backend_peer_reduce       = true,
         .client_connections        = 64,
         .client_threads            = 4,
         .server_connections        = 64,
@@ -233,6 +234,7 @@ static Laik_Tcp_Config* laik_tcp_config_new_custom (Laik_Tcp_Errors* errors) {
         // Load the individual settings
         if (!laik_tcp_config_parse_addresses (keyfile, "addresses",                             &this->addresses,                 errors)) { return NULL; };
         if (!laik_tcp_config_parse_bool      (keyfile, "general",  "backend_async_send",        &this->backend_async_send,        errors)) { return NULL; };
+        if (!laik_tcp_config_parse_bool      (keyfile, "general",  "backend_peer_reduce",       &this->backend_peer_reduce,       errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "client_connections",        &this->client_connections,        errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "client_threads",            &this->client_threads,            errors)) { return NULL; };
         if (!laik_tcp_config_parse_size      (keyfile, "general",  "server_connections",        &this->server_connections,        errors)) { return NULL; };
