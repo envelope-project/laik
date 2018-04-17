@@ -124,11 +124,15 @@ tfile.write("#include <omp.h>\nint main(){return 0;}\n")
 tfile.close()
 
 ompflag = ""
+devnull = open(os.devnull, 'w') # for redirecting stderr
 for flag in ['-fopenmp', '-qopenmp']:
-    if subprocess.call([cc if cc else 'cc', '-fsyntax-only', flag, tname]) == 0:
+    if subprocess.call([cc if cc else 'cc', '-fsyntax-only', flag, tname],
+                       stderr=devnull) == 0:
         print("OpenMP activated in examples (using '" + flag + "')");
         ompflag = flag
         break
+if not ompflag:
+    print("OpenMP not supported by compiler, disabled in examples");
 
 os.remove(tname)
 
