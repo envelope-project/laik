@@ -852,23 +852,23 @@ void laik_execOrRecord(bool record,
         }
     }
 
-    // use 2x <task count> phases to avoid deadlocks
-    // - count phases X: 0..<count-1>
+    // use 2x <taskcount> phases to avoid deadlocks
+    // - count phases X: 0..<taskcount - 1>
     //     - receive from <task X> if <task X> lower rank
     //     - send to <task X> if <task X> is higher rank
-    // - count phases Y: 0..<count-1>
-    //     - receive from <task count-Y> if it is higher rank
-    //     - send to <task count-1-Y> if it is lower rank
+    // - count phases Y: 0..<taskcount - 1>
+    //     - receive from <taskcount - Y> if it is higher rank
+    //     - send to <taskcount - 1 - Y> if it is lower rank
     //
     // TODO: prepare communication schedule with sorted transitions actions!
 
-    int count = group->size;
-    for(int phase = 0; phase < 2*count; phase++) {
-        int task = (phase < count) ? phase : (2*count-phase-1);
-        bool sendToHigher   = (phase < count);
-        bool recvFromLower  = (phase < count);
-        bool sendToLower    = (phase >= count);
-        bool recvFromHigher = (phase >= count);
+    int tcount = group->size;
+    for(int phase = 0; phase < 2*tcount; phase++) {
+        int task = (phase < tcount) ? phase : (2*tcount-phase-1);
+        bool sendToHigher   = (phase < tcount);
+        bool recvFromLower  = (phase < tcount);
+        bool sendToLower    = (phase >= tcount);
+        bool recvFromHigher = (phase >= tcount);
 
         // receive
         for(int i=0; i < t->recvCount; i++) {
@@ -954,6 +954,7 @@ void laik_execOrRecord(bool record,
                                                    dims, &(op->slc), op->fromTask);
                     laik_mpi_exec_recvAndUnpack(&a, dims, data->elemsize,
                                                 mpiDataType, 1, comm);
+                    count = a.count;
                 }
             }
 
@@ -1037,6 +1038,7 @@ void laik_execOrRecord(bool record,
                     laik_actions_initPackAndSend(&a, 0, fromMap,
                                                  dims, &(op->slc), op->toTask);
                     laik_mpi_exec_packAndSend(&a, dims, mpiDataType, 1, comm);
+                    count = a.count;
                 }
             }
 
