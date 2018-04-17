@@ -1,9 +1,20 @@
 /*
- * @Author: D. Yang 
- * @Date: 2017-07-06 08:14:35 
- * @Last Modified by: D. Yang
- * @Last Modified time: 2017-07-06 08:42:59
+ * This file is part of the LAIK library.
+ * Copyright (c) 2017 Dai Yang, I10/TUM
+ *
+ * LAIK is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, version 3 or later.
+ *
+ * LAIK is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+
 
 #include "laik-internal.h"
 #include <stdlib.h>
