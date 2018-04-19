@@ -399,6 +399,30 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
                             ba->ce[i].bytes);
         break;
 
+    case LAIK_AT_CopyFromRBuf:
+        laik_log_append("    copy from buffer (R %d): buf %d, off %lld, ranges %d",
+                        ba->round,
+                        ba->bufID, (long long int) ba->offset,
+                        ba->count);
+        for(int i = 0; i < ba->count; i++)
+            laik_log_append("\n        off %d, bytes %d => to %p",
+                            ba->ce[i].offset,
+                            ba->ce[i].bytes,
+                            ba->ce[i].ptr);
+        break;
+
+    case LAIK_AT_CopyToRBuf:
+        laik_log_append("    copy to buffer (R %d): buf %d, off %lld, ranges %d",
+                        ba->round,
+                        ba->bufID, (long long int) ba->offset,
+                        ba->count);
+        for(int i = 0; i < ba->count; i++)
+            laik_log_append("\n        %p => off %d, bytes %d",
+                            ba->ce[i].ptr,
+                            ba->ce[i].offset,
+                            ba->ce[i].bytes);
+        break;
+
     case LAIK_AT_BufCopy:
         laik_log_append("    copy (R %d): from %p, to %p, count %d",
                         ba->round,
@@ -433,12 +457,20 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         laik_log_TransitionGroup(tc->transition, ba->outputGroup);
         break;
 
+    case LAIK_AT_RBufGroupReduce:
+        laik_log_append("    groupReduce: count %d, from/to buf %d, off %lld, input ",
+                        ba->count, ba->bufID, (long long int) ba->offset);
+        laik_log_TransitionGroup(tc->transition, ba->inputGroup);
+        laik_log_append(", output ");
+        laik_log_TransitionGroup(tc->transition, ba->outputGroup);
+        break;
+
     case LAIK_AT_RBufReduce:
         laik_log_append("    reduce (R %d): type %s, redOp ",
                         ba->round, ba->dtype->name);
         laik_log_Reduction(ba->redOp);
         laik_log_append(", from %p (%d off %lld), to %p, count %d",
-                        ba->fromBuf,
+                        (void*) ba->fromBuf,
                         ba->bufID, (long long int) ba->offset,
                         ba->toBuf,
                         ba->count);
@@ -479,9 +511,8 @@ void laik_log_ActionSeq(Laik_ActionSeq *as)
     Laik_TransitionContext* tc = as->context[0];
     laik_log_append("actions for ");
     laik_log_Transition(tc->transition, false);
-    laik_log_append(" on '%s', bufsize %d\n", tc->data->name);
-
-
+    laik_log_append(" on '%s', bufsize %d (%d actions)\n",
+                    tc->data->name, as->bufSize, as->actionCount);
 
     for(int i = 0; i < as->actionCount; i++) {
         laik_log_Action((Laik_Action*) &(as->action[i]), tc);

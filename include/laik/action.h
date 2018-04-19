@@ -73,6 +73,7 @@ typedef enum _Laik_ActionType {
 
     // copy from buffer to container and vice versa
     LAIK_AT_CopyFromBuf, LAIK_AT_CopyToBuf,
+    LAIK_AT_CopyFromRBuf, LAIK_AT_CopyToRBuf,
 
     // pack items from container into buffer and send it afterwards
     LAIK_AT_PackAndSend,
@@ -87,7 +88,7 @@ typedef enum _Laik_ActionType {
     // reduce from all to one or all
     LAIK_AT_Reduce,
     // reduce using input from a subgroup of task and output to subgroup
-    LAIK_AT_GroupReduce,
+    LAIK_AT_GroupReduce, LAIK_AT_RBufGroupReduce,
 
     // copy 1d data from container into buffer or from buffer into container
     LAIK_AT_Copy,

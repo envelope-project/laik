@@ -185,23 +185,55 @@ void laik_actions_addRBufCopy(Laik_ActionSeq* as,
                               int round, char* fromBuf, char* toBuf, int count,
                               int fromBufID, int fromByteOffset);
 
+// append action to pack a slice of data into temp buffer and send it
 void laik_actions_addPackAndSend(Laik_ActionSeq* as, int round,
                                  Laik_Mapping* fromMap,
                                  Laik_Slice* slc, int to);
+
+// append action to receive data into temp buffer and unpack it into a slice of data
 void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as, int round,
                                    Laik_Mapping* toMap,
                                    Laik_Slice* slc, int from);
+
+// append action to reduce data in buffer from all to buffer in rootTask
 void laik_actions_addReduce(Laik_ActionSeq* as,
                             char* fromBuf, char* toBuf, int count,
                             int rootTask, Laik_ReductionOperation redOp);
+
+// append action to reduce data in buffer from inputGroup to buffer in outputGroup
 void laik_actions_addGroupReduce(Laik_ActionSeq* as,
                                  int inputGroup, int outputGroup,
                                  char* fromBuf, char* toBuf, int count,
                                  Laik_ReductionOperation redOp);
+
+// append action to gather a sequence of arrays into one packed buffer
 void laik_actions_addCopyToBuf(Laik_ActionSeq* as, int round,
                                Laik_CopyEntry* ce, char* toBuf, int count);
+
+// append action to scather packed arrays in one buffer to multiple buffers
 void laik_actions_addCopyFromBuf(Laik_ActionSeq* as, int round,
                                  Laik_CopyEntry* ce, char* fromBuf, int count);
+
+// append action to reduce data in buffer from inputGroup to same buffer in outputGroup
+// the buffer is specified by a reserve buffer ID and an offset
+void laik_actions_addRBufGroupReduce(Laik_ActionSeq* as,
+                                     int inputGroup, int outputGroup,
+                                     int bufID, int byteOffset, int count,
+                                     Laik_ReductionOperation redOp);
+
+// append action to gather a sequence of arrays into one packed buffer
+// the buffer is specified by a reserve buffer ID and an offset
+void laik_actions_addCopyToRBuf(Laik_ActionSeq* as, int round,
+                                Laik_CopyEntry* ce,
+                                int toBufID, int toByteOffset, int count);
+
+// append action to scather packed arrays in one buffer to multiple buffers
+// the buffer is specified by a reserve buffer ID and an offset
+void laik_actions_addCopyFromRBuf(Laik_ActionSeq* as, int round,
+                                  Laik_CopyEntry* ce,
+                                  int fromBufID, int fromByteOffset, int count);
+
+
 
 // collect buffer reservation actions and update actions referencing them
 // works in-place, only call once

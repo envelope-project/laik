@@ -619,13 +619,13 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         case LAIK_AT_CopyFromBuf:
             for(int i = 0; i < a->count; i++)
                 memcpy(a->ce[i].ptr,
-                       as->buf + a->ce[i].offset,
+                       a->fromBuf + a->ce[i].offset,
                        a->ce[i].bytes);
             break;
 
         case LAIK_AT_CopyToBuf:
             for(int i = 0; i < a->count; i++)
-                memcpy(as->buf + a->ce[i].offset,
+                memcpy(a->toBuf + a->ce[i].offset,
                        a->ce[i].ptr,
                        a->ce[i].bytes);
             break;
@@ -1071,10 +1071,16 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     laik_actions_free(as);
     as = as2;
 
-    //laik_actions_allocBuffer(as);
+    if (laik_log_begin(1)) {
+        laik_log_append("After combining actions:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
+    laik_actions_allocBuffer(as);
 
     if (laik_log_begin(1)) {
-        laik_log_append("After optimization:\n");
+        laik_log_append("After buffer allocation:\n");
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
