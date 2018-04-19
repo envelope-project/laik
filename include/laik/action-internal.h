@@ -240,7 +240,7 @@ void laik_actions_addCopyFromRBuf(Laik_ActionSeq* as, int round,
 void laik_actions_allocBuffer(Laik_ActionSeq* as);
 
 // returns a new empty action sequence with same transition context
-Laik_ActionSeq* laik_actions_cloneSeq(Laik_ActionSeq* oldAS);
+Laik_ActionSeq* laik_actions_setupTransform(Laik_ActionSeq* oldAS);
 
 // just copy actions from oldAS into as
 void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);

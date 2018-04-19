@@ -1066,7 +1066,7 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_flush(0);
     }
 
-    Laik_ActionSeq* as2 = laik_actions_cloneSeq(as);
+    Laik_ActionSeq* as2 = laik_actions_setupTransform(as);
     laik_actions_combineActions(as, as2);
     laik_actions_free(as);
     as = as2;

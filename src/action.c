@@ -561,13 +561,17 @@ void laik_actions_allocBuffer(Laik_ActionSeq* as)
 
 
 // returns a new empty action sequence with same transition context
-Laik_ActionSeq* laik_actions_cloneSeq(Laik_ActionSeq* oldAS)
+Laik_ActionSeq* laik_actions_setupTransform(Laik_ActionSeq* oldAS)
 {
     Laik_TransitionContext* tc = oldAS->context[0];
     Laik_Data* d = tc->data;
     Laik_ActionSeq* as = laik_actions_new(d->space->inst);
     laik_actions_addTContext(as, d, tc->transition,
                              tc->fromList, tc->toList);
+
+    // skip already used bufIDs for reservation
+    as->bufReserveCount = oldAS->bufReserveCount;
+
     return as;
 }
 
