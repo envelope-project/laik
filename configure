@@ -12,7 +12,7 @@ defs = ""
 miscvars = ""
 subdirs = "examples"
 test_subdirs = ""
-ipath = "/usr/include"
+ipaths = ["/usr/include", "/usr/local/include"]
 
 cc = ""
 # if compiler is specified via CC for configure, use it
@@ -22,21 +22,28 @@ if "CC" in os.environ:
 #------------------------------------
 # Mosquitto/MQTT
 
-#  check for mosquitto header
-mosq_found = os.path.isfile(ipath + "/mosquitto.h")
-#  check for protobuf header
-protobuf_found = os.path.isfile(ipath + "/protobuf-c/protobuf-c.h")
-if not protobuf_found:
-    # on precise/trusty header is in /usr/include/google
-    protobuf_found = os.path.isfile(ipath + "/google/protobuf-c/protobuf-c.h")
+# check for mosquitto header
+for ipath in ipaths:
+    mosq_found = os.path.isfile(ipath + "/mosquitto.h")
+    if mosq_found:
+        mosq_ipath = ipath
+        break
+
+# check for protobuf header
+# on precise/trusty header is in /usr/include/google
+for ipath in ipaths + ["/usr/include/google"]:
+    protobuf_found = os.path.isfile(ipath + "/protobuf-c/protobuf-c.h")
     if protobuf_found:
-        defs += " -I/usr/include/google"
-#  check for protobuf compiler
+        protobuf_ipath = ipath
+        break
+
+# check for protobuf compiler
 protoc_found = distutils.spawn.find_executable("protoc-c")
 
 mqtt_enabled = mosq_found and protobuf_found and protoc_found
 if mqtt_enabled:
     print("MQTT enabled (mosquitto + protobuf found).")
+    defs += " -I" + protobuf_ipath + " -I" + mosq_ipath
     subdirs += " external/MQTT"
 else:
     print("MQTT support disabled:")
