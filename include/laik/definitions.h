@@ -21,7 +21,7 @@
 #define MAX_GROUPS        10
 #define MAX_SPACES        10
 #define MAX_PARTITIONINGS 10
-#define MAX_DATAS         10
+#define MAX_DATAS         1000
 #define MAX_MAPPINGS      10
 #define MAX_AGENTS        10
 #define MAX_FILENAME_LENGTH 128

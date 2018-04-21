@@ -38,7 +38,7 @@
 ../include/laik/core-internal.h
 ../include/laik/data.h
 ../include/laik/data-internal.h
-../include/laik/debug.h
+../include/laik/definitions.h
 ../include/laik/ext.h
 ../include/laik/profiling.h
 ../include/laik/profiling-internal.h
