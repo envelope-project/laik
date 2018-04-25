@@ -34,6 +34,7 @@
 
 // forward decls, types/structs , global variables
 
+
 static void laik_mpi_finalize();
 static Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
                                         Laik_MappingList *fromList, Laik_MappingList *toList);
@@ -43,6 +44,10 @@ static void laik_mpi_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* tp,
 static void laik_mpi_wait(Laik_ActionSeq* as, int mapNo);
 static bool laik_mpi_probe(Laik_ActionSeq* as, int mapNo);
 static void laik_mpi_updateGroup(Laik_Group*);
+
+#ifdef LAIK_MPI_PROFILING
+static void laik_mpi_print_stats();
+#endif
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
@@ -85,6 +90,23 @@ static int mpi_reduce = 1;
 // buffer space for messages if packing/unpacking from/to not-1d layout
 // is necessary
 // TODO: if we go to asynchronous messages, this needs to be dynamic per data
+
+#ifdef LAIK_MPI_PROFILING
+typedef struct _MPIProfData {
+    int rank;
+    unsigned long total_num_sends;
+    unsigned long total_num_recvs;
+    unsigned long total_msg_size;
+    unsigned long total_all_reduces;
+    unsigned long total_reduces;
+    unsigned long action_total_msg_size;
+    double total_time_spent;
+}MPIProfData;
+
+static MPIProfData* myProfData;
+#endif
+
+
 #define PACKBUFSIZE (10*1024*1024)
 //#define PACKBUFSIZE (10*800)
 static char packbuf[PACKBUFSIZE];
@@ -155,6 +177,11 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     }
 
     mpi_instance = inst;
+
+#ifdef LAIK_MPI_PROFILING
+    myProfData = calloc (1, sizeof(MPIProfData));
+    myProfData->rank = rank;
+#endif
     return inst;
 }
 
@@ -168,10 +195,35 @@ static MPIGroupData* mpiGroupData(Laik_Group* g)
     return (MPIGroupData*) g->backend_data;
 }
 
+#ifdef LAIK_MPI_PROFILING
+static void laik_mpi_print_stats()
+{
+    printf( 
+        "MPI Backend finalized. These are your MPI Statistics: \n"
+        "On MPI Rank: %d\n"
+        "Total Messages Sent: \t%lu \n"
+        "Total Messages Recieved: \t%lu\n"
+        "Total AllReduction executed: \t%lu\n"
+        "Total Reduction Executed: \t%lu\n"
+        "Total Message Size: \t%lu\n"
+        "Total Time Spent in MPI: \t%lf\n",
+        myProfData->rank, myProfData->total_num_sends, myProfData->total_num_recvs,
+        myProfData->total_all_reduces, myProfData->total_reduces,
+        myProfData->total_msg_size,
+        myProfData->total_time_spent
+    );
+}
+#endif
+
 static void laik_mpi_finalize()
 {
     if (mpiData(mpi_instance)->didInit)
         MPI_Finalize();
+
+#ifdef LAIK_MPI_PROFILING
+    laik_mpi_print_stats();
+    free(myProfData);
+#endif 
 }
 
 // update backend specific data for group if needed
@@ -233,8 +285,6 @@ MPI_Op getMPIOp(Laik_ReductionOperation redOp)
 }
 
 
-
-
 static
 void laik_mpi_exec_packAndSend(Laik_BackendAction* a, int dims,
                                MPI_Datatype dataType, int tag, MPI_Comm comm)
@@ -246,9 +296,18 @@ void laik_mpi_exec_packAndSend(Laik_BackendAction* a, int dims,
         packed = (a->map->layout->pack)(a->map, a->slc, &idx,
                                         packbuf, PACKBUFSIZE);
         assert(packed > 0);
+#ifdef LAIK_MPI_PROFILING
+        double t1 = MPI_Wtime();
+#endif
         MPI_Send(packbuf, packed,
                  dataType, a->peer_rank, tag, comm);
         count += packed;
+#ifdef LAIK_MPI_PROFILING
+        myProfData->total_time_spent += (MPI_Wtime() - t1);
+        myProfData->total_msg_size+=packed;
+        myProfData->total_num_sends+=1;
+#endif
+
         if (laik_index_isEqual(dims, &idx, &(a->slc->to))) break;
     }
     assert(count == a->count);
@@ -263,8 +322,15 @@ void laik_mpi_exec_recvAndUnpack(Laik_BackendAction* a, int dims, int elemsize,
     int recvCount, unpacked;
     int count = 0;
     while(1) {
+#ifdef LAIK_MPI_PROFILING
+        double t1 = MPI_Wtime();
+#endif
         MPI_Recv(packbuf, PACKBUFSIZE / elemsize,
                  dataType, a->peer_rank, tag, comm, &st);
+#ifdef LAIK_MPI_PROFILING
+        myProfData->total_time_spent += (MPI_Wtime() - t1);
+        myProfData->total_num_recvs+=1;
+#endif
         MPI_Get_count(&st, dataType, &recvCount);
         unpacked = (a->map->layout->unpack)(a->map, a->slc, &idx,
                                            packbuf,
@@ -297,20 +363,51 @@ void laik_mpi_exec_reduce(Laik_BackendAction* a,
 #endif
 
     if (rootTask == -1) {
-        if (a->fromBuf == a->toBuf)
+        if (a->fromBuf == a->toBuf){
+#ifdef LAIK_MPI_PROFILING
+            double t1 = MPI_Wtime();
+#endif
             MPI_Allreduce(MPI_IN_PLACE, a->toBuf, a->count,
                           dataType, mpiRedOp, comm);
-        else
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_all_reduces+=1;
+#endif
+        }else{
+
+#ifdef LAIK_MPI_PROFILING
+            double t1 = MPI_Wtime();
+#endif
             MPI_Allreduce(a->fromBuf, a->toBuf, a->count,
                           dataType, mpiRedOp, comm);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent =+ (MPI_Wtime() - t1);
+            myProfData->total_all_reduces+=1;
+#endif                          
+        }
     }
     else {
-        if (a->fromBuf == a->toBuf)
+        if (a->fromBuf == a->toBuf){
+#ifdef LAIK_MPI_PROFILING
+            double t1 = MPI_Wtime();
+#endif
             MPI_Reduce(MPI_IN_PLACE, a->toBuf, a->count,
                        dataType, mpiRedOp, rootTask, comm);
-        else
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_reduces+=1;
+#endif                       
+        }else{
+#ifdef LAIK_MPI_PROFILING
+            double t1 = MPI_Wtime();
+#endif
             MPI_Reduce(a->fromBuf, a->toBuf, a->count,
                        dataType, mpiRedOp, rootTask, comm);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_reduces+=1;
+#endif       
+        }               
     }
 
 #ifdef LOG_EXEC_DOUBLE_VALUES
@@ -383,17 +480,35 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
             if (record)
                 laik_actions_addBufSend(as, 0, a->fromBuf, a->count, reduceTask);
-            else
+            else{
+#ifdef LAIK_MPI_PROFILING
+                double t1 = MPI_Wtime();
+#endif
                 MPI_Send(a->fromBuf, a->count, dataType, reduceTask, 1, comm);
+#ifdef LAIK_MPI_PROFILING
+                myProfData->total_time_spent += (MPI_Wtime() - t1);
+                myProfData->total_msg_size+=a->count;
+                myProfData->total_num_sends+=1;
+#endif  
+            }
         }
+        
         if (laik_isInGroup(t, a->outputGroup, myid)) {
             laik_log(1, "  %s MPI_Recv from T%d",
                      record ? "record" : "exec", reduceTask);
 
             if (record)
                 laik_actions_addBufRecv(as, 2, a->toBuf, a->count, reduceTask);
-            else
+            else{
+#ifdef LAIK_MPI_PROFILING
+                double t1 = MPI_Wtime();
+#endif
                 MPI_Recv(a->toBuf, a->count, dataType, reduceTask, 1, comm, &st);
+#ifdef LAIK_MPI_PROFILING
+                myProfData->total_time_spent += (MPI_Wtime() - t1);
+                myProfData->total_num_recvs+=1;
+#endif
+            }
         }
         return;
     }
@@ -456,7 +571,14 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         if (record)
             laik_actions_addRBufRecv(as, 0, bufID, off, a->count, inTask);
         else {
+#ifdef LAIK_MPI_PROFILING
+            double t1 = MPI_Wtime();
+#endif
             MPI_Recv(packbuf + off, a->count, dataType, inTask, 1, comm, &st);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_num_recvs+=1;
+#endif
 
 #ifdef LOG_EXEC_DOUBLE_VALUES
             if (laik_log_begin(1)) {
@@ -545,7 +667,17 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         if (record)
             laik_actions_addBufSend(as, 2, a->toBuf, a->count, outTask);
         else
+        {
+#ifdef LAIK_MPI_PROFILING
+            double t1 = MPI_Wtime();
+#endif
             MPI_Send(a->toBuf, a->count, dataType, outTask, 1, comm);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_msg_size+=a->count;
+            myProfData->total_num_sends+=1;
+#endif
+        }
     }
 }
 
@@ -573,6 +705,9 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
     MPI_Status st;
 
     for(int i = 0; i < as->actionCount; i++) {
+#ifdef LAIK_MPI_PROFILING
+            double t1;
+#endif
         Laik_BackendAction* a = &(as->action[i]);
         if (laik_log_begin(1)) {
             laik_log_Action((Laik_Action*) a, tc);
@@ -585,35 +720,80 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_MapSend:
+#ifdef LAIK_MPI_PROFILING
+            t1 = MPI_Wtime();
+#endif
             MPI_Send(fromList->map[a->mapNo].base + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_msg_size+=a->count;
+            myProfData->total_num_sends+=1;
+#endif
             break;
 
         case LAIK_AT_RBufSend:
             assert(a->bufID == 0);
+#ifdef LAIK_MPI_PROFILING
+            t1 = MPI_Wtime();
+#endif
             MPI_Send(as->buf + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_msg_size+=a->count;
+            myProfData->total_num_sends+=1;
+#endif
             break;
 
         case LAIK_AT_BufSend:
+#ifdef LAIK_MPI_PROFILING
+            t1 = MPI_Wtime();
+#endif
             MPI_Send(a->fromBuf, a->count,
                      dataType, a->peer_rank, tag, comm);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_msg_size+=a->count;
+            myProfData->total_num_sends+=1;
+#endif
             break;
 
         case LAIK_AT_MapRecv:
+#ifdef LAIK_MPI_PROFILING
+            t1 = MPI_Wtime();
+#endif
             MPI_Recv(toList->map[a->mapNo].base + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_num_recvs+=1;
+#endif
             break;
 
         case LAIK_AT_RBufRecv:
             assert(a->bufID == 0);
+#ifdef LAIK_MPI_PROFILING
+            t1 = MPI_Wtime();
+#endif
             MPI_Recv(as->buf + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_num_recvs+=1;
+#endif
             break;
 
         case LAIK_AT_BufRecv:
+#ifdef LAIK_MPI_PROFILING
+            t1 = MPI_Wtime();
+#endif
             MPI_Recv(a->toBuf, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
+#ifdef LAIK_MPI_PROFILING
+            myProfData->total_time_spent += (MPI_Wtime() - t1);
+            myProfData->total_num_recvs+=1;
+#endif
             break;
 
         case LAIK_AT_CopyFromBuf:
@@ -934,9 +1114,16 @@ void laik_execOrRecord(bool record,
                                             toMap->base + from * data->elemsize,
                                             count, op->fromTask);
                 else {
-                    // TODO: tag 1 may conflict with application
+#ifdef LAIK_MPI_PROFILING
+                      double t1 = MPI_Wtime();
+#endif
                     MPI_Recv(toMap->base + from * data->elemsize, count,
                              mpiDataType, op->fromTask, 1, comm, &s);
+                    // TODO: tag 1 may conflict with application
+#ifdef LAIK_MPI_PROFILING
+                    myProfData->total_time_spent += (MPI_Wtime() - t1);
+                    myProfData->total_num_recvs+=1;
+#endif
                 }
             }
             else {
@@ -1020,8 +1207,16 @@ void laik_execOrRecord(bool record,
                                             count, op->toTask);
                 else {
                     // TODO: tag 1 may conflict with application
+#ifdef LAIK_MPI_PROFILING
+                    double t1 = MPI_Wtime();
+#endif
                     MPI_Send(fromMap->base + from * data->elemsize, count,
                              mpiDataType, op->toTask, 1, comm);
+#ifdef LAIK_MPI_PROFILING
+                    myProfData->total_time_spent += (MPI_Wtime() - t1);
+                    myProfData->total_msg_size += count;
+                    myProfData->total_num_sends += 1;
+#endif
                 }
             }
             else {
