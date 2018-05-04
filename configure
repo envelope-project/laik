@@ -85,10 +85,12 @@ else:
 #------------------------------------
 # TCP backend support
 
-# check version
-glib_versionok = not subprocess.call(['pkg-config', '--atleast-version=2.44', 'gio-2.0'])
-glib_inc = os.popen('pkg-config --cflags gio-2.0').read().strip()
-if glib_inc and glib_versionok:
+pkgc_found = distutils.spawn.find_executable('pkg-config')
+if pkgc_found:
+    # check gio version
+    glib_versionok = not subprocess.call(['pkg-config', '--atleast-version=2.44', 'gio-2.0'])
+    glib_inc = os.popen('pkg-config --cflags gio-2.0').read().strip()
+if pkgc_found and glib_inc and glib_versionok:
     glib_libs = os.popen('pkg-config --libs gio-2.0').read().strip()
     print("TCP backend enabled (glib-2.0/gio-2.0 found).")
     defs += " -DUSE_TCP"
@@ -97,7 +99,9 @@ if glib_inc and glib_versionok:
     miscvars += "TCP_LIBS=" + glib_libs + "\n"
     test_subdirs += " tcp"
 else:
-    if not glib_versionok:
+    if not pkgc_found:
+        print("TCP backend disabled: pkg-config required to detect glib-2.0 dependency")
+    elif not glib_versionok:
         print("TCP backend disabled: glib-2.0/gio-2.0 version < 2.44")
     else:
         print("TCP backend disabled: glib-2.0/gio-2.0 not found")
