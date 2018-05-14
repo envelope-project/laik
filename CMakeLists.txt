@@ -35,6 +35,8 @@ option (single-backend    "Enable Single backend"                               
 option (skip-missing      "Enable skipping optional features in the case of missing dependencies"       on)
 option (tcp-backend       "Enable TCP backend (needs libglib2.0-dev)"                                   on)
 
+set (mpi-implementation "mpi" CACHE STRING "The pkg-config name of the MPI implementation to use (defaults to 'mpi')")
+
 # Add a pandoc helper function
 function (add_pandoc_target target)
     add_custom_command (

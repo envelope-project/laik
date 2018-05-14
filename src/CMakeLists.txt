@@ -25,7 +25,7 @@ target_link_libraries ("laik"
 
 # Optional MPI backend
 if (mpi-backend)
-    find_pkgconfig ("mpi" "mpi")
+    find_pkgconfig ("mpi" "${mpi-implementation}")
 
     # If pkg-config didn't find MPI above, also try CMake's native FindMPI
     # module since we really want to enable MPI support whenever possible!
