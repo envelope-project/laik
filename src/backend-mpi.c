@@ -236,15 +236,15 @@ MPI_Op getMPIOp(Laik_ReductionOperation redOp)
 
 
 static
-void laik_mpi_exec_packAndSend(Laik_BackendAction* a, int dims,
+void laik_mpi_exec_packAndSend(Laik_BackendAction* a, Laik_Mapping* map, int dims,
                                MPI_Datatype dataType, int tag, MPI_Comm comm)
 {
     Laik_Index idx = a->slc->from;
     int packed;
     int count = 0;
     while(1) {
-        packed = (a->map->layout->pack)(a->map, a->slc, &idx,
-                                        packbuf, PACKBUFSIZE);
+        packed = (map->layout->pack)(map, a->slc, &idx,
+                                     packbuf, PACKBUFSIZE);
         assert(packed > 0);
         MPI_Send(packbuf, packed,
                  dataType, a->peer_rank, tag, comm);
@@ -255,7 +255,8 @@ void laik_mpi_exec_packAndSend(Laik_BackendAction* a, int dims,
 }
 
 static
-void laik_mpi_exec_recvAndUnpack(Laik_BackendAction* a, int dims, int elemsize,
+void laik_mpi_exec_recvAndUnpack(Laik_BackendAction* a, Laik_Mapping* map,
+                                 int dims, int elemsize,
                                  MPI_Datatype dataType, int tag, MPI_Comm comm)
 {
     MPI_Status st;
@@ -266,9 +267,8 @@ void laik_mpi_exec_recvAndUnpack(Laik_BackendAction* a, int dims, int elemsize,
         MPI_Recv(packbuf, PACKBUFSIZE / elemsize,
                  dataType, a->peer_rank, tag, comm, &st);
         MPI_Get_count(&st, dataType, &recvCount);
-        unpacked = (a->map->layout->unpack)(a->map, a->slc, &idx,
-                                           packbuf,
-                                           recvCount * elemsize);
+        unpacked = (map->layout->unpack)(map, a->slc, &idx,
+                                         packbuf, recvCount * elemsize);
         assert(recvCount == unpacked);
         count += unpacked;
         if (laik_index_isEqual(dims, &idx, &(a->slc->to))) break;
@@ -630,12 +630,36 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
                        a->ce[i].bytes);
             break;
 
+        case LAIK_AT_MapPackAndSend: {
+            assert(a->mapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[a->mapNo]);
+            // data to send must exist in local memory
+            assert(fromMap);
+            assert(fromMap->base);
+            laik_mpi_exec_packAndSend(a, fromMap, dims, dataType, tag, comm);
+            break;
+        }
+
         case LAIK_AT_PackAndSend:
-            laik_mpi_exec_packAndSend(a, dims, dataType, tag, comm);
+            laik_mpi_exec_packAndSend(a, a->map, dims, dataType, tag, comm);
             break;
 
+        case LAIK_AT_MapRecvAndUnpack: {
+            assert(a->mapNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[a->mapNo]);
+            assert(toMap);
+            if (toMap->base == 0) {
+                // space not yet allocated
+                laik_allocateMap(toMap, ss);
+                assert(toMap->base != 0);
+            }
+
+            laik_mpi_exec_recvAndUnpack(a, toMap, dims, elemsize, dataType, tag, comm);
+            break;
+        }
+
         case LAIK_AT_RecvAndUnpack:
-            laik_mpi_exec_recvAndUnpack(a, dims, elemsize, dataType, tag, comm);
+            laik_mpi_exec_recvAndUnpack(a, a->map, dims, elemsize, dataType, tag, comm);
             break;
 
         case LAIK_AT_Reduce:
@@ -852,6 +876,17 @@ void laik_execOrRecord(bool record,
         }
     }
 
+    // TODO: no deadlock avoidance yet
+#if 0
+    if (record) {
+        laik_actions_addSends(as, 0, data, t);
+        laik_actions_addRecvs(as, 0, data, t);
+        // TODO: - reoderder for deadlock avoidance
+        //       - avoid buffer usage / allocate buffer of required size
+        return;
+    }
+#endif
+
     // use 2x <taskcount> phases to avoid deadlocks
     // - count phases X: 0..<taskcount - 1>
     //     - receive from <task X> if <task X> lower rank
@@ -890,6 +925,7 @@ void laik_execOrRecord(bool record,
             assert(toMap != 0);
             if (toMap->base == 0) {
                 // space not yet allocated
+                // TODO: this should be done before execution
                 laik_allocateMap(toMap, ss);
                 assert(toMap->base != 0);
             }
@@ -952,7 +988,7 @@ void laik_execOrRecord(bool record,
                     Laik_BackendAction a;
                     laik_actions_initRecvAndUnpack(&a, 0, toMap,
                                                    dims, &(op->slc), op->fromTask);
-                    laik_mpi_exec_recvAndUnpack(&a, dims, data->elemsize,
+                    laik_mpi_exec_recvAndUnpack(&a, a.map, dims, data->elemsize,
                                                 mpiDataType, 1, comm);
                     count = a.count;
                 }
@@ -1037,7 +1073,7 @@ void laik_execOrRecord(bool record,
                     Laik_BackendAction a;
                     laik_actions_initPackAndSend(&a, 0, fromMap,
                                                  dims, &(op->slc), op->toTask);
-                    laik_mpi_exec_packAndSend(&a, dims, mpiDataType, 1, comm);
+                    laik_mpi_exec_packAndSend(&a, a.map, dims, mpiDataType, 1, comm);
                     count = a.count;
                 }
             }

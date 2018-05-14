@@ -186,9 +186,17 @@ void laik_actions_addRBufCopy(Laik_ActionSeq* as,
                               int fromBufID, int fromByteOffset);
 
 // append action to pack a slice of data into temp buffer and send it
+void laik_actions_addMapPackAndSend(Laik_ActionSeq* as, int round,
+                                    int fromMapNo, Laik_Slice* slc, int to);
+
+// append action to pack a slice of data into temp buffer and send it
 void laik_actions_addPackAndSend(Laik_ActionSeq* as, int round,
                                  Laik_Mapping* fromMap,
                                  Laik_Slice* slc, int to);
+
+// append action to receive data into temp buffer and unpack it into a slice of data
+void laik_actions_addPackRecvAndUnpack(Laik_ActionSeq* as, int round,
+                                       int toMapNo, Laik_Slice* slc, int from);
 
 // append action to receive data into temp buffer and unpack it into a slice of data
 void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as, int round,
@@ -233,6 +241,14 @@ void laik_actions_addCopyFromRBuf(Laik_ActionSeq* as, int round,
                                   Laik_CopyEntry* ce,
                                   int fromBufID, int fromByteOffset, int count);
 
+// add all receive ops from a transition to an ActionSeq
+void laik_actions_addRecvs(Laik_ActionSeq* as, int round,
+                           Laik_Data* data, Laik_Transition* t);
+
+
+// add all send ops from a transition to an ActionSeq
+void laik_actions_addSends(Laik_ActionSeq* as, int round,
+                           Laik_Data* data, Laik_Transition* t);
 
 
 // collect buffer reservation actions and update actions referencing them
@@ -247,6 +263,7 @@ void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 
 // merge send/recv actions from oldAS into as
 void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
+
 
 
 #endif // _LAIK_ACTION_INTERNAL_H_

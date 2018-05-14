@@ -321,6 +321,33 @@ void laik_actions_addPackAndSend(Laik_ActionSeq* as, int round,
     as->sendCount += a->count;
 }
 
+void laik_actions_initMapPackAndSend(Laik_BackendAction* a, int round,
+                                     int fromMapNo, int dims, Laik_Slice* slc,
+                                     int to)
+{
+    a->type = LAIK_AT_MapPackAndSend;
+    a->round = round;
+    a->mapNo = fromMapNo;
+    a->dims = dims;
+    a->slc = slc;
+    a->peer_rank = to;
+    a->count = laik_slice_size(dims, slc);
+    assert(a->count > 0);
+}
+
+void laik_actions_addMapPackAndSend(Laik_ActionSeq* as, int round,
+                                    int fromMapNo, Laik_Slice* slc, int to)
+{
+    Laik_BackendAction* a = laik_actions_addAction(as);
+
+    Laik_TransitionContext* tc = as->context[0];
+    int dims = tc->transition->space->dims;
+    laik_actions_initMapPackAndSend(a, round, fromMapNo, dims, slc, to);
+
+    as->sendCount += a->count;
+}
+
+
 void laik_actions_initRecvAndUnpack(Laik_BackendAction* a, int round,
                                     Laik_Mapping* toMap, int dims, Laik_Slice* slc,
                                     int from)
@@ -346,6 +373,33 @@ void laik_actions_addRecvAndUnpack(Laik_ActionSeq* as, int round,
 
     as->recvCount += a->count;
 }
+
+void laik_actions_initMapRecvAndUnpack(Laik_BackendAction* a, int round,
+                                       int toMapNo, int dims, Laik_Slice* slc,
+                                       int from)
+{
+    a->type = LAIK_AT_MapRecvAndUnpack;
+    a->round = round;
+    a->mapNo = toMapNo;
+    a->dims = dims;
+    a->slc = slc;
+    a->peer_rank = from;
+    a->count = laik_slice_size(dims, slc);
+    assert(a->count > 0);
+}
+
+void laik_actions_addMapRecvAndUnpack(Laik_ActionSeq* as, int round,
+                                      int toMapNo, Laik_Slice* slc, int from)
+{
+    Laik_BackendAction* a = laik_actions_addAction(as);
+
+    Laik_TransitionContext* tc = as->context[0];
+    int dims = tc->transition->space->dims;
+    laik_actions_initMapRecvAndUnpack(a, round, toMapNo, dims, slc, from);
+
+    as->recvCount += a->count;
+}
+
 
 void laik_actions_initReduce(Laik_BackendAction* a,
                             char* fromBuf, char* toBuf, int count,
@@ -471,6 +525,43 @@ void laik_actions_addCopyFromRBuf(Laik_ActionSeq* as, int round,
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
     a->count = count;
+}
+
+
+// add all receive ops from a transition to an ActionSeq.
+// before execution, a deadlock-avoidance action sorting is required
+void laik_actions_addRecvs(Laik_ActionSeq* as, int round,
+                           Laik_Data* data, Laik_Transition* t)
+{
+    Laik_TransitionContext* tc = as->context[0];
+    assert(tc->data == data);
+    assert(tc->transition == t);
+    assert(t->group->myid >= 0);
+
+
+    for(int i=0; i < t->recvCount; i++) {
+        struct recvTOp* op = &(t->recv[i]);
+        laik_actions_addMapRecvAndUnpack(as, round, op->mapNo,
+                                         &(op->slc), op->fromTask);
+    }
+}
+
+// add all send ops from a transition to an ActionSeq.
+// before execution, a deadlock-avoidance action sorting is required
+void laik_actions_addSends(Laik_ActionSeq* as, int round,
+                           Laik_Data* data, Laik_Transition* t)
+{
+    Laik_TransitionContext* tc = as->context[0];
+    assert(tc->data == data);
+    assert(tc->transition == t);
+    assert(t->group->myid >= 0);
+
+
+    for(int i=0; i < t->sendCount; i++) {
+        struct sendTOp* op = &(t->send[i]);
+        laik_actions_addMapPackAndSend(as, round, op->mapNo,
+                                       &(op->slc), op->toTask);
+    }
 }
 
 
@@ -617,9 +708,19 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
                                  ba->count, ba->peer_rank);
         break;
 
+    case LAIK_AT_MapPackAndSend:
+        laik_actions_addMapPackAndSend(as, ba->round,
+                                       ba->mapNo, ba->slc, ba->peer_rank);
+        break;
+
     case LAIK_AT_PackAndSend:
         laik_actions_addPackAndSend(as, ba->round,
                                     ba->map, ba->slc, ba->peer_rank);
+        break;
+
+    case LAIK_AT_MapRecvAndUnpack:
+        laik_actions_addMapRecvAndUnpack(as, ba->round,
+                                         ba->mapNo, ba->slc, ba->peer_rank);
         break;
 
     case LAIK_AT_RecvAndUnpack:

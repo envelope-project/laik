@@ -485,6 +485,13 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
                         ba->count);
         break;
 
+    case LAIK_AT_MapPackAndSend:
+        laik_log_append("    packAndSend (R %d): ", ba->round);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" mapNo %d => T%d, count %d",
+                        ba->mapNo, ba->peer_rank, ba->count);
+        break;
+
     case LAIK_AT_PackAndSend:
         laik_log_append("    packAndSend (R %d): ", ba->round);
         laik_log_Slice(ba->dims, ba->slc);
@@ -497,6 +504,13 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
                         ba->round, ba->peer_rank);
         laik_log_Slice(ba->dims, ba->slc);
         laik_log_append(", count %d", ba->count);
+        break;
+
+    case LAIK_AT_MapRecvAndUnpack:
+        laik_log_append("    recvAndUnpack (R %d): T%d => ",
+                        ba->round, ba->peer_rank);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" mapNo %d, count %d", ba->mapNo, ba->count);
         break;
 
     default:
