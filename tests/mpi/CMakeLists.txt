@@ -35,6 +35,13 @@ if ("USE_MPI" IN_LIST definitions)
         "test-vsum-mpi-1.sh"
         "test-vsum-mpi-4.sh"
     )
-        add_test ("mpi/${test}" "${CMAKE_CURRENT_SOURCE_DIR}/${test}")
+
+        if ("${mpi-implementation}" STREQUAL "ompi")
+            add_test ("mpi/${test}" "env" "MPIEXEC=mpiexec.openmpi --oversubscribe" "${CMAKE_CURRENT_SOURCE_DIR}/${test}")
+        elseif ("${mpi-implementation}" STREQUAL "mpich")
+            add_test ("mpi/${test}" "env" "MPIEXEC=mpiexec.mpich" "${CMAKE_CURRENT_SOURCE_DIR}/${test}")
+        else ()
+            add_test ("mpi/${test}" "${CMAKE_CURRENT_SOURCE_DIR}/${test}")
+        endif ()
     endforeach ()
 endif ()
