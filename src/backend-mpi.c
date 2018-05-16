@@ -368,7 +368,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
     // do the manual reduction on smallest rank of output group
     int reduceTask = taskInSubgroup(t, a->outputGroup, 0);
-    laik_log(1, "%s reduce at T%d",
+    laik_log(1, "      %s reduce at T%d",
              record ? "record" : "exec", reduceTask);
 
     int myid = t->group->myid;
@@ -378,7 +378,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         // not the reduce task: eventually send input and recv result
 
         if (laik_isInGroup(t, a->inputGroup, myid)) {
-            laik_log(1, "  %s MPI_Send to T%d",
+            laik_log(1, "        %s MPI_Send to T%d",
                      as ? "record" : "exec", reduceTask);
 
             if (record)
@@ -387,7 +387,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                 MPI_Send(a->fromBuf, a->count, dataType, reduceTask, 1, comm);
         }
         if (laik_isInGroup(t, a->outputGroup, myid)) {
-            laik_log(1, "  %s MPI_Recv from T%d",
+            laik_log(1, "        %s MPI_Recv from T%d",
                      record ? "record" : "exec", reduceTask);
 
             if (record)
@@ -449,7 +449,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
             continue;
         }
 
-        laik_log(1, "  %s MPI_Recv from T%d (buf off %d, count %d)",
+        laik_log(1, "        %s MPI_Recv from T%d (buf off %d, count %d)",
                  record ? "record" : "exec", inTask, off, a->count);
 
         bufOff[ii++] = off;
@@ -478,7 +478,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         resAction->count = off; // byte size of buffer reservation
 
         if (inCount == 0) {
-            laik_log(1, "  record call to init (count %d)", a->count);
+            laik_log(1, "        record call to init (count %d)", a->count);
             laik_actions_addBufInit(as, 1, data->type, a->redOp,
                                     a->toBuf, a->count);
         }
@@ -486,11 +486,11 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
             // move first input to a->toBuf, and then reduce on that
 
             // TODO: check that this is really a copy!
-            laik_log(1, "  record call to copy (count %d)", a->count);
+            laik_log(1, "        record call to copy (count %d)", a->count);
             laik_actions_addRBufCopy(as, 1, inputFromMe ? a->fromBuf : 0,
                                      a->toBuf, a->count, bufID, bufOff[0]);
 
-            laik_log(1, "  record %d calls to reduce (count %d)",
+            laik_log(1, "        record %d calls to reduce (count %d)",
                      inCount - 1, a->count);
             for(int t = 1; t < inCount; t++)
                 laik_actions_addRBufReduce(as, 1, data->type, a->redOp,
@@ -540,7 +540,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
             continue;
         }
 
-        laik_log(1, "  %s MPI_Send result to T%d",
+        laik_log(1, "        %s MPI_Send result to T%d",
                  record ? "record" : "exec", outTask);
         if (record)
             laik_actions_addBufSend(as, 2, a->toBuf, a->count, outTask);
