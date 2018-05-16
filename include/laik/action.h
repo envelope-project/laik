@@ -69,7 +69,7 @@ typedef enum _Laik_ActionType {
     LAIK_AT_MapRecv, LAIK_AT_BufRecv, LAIK_AT_RBufRecv,
 
     // call to a reduce/init operation
-    LAIK_AT_RBufReduce, LAIK_AT_BufInit,
+    LAIK_AT_RBufLocalReduce, LAIK_AT_BufInit,
 
     // copy from buffer to container and vice versa
     LAIK_AT_CopyFromBuf, LAIK_AT_CopyToBuf,
@@ -86,7 +86,7 @@ typedef enum _Laik_ActionType {
     LAIK_AT_Unpack,
 
     // reduce from all to one or all
-    LAIK_AT_Reduce,
+    LAIK_AT_Reduce, LAIK_AT_RBufReduce,
     // reduce using input from a subgroup of task and output to subgroup
     LAIK_AT_GroupReduce, LAIK_AT_RBufGroupReduce,
 

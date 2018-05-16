@@ -163,17 +163,17 @@ void laik_actions_addRBufRecv(Laik_ActionSeq* as, int round,
     a->peer_rank = from;
 }
 
-// append action to call a reduce operation
+// append action to call a local reduce operation
 // if fromBuf is 0, use a buffer referenced by a previous reserve action
-void laik_actions_addRBufReduce(Laik_ActionSeq* as, int round,
-                                Laik_Type* dtype,
-                                Laik_ReductionOperation redOp,
-                                char* fromBuf, char* toBuf, int count,
-                                int fromBufID, int fromByteOffset)
+void laik_actions_addRBufLocalReduce(Laik_ActionSeq* as, int round,
+                                     Laik_Type* dtype,
+                                     Laik_ReductionOperation redOp,
+                                     char* fromBuf, char* toBuf, int count,
+                                     int fromBufID, int fromByteOffset)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
 
-    a->type = LAIK_AT_RBufReduce;
+    a->type = LAIK_AT_RBufLocalReduce;
     a->round = round;
     a->dtype = dtype;
     a->redOp = redOp;
@@ -184,7 +184,7 @@ void laik_actions_addRBufReduce(Laik_ActionSeq* as, int round,
     a->offset = fromByteOffset;
 }
 
-// append action to call a init operation
+// append action to call an init operation
 void laik_actions_addBufInit(Laik_ActionSeq* as, int round,
                              Laik_Type* dtype,
                              Laik_ReductionOperation redOp,
@@ -426,6 +426,23 @@ void laik_actions_addReduce(Laik_ActionSeq* as,
     as->reduceCount += count;
 }
 
+void laik_actions_addRBufReduce(Laik_ActionSeq* as,
+                                int bufID, int byteOffset, int count,
+                                int rootTask, Laik_ReductionOperation redOp)
+{
+    Laik_BackendAction* a = laik_actions_addAction(as);
+    a->type = LAIK_AT_RBufReduce;
+    a->bufID = bufID;
+    a->offset = byteOffset;
+    a->count = count;
+    a->peer_rank = rootTask;
+    a->redOp = redOp;
+
+    assert(count > 0);
+    as->reduceCount += count;
+}
+
+
 void laik_actions_initGroupReduce(Laik_BackendAction* a,
                                   int inputGroup, int outputGroup,
                                   char* fromBuf, char* toBuf, int count,
@@ -453,7 +470,7 @@ void laik_actions_addGroupReduce(Laik_ActionSeq* as,
     as->reduceCount += count;
 }
 
-// similar to addGroup
+// similar to addGroupReduce
 void laik_actions_addRBufGroupReduce(Laik_ActionSeq* as,
                                      int inputGroup, int outputGroup,
                                      int bufID, int byteOffset, int count,
@@ -623,6 +640,7 @@ void laik_actions_allocBuffer(Laik_ActionSeq* as)
         case LAIK_AT_RBufRecv:
         case LAIK_AT_RBufCopy:
         case LAIK_AT_RBufReduce:
+        case LAIK_AT_RBufLocalReduce:
         case LAIK_AT_CopyFromRBuf:
         case LAIK_AT_CopyToRBuf:
         case LAIK_AT_RBufGroupReduce:
@@ -662,6 +680,11 @@ void laik_actions_allocBuffer(Laik_ActionSeq* as)
             case LAIK_AT_CopyToRBuf:
                 ba->toBuf = as->buf + ba->offset;
                 ba->type = LAIK_AT_CopyToBuf;
+                break;
+            case LAIK_AT_RBufReduce:
+                ba->fromBuf = as->buf + ba->offset;
+                ba->toBuf   = as->buf + ba->offset;
+                ba->type = LAIK_AT_Reduce;
                 break;
             case LAIK_AT_RBufGroupReduce:
                 ba->fromBuf = as->buf + ba->offset;
@@ -771,6 +794,11 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
                                  ba->count, ba->bufID, ba->offset);
         break;
 
+    case LAIK_AT_RBufReduce:
+        laik_actions_addRBufReduce(as, ba->bufID, ba->offset, ba->count,
+                                   ba->peer_rank, ba->redOp);
+        break;
+
     case LAIK_AT_Reduce:
         laik_actions_addReduce(as, ba->fromBuf, ba->toBuf, ba->count,
                                ba->peer_rank, ba->redOp);
@@ -783,10 +811,10 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
                                     ba->count, ba->redOp);
         break;
 
-    case LAIK_AT_RBufReduce:
-        laik_actions_addRBufReduce(as, ba->round, ba->dtype, ba->redOp,
-                                   ba->fromBuf, ba->toBuf, ba->count,
-                                   ba->bufID, ba->offset);
+    case LAIK_AT_RBufLocalReduce:
+        laik_actions_addRBufLocalReduce(as, ba->round, ba->dtype, ba->redOp,
+                                        ba->fromBuf, ba->toBuf, ba->count,
+                                        ba->bufID, ba->offset);
         break;
 
     case LAIK_AT_BufInit:
@@ -815,6 +843,7 @@ void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 {
     int combineGroupReduce = 1;
+    int combineReduce = 0; // FIXME: not activated, still buggy
 
     Laik_TransitionContext* tc = oldAS->context[0];
     Laik_Data* d = tc->data;
@@ -895,6 +924,37 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                     copyRanges += actionCount;
                 if (laik_isInGroup(tc->transition, outputGroup, myid))
                     copyRanges += actionCount;
+            }
+            break;
+        }
+
+        case LAIK_AT_Reduce: {
+            if (!combineReduce) break;
+
+            // skip already processed reduce actions
+            if (ba->mark == 1) break;
+
+            // combine consecutive reduce actions with same root and redOp
+            // TODO: combine all with same root and redOp
+            count = ba->count;
+            int root = ba->peer_rank;
+            Laik_ReductionOperation redOp = ba->redOp;
+            int actionCount = 1;
+            for(j = i+1; j < oldAS->actionCount; j++) {
+                if (oldAS->action[j].type != LAIK_AT_Reduce) continue;
+                if (oldAS->action[j].peer_rank != root) continue;
+                if (oldAS->action[j].redOp != redOp) continue;
+                // should be unmarked
+                assert(oldAS->action[j].mark == 0);
+                oldAS->action[j].mark = 1;
+                count += oldAS->action[j].count;
+                actionCount++;
+            }
+            if (actionCount > 1) {
+                bufSize += count;
+                // always providing input, copy input ranges
+                copyRanges += actionCount;
+                // if I want result, we can reuse the input ranges
             }
             break;
         }
@@ -1092,6 +1152,76 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                                             ba->inputGroup, ba->outputGroup,
                                             ba->fromBuf, ba->toBuf,
                                             ba->count, ba->redOp);
+            break;
+        }
+
+        case LAIK_AT_Reduce: {
+            if (!combineReduce) {
+                // pass through
+                laik_actions_addReduce(as, ba->fromBuf, ba->toBuf,
+                                       ba->count, ba->peer_rank, ba->redOp);
+                break;
+            }
+
+            // skip already processed reduce actions
+            if (ba->mark == 1) break;
+
+            count = ba->count;
+            int root = ba->peer_rank;
+            Laik_ReductionOperation redOp = ba->redOp;
+            int actionCount = 1;
+            for(j = i+1; j < oldAS->actionCount; j++) {
+                if (oldAS->action[j].type != LAIK_AT_Reduce) continue;
+                if (oldAS->action[j].peer_rank != root) continue;
+                if (oldAS->action[j].redOp != redOp) continue;
+                // should be unmarked
+                assert(oldAS->action[j].mark == 0);
+                oldAS->action[j].mark = 1;
+                count += oldAS->action[j].count;
+                actionCount++;
+            }
+            if (actionCount > 1) {
+                // temporary buffer used as input and output for reduce
+                int startBufOff = bufOff;
+
+                // copy input pieces into temporary buffer
+                laik_actions_addCopyToRBuf(as, ba->round,
+                                           as->ce + rangeOff,
+                                           bufID, 0,
+                                           actionCount);
+                // ranges for input pieces
+                int oldRangeOff = rangeOff;
+                for(int k = i; k < oldAS->actionCount; k++) {
+                    if (oldAS->action[k].type != LAIK_AT_Reduce) continue;
+                    if (oldAS->action[k].peer_rank != root) continue;
+                    if (oldAS->action[k].redOp != redOp) continue;
+
+                    assert(rangeOff < copyRanges);
+                    as->ce[rangeOff].ptr = oldAS->action[k].fromBuf;
+                    as->ce[rangeOff].bytes = oldAS->action[k].count * elemsize;
+                    as->ce[rangeOff].offset = bufOff * elemsize;
+                    bufOff += oldAS->action[k].count;
+                    rangeOff++;
+                }
+                assert(oldRangeOff + actionCount == rangeOff);
+                assert(startBufOff + count == bufOff);
+
+                // use temporary buffer for both input and output
+                laik_actions_addRBufReduce(as, bufID, startBufOff * elemsize,
+                                           count, root, redOp);
+
+                // if I want result, copy output ranges
+                if ((root == myid) || (root == -1)) {
+                    // reuse copy ranges from input pieces
+                    laik_actions_addCopyFromRBuf(as, ba->round,
+                                                 as->ce + oldRangeOff,
+                                                 bufID, 0,
+                                                 actionCount);
+                }
+            }
+            else
+                laik_actions_addReduce(as, ba->fromBuf, ba->toBuf,
+                                       ba->count, ba->peer_rank, ba->redOp);
             break;
         }
 

@@ -163,12 +163,12 @@ void laik_actions_addMapRecv(Laik_ActionSeq* as, int round,
 void laik_actions_addBufRecv(Laik_ActionSeq* as, int round,
                              char* toBuf, int count, int from);
 
-// append action to call a reduce operation
-void laik_actions_addRBufReduce(Laik_ActionSeq* as,
-                                int round, Laik_Type *dtype,
-                                Laik_ReductionOperation redOp,
-                                char* fromBuf, char* toBuf, int count,
-                                int fromBufID, int fromByteOffset);
+// append action to call a local reduce operation
+void laik_actions_addRBufLocalReduce(Laik_ActionSeq* as,
+                                     int round, Laik_Type *dtype,
+                                     Laik_ReductionOperation redOp,
+                                     char* fromBuf, char* toBuf, int count,
+                                     int fromBufID, int fromByteOffset);
 
 // append action to call a init operation
 void laik_actions_addBufInit(Laik_ActionSeq* as,

@@ -449,6 +449,11 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
                         ba->count, ba->fromBuf, ba->toBuf, ba->peer_rank);
         break;
 
+    case LAIK_AT_RBufReduce:
+        laik_log_append("    reduce: count %d, from/to buf %d off %lld, root %d",
+                        ba->count, ba->bufID, ba->offset, ba->peer_rank);
+        break;
+
     case LAIK_AT_GroupReduce:
         laik_log_append("    groupReduce: count %d, from %p, to %p, input ",
                         ba->count, ba->fromBuf, ba->toBuf);
@@ -465,8 +470,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         laik_log_TransitionGroup(tc->transition, ba->outputGroup);
         break;
 
-    case LAIK_AT_RBufReduce:
-        laik_log_append("    reduce (R %d): type %s, redOp ",
+    case LAIK_AT_RBufLocalReduce:
+        laik_log_append("    localReduce (R %d): type %s, redOp ",
                         ba->round, ba->dtype->name);
         laik_log_Reduction(ba->redOp);
         laik_log_append(", from %p (%d off %lld), to %p, count %d",

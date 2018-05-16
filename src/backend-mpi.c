@@ -290,9 +290,8 @@ void laik_mpi_exec_reduce(Laik_BackendAction* a,
 #ifdef LOG_EXEC_DOUBLE_VALUES
     if (a->fromBuf) {
         assert(dataType == MPI_DOUBLE);
-        for(uint64_t i = 0; i < a->count; i++)
-            laik_log(1, "    before at %d: %f", from + i,
-                     ((double*)a->fromBuf)[i]);
+        for(int i = 0; i < a->count; i++)
+            laik_log(1, "    before at %d: %f", i, ((double*)a->fromBuf)[i]);
     }
 #endif
 
@@ -316,9 +315,8 @@ void laik_mpi_exec_reduce(Laik_BackendAction* a,
 #ifdef LOG_EXEC_DOUBLE_VALUES
     if (a->toBuf) {
         assert(dataType == MPI_DOUBLE);
-        for(uint64_t i = 0; i < a->count; i++)
-            laik_log(1, "    before at %d: %f", from + i,
-                     ((double*)a->toBuf)[i]);
+        for(int i = 0; i < a->count; i++)
+            laik_log(1, "    before at %d: %f", i, ((double*)a->toBuf)[i]);
     }
 #endif
 
@@ -493,9 +491,9 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
             laik_log(1, "        record %d calls to reduce (count %d)",
                      inCount - 1, a->count);
             for(int t = 1; t < inCount; t++)
-                laik_actions_addRBufReduce(as, 1, data->type, a->redOp,
-                                           0, a->toBuf, a->count,
-                                           bufID, bufOff[t]);
+                laik_actions_addRBufLocalReduce(as, 1, data->type, a->redOp,
+                                                0, a->toBuf, a->count,
+                                                bufID, bufOff[t]);
         }
     }
     else {
@@ -670,7 +668,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             laik_mpi_exec_groupReduce(tc, a, dataType, comm, 0);
             break;
 
-        case LAIK_AT_RBufReduce:
+        case LAIK_AT_RBufLocalReduce:
+            assert(a->bufID == 0);
             assert(a->dtype->reduce != 0);
             (a->dtype->reduce)(a->toBuf, a->toBuf,
                                a->fromBuf ? a->fromBuf : (as->buf + a->offset),
@@ -678,6 +677,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_RBufCopy:
+            assert(a->bufID == 0);
             memcpy(a->toBuf, a->fromBuf ? a->fromBuf : (as->buf + a->offset),
                    a->count * elemsize);
             break;
