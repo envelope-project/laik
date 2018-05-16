@@ -876,13 +876,13 @@ void laik_execOrRecord(bool record,
         }
     }
 
-    // TODO: no deadlock avoidance yet
-#if 0
+#if 1
     if (record) {
+        // warning: the sequence has to be sorted for deadlock avoidance
         laik_actions_addSends(as, 0, data, t);
         laik_actions_addRecvs(as, 0, data, t);
-        // TODO: - reoderder for deadlock avoidance
-        //       - avoid buffer usage / allocate buffer of required size
+
+        // TODO: avoid buffer usage / allocate buffer of required size
         return;
     }
 #endif
@@ -1093,7 +1093,9 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
                                  Laik_MappingList* fromList,
                                  Laik_MappingList* toList)
 {
-    Laik_ActionSeq* as = laik_actions_new(d->space->inst);
+    Laik_ActionSeq *as, *as2;
+
+    as = laik_actions_new(d->space->inst);
     laik_actions_addTContext(as, d, t, fromList, toList);
     laik_execOrRecord(true, d, t, as, fromList, toList);
 
@@ -1102,7 +1104,18 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_flush(0);
     }
 
-    Laik_ActionSeq* as2 = laik_actions_setupTransform(as);
+    as2 = laik_actions_setupTransform(as);
+    laik_actions_sort2phase(as, as2);
+    laik_actions_free(as);
+    as = as2;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After sorting actions:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
+    as2 = laik_actions_setupTransform(as);
     laik_actions_combineActions(as, as2);
     laik_actions_free(as);
     as = as2;

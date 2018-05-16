@@ -45,6 +45,7 @@ Laik_ActionSeq* laik_actions_new(Laik_Instance *inst)
     return as;
 }
 
+
 void laik_actions_free(Laik_ActionSeq* as)
 {
     for(int i = 0; i < CONTEXTS_MAX; i++)
@@ -527,6 +528,32 @@ void laik_actions_addCopyFromRBuf(Laik_ActionSeq* as, int round,
     a->count = count;
 }
 
+bool laik_action_isSend(Laik_BackendAction* ba)
+{
+    switch(ba->type) {
+    case LAIK_AT_MapSend:
+    case LAIK_AT_BufSend:
+    case LAIK_AT_RBufSend:
+    case LAIK_AT_MapPackAndSend:
+    case LAIK_AT_PackAndSend:
+        return true;
+    }
+    return false;
+}
+
+bool laik_action_isRecv(Laik_BackendAction* ba)
+{
+    switch(ba->type) {
+    case LAIK_AT_MapRecv:
+    case LAIK_AT_BufRecv:
+    case LAIK_AT_RBufRecv:
+    case LAIK_AT_MapRecvAndUnpack:
+    case LAIK_AT_RecvAndUnpack:
+        return true;
+    }
+    return false;
+}
+
 
 // add all receive ops from a transition to an ActionSeq.
 // before execution, a deadlock-avoidance action sorting is required
@@ -563,6 +590,7 @@ void laik_actions_addSends(Laik_ActionSeq* as, int round,
                                        &(op->slc), op->toTask);
     }
 }
+
 
 
 // collect buffer reservation actions and update actions referencing them
@@ -662,6 +690,11 @@ Laik_ActionSeq* laik_actions_setupTransform(Laik_ActionSeq* oldAS)
 
     // skip already used bufIDs for reservation
     as->bufReserveCount = oldAS->bufReserveCount;
+
+    // we will not use any buffer allocation, should not be done yet on oldAS
+    assert(oldAS->buf == 0);
+
+    // TODO: take care of CopyEntries!
 
     return as;
 }
@@ -874,7 +907,7 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
     if (bufSize == 0) {
         assert(copyRanges == 0);
-        laik_log(1, "Optimized action sequence: nothing to do.");
+        laik_log(1, "Combining action sequence: nothing to do.");
         laik_actions_copySeq(oldAS, as);
         return;
     }
@@ -1072,3 +1105,76 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     assert(bufSize == bufOff);
 }
 
+/* sort2phase: sort actions into phases to avoid deadlocks
+ *
+ * - phase 1.X: receive from lower rank <X>
+ * - phase 2.X: send to higher rank  <X>
+ * - phase 3.X: send to lower rank <X>
+ * - phase 4.X: receive from higher rank <X>
+ *
+ * for sends/recvs among same peers, order must be kept,
+ * use stable sort for that
+*/
+
+// used by compare function, set directly before sort
+static int myid4cmp;
+
+int cmp2phase(const void* aptr1, const void* aptr2)
+{
+    Laik_BackendAction* ba1 = *((Laik_BackendAction**) aptr1);
+    Laik_BackendAction* ba2 = *((Laik_BackendAction**) aptr2);
+
+    if (ba1->round != ba2->round)
+        return ba1->round - ba2->round;
+
+    bool a1isSend = laik_action_isSend(ba1);
+    bool a2isSend = laik_action_isSend(ba2);
+    bool a1isRecv = laik_action_isRecv(ba1);
+    bool a2isRecv = laik_action_isRecv(ba2);
+    int a1peer = ba1->peer_rank;
+    int a2peer = ba2->peer_rank;
+
+    int a1phase = 0;
+    if (a1isRecv) a1phase = (a1peer < myid4cmp) ? 1 : 4;
+    if (a1isSend) a1phase = (a1peer < myid4cmp) ? 3 : 2;
+
+    int a2phase = 0;
+    if (a2isRecv) a2phase = (a2peer < myid4cmp) ? 1 : 4;
+    if (a2isSend) a2phase = (a2peer < myid4cmp) ? 3 : 2;
+
+    // if different phases, sort by phase number
+    // i.e. all send/recv actions will come last in a round
+    if (a1phase != a2phase)
+        return a1phase - a2phase;
+
+    if (a1phase > 0) {
+        // within a send/recv phase, sort actions by peer ranks
+        return a1peer - a2peer;
+    }
+
+    // both are neither send/recv actions: keep same order (stable sort!)
+    return 0;
+}
+
+// sort send/recv actions to avoid deadlocks within each round, others
+// are moved to front. Copy resorted sequence into as2
+void laik_actions_sort2phase(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+{
+    Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
+
+    for(int i=0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+        order[i] = ba;
+    }
+
+    Laik_TransitionContext* tc = as->context[0];
+    myid4cmp = tc->transition->group->myid;
+    mergesort(order, as->actionCount, sizeof(void*), cmp2phase);
+
+    // add actions in new order to as2
+    for(int i = 0; i < as->actionCount; i++) {
+        laik_actions_add(order[i], as2);
+    }
+
+    free(order);
+}

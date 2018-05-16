@@ -250,7 +250,6 @@ void laik_actions_addRecvs(Laik_ActionSeq* as, int round,
 void laik_actions_addSends(Laik_ActionSeq* as, int round,
                            Laik_Data* data, Laik_Transition* t);
 
-
 // collect buffer reservation actions and update actions referencing them
 // works in-place, only call once
 void laik_actions_allocBuffer(Laik_ActionSeq* as);
@@ -264,6 +263,8 @@ void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 // merge send/recv actions from oldAS into as
 void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 
+// add sorted send/recv actions from as into as2 to avoid deadlocks
+void laik_actions_sort2phase(Laik_ActionSeq* as, Laik_ActionSeq *as2);
 
 
 #endif // _LAIK_ACTION_INTERNAL_H_
