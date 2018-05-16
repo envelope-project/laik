@@ -1149,11 +1149,17 @@ int cmp2phase(const void* aptr1, const void* aptr2)
 
     if (a1phase > 0) {
         // within a send/recv phase, sort actions by peer ranks
-        return a1peer - a2peer;
+        if (a1peer != a2peer)
+            return a1peer - a2peer;
+
+        // with same peers, use original order
+        // we can compare pointers to actions (as they are not sorted directly!)
+        return (int) (ba1 - ba2);
     }
 
-    // both are neither send/recv actions: keep same order (stable sort!)
-    return 0;
+    // both are neither send/recv actions: keep same order
+    // we can compare pointers to actions (as they are not sorted directly!)
+    return (int) (ba1 - ba2);
 }
 
 // sort send/recv actions to avoid deadlocks within each round, others
@@ -1169,7 +1175,7 @@ void laik_actions_sort2phase(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
     Laik_TransitionContext* tc = as->context[0];
     myid4cmp = tc->transition->group->myid;
-    mergesort(order, as->actionCount, sizeof(void*), cmp2phase);
+    qsort(order, as->actionCount, sizeof(void*), cmp2phase);
 
     // add actions in new order to as2
     for(int i = 0; i < as->actionCount; i++) {
