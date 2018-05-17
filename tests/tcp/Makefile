@@ -7,6 +7,7 @@ TESTS = \
         jac3d_-s_100 \
         jac3d_-s_-n_100 \
         markov2_40_4 \
+        markov2_-f_500_5 \
         markov_40_4 \
         propagation2d_10_10 \
         spmv2_10_3000 \
@@ -40,6 +41,9 @@ jac3d_-s_100:
 
 jac3d_-s_-n_100:
 	$(SDIR)./jac3d_-s_-n_100.sh
+
+markov2_-f_500_5:
+	$(SDIR)./markov2_-f_500_5.sh
 
 markov2_40_4:
 	$(SDIR)./markov2_40_4.sh

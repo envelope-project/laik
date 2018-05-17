@@ -279,7 +279,7 @@ void laik_mpi_exec_recvAndUnpack(Laik_BackendAction* a, Laik_Mapping* map,
 // #define LOG_EXEC_DOUBLE_VALUES
 
 static
-void laik_mpi_exec_reduce(Laik_BackendAction* a,
+void laik_mpi_exec_reduce(Laik_TransitionContext* tc, Laik_BackendAction* a,
                           MPI_Datatype dataType, MPI_Comm comm)
 {
     assert(mpi_reduce > 0);
@@ -304,7 +304,7 @@ void laik_mpi_exec_reduce(Laik_BackendAction* a,
                           dataType, mpiRedOp, comm);
     }
     else {
-        if (a->fromBuf == a->toBuf)
+        if ((a->fromBuf == a->toBuf) && (tc->transition->group->myid == rootTask))
             MPI_Reduce(MPI_IN_PLACE, a->toBuf, a->count,
                        dataType, mpiRedOp, rootTask, comm);
         else
@@ -661,7 +661,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_Reduce:
-            laik_mpi_exec_reduce(a, dataType, comm);
+            laik_mpi_exec_reduce(tc, a, dataType, comm);
             break;
 
         case LAIK_AT_GroupReduce:
@@ -863,9 +863,13 @@ void laik_execOrRecord(bool record,
                 else {
                     // fill out action parameters and execute directly
                     Laik_BackendAction a;
+                    Laik_TransitionContext tc;
+
                     laik_actions_initReduce(&a, fromBase, toBase, to - from,
                                            rootTask, op->redOp);
-                    laik_mpi_exec_reduce(&a, mpiDataType, comm);
+                    laik_actions_initTContext(&tc,
+                                              data, t, fromList, toList);
+                    laik_mpi_exec_reduce(&tc, &a, mpiDataType, comm);
                 }
             }
 

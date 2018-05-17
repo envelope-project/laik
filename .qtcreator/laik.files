@@ -98,3 +98,4 @@
 ../tests/Makefile
 ../tests/.gitignore
 ../tests/mpi/Makefile
+../tests/tcp/Makefile

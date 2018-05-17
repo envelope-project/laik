@@ -7,7 +7,7 @@ TESTS= \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d test-jac3dr \
     test-jac2d-noc test-jac3d-noc test-jac3dr-noc \
-    test-markov test-markov2 \
+    test-markov test-markov2 test-markov2-f \
     test-propagation2d
 
 .PHONY: $(TESTS)
@@ -80,6 +80,9 @@ test-markov:
 test-markov2:
 	$(SDIR)./test-markov2-20-4-mpi-1.sh
 	$(SDIR)./test-markov2-40-4-mpi-4.sh
+
+test-markov2-f:
+	$(SDIR)./test-markov2-f-500-5-mpi-4.sh
 
 test-propagation2d:
 	$(SDIR)./test-propagation2d-10-mpi-1.sh

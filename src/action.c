@@ -843,7 +843,7 @@ void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 {
     int combineGroupReduce = 1;
-    int combineReduce = 0; // FIXME: not activated, still buggy
+    int combineReduce = 0; // FIXME: still buggy test markov2-f-500-5-mpi-4
 
     Laik_TransitionContext* tc = oldAS->context[0];
     Laik_Data* d = tc->data;

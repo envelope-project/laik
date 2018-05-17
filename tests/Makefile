@@ -3,7 +3,7 @@ TESTS= \
     test-spmv test-spmv2 test-spmv2r \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d test-jac3dr \
-    test-markov test-markov2 \
+    test-markov test-markov2 test-markov2-f \
     test-propagation2d
 
 -include ../Makefile.config
@@ -59,6 +59,9 @@ test-markov:
 
 test-markov2:
 	$(SDIR)./test-markov2-20-4-single.sh
+
+test-markov2-f:
+	$(SDIR)./test-markov2-f-500-5-single.sh
 
 test-propagation2d:
 	$(SDIR)./test-propagation2d-10-single.sh
