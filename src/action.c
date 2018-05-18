@@ -839,11 +839,30 @@ void laik_actions_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     }
 }
 
-// merge send/recv/groupReduce actions from oldAS into as
+/* Merge send/recv/groupReduce/reduce actions from "oldAS" into "as".
+ *
+ * We merge actions with same communication partners, marking actions
+ * already merged.
+ * A merging of similar actions results in up to 3 new actions:
+ * - a multi-copy actions with copy ranges, to copy into a temporary buffer
+ *   (only if this process provides input)
+ * - the send/recv/groupReduce/reduce action on the larger temporary buffer
+ * - a multi-copy actions with copy ranges, to copy from a temporary buffer
+ *   (only if this process receives output)
+ * Before generating the new actions, merge candidates are identified
+ * and space required for temporary buffers and copy ranges.
+ *
+ * This merge transformation is easy to see in LAIK_LOG=1 output of the
+ * "the markov2 -f ..." test.
+ *
+ * TODO: Instead of doing merging in one big step for all action types,
+ * we could do it for each seperately, and also generate individual buffer
+ * reservation actions.
+ */
 void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 {
     int combineGroupReduce = 1;
-    int combineReduce = 0; // FIXME: still buggy test markov2-f-500-5-mpi-4
+    int combineReduce = 1;
 
     Laik_TransitionContext* tc = oldAS->context[0];
     Laik_Data* d = tc->data;
@@ -855,7 +874,7 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     for(int i = 0; i < oldAS->actionCount; i++)
         oldAS->action[i].mark = 0;
 
-    // first pass: how much buffer space?
+    // first pass: how much buffer space / copy range elements is needed?
     int bufSize = 0, copyRanges = 0;
     int rank, j, count;
     for(int i = 0; i < oldAS->actionCount; i++) {
@@ -899,9 +918,8 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             // skip already processed GroupReduce actions
             if (ba->mark == 1) break;
 
-            // combine consecutive GroupReduce actions with same
+            // combine all GroupReduce actions with same
             // inputGroup, outputGroup, and redOp
-            // TODO: combine all with same input/outputGroup
             count = ba->count;
             int inputGroup = ba->inputGroup;
             int outputGroup = ba->outputGroup;
@@ -934,8 +952,7 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             // skip already processed reduce actions
             if (ba->mark == 1) break;
 
-            // combine consecutive reduce actions with same root and redOp
-            // TODO: combine all with same root and redOp
+            // combine all reduce actions with same root and redOp
             count = ba->count;
             int root = ba->peer_rank;
             Laik_ReductionOperation redOp = ba->redOp;
@@ -955,6 +972,8 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 // always providing input, copy input ranges
                 copyRanges += actionCount;
                 // if I want result, we can reuse the input ranges
+                if ((root == myid) || (root == -1))
+                    copyRanges += actionCount;
             }
             break;
         }
@@ -1212,12 +1231,29 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
                 // if I want result, copy output ranges
                 if ((root == myid) || (root == -1)) {
-                    // reuse copy ranges from input pieces
+                    // collect output ranges: we cannot reuse copy ranges from
+                    // input pieces because of potentially other output buffers
                     laik_actions_addCopyFromRBuf(as, ba->round,
-                                                 as->ce + oldRangeOff,
+                                                 as->ce + rangeOff,
                                                  bufID, 0,
                                                  actionCount);
+                    bufOff = startBufOff;
+                    int oldRangeOff = rangeOff;
+                    for(int k = i; k < oldAS->actionCount; k++) {
+                        if (oldAS->action[k].type != LAIK_AT_Reduce) continue;
+                        if (oldAS->action[k].peer_rank != root) continue;
+                        if (oldAS->action[k].redOp != redOp) continue;
+
+                        assert(rangeOff < copyRanges);
+                        as->ce[rangeOff].ptr = oldAS->action[k].toBuf;
+                        as->ce[rangeOff].bytes = oldAS->action[k].count * elemsize;
+                        as->ce[rangeOff].offset = bufOff * elemsize;
+                        bufOff += oldAS->action[k].count;
+                        rangeOff++;
+                    }
+                    assert(oldRangeOff + actionCount == rangeOff);
                 }
+                bufOff = startBufOff + count;
             }
             else
                 laik_actions_addReduce(as, ba->fromBuf, ba->toBuf,
