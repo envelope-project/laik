@@ -107,14 +107,13 @@ int laik_actions_addTContext(Laik_ActionSeq* as,
 }
 
 // append action to reserve buffer space
-// if <bufID> is negative, a new ID is generated
-// returns the created action
+// if <bufID> is negative, a new ID is generated (always >0)
+// returns bufID.
 //
 // in a final pass, all buffer reservations must be collected, the buffer
 // allocated (with ID 0), and the references to this buffer replaced
 // by references into buffer 0. These actions can be removed afterwards.
-Laik_BackendAction*
-laik_actions_addBufReserve(Laik_ActionSeq* as, int size, int bufID)
+int laik_actions_addBufReserve(Laik_ActionSeq* as, int size, int bufID)
 {
     if (bufID < 0) {
         // generate new buf ID
@@ -131,7 +130,7 @@ laik_actions_addBufReserve(Laik_ActionSeq* as, int size, int bufID)
     a->bufID = bufID;
     a->offset = 0;
 
-    return a;
+    return bufID;
 }
 
 // append send action to buffer referencing a previous reserve action
@@ -1026,9 +1025,7 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     assert(as->ce == 0);  // ensure no entries yet allocated
     assert(as->buf == 0); // ensure no buffer yet allocated
 
-    Laik_BackendAction* reserveAction;
-    reserveAction = laik_actions_addBufReserve(as, bufSize * elemsize, -1);
-    int bufID = reserveAction->bufID;
+    int bufID = laik_actions_addBufReserve(as, bufSize * elemsize, -1);
 
     as->ce = malloc(copyRanges * sizeof(Laik_CopyEntry));
 

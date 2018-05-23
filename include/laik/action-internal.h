@@ -131,9 +131,8 @@ void laik_actions_initRecvAndUnpack(Laik_BackendAction* a, int round,
                                     Laik_Mapping* toMap, int dims, Laik_Slice* slc,
                                     int from);
 
-// append action to reserve buffer space
-Laik_BackendAction* laik_actions_addBufReserve(Laik_ActionSeq* as,
-                                               int size, int bufID);
+// append action to reserve buffer space, return bufID
+int laik_actions_addBufReserve(Laik_ActionSeq* as, int size, int bufID);
 
 // append send action to buffer referencing a previous reserve action
 void laik_actions_addRBufSend(Laik_ActionSeq* as,

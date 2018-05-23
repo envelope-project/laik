@@ -401,18 +401,19 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     int inCount = subgroupCount(t, a->inputGroup);
     uint64_t byteCount = a->count * data->elemsize;
 
+    bool inputFromMe = laik_isInGroup(t, a->inputGroup, myid);
+
     // for recording
     int bufID = 0;
-    Laik_BackendAction* resAction = 0;
+    int bufSize = (inCount - (inputFromMe ? 1:0)) * byteCount;
+
     if (record) {
-        // size yet unknown, will be updated later
-        resAction = laik_actions_addBufReserve(as, -1, -1);
-        bufID = resAction->bufID;
+        bufID = laik_actions_addBufReserve(as, bufSize, -1);
     }
     else {
         // for direct execution: use global <packbuf> (size PACKBUFSIZE)
         // check that bufsize is enough. TODO: dynamically increase?
-        assert(inCount * byteCount < PACKBUFSIZE);
+        assert(bufSize < PACKBUFSIZE);
     }
 
     // collect values from tasks in input group
@@ -423,7 +424,6 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     // our results, but there may be input from us, which would
     // be overwritten if not starting with our input
     int ii = 0;
-    bool inputFromMe = laik_isInGroup(t, a->inputGroup, myid);
     if (inputFromMe) {
         ii++; // slot 0 reserved for this task (use a->fromBuf)
         bufOff[0] = 0;
@@ -471,10 +471,9 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         off += byteCount;
     }
     assert(ii == inCount);
+    assert(off == bufSize);
 
     if (record) {
-        resAction->count = off; // byte size of buffer reservation
-
         if (inCount == 0) {
             laik_log(1, "        record call to init (count %d)", a->count);
             laik_actions_addBufInit(as, 1, data->type, a->redOp,
