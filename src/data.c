@@ -272,10 +272,9 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         m->size[2] = (dims > 2) ? (slc.to.i[2] - slc.from.i[2]) : 0;
 
         if (laik_log_begin(1)) {
-            laik_log_append("prepare map for '%s'/%d: req.slice ",
-                            d->name, mapNo);
+            laik_log_append("    mapNo %d: req.slice ", mapNo);
             laik_log_Slice(dims, &slc);
-            laik_log_flush(" (off %d - %d, count %d, elemsize %d)\n",
+            laik_log_flush(", tslices %d - %d, count %d, elemsize %d\n",
                            firstOff, lastOff, m->count, d->elemsize);
         }
     }
@@ -290,7 +289,7 @@ void freeMap(Laik_Mapping* m, Laik_Data* d, Laik_SwitchStat* ss)
     assert(d == m->data);
 
     if (m->reusedFor == -1) {
-        laik_log(1, "free map for '%s'/%d (capacity %llu, base %p, start %p)\n",
+        laik_log(1, "free map for data '%s' mapNo %d (capacity %llu, base %p, start %p)\n",
                  d->name, m->mapNo,
                  (unsigned long long) m->capacity, (void*) m->base, (void*) m->start);
 
@@ -315,7 +314,7 @@ void freeMap(Laik_Mapping* m, Laik_Data* d, Laik_SwitchStat* ss)
         m->start = 0;
     }
     else
-        laik_log(1, "free map for '%s'/%d: nothing to do (reused for %d)\n",
+        laik_log(1, "free map for data '%s' mapNo %d: nothing to do (reused for %d)\n",
                  d->name, m->mapNo, m->reusedFor);
 }
 
