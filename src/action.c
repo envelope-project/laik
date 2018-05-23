@@ -129,6 +129,7 @@ laik_actions_addBufReserve(Laik_ActionSeq* as, int size, int bufID)
     a->type = LAIK_AT_BufReserve;
     a->count = size;
     a->bufID = bufID;
+    a->offset = 0;
 
     return a;
 }
@@ -614,25 +615,28 @@ void laik_actions_addSends(Laik_ActionSeq* as, int round,
 // works in-place, only call once
 void laik_actions_allocBuffer(Laik_ActionSeq* as)
 {
-    uint64_t currSize, off;
-    int currID;
+    uint64_t off;
     int rCount = 0, rActions = 0;
     assert(as->buf == 0); // nothing allocated yet
 
     Laik_TransitionContext* tc = as->context[0];
     int elemsize = tc->data->elemsize;
 
-    // TODO: expects that actions reference previous reservation
-    currSize = 0;
+    Laik_BackendAction** resAction;
+    resAction = malloc(as->bufReserveCount * sizeof(Laik_BackendAction*));
+    for(int i = 0; i < as->bufReserveCount; i++)
+        resAction[i] = 0; // reservation not see yet for ID (i-1)
+
     off = 0;
     for(int i = 0; i < as->actionCount; i++) {
         Laik_BackendAction* ba = &(as->action[i]);
         switch(ba->type) {
         case LAIK_AT_BufReserve:
-            off += currSize;
-            currSize = ba->count;
-            currID = ba->bufID;
-            ba->type = LAIK_AT_Nop;
+            ba->offset = off;
+            assert(ba->bufID > 0);
+            assert(ba->bufID <= as->bufReserveCount);
+            resAction[ba->bufID -1] = ba;
+            off += ba->count;
             rCount++;
             break;
 
@@ -643,21 +647,27 @@ void laik_actions_allocBuffer(Laik_ActionSeq* as)
         case LAIK_AT_RBufLocalReduce:
         case LAIK_AT_CopyFromRBuf:
         case LAIK_AT_CopyToRBuf:
-        case LAIK_AT_RBufGroupReduce:
-            assert(ba->bufID == currID);
+        case LAIK_AT_RBufGroupReduce: {
+            assert(ba->bufID > 0);
+            assert(ba->bufID <= as->bufReserveCount);
+            Laik_BackendAction* ra = resAction[ba->bufID -1];
+            assert(ra != 0);
             assert(ba->count > 0);
-            assert(ba->offset + (uint64_t)(ba->count * elemsize) <= currSize);
+            assert(ba->offset + (uint64_t)(ba->count * elemsize) <= (uint64_t) ra->count);
 
-            ba->offset += off;
+            ba->offset += ra->offset;
             ba->bufID = 0; // reference into allocated buffer
             rActions++;
             break;
+        }
 
         default:
             break;
         }
     }
-    as->bufSize = off + currSize;
+    free(resAction);
+
+    as->bufSize = off;
     if (as->bufSize > 0) {
         as->buf = malloc(as->bufSize);
 

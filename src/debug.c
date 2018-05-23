@@ -319,9 +319,10 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_BufReserve:
-        laik_log_append("    BufReserve: buf id %d, size %d",
+        laik_log_append("    BufReserve: buf id %d, size %d (off %llu)",
                         ba->bufID,
-                        ba->count);
+                        ba->count,
+                        (long long int) ba->offset);
         break;
 
     case LAIK_AT_MapSend:
@@ -351,11 +352,11 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 
 
     case LAIK_AT_MapRecv:
-        laik_log_append("    MapRecv (R %d): T%d ==> to mapNo %d, off %d, count %d",
+        laik_log_append("    MapRecv (R %d): T%d ==> to mapNo %d, off %lld, count %d",
                         ba->round,
                         ba->peer_rank,
                         ba->mapNo,
-                        ba->offset,
+                        (long long int) ba->offset,
                         ba->count);
         break;
 
