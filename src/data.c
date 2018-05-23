@@ -523,10 +523,8 @@ void copyMaps(Laik_Transition* t,
             continue;
         }
 
-        if (toMap->base == 0) {
-            // need to allocate memory
-            laik_allocateMap(toMap, ss);
-        }
+        assert(toMap->base);
+
         uint64_t fromOff  = laik_offset(&fromStart, fromMap->layout);
         uint64_t toOff    = laik_offset(&toStart, toMap->layout);
         char*    fromPtr  = fromMap->base + fromOff * d->elemsize;
@@ -664,10 +662,7 @@ void initMaps(Laik_Transition* t,
             continue;
         }
 
-        if (toMap->base == 0) {
-            // allocate memory
-            laik_allocateMap(toMap, ss);
-        }
+        assert(toMap->base);
 
         int dims = toMap->data->space->dims;
         assert(dims == 1); // only for 1d now
@@ -699,6 +694,20 @@ void initMaps(Laik_Transition* t,
 }
 
 static
+void allocateMappings(Laik_MappingList* toList, Laik_SwitchStat* ss)
+{
+    for(int i = 0; i < toList->count; i++) {
+        Laik_Mapping* map = &(toList->map[i]);
+        if (map->base) continue;
+
+        // with reservation, all allocations must have happened before
+        assert(toList->res == 0);
+
+        laik_allocateMap(map, ss);
+    }
+}
+
+static
 void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
                   Laik_MappingList* fromList, Laik_MappingList* toList)
 {
@@ -726,6 +735,9 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
         // but reusing mappings such that same indexes go to same address
         // is fine.
         checkMapReuse(toList, fromList);
+
+        // allocate space for mappings for which reuse is not possible
+        allocateMappings(toList, d->stat);
 
         if (t->sendCount + t->recvCount + t->redCount > 0) {
             // let backend do send/recv/reduce actions
@@ -1664,9 +1676,8 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
         return 0;
 
     Laik_Mapping* m = &(d->activeMappings->map[n]);
-    // ensure the mapping is backed by real memory
-    if (m->base == 0)
-        laik_allocateMap(m, d->stat);
+    // space always should be allocated
+    assert(m->base);
 
     return m;
 }

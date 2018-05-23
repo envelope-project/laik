@@ -646,11 +646,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             assert(a->mapNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[a->mapNo]);
             assert(toMap);
-            if (toMap->base == 0) {
-                // space not yet allocated
-                laik_allocateMap(toMap, ss);
-                assert(toMap->base != 0);
-            }
+            assert(toMap->base);
 
             laik_mpi_exec_recvAndUnpack(a, toMap, dims, elemsize, dataType, tag, comm);
             break;
@@ -746,11 +742,7 @@ void laik_execOrRecord(bool record,
             if (toList && (toList->count > 0) && (op->myOutputMapNo >= 0)) {
                 assert(op->myOutputMapNo < toList->count);
                 toMap = &(toList->map[op->myOutputMapNo]);
-
-                if (toMap->base == 0) {
-                    laik_allocateMap(toMap, ss);
-                    assert(toMap->base != 0);
-                }
+                assert(toMap->base != 0);
             }
 
             char* fromBase = fromMap ? fromMap->base : 0;
@@ -927,12 +919,7 @@ void laik_execOrRecord(bool record,
             assert(op->mapNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[op->mapNo]);
             assert(toMap != 0);
-            if (toMap->base == 0) {
-                // space not yet allocated
-                // TODO: this should be done before execution
-                laik_allocateMap(toMap, ss);
-                assert(toMap->base != 0);
-            }
+            assert(toMap->base != 0);
 
             MPI_Status s;
             uint64_t count = 0;
