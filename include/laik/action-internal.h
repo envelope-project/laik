@@ -167,8 +167,8 @@ void laik_actions_addBufRecv(Laik_ActionSeq* as, int round,
 void laik_actions_addRBufLocalReduce(Laik_ActionSeq* as,
                                      int round, Laik_Type *dtype,
                                      Laik_ReductionOperation redOp,
-                                     char* fromBuf, char* toBuf, int count,
-                                     int fromBufID, int fromByteOffset);
+                                     int fromBufID, int fromByteOffset,
+                                     char* toBuf, int count);
 
 // append action to call a init operation
 void laik_actions_addBufInit(Laik_ActionSeq* as,
@@ -181,9 +181,9 @@ void laik_actions_addBufCopy(Laik_ActionSeq* as,
                              int round, char* fromBuf, char* toBuf, int count);
 
 // append action to call a copy operation from/to a buffer
-void laik_actions_addRBufCopy(Laik_ActionSeq* as,
-                              int round, char* fromBuf, char* toBuf, int count,
-                              int fromBufID, int fromByteOffset);
+void laik_actions_addRBufCopy(Laik_ActionSeq* as, int round,
+                              int fromBufID, int fromByteOffset,
+                              char* toBuf, int count);
 
 // append action to pack a slice of data into temp buffer and send it
 void laik_actions_addMapPackAndSend(Laik_ActionSeq* as, int round,

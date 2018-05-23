@@ -483,17 +483,27 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         else {
             // move first input to a->toBuf, and then reduce on that
 
-            // TODO: check that this is really a copy!
-            laik_log(1, "        record call to copy (count %d)", a->count);
-            laik_actions_addRBufCopy(as, 1, inputFromMe ? a->fromBuf : 0,
-                                     a->toBuf, a->count, bufID, bufOff[0]);
+            if (inputFromMe) {
+                if (a->fromBuf != a->toBuf) {
+                    laik_log(1, "        record call to copy (count %d)",
+                             a->count);
+                    laik_actions_addBufCopy(as, 1,
+                                            a->fromBuf, a ->toBuf, a->count);
+                }
+            }
+            else {
+                laik_log(1, "        record call to RBuf copy (count %d)",
+                         a->count);
+                laik_actions_addRBufCopy(as, 1, bufID, bufOff[0],
+                                         a->toBuf, a->count);
+            }
 
             laik_log(1, "        record %d calls to reduce (count %d)",
                      inCount - 1, a->count);
             for(int t = 1; t < inCount; t++)
                 laik_actions_addRBufLocalReduce(as, 1, data->type, a->redOp,
-                                                0, a->toBuf, a->count,
-                                                bufID, bufOff[t]);
+                                                bufID, bufOff[t],
+                                                a->toBuf, a->count);
         }
     }
     else {
@@ -671,15 +681,17 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         case LAIK_AT_RBufLocalReduce:
             assert(a->bufID == 0);
             assert(a->dtype->reduce != 0);
-            (a->dtype->reduce)(a->toBuf, a->toBuf,
-                               a->fromBuf ? a->fromBuf : (as->buf + a->offset),
+            (a->dtype->reduce)(a->toBuf, a->toBuf, as->buf + a->offset,
                                a->count, a->redOp);
             break;
 
         case LAIK_AT_RBufCopy:
             assert(a->bufID == 0);
-            memcpy(a->toBuf, a->fromBuf ? a->fromBuf : (as->buf + a->offset),
-                   a->count * elemsize);
+            memcpy(a->toBuf, as->buf + a->offset, a->count * elemsize);
+            break;
+
+        case LAIK_AT_BufCopy:
+            memcpy(a->toBuf, a->fromBuf, a->count * elemsize);
             break;
 
         default:

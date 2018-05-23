@@ -164,12 +164,12 @@ void laik_actions_addRBufRecv(Laik_ActionSeq* as, int round,
 }
 
 // append action to call a local reduce operation
-// if fromBuf is 0, use a buffer referenced by a previous reserve action
+// using buffer referenced by a previous reserve action and toBuf as input
 void laik_actions_addRBufLocalReduce(Laik_ActionSeq* as, int round,
                                      Laik_Type* dtype,
                                      Laik_ReductionOperation redOp,
-                                     char* fromBuf, char* toBuf, int count,
-                                     int fromBufID, int fromByteOffset)
+                                     int fromBufID, int fromByteOffset,
+                                     char* toBuf, int count)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
 
@@ -177,7 +177,6 @@ void laik_actions_addRBufLocalReduce(Laik_ActionSeq* as, int round,
     a->round = round;
     a->dtype = dtype;
     a->redOp = redOp;
-    a->fromBuf = fromBuf;
     a->toBuf = toBuf;
     a->count = count;
     a->bufID = fromBufID;
@@ -203,24 +202,25 @@ void laik_actions_addBufInit(Laik_ActionSeq* as, int round,
 // append action to call a copy operation from/to a buffer
 // if fromBuf is 0, use a buffer referenced by a previous reserve action
 void laik_actions_addRBufCopy(Laik_ActionSeq* as, int round,
-                              char* fromBuf, char* toBuf, int count,
-                              int fromBufID, int fromByteOffset)
+                              int fromBufID, int fromByteOffset,
+                              char* toBuf, int count)
 {
     Laik_BackendAction* a = laik_actions_addAction(as);
 
     a->type = LAIK_AT_RBufCopy;
     a->round = round;
-    a->fromBuf = fromBuf;
-    a->toBuf = toBuf;
-    a->count = count;
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
+    a->toBuf = toBuf;
+    a->count = count;
 }
 
 // append action to call a copy operation from/to a buffer
 void laik_actions_addBufCopy(Laik_ActionSeq* as, int round,
                              char* fromBuf, char* toBuf, int count)
 {
+    assert(fromBuf != toBuf);
+
     Laik_BackendAction* a = laik_actions_addAction(as);
 
     a->type = LAIK_AT_BufCopy;
@@ -790,8 +790,8 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
         break;
 
     case LAIK_AT_RBufCopy:
-        laik_actions_addRBufCopy(as, ba->round, ba->fromBuf, ba->toBuf,
-                                 ba->count, ba->bufID, ba->offset);
+        laik_actions_addRBufCopy(as, ba->round, ba->bufID, ba->offset,
+                                 ba->toBuf, ba->count);
         break;
 
     case LAIK_AT_RBufReduce:
@@ -813,8 +813,8 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
 
     case LAIK_AT_RBufLocalReduce:
         laik_actions_addRBufLocalReduce(as, ba->round, ba->dtype, ba->redOp,
-                                        ba->fromBuf, ba->toBuf, ba->count,
-                                        ba->bufID, ba->offset);
+                                        ba->bufID, ba->offset,
+                                        ba->toBuf, ba->count);
         break;
 
     case LAIK_AT_BufInit:

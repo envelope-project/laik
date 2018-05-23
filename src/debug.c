@@ -432,9 +432,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_RBufCopy:
-        laik_log_append("    RBufCopy (R %d): from %p (buf %d off %lld), to %p, count %d",
+        laik_log_append("    RBufCopy (R %d): from buf %d off %lld, to %p, count %d",
                         ba->round,
-                        ba->fromBuf,
                         ba->bufID, (long long int) ba->offset,
                         ba->toBuf,
                         ba->count);
@@ -474,8 +473,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         laik_log_append("    RBufLocalReduce (R %d): type %s, redOp ",
                         ba->round, ba->dtype->name);
         laik_log_Reduction(ba->redOp);
-        laik_log_append(", from %p (%d off %lld), to %p, count %d",
-                        (void*) ba->fromBuf,
+        laik_log_append(", from buf %d off %lld, to %p, count %d",
                         ba->bufID, (long long int) ba->offset,
                         ba->toBuf,
                         ba->count);
