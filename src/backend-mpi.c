@@ -582,10 +582,14 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             // no need to do anything
             break;
 
-        case LAIK_AT_MapSend:
-            MPI_Send(fromList->map[a->mapNo].base + a->offset, a->count,
+        case LAIK_AT_MapSend: {
+            assert(a->mapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[a->mapNo]);
+            assert(fromMap->base != 0);
+            MPI_Send(fromMap->base + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm);
             break;
+        }
 
         case LAIK_AT_RBufSend:
             assert(a->bufID == 0);
@@ -598,10 +602,14 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
                      dataType, a->peer_rank, tag, comm);
             break;
 
-        case LAIK_AT_MapRecv:
-            MPI_Recv(toList->map[a->mapNo].base + a->offset, a->count,
+        case LAIK_AT_MapRecv: {
+            assert(a->mapNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[a->mapNo]);
+            assert(toMap->base != 0);
+            MPI_Recv(toMap->base + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
             break;
+        }
 
         case LAIK_AT_RBufRecv:
             assert(a->bufID == 0);
@@ -631,9 +639,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         case LAIK_AT_MapPackAndSend: {
             assert(a->mapNo < fromList->count);
             Laik_Mapping* fromMap = &(fromList->map[a->mapNo]);
-            // data to send must exist in local memory
-            assert(fromMap);
-            assert(fromMap->base);
+            assert(fromMap->base != 0);
             laik_mpi_exec_packAndSend(a, fromMap, dims, dataType, tag, comm);
             break;
         }
@@ -645,9 +651,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         case LAIK_AT_MapRecvAndUnpack: {
             assert(a->mapNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[a->mapNo]);
-            assert(toMap);
             assert(toMap->base);
-
             laik_mpi_exec_recvAndUnpack(a, toMap, dims, elemsize, dataType, tag, comm);
             break;
         }
@@ -1102,6 +1106,17 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
 
     if (laik_log_begin(1)) {
         laik_log_append("After sorting actions:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
+    as2 = laik_actions_setupTransform(as);
+    laik_actions_flattenPacking(as, as2);
+    laik_actions_free(as);
+    as = as2;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After flattening actions:\n");
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }

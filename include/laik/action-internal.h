@@ -266,5 +266,8 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 // add sorted send/recv actions from as into as2 to avoid deadlocks
 void laik_actions_sort2phase(Laik_ActionSeq* as, Laik_ActionSeq *as2);
 
+// transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
+void laik_actions_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+
 
 #endif // _LAIK_ACTION_INTERNAL_H_

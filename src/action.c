@@ -1400,3 +1400,77 @@ void laik_actions_sort2phase(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
     free(order);
 }
+
+// transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
+// if mapping is known and direct send/recv is possible
+void laik_actions_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+{
+    Laik_Mapping* map;
+    int64_t from, to;
+
+    Laik_TransitionContext* tc = as->context[0];
+
+    for(int i = 0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+        bool handled = false;
+
+        switch(ba->type) {
+        case LAIK_AT_MapPackAndSend:
+            if (!tc->fromList) break;
+            assert(ba->mapNo < tc->fromList->count);
+            map = &(tc->fromList->map[ba->mapNo]);
+
+            // TODO: only for 1d for now
+            if (ba->dims > 1) break;
+
+            // FIXME: this assumes lexicographical layout
+            from = ba->slc->from.i[0] - map->requiredSlice.from.i[0];
+            to   = ba->slc->to.i[0] - map->requiredSlice.from.i[0];
+            assert(from >= 0);
+            assert(to > from);
+
+            // replace with different action depending on map allocation done
+            if (map->base)
+                laik_actions_addBufSend(as2, ba->round,
+                                        map->base + from * tc->data->elemsize,
+                                        to - from, ba->peer_rank);
+            else
+                laik_actions_addMapSend(as2, ba->round,
+                                        ba->mapNo, from * tc->data->elemsize,
+                                        to - from, ba->peer_rank);
+            handled = true;
+            break;
+
+        case LAIK_AT_MapRecvAndUnpack:
+            if (!tc->toList) break;
+            assert(ba->mapNo < tc->toList->count);
+            map = &(tc->toList->map[ba->mapNo]);
+
+            // TODO: only for 1d for now
+            if (ba->dims > 1) break;
+
+            // FIXME: this assumes lexicographical layout
+            from = ba->slc->from.i[0] - map->requiredSlice.from.i[0];
+            to   = ba->slc->to.i[0] - map->requiredSlice.from.i[0];
+            assert(from >= 0);
+            assert(to > from);
+
+            // replace with different action depending on map allocation done
+            if (map->base)
+                laik_actions_addBufRecv(as2, ba->round,
+                                        map->base + from * tc->data->elemsize,
+                                        to - from, ba->peer_rank);
+            else
+                laik_actions_addMapRecv(as2, ba->round,
+                                        ba->mapNo, from * tc->data->elemsize,
+                                        to - from, ba->peer_rank);
+            handled = true;
+            break;
+
+        default: break;
+        }
+
+        if (!handled)
+            laik_actions_add(ba, as2);
+    }
+}
