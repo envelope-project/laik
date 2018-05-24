@@ -803,7 +803,7 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record) {
-#if 1
+#if 0
                     laik_actions_addGroupReduce(as,
                                                 op->inputGroup, op->outputGroup,
                                                 fromBase, toBase, elemCount, op->redOp);
@@ -1199,9 +1199,9 @@ void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_ActionSeq* as,
     Laik_TransitionContext* tc = as->context[0];
     assert(d == tc->data);
     assert(t == tc->transition);
-    assert(as->actionCount > 0);
 
-    laik_mpi_exec_actions(as, d->stat);
+    if (as->actionCount > 0)
+        laik_mpi_exec_actions(as, d->stat);
 }
 
 
