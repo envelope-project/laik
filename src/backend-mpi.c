@@ -602,8 +602,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         }
 
         case LAIK_AT_RBufSend:
-            assert(a->bufID == 0);
-            MPI_Send(as->buf + a->offset, a->count,
+            assert(a->bufID < BUFFER_MAX);
+            MPI_Send(as->buf[a->bufID] + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm);
             break;
 
@@ -622,8 +622,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         }
 
         case LAIK_AT_RBufRecv:
-            assert(a->bufID == 0);
-            MPI_Recv(as->buf + a->offset, a->count,
+            assert(a->bufID < BUFFER_MAX);
+            MPI_Recv(as->buf[a->bufID] + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
             break;
 
@@ -679,15 +679,15 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_RBufLocalReduce:
-            assert(a->bufID == 0);
+            assert(a->bufID < BUFFER_MAX);
             assert(a->dtype->reduce != 0);
-            (a->dtype->reduce)(a->toBuf, a->toBuf, as->buf + a->offset,
+            (a->dtype->reduce)(a->toBuf, a->toBuf, as->buf[a->bufID] + a->offset,
                                a->count, a->redOp);
             break;
 
         case LAIK_AT_RBufCopy:
-            assert(a->bufID == 0);
-            memcpy(a->toBuf, as->buf + a->offset, a->count * elemsize);
+            assert(a->bufID < BUFFER_MAX);
+            memcpy(a->toBuf, as->buf[a->bufID] + a->offset, a->count * elemsize);
             break;
 
         case LAIK_AT_BufCopy:
@@ -1133,7 +1133,14 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_flush(0);
     }
 
-#if 1
+    laik_actions_allocBuffer(as);
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After buffer allocation 1:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
     as2 = laik_actions_setupTransform(as);
     laik_actions_combineActions(as, as2);
     laik_actions_free(as);
@@ -1144,12 +1151,11 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
-#endif
 
     laik_actions_allocBuffer(as);
 
     if (laik_log_begin(1)) {
-        laik_log_append("After buffer allocation:\n");
+        laik_log_append("After buffer allocation 2:\n");
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }

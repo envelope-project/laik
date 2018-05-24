@@ -529,8 +529,8 @@ void laik_log_ActionSeq(Laik_ActionSeq *as)
     Laik_TransitionContext* tc = as->context[0];
     laik_log_append("actions for ");
     laik_log_Transition(tc->transition, false);
-    laik_log_append(" on '%s', bufsize %d (%d actions)\n",
-                    tc->data->name, as->bufSize, as->actionCount);
+    laik_log_append(" on '%s' (%d actions)\n",
+                    tc->data->name, as->actionCount);
 
     for(int i = 0; i < as->actionCount; i++) {
         laik_log_Action((Laik_Action*) &(as->action[i]), tc);

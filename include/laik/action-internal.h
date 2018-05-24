@@ -77,9 +77,11 @@ struct _Laik_ActionSeq {
 #define CONTEXTS_MAX 1
     void* context[CONTEXTS_MAX];
 
-    // buffer space
-    char* buf;
-    int bufSize;
+    // each call to laik_actions_allocBuffer() allocates another buffer
+#define BUFFER_MAX 5
+    char* buf[BUFFER_MAX];
+    int bufSize[BUFFER_MAX];
+    int currentBuf;
     int bufReserveCount; // current number of BufReserve actions
 
     // for copy actions

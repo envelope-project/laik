@@ -29,9 +29,13 @@ Laik_ActionSeq* laik_actions_new(Laik_Instance *inst)
     for(int i = 0; i < CONTEXTS_MAX; i++)
         as->context[i] = 0;
 
-    as->buf = 0;
-    as->bufSize = 0;
+    for(int i = 0; i < BUFFER_MAX; i++) {
+        as->buf[i] = 0;
+        as->bufSize[i] = 0;
+    }
+    as->currentBuf = 0;
     as->bufReserveCount = 0;
+
     as->ce = 0;
 
     as->actionCount = 0;
@@ -51,7 +55,9 @@ void laik_actions_free(Laik_ActionSeq* as)
     for(int i = 0; i < CONTEXTS_MAX; i++)
         free(as->context[i]);
 
-    free(as->buf);
+    for(int i = 0; i < BUFFER_MAX; i++)
+        free(as->buf[i]);
+
     free(as->ce);
 
     free(as->action);
@@ -107,9 +113,10 @@ int laik_actions_addTContext(Laik_ActionSeq* as,
 }
 
 // append action to reserve buffer space
-// if <bufID> is negative, a new ID is generated (always >0)
+// if <bufID> is negative, a new ID is generated (always > 100)
 // returns bufID.
 //
+// bufID < 100 are reserved for buffers already allocated (buf[bufID]).
 // in a final pass, all buffer reservations must be collected, the buffer
 // allocated (with ID 0), and the references to this buffer replaced
 // by references into buffer 0. These actions can be removed afterwards.
@@ -118,11 +125,11 @@ int laik_actions_addBufReserve(Laik_ActionSeq* as, int size, int bufID)
     if (bufID < 0) {
         // generate new buf ID
         // only return IDs > 0. ID 0 is reserved for actually allocated buffer
+        bufID = as->bufReserveCount + 100;
         as->bufReserveCount++;
-        bufID = as->bufReserveCount;
     }
-    else if (bufID > as->bufReserveCount)
-        as->bufReserveCount = bufID;
+    else if (bufID > as->bufReserveCount + 99)
+        as->bufReserveCount = bufID - 99;
 
     Laik_BackendAction* a = laik_actions_addAction(as);
     a->type = LAIK_AT_BufReserve;
@@ -614,9 +621,9 @@ void laik_actions_addSends(Laik_ActionSeq* as, int round,
 // works in-place, only call once
 void laik_actions_allocBuffer(Laik_ActionSeq* as)
 {
-    uint64_t off;
     int rCount = 0, rActions = 0;
-    assert(as->buf == 0); // nothing allocated yet
+    assert(as->currentBuf < BUFFER_MAX);
+    assert(as->buf[as->currentBuf] == 0); // nothing allocated yet
 
     Laik_TransitionContext* tc = as->context[0];
     int elemsize = tc->data->elemsize;
@@ -624,38 +631,45 @@ void laik_actions_allocBuffer(Laik_ActionSeq* as)
     Laik_BackendAction** resAction;
     resAction = malloc(as->bufReserveCount * sizeof(Laik_BackendAction*));
     for(int i = 0; i < as->bufReserveCount; i++)
-        resAction[i] = 0; // reservation not see yet for ID (i-1)
+        resAction[i] = 0; // reservation not seen yet for ID (i-100)
 
-    off = 0;
+    uint64_t bufSize = 0;
     for(int i = 0; i < as->actionCount; i++) {
         Laik_BackendAction* ba = &(as->action[i]);
         switch(ba->type) {
         case LAIK_AT_BufReserve:
-            ba->offset = off;
-            assert(ba->bufID > 0);
-            assert(ba->bufID <= as->bufReserveCount);
-            resAction[ba->bufID -1] = ba;
-            off += ba->count;
+            // reservation already processed and allocated
+            if (ba->bufID < BUFFER_MAX) break;
+
+            ba->offset = bufSize;
+            assert(ba->bufID >= 100);
+            assert(ba->bufID < 100 + as->bufReserveCount);
+            resAction[ba->bufID - 100] = ba;
+            ba->bufID = as->currentBuf; // mark as processed
+            bufSize += ba->count;
             rCount++;
             break;
 
+        case LAIK_AT_RBufCopy:
+        case LAIK_AT_RBufLocalReduce:
         case LAIK_AT_RBufSend:
         case LAIK_AT_RBufRecv:
-        case LAIK_AT_RBufCopy:
         case LAIK_AT_RBufReduce:
-        case LAIK_AT_RBufLocalReduce:
         case LAIK_AT_CopyFromRBuf:
         case LAIK_AT_CopyToRBuf:
         case LAIK_AT_RBufGroupReduce: {
-            assert(ba->bufID > 0);
-            assert(ba->bufID <= as->bufReserveCount);
-            Laik_BackendAction* ra = resAction[ba->bufID -1];
+            // action with allocated reservation
+            if (ba->bufID < BUFFER_MAX) break;
+
+            assert(ba->bufID >= 100);
+            assert(ba->bufID < 100 + as->bufReserveCount);
+            Laik_BackendAction* ra = resAction[ba->bufID - 100];
             assert(ra != 0);
             assert(ba->count > 0);
             assert(ba->offset + (uint64_t)(ba->count * elemsize) <= (uint64_t) ra->count);
 
             ba->offset += ra->offset;
-            ba->bufID = 0; // reference into allocated buffer
+            ba->bufID = as->currentBuf; // reference into allocated buffer
             rActions++;
             break;
         }
@@ -666,48 +680,58 @@ void laik_actions_allocBuffer(Laik_ActionSeq* as)
     }
     free(resAction);
 
-    as->bufSize = off;
-    if (as->bufSize > 0) {
-        as->buf = malloc(as->bufSize);
-
-        // eventually modify actions, now that buffer allocation is known
-        for(int i = 0; i < as->actionCount; i++) {
-            Laik_BackendAction* ba = &(as->action[i]);
-            switch(ba->type) {
-            case LAIK_AT_RBufSend:
-                ba->fromBuf = as->buf + ba->offset;
-                ba->type = LAIK_AT_BufSend;
-                break;
-            case LAIK_AT_RBufRecv:
-                ba->toBuf = as->buf + ba->offset;
-                ba->type = LAIK_AT_BufRecv;
-                break;
-            case LAIK_AT_CopyFromRBuf:
-                ba->fromBuf = as->buf + ba->offset;
-                ba->type = LAIK_AT_CopyFromBuf;
-                break;
-            case LAIK_AT_CopyToRBuf:
-                ba->toBuf = as->buf + ba->offset;
-                ba->type = LAIK_AT_CopyToBuf;
-                break;
-            case LAIK_AT_RBufReduce:
-                ba->fromBuf = as->buf + ba->offset;
-                ba->toBuf   = as->buf + ba->offset;
-                ba->type = LAIK_AT_Reduce;
-                break;
-            case LAIK_AT_RBufGroupReduce:
-                ba->fromBuf = as->buf + ba->offset;
-                ba->toBuf   = as->buf + ba->offset;
-                ba->type = LAIK_AT_GroupReduce;
-                break;
-            default: break;
-            }
-        }
+    if (bufSize == 0) {
+        laik_log(1, "RBuf alloc %d: Nothing to do.", as->currentBuf + 1);
+        return;
     }
 
-    laik_log(1, "RBuf alloc: %d reservations, %d RBuf actions => %d bytes at %p",
-             rCount, rActions, as->bufSize, as->buf);
+    char* buf = malloc(bufSize);
+    assert(buf != 0);
+
+    // eventually modify actions, now that buffer allocation is known
+    for(int i = 0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+        switch(ba->type) {
+        case LAIK_AT_RBufSend:
+            ba->fromBuf = buf + ba->offset;
+            ba->type = LAIK_AT_BufSend;
+            break;
+        case LAIK_AT_RBufRecv:
+            ba->toBuf = buf + ba->offset;
+            ba->type = LAIK_AT_BufRecv;
+            break;
+        case LAIK_AT_CopyFromRBuf:
+            ba->fromBuf = buf + ba->offset;
+            ba->type = LAIK_AT_CopyFromBuf;
+            break;
+        case LAIK_AT_CopyToRBuf:
+            ba->toBuf = buf + ba->offset;
+            ba->type = LAIK_AT_CopyToBuf;
+            break;
+        case LAIK_AT_RBufReduce:
+            ba->fromBuf = buf + ba->offset;
+            ba->toBuf   = buf + ba->offset;
+            ba->type = LAIK_AT_Reduce;
+            break;
+        case LAIK_AT_RBufGroupReduce:
+            ba->fromBuf = buf + ba->offset;
+            ba->toBuf   = buf + ba->offset;
+            ba->type = LAIK_AT_GroupReduce;
+            break;
+        default: break;
+        }
+    }
+    as->bufSize[as->currentBuf] = bufSize;
+    as->buf[as->currentBuf] = buf;
+
+    laik_log(1, "RBuf alloc %d: %d reservations, %d RBuf actions => %llu bytes at %p",
+             as->currentBuf + 1, rCount, rActions, (long long unsigned) bufSize,
+             as->buf[as->currentBuf]);
     assert(rCount == as->bufReserveCount);
+
+    // start again with bufID 100 for next reservations
+    as->bufReserveCount = 0;
+    as->currentBuf++;
 }
 
 
@@ -720,13 +744,19 @@ Laik_ActionSeq* laik_actions_setupTransform(Laik_ActionSeq* oldAS)
     laik_actions_addTContext(as, d, tc->transition,
                              tc->fromList, tc->toList);
 
+    // take over already allocated buffers
+    for(int i = 0; i < BUFFER_MAX; i++) {
+        as->buf[i] = oldAS->buf[i];
+        oldAS->buf[i] = 0; // do not double-free (cannot exec oldAS anymore!)
+        as->bufSize[i] = oldAS->bufSize[i];
+    }
+    as->currentBuf = oldAS->currentBuf;
     // skip already used bufIDs for reservation
     as->bufReserveCount = oldAS->bufReserveCount;
 
-    // we will not use any buffer allocation, should not be done yet on oldAS
-    assert(oldAS->buf == 0);
-
-    // TODO: take care of CopyEntries!
+    // take care of CopyEntries
+    as->ce = oldAS->ce;
+    oldAS->ce = 0;
 
     return as;
 }
@@ -740,6 +770,9 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
         break;
 
     case LAIK_AT_BufReserve:
+        // can ignored if already processed
+        if (ba->bufID < BUFFER_MAX) break;
+
         laik_actions_addBufReserve(as, ba->count, ba->bufID);
         break;
 
@@ -1023,7 +1056,6 @@ void laik_actions_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
     assert(copyRanges > 0);
     assert(as->ce == 0);  // ensure no entries yet allocated
-    assert(as->buf == 0); // ensure no buffer yet allocated
 
     int bufID = laik_actions_addBufReserve(as, bufSize * elemsize, -1);
 
