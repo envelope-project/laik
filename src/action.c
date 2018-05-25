@@ -1375,20 +1375,13 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     assert(bufSize == bufOff);
 }
 
-/* sort2phase: sort actions into phases to avoid deadlocks
- *
- * - phase 1.X: receive from lower rank <X>
- * - phase 2.X: send to higher rank  <X>
- * - phase 3.X: send to lower rank <X>
- * - phase 4.X: receive from higher rank <X>
- *
- * for sends/recvs among same peers, order must be kept,
- * use stable sort for that
-*/
 
-// used by compare function, set directly before sort
+// helpers for action resorting
+
+// used by compare functions, set directly before sort
 static int myid4cmp;
 
+static
 int cmp2phase(const void* aptr1, const void* aptr2)
 {
     Laik_BackendAction* ba1 = *((Laik_BackendAction**) aptr1);
@@ -1432,9 +1425,19 @@ int cmp2phase(const void* aptr1, const void* aptr2)
     return (int) (ba1 - ba2);
 }
 
-// sort send/recv actions to avoid deadlocks within each round, others
-// are moved to front. Copy resorted sequence into as2
-void laik_aseq_sort2phase(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+/* sort actions into 2 phases to avoid deadlocks
+ * (1) messages from lower to higher ranks
+ *     - receive from lower rank <X>
+ *     - send to higher rank <X>
+ * (2) messages from higher to lower ranks
+ *     - send to lower rank <X>
+ *     - receive from higher rank <X>
+ * for sends/recvs among same peers, order must be kept
+ *
+ * Actions other the send/recv are moved to front.
+ * Copy resorted sequence into as2.
+ */
+void laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
     Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
 
@@ -1454,6 +1457,92 @@ void laik_aseq_sort2phase(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
     free(order);
 }
+
+static
+int cmp_rankdigits(const void* aptr1, const void* aptr2)
+{
+    Laik_BackendAction* ba1 = *((Laik_BackendAction**) aptr1);
+    Laik_BackendAction* ba2 = *((Laik_BackendAction**) aptr2);
+
+    if (ba1->round != ba2->round)
+        return ba1->round - ba2->round;
+
+    bool a1isSend = laik_action_isSend(ba1);
+    bool a2isSend = laik_action_isSend(ba2);
+    bool a1isRecv = laik_action_isRecv(ba1);
+    bool a2isRecv = laik_action_isRecv(ba2);
+    int a1peer = ba1->peer_rank;
+    int a2peer = ba2->peer_rank;
+
+    // phase number is number of lower digits equal to my rank
+    int a1phase = 0, a2phase = 0, mask;
+    if (a1isSend || a1isRecv)
+        for(a1phase = 1, mask = 1; mask; a1phase++, mask = mask << 1)
+            if ((a1peer & mask) != (myid4cmp & mask)) break;
+    if (a2isSend || a2isRecv)
+        for(a2phase = 1, mask = 1; mask; a2phase++, mask = mask << 1)
+            if ((a2peer & mask) != (myid4cmp & mask)) break;
+
+    // if different phases, sort by phase number
+    if (a1phase != a2phase)
+        return a1phase - a2phase;
+
+    if (a1phase > 0) {
+        // calculate sub-phase (we reuse the variables for subphase)
+        if ((myid4cmp & mask) == 0) {
+            // sub-phase: with first diverging bit = 0, we first send
+            a1phase = a1isSend ? 1 : 2;
+            a2phase = a2isSend ? 1 : 2;
+        }
+        else {
+            a1phase = a1isSend ? 2 : 1;
+            a2phase = a2isSend ? 2 : 1;
+        }
+        // if different sub-phases, sort by sub-phase number
+        if (a1phase != a2phase)
+            return a1phase - a2phase;
+
+        // within same sub-phase, sort actions by peer ranks
+        if (a1peer != a2peer)
+            return a1peer - a2peer;
+    }
+    // otherwise, keep original order
+    // we can compare pointers to actions (as they are not sorted directly!)
+    return (int) (ba1 - ba2);
+}
+
+/* sort actions using binary digits of rank numbers, to avoid deadlocks
+ * (1) use bit 0 of peer rank and myself
+ *     - ranks with bit0 = 0 send to ranks with bit0 = 1
+ *     - ranks with bit0 = 1 send to ranks with bit0 = 0
+ * (2) use bit 1
+ * ...
+ * for sends/recvs among same peers, order must be kept
+ *
+ * Actions other the send/recv are moved to front.
+ * Copy resorted sequence into as2.
+ */
+void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+{
+    Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
+
+    for(int i=0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+        order[i] = ba;
+    }
+
+    Laik_TransitionContext* tc = as->context[0];
+    myid4cmp = tc->transition->group->myid;
+    qsort(order, as->actionCount, sizeof(void*), cmp_rankdigits);
+
+    // add actions in new order to as2
+    for(int i = 0; i < as->actionCount; i++) {
+        laik_actions_add(order[i], as2);
+    }
+
+    free(order);
+}
+
 
 // transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
 // if mapping is known and direct send/recv is possible

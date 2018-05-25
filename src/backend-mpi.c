@@ -1112,7 +1112,8 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     }
 
     as2 = laik_actions_setupTransform(as);
-    laik_aseq_sort2phase(as, as2);
+    //laik_aseq_sort_2phases(as, as2);
+    laik_aseq_sort_rankdigits(as, as2);
     laik_aseq_free(as);
     as = as2;
 

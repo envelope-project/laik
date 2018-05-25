@@ -269,7 +269,8 @@ void laik_aseq_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 
 // add sorted send/recv actions from as into as2 to avoid deadlocks
-void laik_aseq_sort2phase(Laik_ActionSeq* as, Laik_ActionSeq *as2);
+void laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq *as2);
+void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2);
 
 // transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
 void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2);
