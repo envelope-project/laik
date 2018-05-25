@@ -118,7 +118,17 @@ typedef struct _Laik_TransitionContext Laik_TransitionContext;
 //
 // Laik_ActionSeq
 //
+// Within an action sequence, the actions for multiple transitions for different
+// data containers can be recorded, for multiple later executions triggered by
+// just one call.
+// An action sequence is opaque to LAIK users.
 
 typedef struct _Laik_ActionSeq Laik_ActionSeq;
+
+// create a new action sequence object, usable for the given LAIK instance
+Laik_ActionSeq* laik_aseq_new(Laik_Instance* inst);
+// free all resources allocated for an action sequence
+void laik_aseq_free(Laik_ActionSeq* as);
+
 
 #endif // _LAIK_ACTIONS_H_

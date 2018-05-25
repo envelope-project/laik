@@ -380,7 +380,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                      as ? "record" : "exec", reduceTask);
 
             if (record)
-                laik_actions_addBufSend(as, 0, a->fromBuf, a->count, reduceTask);
+                laik_aseq_addBufSend(as, 0, a->fromBuf, a->count, reduceTask);
             else
                 MPI_Send(a->fromBuf, a->count, dataType, reduceTask, 1, comm);
         }
@@ -389,7 +389,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                      record ? "record" : "exec", reduceTask);
 
             if (record)
-                laik_actions_addBufRecv(as, 2, a->toBuf, a->count, reduceTask);
+                laik_aseq_addBufRecv(as, 2, a->toBuf, a->count, reduceTask);
             else
                 MPI_Recv(a->toBuf, a->count, dataType, reduceTask, 1, comm, &st);
         }
@@ -408,7 +408,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     int bufSize = (inCount - (inputFromMe ? 1:0)) * byteCount;
 
     if (record) {
-        bufID = laik_actions_addBufReserve(as, bufSize, -1);
+        bufID = laik_aseq_addBufReserve(as, bufSize, -1);
     }
     else {
         // for direct execution: use global <packbuf> (size PACKBUFSIZE)
@@ -452,7 +452,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
         bufOff[ii++] = off;
         if (record)
-            laik_actions_addRBufRecv(as, 0, bufID, off, a->count, inTask);
+            laik_aseq_addRBufRecv(as, 0, bufID, off, a->count, inTask);
         else {
             MPI_Recv(packbuf + off, a->count, dataType, inTask, 1, comm, &st);
 
@@ -476,7 +476,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     if (record) {
         if (inCount == 0) {
             laik_log(1, "        record call to init (count %d)", a->count);
-            laik_actions_addBufInit(as, 1, data->type, a->redOp,
+            laik_aseq_addBufInit(as, 1, data->type, a->redOp,
                                     a->toBuf, a->count);
         }
         else {
@@ -486,21 +486,21 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                 if (a->fromBuf != a->toBuf) {
                     laik_log(1, "        record call to copy (count %d)",
                              a->count);
-                    laik_actions_addBufCopy(as, 1,
+                    laik_aseq_addBufCopy(as, 1,
                                             a->fromBuf, a ->toBuf, a->count);
                 }
             }
             else {
                 laik_log(1, "        record call to RBuf copy (count %d)",
                          a->count);
-                laik_actions_addRBufCopy(as, 1, bufID, bufOff[0],
+                laik_aseq_addRBufCopy(as, 1, bufID, bufOff[0],
                                          a->toBuf, a->count);
             }
 
             laik_log(1, "        record %d calls to reduce (count %d)",
                      inCount - 1, a->count);
             for(int t = 1; t < inCount; t++)
-                laik_actions_addRBufLocalReduce(as, 1, data->type, a->redOp,
+                laik_aseq_addRBufLocalReduce(as, 1, data->type, a->redOp,
                                                 bufID, bufOff[t],
                                                 a->toBuf, a->count);
         }
@@ -550,7 +550,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         laik_log(1, "        %s MPI_Send result to T%d",
                  record ? "record" : "exec", outTask);
         if (record)
-            laik_actions_addBufSend(as, 2, a->toBuf, a->count, outTask);
+            laik_aseq_addBufSend(as, 2, a->toBuf, a->count, outTask);
         else
             MPI_Send(a->toBuf, a->count, dataType, outTask, 1, comm);
     }
@@ -602,7 +602,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         }
 
         case LAIK_AT_RBufSend:
-            assert(a->bufID < BUFFER_MAX);
+            assert(a->bufID < ASEQ_BUFFER_MAX);
             MPI_Send(as->buf[a->bufID] + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm);
             break;
@@ -622,7 +622,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
         }
 
         case LAIK_AT_RBufRecv:
-            assert(a->bufID < BUFFER_MAX);
+            assert(a->bufID < ASEQ_BUFFER_MAX);
             MPI_Recv(as->buf[a->bufID] + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
             break;
@@ -679,14 +679,14 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_RBufLocalReduce:
-            assert(a->bufID < BUFFER_MAX);
+            assert(a->bufID < ASEQ_BUFFER_MAX);
             assert(a->dtype->reduce != 0);
             (a->dtype->reduce)(a->toBuf, a->toBuf, as->buf[a->bufID] + a->offset,
                                a->count, a->redOp);
             break;
 
         case LAIK_AT_RBufCopy:
-            assert(a->bufID < BUFFER_MAX);
+            assert(a->bufID < ASEQ_BUFFER_MAX);
             memcpy(a->toBuf, as->buf[a->bufID] + a->offset, a->count * elemsize);
             break;
 
@@ -812,10 +812,10 @@ void laik_execOrRecord(bool record,
                     Laik_BackendAction a;
                     Laik_TransitionContext tc;
 
-                    laik_actions_initGroupReduce(&a,
+                    laik_aseq_initGroupReduce(&a,
                                                  op->inputGroup, op->outputGroup,
                                                  fromBase, toBase, elemCount, op->redOp);
-                    laik_actions_initTContext(&tc,
+                    laik_aseq_initTContext(&tc,
                                               data, t, fromList, toList);
 
                     laik_mpi_exec_groupReduce(&tc, &a, mpiDataType, comm, as);
@@ -827,10 +827,10 @@ void laik_execOrRecord(bool record,
                     Laik_BackendAction a;
                     Laik_TransitionContext tc;
 
-                    laik_actions_initGroupReduce(&a,
+                    laik_aseq_initGroupReduce(&a,
                                                  op->inputGroup, op->outputGroup,
                                                  fromBase, toBase, elemCount, op->redOp);
-                    laik_actions_initTContext(&tc,
+                    laik_aseq_initTContext(&tc,
                                               data, t, fromList, toList);
 
                     laik_mpi_exec_groupReduce(&tc, &a, mpiDataType, comm, 0);
@@ -866,16 +866,16 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record)
-                    laik_actions_addReduce(as, fromBase, toBase, to - from,
+                    laik_aseq_addReduce(as, fromBase, toBase, to - from,
                                            rootTask, op->redOp);
                 else {
                     // fill out action parameters and execute directly
                     Laik_BackendAction a;
                     Laik_TransitionContext tc;
 
-                    laik_actions_initReduce(&a, fromBase, toBase, to - from,
+                    laik_aseq_initReduce(&a, fromBase, toBase, to - from,
                                            rootTask, op->redOp);
-                    laik_actions_initTContext(&tc,
+                    laik_aseq_initTContext(&tc,
                                               data, t, fromList, toList);
                     laik_mpi_exec_reduce(&tc, &a, mpiDataType, comm);
                 }
@@ -891,8 +891,8 @@ void laik_execOrRecord(bool record,
 #if 1
     if (record) {
         // warning: the sequence has to be sorted for deadlock avoidance
-        laik_actions_addSends(as, 0, data, t);
-        laik_actions_addRecvs(as, 0, data, t);
+        laik_aseq_addSends(as, 0, data, t);
+        laik_aseq_addRecvs(as, 0, data, t);
 
         // TODO: avoid buffer usage / allocate buffer of required size
         return;
@@ -973,7 +973,7 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record)
-                    laik_actions_addBufRecv(as, 0,
+                    laik_aseq_addBufRecv(as, 0,
                                             toMap->base + from * data->elemsize,
                                             count, op->fromTask);
                 else {
@@ -989,11 +989,11 @@ void laik_execOrRecord(bool record,
                 assert(toMap->layout->unpack);
 
                 if (record)
-                    laik_actions_addRecvAndUnpack(as, 0, toMap,
+                    laik_aseq_addRecvAndUnpack(as, 0, toMap,
                                                   &(op->slc), op->fromTask);
                 else {
                     Laik_BackendAction a;
-                    laik_actions_initRecvAndUnpack(&a, 0, toMap,
+                    laik_aseq_initRecvAndUnpack(&a, 0, toMap,
                                                    dims, &(op->slc), op->fromTask);
                     laik_mpi_exec_recvAndUnpack(&a, a.map, dims, data->elemsize,
                                                 mpiDataType, 1, comm);
@@ -1058,7 +1058,7 @@ void laik_execOrRecord(bool record,
                          data->elemsize, (void*) fromMap->base);
 
                 if (record)
-                    laik_actions_addBufSend(as, 0,
+                    laik_aseq_addBufSend(as, 0,
                                             fromMap->base + from * data->elemsize,
                                             count, op->toTask);
                 else {
@@ -1074,11 +1074,11 @@ void laik_execOrRecord(bool record,
                 assert(fromMap->layout->pack);
 
                 if (record)
-                    laik_actions_addPackAndSend(as, 0, fromMap,
+                    laik_aseq_addPackAndSend(as, 0, fromMap,
                                                 &(op->slc), op->toTask);
                 else {
                     Laik_BackendAction a;
-                    laik_actions_initPackAndSend(&a, 0, fromMap,
+                    laik_aseq_initPackAndSend(&a, 0, fromMap,
                                                  dims, &(op->slc), op->toTask);
                     laik_mpi_exec_packAndSend(&a, a.map, dims, mpiDataType, 1, comm);
                     count = a.count;
@@ -1102,8 +1102,8 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
 {
     Laik_ActionSeq *as, *as2;
 
-    as = laik_actions_new(d->space->inst);
-    laik_actions_addTContext(as, d, t, fromList, toList);
+    as = laik_aseq_new(d->space->inst);
+    laik_aseq_addTContext(as, d, t, fromList, toList);
     laik_execOrRecord(true, d, t, as, fromList, toList);
 
     if (laik_log_begin(1)) {
@@ -1112,8 +1112,8 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     }
 
     as2 = laik_actions_setupTransform(as);
-    laik_actions_sort2phase(as, as2);
-    laik_actions_free(as);
+    laik_aseq_sort2phase(as, as2);
+    laik_aseq_free(as);
     as = as2;
 
     if (laik_log_begin(1)) {
@@ -1123,8 +1123,8 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     }
 
     as2 = laik_actions_setupTransform(as);
-    laik_actions_flattenPacking(as, as2);
-    laik_actions_free(as);
+    laik_aseq_flattenPacking(as, as2);
+    laik_aseq_free(as);
     as = as2;
 
     if (laik_log_begin(1)) {
@@ -1133,7 +1133,7 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_flush(0);
     }
 
-    laik_actions_allocBuffer(as);
+    laik_aseq_allocBuffer(as);
 
     if (laik_log_begin(1)) {
         laik_log_append("After buffer allocation 1:\n");
@@ -1142,8 +1142,8 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     }
 
     as2 = laik_actions_setupTransform(as);
-    laik_actions_combineActions(as, as2);
-    laik_actions_free(as);
+    laik_aseq_combineActions(as, as2);
+    laik_aseq_free(as);
     as = as2;
 
     if (laik_log_begin(1)) {
@@ -1152,7 +1152,7 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_flush(0);
     }
 
-    laik_actions_allocBuffer(as);
+    laik_aseq_allocBuffer(as);
 
     if (laik_log_begin(1)) {
         laik_log_append("After buffer allocation 2:\n");
@@ -1165,7 +1165,7 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)
 {
-    laik_actions_free(as);
+    laik_aseq_free(as);
 }
 
 static void laik_mpi_wait(Laik_ActionSeq* as, int mapNo)
