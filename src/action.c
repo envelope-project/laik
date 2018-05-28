@@ -741,7 +741,7 @@ void laik_aseq_allocBuffer(Laik_ActionSeq* as)
 
     laik_log(1, "RBuf alloc %d: %d reservations, %d RBuf actions => %llu bytes at %p",
              as->currentBuf + 1, rCount, rActions, (long long unsigned) bufSize,
-             as->buf[as->currentBuf]);
+             (void*) as->buf[as->currentBuf]);
     assert(rCount == as->bufReserveCount);
 
     // start again with bufID 100 for next reservations
