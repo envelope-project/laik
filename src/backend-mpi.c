@@ -226,13 +226,16 @@ MPI_Op getMPIOp(Laik_ReductionOperation redOp)
 {
     MPI_Op mpiRedOp;
     switch(redOp) {
-    case LAIK_RO_Sum: mpiRedOp = MPI_SUM; break;
+    case LAIK_RO_Sum:  mpiRedOp = MPI_SUM; break;
+    case LAIK_RO_Prod: mpiRedOp = MPI_PROD; break;
+    case LAIK_RO_Min:  mpiRedOp = MPI_MIN; break;
+    case LAIK_RO_Max:  mpiRedOp = MPI_MAX; break;
+    case LAIK_RO_And:  mpiRedOp = MPI_LAND; break;
+    case LAIK_RO_Or:   mpiRedOp = MPI_LOR; break;
     default: assert(0);
     }
     return mpiRedOp;
 }
-
-
 
 
 static
