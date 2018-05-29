@@ -111,10 +111,14 @@ void laik_log_Reduction(Laik_ReductionOperation op)
     switch(op) {
     case LAIK_RO_None: laik_log_append("none"); break;
     case LAIK_RO_Sum:  laik_log_append("sum"); break;
+    case LAIK_RO_Prod: laik_log_append("prod"); break;
+    case LAIK_RO_Min:  laik_log_append("min"); break;
+    case LAIK_RO_Max:  laik_log_append("max"); break;
+    case LAIK_RO_And:  laik_log_append("bitwise and"); break;
+    case LAIK_RO_Or:   laik_log_append("bitwise or"); break;
     default: assert(0);
     }
 }
-
 
 void laik_log_DataFlow(Laik_DataFlow flow)
 {
