@@ -436,7 +436,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         laik_log_append("    RBufCopy (R %d): from buf %d off %lld, to %p, count %d",
                         ba->round,
                         ba->bufID, (long long int) ba->offset,
-                        ba->toBuf,
+                        (void*) ba->toBuf,
                         ba->count);
         break;
 
@@ -446,7 +446,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 
     case LAIK_AT_Reduce:
         laik_log_append("    Reduce: count %d, from %p, to %p, root %d",
-                        ba->count, ba->fromBuf, ba->toBuf, ba->peer_rank);
+                        ba->count, (void*) ba->fromBuf, (void*) ba->toBuf, ba->peer_rank);
         break;
 
     case LAIK_AT_RBufReduce:
@@ -456,7 +456,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 
     case LAIK_AT_GroupReduce:
         laik_log_append("    GroupReduce: count %d, from %p, to %p, input ",
-                        ba->count, ba->fromBuf, ba->toBuf);
+                        ba->count, (void*) ba->fromBuf, (void*) ba->toBuf);
         laik_log_TransitionGroup(tc->transition, ba->inputGroup);
         laik_log_append(", output ");
         laik_log_TransitionGroup(tc->transition, ba->outputGroup);
@@ -476,8 +476,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         laik_log_Reduction(ba->redOp);
         laik_log_append(", from buf %d off %lld, to %p, count %d",
                         ba->bufID, (long long int) ba->offset,
-                        ba->toBuf,
-                        ba->count);
+                        ba->toBuf, ba->count);
         break;
 
     case LAIK_AT_BufInit:
@@ -485,8 +484,28 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
                         ba->round, ba->dtype->name);
         laik_log_Reduction(ba->redOp);
         laik_log_append(", to %p, count %d",
-                        ba->toBuf,
-                        ba->count);
+                        (void*) ba->toBuf, ba->count);
+        break;
+
+    case LAIK_AT_PackToBuf:
+        laik_log_append("    MapPackToRBuf (R %d): ", ba->round);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" count %d ==> buf %p",
+                        ba->count, (void*) ba->toBuf);
+        break;
+
+    case LAIK_AT_PackToRBuf:
+        laik_log_append("    PackToRBuf (R %d): ", ba->round);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" count %d ==> buf %d off %lld",
+                        ba->count, ba->bufID, ba->offset);
+        break;
+
+    case LAIK_AT_MapPackToRBuf:
+        laik_log_append("    MapPackToRBuf (R %d): ", ba->round);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" mapNo %d, count %d ==> buf %d off %lld",
+                        ba->mapNo, ba->count, ba->bufID, ba->offset);
         break;
 
     case LAIK_AT_MapPackAndSend:
@@ -501,6 +520,27 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         laik_log_Slice(ba->dims, ba->slc);
         laik_log_append(" count %d ==> T%d",
                         ba->count, ba->peer_rank);
+        break;
+
+    case LAIK_AT_UnpackFromBuf:
+        laik_log_append("    UnpackFromRBuf (R %d): buf %p ==> ",
+                        ba->round, (void*) ba->fromBuf);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(", count %d", ba->count);
+        break;
+
+    case LAIK_AT_UnpackFromRBuf:
+        laik_log_append("    UnpackFromRBuf (R %d): buf %d, off %lld ==> ",
+                        ba->round, ba->bufID, ba->offset);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(", count %d", ba->count);
+        break;
+
+    case LAIK_AT_MapUnpackFromRBuf:
+        laik_log_append("    MapUnpackFromRBuf (R %d): buf %d, off %lld ==> ",
+                        ba->round, ba->bufID, ba->offset);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" mapNo %d, count %d", ba->mapNo, ba->count);
         break;
 
     case LAIK_AT_RecvAndUnpack:

@@ -237,6 +237,15 @@ MPI_Op getMPIOp(Laik_ReductionOperation redOp)
     return mpiRedOp;
 }
 
+static
+void laik_mpi_exec_pack(Laik_BackendAction* a, Laik_Mapping* map)
+{
+    Laik_Index idx = a->slc->from;
+    int byteCount = a->count * map->data->elemsize;
+    int packed = (map->layout->pack)(map, a->slc, &idx, a->toBuf, byteCount);
+    assert(packed == byteCount);
+    assert(laik_index_isEqual(a->dims, &idx, &(a->slc->to)));
+}
 
 static
 void laik_mpi_exec_packAndSend(Laik_BackendAction* a, Laik_Mapping* map, int dims,
@@ -255,6 +264,17 @@ void laik_mpi_exec_packAndSend(Laik_BackendAction* a, Laik_Mapping* map, int dim
         if (laik_index_isEqual(dims, &idx, &(a->slc->to))) break;
     }
     assert(count == a->count);
+}
+
+static
+void laik_mpi_exec_unpack(Laik_BackendAction* a, Laik_Mapping* map)
+{
+    Laik_Index idx = a->slc->from;
+    int byteCount = a->count * map->data->elemsize;
+    int unpacked = (map->layout->unpack)(map, a->slc, &idx,
+                                         a->fromBuf, byteCount);
+    assert(unpacked == byteCount);
+    assert(laik_index_isEqual(a->dims, &idx, &(a->slc->to)));
 }
 
 static
@@ -647,6 +667,14 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
                 memcpy(a->toBuf + a->ce[i].offset,
                        a->ce[i].ptr,
                        a->ce[i].bytes);
+            break;
+
+        case LAIK_AT_PackToBuf:
+            laik_mpi_exec_pack(a, a->map);
+            break;
+
+        case LAIK_AT_UnpackFromBuf:
+            laik_mpi_exec_unpack(a, a->map);
             break;
 
         case LAIK_AT_MapPackAndSend: {

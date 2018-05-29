@@ -77,13 +77,13 @@ typedef enum _Laik_ActionType {
 
     // iteratively pack items from container into buffer and send it afterwards
     LAIK_AT_MapPackAndSend, LAIK_AT_PackAndSend,
-    // pack items from container into buffer (must be followed by Send action)
-    LAIK_AT_Pack,
+    // pack items from container into buffer
+    LAIK_AT_MapPackToRBuf, LAIK_AT_PackToRBuf, LAIK_AT_PackToBuf,
 
     // iteratively receive items into buffer and unpack into container
     LAIK_AT_MapRecvAndUnpack, LAIK_AT_RecvAndUnpack,
-    // unpack data from buffer into container (must have Recv action before)
-    LAIK_AT_Unpack,
+    // unpack data from buffer into container
+    LAIK_AT_MapUnpackFromRBuf, LAIK_AT_UnpackFromRBuf, LAIK_AT_UnpackFromBuf,
 
     // reduce from all to one or all
     LAIK_AT_Reduce, LAIK_AT_RBufReduce,

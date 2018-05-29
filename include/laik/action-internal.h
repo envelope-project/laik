@@ -185,6 +185,20 @@ void laik_aseq_addRBufCopy(Laik_ActionSeq* as, int round,
                            int fromBufID, int fromByteOffset,
                            char* toBuf, int count);
 
+// append action to pack a slice of data into a buffer
+void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
+                            Laik_Mapping* fromMap, Laik_Slice* slc, char* toBuf);
+
+// append action to pack a slice of data into a buffer
+void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
+                             Laik_Mapping* fromMap, Laik_Slice* slc,
+                             int toBufID, int toByteOffset);
+
+// append action to pack a slice of data into a buffer
+void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
+                                int fromMapNo, Laik_Slice* slc,
+                                int toBufID, int toByteOffset);
+
 // append action to pack a slice of data into temp buffer and send it
 void laik_aseq_addMapPackAndSend(Laik_ActionSeq* as, int round,
                                  int fromMapNo, Laik_Slice* slc, int to);
@@ -194,9 +208,23 @@ void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
                               Laik_Mapping* fromMap,
                               Laik_Slice* slc, int to);
 
+// append action to unpack data from buffer into a slice of data
+void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
+                                char* fromBuf, Laik_Mapping* toMap, Laik_Slice* slc);
+
+// append action to unpack data from buffer into a slice of data
+void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
+                                 int fromBufID, int fromByteOffset,
+                                 Laik_Mapping* toMap, Laik_Slice* slc);
+
+// append action to unpack data from buffer into a slice of data
+void laik_aseq_addMapUnpackFromRBuf(Laik_ActionSeq* as, int round,
+                                    int fromBufID, int fromByteOffset,
+                                    int toMapNo, Laik_Slice* slc);
+
 // append action to receive data into temp buffer and unpack it into a slice of data
-void laik_aseq_addPackRecvAndUnpack(Laik_ActionSeq* as, int round,
-                                    int toMapNo, Laik_Slice* slc, int from);
+void laik_aseq_addMapRecvAndUnpack(Laik_ActionSeq* as, int round,
+                                   int toMapNo, Laik_Slice* slc, int from);
 
 // append action to receive data into temp buffer and unpack it into a slice of data
 void laik_aseq_addRecvAndUnpack(Laik_ActionSeq* as, int round,
