@@ -243,7 +243,7 @@ void laik_mpi_exec_pack(Laik_BackendAction* a, Laik_Mapping* map)
     Laik_Index idx = a->slc->from;
     int byteCount = a->count * map->data->elemsize;
     int packed = (map->layout->pack)(map, a->slc, &idx, a->toBuf, byteCount);
-    assert(packed == byteCount);
+    assert(packed == a->count);
     assert(laik_index_isEqual(a->dims, &idx, &(a->slc->to)));
 }
 
@@ -273,7 +273,7 @@ void laik_mpi_exec_unpack(Laik_BackendAction* a, Laik_Mapping* map)
     int byteCount = a->count * map->data->elemsize;
     int unpacked = (map->layout->unpack)(map, a->slc, &idx,
                                          a->fromBuf, byteCount);
-    assert(unpacked == byteCount);
+    assert(unpacked == a->count);
     assert(laik_index_isEqual(a->dims, &idx, &(a->slc->to)));
 }
 
@@ -1131,6 +1131,9 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
                                  Laik_MappingList* fromList,
                                  Laik_MappingList* toList)
 {
+    laik_log(1, "MPI backend: prepare sequence for transition on data '%s'\n",
+             d->name);
+
     Laik_ActionSeq *as, *as2;
 
     as = laik_aseq_new(d->space->inst);
@@ -1197,6 +1200,8 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)
 {
+    laik_log(1, "MPI backend: cleanup action sequence (%d actions)\n",
+             as->actionCount);
     laik_aseq_free(as);
 }
 

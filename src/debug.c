@@ -492,7 +492,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_PackToBuf:
-        laik_log_append("    MapPackToRBuf (R %d): ", ba->round);
+        laik_log_append("    MapPackToBuf (R %d): ", ba->round);
         laik_log_Slice(ba->dims, ba->slc);
         laik_log_append(" count %d ==> buf %p",
                         ba->count, (void*) ba->toBuf);
@@ -527,7 +527,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_UnpackFromBuf:
-        laik_log_append("    UnpackFromRBuf (R %d): buf %p ==> ",
+        laik_log_append("    UnpackFromBuf (R %d): buf %p ==> ",
                         ba->round, (void*) ba->fromBuf);
         laik_log_Slice(ba->dims, ba->slc);
         laik_log_append(", count %d", ba->count);

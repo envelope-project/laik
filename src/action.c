@@ -56,8 +56,11 @@ void laik_aseq_free(Laik_ActionSeq* as)
     for(int i = 0; i < ASEQ_CONTEXTS_MAX; i++)
         free(as->context[i]);
 
-    for(int i = 0; i < ASEQ_BUFFER_MAX; i++)
+    for(int i = 0; i < ASEQ_BUFFER_MAX; i++) {
+        if (as->bufSize[i] == 0) continue;
+        laik_log(1, "    free buffer %d: %d bytes\n", i, as->bufSize[i]);
         free(as->buf[i]);
+    }
 
     free(as->ce);
 
@@ -484,7 +487,7 @@ void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
 
-    a->type = LAIK_AT_UnpackFromRBuf;
+    a->type = LAIK_AT_UnpackFromBuf;
     a->round = round;
     a->dims = dims;
     a->fromBuf = fromBuf;
@@ -945,6 +948,20 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
                               ba->count, ba->peer_rank);
         break;
 
+    case LAIK_AT_MapPackToRBuf:
+        laik_aseq_addMapPackToRBuf(as, ba->round,
+                                   ba->mapNo, ba->slc, ba->bufID, ba->offset);
+        break;
+
+    case LAIK_AT_PackToRBuf:
+        laik_aseq_addPackToRBuf(as, ba->round,
+                                ba->map, ba->slc, ba->bufID, ba->offset);
+        break;
+
+    case LAIK_AT_PackToBuf:
+        laik_aseq_addPackToBuf(as, ba->round, ba->map, ba->slc, ba->toBuf);
+        break;
+
     case LAIK_AT_MapPackAndSend:
         laik_aseq_addMapPackAndSend(as, ba->round,
                                     ba->mapNo, ba->slc, ba->peer_rank);
@@ -953,6 +970,23 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
     case LAIK_AT_PackAndSend:
         laik_aseq_addPackAndSend(as, ba->round,
                                  ba->map, ba->slc, ba->peer_rank);
+        break;
+
+    case LAIK_AT_MapUnpackFromRBuf:
+        laik_aseq_addMapUnpackFromRBuf(as, ba->round,
+                                       ba->bufID, ba->offset,
+                                       ba->mapNo, ba->slc);
+        break;
+
+    case LAIK_AT_UnpackFromRBuf:
+        laik_aseq_addUnpackFromRBuf(as, ba->round,
+                                    ba->bufID, ba->offset,
+                                    ba->map, ba->slc);
+        break;
+
+    case LAIK_AT_UnpackFromBuf:
+        laik_aseq_addUnpackFromBuf(as, ba->round,
+                                   ba->fromBuf, ba->map, ba->slc);
         break;
 
     case LAIK_AT_MapRecvAndUnpack:
@@ -1676,6 +1710,7 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
     int64_t from, to;
 
     Laik_TransitionContext* tc = as->context[0];
+    int elemsize = tc->data->elemsize;
 
     for(int i = 0; i < as->actionCount; i++) {
         Laik_BackendAction* ba = &(as->action[i]);
@@ -1683,54 +1718,81 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
         switch(ba->type) {
         case LAIK_AT_MapPackAndSend:
-            if (!tc->fromList) break;
-            assert(ba->mapNo < tc->fromList->count);
-            map = &(tc->fromList->map[ba->mapNo]);
+            if (tc->fromList)
+                assert(ba->mapNo < tc->fromList->count);
+            map = tc->fromList ? &(tc->fromList->map[ba->mapNo]) : 0;
 
-            // TODO: only for 1d for now
-            if (ba->dims > 1) break;
+            if (map && (ba->dims == 1)) {
+                // mapping known and 1d: can use direct send/recv
 
-            // FIXME: this assumes lexicographical layout
-            from = ba->slc->from.i[0] - map->requiredSlice.from.i[0];
-            to   = ba->slc->to.i[0] - map->requiredSlice.from.i[0];
-            assert(from >= 0);
-            assert(to > from);
+                // FIXME: this assumes lexicographical layout
+                from = ba->slc->from.i[0] - map->requiredSlice.from.i[0];
+                to   = ba->slc->to.i[0] - map->requiredSlice.from.i[0];
+                assert(from >= 0);
+                assert(to > from);
 
-            // replace with different action depending on map allocation done
-            if (map->base)
-                laik_aseq_addBufSend(as2, ba->round,
-                                     map->base + from * tc->data->elemsize,
-                                     to - from, ba->peer_rank);
-            else
-                laik_aseq_addMapSend(as2, ba->round,
-                                     ba->mapNo, from * tc->data->elemsize,
-                                     to - from, ba->peer_rank);
+                // replace with different action depending on map allocation done
+                if (map->base)
+                    laik_aseq_addBufSend(as2, ba->round,
+                                         map->base + from * elemsize,
+                                         to - from, ba->peer_rank);
+                else
+                    laik_aseq_addMapSend(as2, ba->round,
+                                         ba->mapNo, from * elemsize,
+                                         to - from, ba->peer_rank);
+            }
+            else {
+                // split off packing and sending, using a buffer of required size
+                int bufID = laik_aseq_addBufReserve(as2, ba->count * elemsize, -1);
+                if (map)
+                    laik_aseq_addPackToRBuf(as2, ba->round,
+                                            map, ba->slc, bufID, 0);
+                else
+                    laik_aseq_addMapPackToRBuf(as2, ba->round,
+                                               ba->mapNo, ba->slc, bufID, 0);
+
+                laik_aseq_addRBufSend(as2, ba->round, bufID, 0,
+                                      ba->count, ba->peer_rank);
+            }
             handled = true;
             break;
 
         case LAIK_AT_MapRecvAndUnpack:
-            if (!tc->toList) break;
-            assert(ba->mapNo < tc->toList->count);
-            map = &(tc->toList->map[ba->mapNo]);
+            if (tc->toList)
+                assert(ba->mapNo < tc->toList->count);
+            map = tc->toList ? &(tc->toList->map[ba->mapNo]) : 0;
 
-            // TODO: only for 1d for now
-            if (ba->dims > 1) break;
+            if (map && (ba->dims == 1)) {
+                // mapping known and 1d: can use direct send/recv
 
-            // FIXME: this assumes lexicographical layout
-            from = ba->slc->from.i[0] - map->requiredSlice.from.i[0];
-            to   = ba->slc->to.i[0] - map->requiredSlice.from.i[0];
-            assert(from >= 0);
-            assert(to > from);
+                // FIXME: this assumes lexicographical layout
+                from = ba->slc->from.i[0] - map->requiredSlice.from.i[0];
+                to   = ba->slc->to.i[0] - map->requiredSlice.from.i[0];
+                assert(from >= 0);
+                assert(to > from);
 
-            // replace with different action depending on map allocation done
-            if (map->base)
-                laik_aseq_addBufRecv(as2, ba->round,
-                                     map->base + from * tc->data->elemsize,
-                                     to - from, ba->peer_rank);
-            else
-                laik_aseq_addMapRecv(as2, ba->round,
-                                     ba->mapNo, from * tc->data->elemsize,
-                                     to - from, ba->peer_rank);
+                // replace with different action depending on map allocation done
+                if (map->base)
+                    laik_aseq_addBufRecv(as2, ba->round,
+                                         map->base + from * elemsize,
+                                         to - from, ba->peer_rank);
+                else
+                    laik_aseq_addMapRecv(as2, ba->round,
+                                         ba->mapNo, from * elemsize,
+                                         to - from, ba->peer_rank);
+            }
+            else {
+                // split off receiving and unpacking, using buffer of required size
+                int bufID = laik_aseq_addBufReserve(as2, ba->count * elemsize, -1);
+                laik_aseq_addRBufRecv(as2, ba->round, bufID, 0,
+                                      ba->count, ba->peer_rank);
+                if (map)
+                    laik_aseq_addUnpackFromRBuf(as2, ba->round,
+                                                bufID, 0, map, ba->slc);
+                else
+                    laik_aseq_addMapUnpackFromRBuf(as2, ba->round,
+                                                   bufID, 0, ba->mapNo, ba->slc);
+            }
             handled = true;
             break;
 

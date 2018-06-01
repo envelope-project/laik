@@ -1463,7 +1463,7 @@ int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
         laik_sub_index(&localFrom, &(s->from), &(m->requiredSlice.from));
         laik_sub_index(&slcsize, &(s->to), &(s->from));
 
-        laik_log_append("packing for '%s', size (", m->data->name);
+        laik_log_append("        packing '%s', size (", m->data->name);
         laik_log_Index(dims, &slcsize);
         laik_log_append(") x %d from global (", elemsize);
         laik_log_Index(dims, &(s->from));
@@ -1517,7 +1517,7 @@ int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
         Laik_Index idx2;
         laik_set_index(&idx2, i0, i1, i2);
 
-        laik_log_append("packed for '%s': end (", m->data->name);
+        laik_log_append("        packed '%s': end (", m->data->name);
         laik_log_Index(dims, &idx2);
         laik_log_flush("), %lu elems = %lu bytes, %d left",
                        count, count * elemsize, size);
@@ -1584,7 +1584,7 @@ int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
         laik_sub_index(&localFrom, &(s->from), &(m->requiredSlice.from));
         laik_sub_index(&slcsize, &(s->to), &(s->from));
 
-        laik_log_append("unpacking for '%s', size (", m->data->name);
+        laik_log_append("        unpacking '%s', size (", m->data->name);
         laik_log_Index(dims, &slcsize);
         laik_log_append(") x %d from global (", elemsize);
         laik_log_Index(dims, &(s->from));
@@ -1638,7 +1638,7 @@ int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
         Laik_Index idx2;
         laik_set_index(&idx2, i0, i1, i2);
 
-        laik_log_append("unpacked for '%s': end (", m->data->name);
+        laik_log_append("        unpacked '%s': end (", m->data->name);
         laik_log_Index(dims, &idx2);
         laik_log_flush("), %lu elems = %lu bytes, %d left",
                        count, count * elemsize, size);
