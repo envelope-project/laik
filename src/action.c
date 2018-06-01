@@ -53,14 +53,21 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
 // this may include backend-specific resources
 void laik_aseq_free(Laik_ActionSeq* as)
 {
-    for(int i = 0; i < ASEQ_CONTEXTS_MAX; i++)
-        free(as->context[i]);
+    Laik_TransitionContext* tc = as->context[0];
 
     for(int i = 0; i < ASEQ_BUFFER_MAX; i++) {
         if (as->bufSize[i] == 0) continue;
+
         laik_log(1, "    free buffer %d: %d bytes\n", i, as->bufSize[i]);
         free(as->buf[i]);
+
+        // update allocation statistics
+        tc->data->stat->freeCount++;
+        tc->data->stat->freedBytes += as->bufSize[i];
     }
+
+    for(int i = 0; i < ASEQ_CONTEXTS_MAX; i++)
+        free(as->context[i]);
 
     free(as->ce);
 
@@ -821,6 +828,10 @@ void laik_aseq_allocBuffer(Laik_ActionSeq* as)
 
     char* buf = malloc(bufSize);
     assert(buf != 0);
+
+    // update allocation statistics
+    tc->data->stat->mallocCount++;
+    tc->data->stat->mallocedBytes += bufSize;
 
     // eventually modify actions, now that buffer allocation is known
     for(int i = 0; i < as->actionCount; i++) {
