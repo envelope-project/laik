@@ -688,13 +688,16 @@ void laik_execOrRecord(bool record,
     assert(gd); // must have been updated by laik_mpi_updateGroup()
     MPI_Comm comm = gd->comm;
 
-#if 0
-    if (record)
+    // when recording, just create actions
+    // TODO: pull out of backend
+    if (record) {
         laik_aseq_addReds(as, data, t);
-    else if (t->redCount > 0) {
-#else
+        laik_aseq_addSends(as, 0, data, t);
+        laik_aseq_addRecvs(as, 0, data, t);
+        return;
+    }
+
     if (t->redCount > 0) {
-#endif
         assert(dims == 1);
         assert(fromList);
 
@@ -794,17 +797,6 @@ void laik_execOrRecord(bool record,
             }
         }
     }
-
-#if 1
-    if (record) {
-        // warning: the sequence has to be sorted for deadlock avoidance
-        laik_aseq_addSends(as, 0, data, t);
-        laik_aseq_addRecvs(as, 0, data, t);
-
-        // TODO: avoid buffer usage / allocate buffer of required size
-        return;
-    }
-#endif
 
     // use 2x <taskcount> phases to avoid deadlocks
     // - count phases X: 0..<taskcount - 1>
@@ -1011,6 +1003,7 @@ static void detectReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         Laik_BackendAction* ba = &(as->action[i]);
 
         switch(ba->type) {
+        // TODO: LAIK_AT_MapGroupReduce
         case LAIK_AT_GroupReduce:
             if (ba->inputGroup == -1) {
                 if (ba->outputGroup == -1) {

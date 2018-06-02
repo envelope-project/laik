@@ -1767,11 +1767,12 @@ void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 // if mapping is known and direct send/recv is possible
 void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
-    Laik_Mapping* map;
+    Laik_Mapping *fromMap, *toMap;
     int64_t from, to;
 
     Laik_TransitionContext* tc = as->context[0];
     int elemsize = tc->data->elemsize;
+    int myid = tc->transition->group->myid;
 
     for(int i = 0; i < as->actionCount; i++) {
         Laik_BackendAction* ba = &(as->action[i]);
@@ -1781,21 +1782,21 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         case LAIK_AT_MapPackAndSend:
             if (tc->fromList)
                 assert(ba->fromMapNo < tc->fromList->count);
-            map = tc->fromList ? &(tc->fromList->map[ba->fromMapNo]) : 0;
+            fromMap = tc->fromList ? &(tc->fromList->map[ba->fromMapNo]) : 0;
 
-            if (map && (ba->dims == 1)) {
+            if (fromMap && (ba->dims == 1)) {
                 // mapping known and 1d: can use direct send/recv
 
                 // FIXME: this assumes lexicographical layout
-                from = ba->slc->from.i[0] - map->requiredSlice.from.i[0];
-                to   = ba->slc->to.i[0] - map->requiredSlice.from.i[0];
+                from = ba->slc->from.i[0] - fromMap->requiredSlice.from.i[0];
+                to   = ba->slc->to.i[0] - fromMap->requiredSlice.from.i[0];
                 assert(from >= 0);
                 assert(to > from);
 
                 // replace with different action depending on map allocation done
-                if (map->base)
+                if (fromMap->base)
                     laik_aseq_addBufSend(as2, ba->round,
-                                         map->base + from * elemsize,
+                                         fromMap->base + from * elemsize,
                                          to - from, ba->peer_rank);
                 else
                     laik_aseq_addMapSend(as2, ba->round,
@@ -1805,9 +1806,9 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
             else {
                 // split off packing and sending, using a buffer of required size
                 int bufID = laik_aseq_addBufReserve(as2, ba->count * elemsize, -1);
-                if (map)
+                if (fromMap)
                     laik_aseq_addPackToRBuf(as2, ba->round,
-                                            map, ba->slc, bufID, 0);
+                                            fromMap, ba->slc, bufID, 0);
                 else
                     laik_aseq_addMapPackToRBuf(as2, ba->round,
                                                ba->fromMapNo, ba->slc, bufID, 0);
@@ -1821,21 +1822,21 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         case LAIK_AT_MapRecvAndUnpack:
             if (tc->toList)
                 assert(ba->toMapNo < tc->toList->count);
-            map = tc->toList ? &(tc->toList->map[ba->toMapNo]) : 0;
+            toMap = tc->toList ? &(tc->toList->map[ba->toMapNo]) : 0;
 
-            if (map && (ba->dims == 1)) {
+            if (toMap && (ba->dims == 1)) {
                 // mapping known and 1d: can use direct send/recv
 
                 // FIXME: this assumes lexicographical layout
-                from = ba->slc->from.i[0] - map->requiredSlice.from.i[0];
-                to   = ba->slc->to.i[0] - map->requiredSlice.from.i[0];
+                from = ba->slc->from.i[0] - toMap->requiredSlice.from.i[0];
+                to   = ba->slc->to.i[0] - toMap->requiredSlice.from.i[0];
                 assert(from >= 0);
                 assert(to > from);
 
                 // replace with different action depending on map allocation done
-                if (map->base)
+                if (toMap->base)
                     laik_aseq_addBufRecv(as2, ba->round,
-                                         map->base + from * elemsize,
+                                         toMap->base + from * elemsize,
                                          to - from, ba->peer_rank);
                 else
                     laik_aseq_addMapRecv(as2, ba->round,
@@ -1847,14 +1848,63 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                 int bufID = laik_aseq_addBufReserve(as2, ba->count * elemsize, -1);
                 laik_aseq_addRBufRecv(as2, ba->round, bufID, 0,
                                       ba->count, ba->peer_rank);
-                if (map)
+                if (toMap)
                     laik_aseq_addUnpackFromRBuf(as2, ba->round,
-                                                bufID, 0, map, ba->slc);
+                                                bufID, 0, toMap, ba->slc);
                 else
                     laik_aseq_addMapUnpackFromRBuf(as2, ba->round,
                                                    bufID, 0, ba->toMapNo, ba->slc);
             }
             handled = true;
+            break;
+
+        case LAIK_AT_MapGroupReduce:
+
+            // TODO: for >1 dims, use pack/unpack with buffer
+            if (ba->dims == 1) {
+                char *fromBase, *toBase;
+
+                // if current task is input, fromBase should be allocated
+                if (laik_trans_isInGroup(tc->transition, ba->inputGroup, myid)) {
+                    assert(tc->fromList);
+                    assert(ba->fromMapNo < tc->fromList->count);
+                    fromMap = &(tc->fromList->map[ba->fromMapNo]);
+                    fromBase = fromMap ? fromMap->base : 0;
+                    assert(fromBase != 0);
+                }
+                else
+                    fromBase = 0;
+
+                // if current task is receiver, toBase should be allocated
+                if (laik_trans_isInGroup(tc->transition, ba->outputGroup, myid)) {
+                    assert(tc->toList);
+                    assert(ba->toMapNo < tc->toList->count);
+                    toMap = &(tc->toList->map[ba->toMapNo]);
+                    toBase = toMap ? toMap->base : 0;
+                    assert(toBase != 0);
+                }
+                else
+                    toBase = 0; // no interest in receiving anything
+
+                // FIXME: this assumes lexicographical layout
+                from = ba->slc->from.i[0];
+                to   = ba->slc->to.i[0];
+                assert(to > from);
+
+                if (fromBase) {
+                    assert(from >= fromMap->requiredSlice.from.i[0]);
+                    fromBase += (from - fromMap->requiredSlice.from.i[0]) * elemsize;
+                }
+                if (toBase) {
+                    assert(from >= toMap->requiredSlice.from.i[0]);
+                    toBase += (from - toMap->requiredSlice.from.i[0]) * elemsize;
+                }
+
+                laik_aseq_addGroupReduce(as,
+                                         ba->inputGroup, ba->outputGroup,
+                                         fromBase, toBase, to - from, ba->redOp);
+                handled = true;
+            }
             break;
 
         default: break;
