@@ -303,5 +303,7 @@ void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2);
 // transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
 void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2);
 
+// transformation for split reduce actions into basic multiple actions
+void laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2);
 
 #endif // _LAIK_ACTION_INTERNAL_H_

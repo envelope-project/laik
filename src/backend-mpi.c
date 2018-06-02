@@ -810,23 +810,9 @@ void laik_execOrRecord(bool record,
                 }
 
                 if (record) {
-#if 0
-                    laik_actions_addGroupReduce(as,
-                                                op->inputGroup, op->outputGroup,
-                                                fromBase, toBase, elemCount, op->redOp);
-#else
-                    // experimental: record actions of group reduce
-                    Laik_BackendAction a;
-                    Laik_TransitionContext tc;
-
-                    laik_aseq_initGroupReduce(&a,
-                                                 op->inputGroup, op->outputGroup,
-                                                 fromBase, toBase, elemCount, op->redOp);
-                    laik_aseq_initTContext(&tc,
-                                              data, t, fromList, toList);
-
-                    laik_mpi_exec_groupReduce(&tc, &a, mpiDataType, comm, as);
-#endif
+                    laik_aseq_addGroupReduce(as,
+                                             op->inputGroup, op->outputGroup,
+                                             fromBase, toBase, elemCount, op->redOp);
                 }
                 else {
                     // fill out action parameters and transition context,
@@ -1117,6 +1103,17 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     laik_execOrRecord(true, d, t, as, fromList, toList);
 
     if (laik_log_begin(1)) {
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
+    as2 = laik_actions_setupTransform(as);
+    laik_aseq_splitReduce(as, as2);
+    laik_aseq_free(as);
+    as = as2;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After splitting reduce actions:\n");
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
