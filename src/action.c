@@ -1900,7 +1900,7 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                     toBase += (from - toMap->requiredSlice.from.i[0]) * elemsize;
                 }
 
-                laik_aseq_addGroupReduce(as,
+                laik_aseq_addGroupReduce(as2,
                                          ba->inputGroup, ba->outputGroup,
                                          fromBase, toBase, to - from, ba->redOp);
                 handled = true;
@@ -1915,9 +1915,10 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
     }
 }
 
-// helper for splitReduce transformation:
-// add manual actions to <as> for the reduce action <a>
-void laik_aseq_addReduceActions(Laik_ActionSeq* as,
+// helpers for splitReduce transformation
+
+static
+void laik_aseq_addReduce3Rounds(Laik_ActionSeq* as,
                                 Laik_TransitionContext* tc, Laik_BackendAction* a)
 {
     assert(a->type == LAIK_AT_GroupReduce);
@@ -2003,7 +2004,6 @@ void laik_aseq_addReduceActions(Laik_ActionSeq* as,
                                          a->toBuf, a->count);
     }
 
-
     // send result to tasks in output group
     int outCount = laik_trans_groupCount(t, a->outputGroup);
     for(int i = 0; i< outCount; i++) {
@@ -2017,6 +2017,92 @@ void laik_aseq_addReduceActions(Laik_ActionSeq* as,
     }
 }
 
+static
+void laik_aseq_addReduce2Rounds(Laik_ActionSeq* as,
+                                Laik_TransitionContext* tc, Laik_BackendAction* a)
+{
+    assert(a->type == LAIK_AT_GroupReduce);
+    Laik_Transition* t = tc->transition;
+    Laik_Data* data = tc->data;
+
+    // everybody sends his input to all others, everybody does reduction
+    int myid = t->group->myid;
+
+    bool inputFromMe = laik_trans_isInGroup(t, a->inputGroup, myid);
+    if (inputFromMe) {
+        // send my input to all tasks in output group
+        int outCount = laik_trans_groupCount(t, a->outputGroup);
+        for(int i = 0; i< outCount; i++) {
+            int outTask = laik_trans_taskInGroup(t, a->outputGroup, i);
+            if (outTask == myid) {
+                // that's myself: nothing to do
+                continue;
+            }
+
+            laik_aseq_addBufSend(as, 0, a->fromBuf, a->count, outTask);
+        }
+    }
+
+    if (!laik_trans_isInGroup(t, a->outputGroup, myid)) return;
+
+    // I am interested in result, process inputs from others
+
+    int inCount = laik_trans_groupCount(t, a->inputGroup);
+    uint64_t byteCount = a->count * data->elemsize;
+    // buffer for all partial input values
+    int bufSize = (inCount - (inputFromMe ? 1:0)) * byteCount;
+    int bufID = -1;
+    if (bufSize > 0)
+        bufID = laik_aseq_addBufReserve(as, bufSize, -1);
+
+    // collect values from tasks in input group
+    int bufOff[32], off = 0;
+    assert(inCount <= 32); // TODO: support more than 32 partitial inputs
+
+    // always put this task in front: we use toBuf to calculate
+    // our results, but there may be input from us, which would
+    // be overwritten if not starting with our input
+    int ii = 0;
+    if (inputFromMe) {
+        ii++; // slot 0 reserved for this task (use a->fromBuf)
+        bufOff[0] = 0;
+    }
+    for(int i = 0; i < inCount; i++) {
+        int inTask = laik_trans_taskInGroup(t, a->inputGroup, i);
+        if (inTask == myid) continue;
+
+        laik_aseq_addRBufRecv(as, 0, bufID, off, a->count, inTask);
+        bufOff[ii++] = off;
+        off += byteCount;
+    }
+    assert(ii == inCount);
+    assert(off == bufSize);
+
+    if (inCount == 0) {
+        // no input: add init action for neutral element of reduction
+        laik_aseq_addBufInit(as, 1, data->type, a->redOp, a->toBuf, a->count);
+    }
+    else {
+        // move first input to a->toBuf, and then reduce on that
+        if (inputFromMe) {
+            if (a->fromBuf != a->toBuf) {
+                // if my input is not already at a->toBuf, copy it
+                laik_aseq_addBufCopy(as, 1, a->fromBuf, a ->toBuf, a->count);
+            }
+        }
+        else {
+            // copy first input to a->toBuf
+            laik_aseq_addRBufCopy(as, 1, bufID, bufOff[0], a->toBuf, a->count);
+        }
+
+        // do reduction with other inputs
+        for(int t = 1; t < inCount; t++)
+            laik_aseq_addRBufLocalReduce(as, 1, data->type, a->redOp,
+                                         bufID, bufOff[t],
+                                         a->toBuf, a->count);
+    }
+}
+
 // transformation for split reduce actions into basic multiple actions
 void laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
@@ -2026,9 +2112,17 @@ void laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         Laik_BackendAction* ba = &(as->action[i]);
 
         switch(ba->type) {
-        case LAIK_AT_GroupReduce:
-            laik_aseq_addReduceActions(as2, tc, ba);
+        case LAIK_AT_GroupReduce: {
+            int inCount, outCount;
+            inCount = laik_trans_groupCount(tc->transition, ba->inputGroup);
+            outCount = laik_trans_groupCount(tc->transition, ba->inputGroup);
+            // use simple 3-step reduction if too many messages for 2-step
+            if (inCount * outCount > 4 * (inCount + outCount))
+                laik_aseq_addReduce3Rounds(as2, tc, ba);
+            else
+                laik_aseq_addReduce2Rounds(as2, tc, ba);
             break;
+        }
 
         default:
             laik_actions_add(ba, as2);
