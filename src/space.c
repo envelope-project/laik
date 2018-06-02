@@ -1690,6 +1690,43 @@ laik_calc_transition(Laik_Space* space,
 }
 
 
+// return size of task group with ID <subgroup> in transition <t>
+int laik_trans_groupCount(Laik_Transition* t, int subgroup)
+{
+    if (subgroup == -1)
+        return t->group->size;
+
+    assert((subgroup >= 0) && (subgroup < t->subgroupCount));
+    return t->subgroup[subgroup].count;
+}
+
+// return task of <i>'th task in group with ID <subgroup> in transition <t>
+int laik_trans_taskInGroup(Laik_Transition* t, int subgroup, int i)
+{
+    if (subgroup == -1) {
+        assert((i >= 0) && (i < t->group->size));
+        return i;
+    }
+
+    assert((subgroup >= 0) && (subgroup < t->subgroupCount));
+    assert((i >= 0) && (i < t->subgroup[subgroup].count));
+    return t->subgroup[subgroup].task[i];
+}
+
+// true if a task is part of the group with ID <subgroup> in transition <t>
+bool laik_trans_isInGroup(Laik_Transition* t, int subgroup, int task)
+{
+    // all-group?
+    if (subgroup == -1) return true;
+
+    assert(subgroup < t->subgroupCount);
+    TaskGroup* tg = &(t->subgroup[subgroup]);
+    for(int i = 0; i < tg->count; i++)
+        if (tg->task[i] == task) return true;
+    return false;
+}
+
+
 // Calculate communication for transitioning between partitioning groups
 Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
                                        Laik_PartGroup* to)

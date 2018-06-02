@@ -83,9 +83,5 @@ struct _Laik_Backend {
 };
 
 
-// helpers for backends
-
-bool laik_isInGroup(Laik_Transition* t, int group, int task);
-
 
 #endif // _LAIK_BACKEND_H_

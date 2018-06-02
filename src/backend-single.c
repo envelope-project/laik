@@ -79,7 +79,7 @@ void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
             int64_t from = op->slc.from.i[0];
             int64_t to   = op->slc.to.i[0];
             assert(fromBase != 0);
-            assert(laik_isInGroup(t, op->outputGroup, inst->myid));
+            assert(laik_trans_isInGroup(t, op->outputGroup, inst->myid));
             assert(toBase != 0);
             assert(to > from);
 

@@ -345,30 +345,6 @@ void laik_mpi_exec_reduce(Laik_TransitionContext* tc, Laik_BackendAction* a,
 
 }
 
-static
-int subgroupCount(Laik_Transition* t, int subgroup)
-{
-    if (subgroup == -1)
-        return t->group->size;
-
-    assert((subgroup >= 0) && (subgroup < t->subgroupCount));
-    return t->subgroup[subgroup].count;
-}
-
-static
-int taskInSubgroup(Laik_Transition* t, int subgroup, int i)
-{
-    if (subgroup == -1) {
-        assert((i >= 0) && (i < t->group->size));
-        return i;
-    }
-
-    assert((subgroup >= 0) && (subgroup < t->subgroupCount));
-    assert((i >= 0) && (i < t->subgroup[subgroup].count));
-    return t->subgroup[subgroup].task[i];
-}
-
-
 // a naive, manual reduction using send/recv:
 // one process is chosen to do the reduction: the smallest rank from processes
 // which are interested in the result. All other processes with input
@@ -388,7 +364,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     bool record = (as != 0);
 
     // do the manual reduction on smallest rank of output group
-    int reduceTask = taskInSubgroup(t, a->outputGroup, 0);
+    int reduceTask = laik_trans_taskInGroup(t, a->outputGroup, 0);
     laik_log(1, "      %s reduce at T%d",
              record ? "record" : "exec", reduceTask);
 
@@ -398,7 +374,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     if (myid != reduceTask) {
         // not the reduce task: eventually send input and recv result
 
-        if (laik_isInGroup(t, a->inputGroup, myid)) {
+        if (laik_trans_isInGroup(t, a->inputGroup, myid)) {
             laik_log(1, "        %s MPI_Send to T%d",
                      as ? "record" : "exec", reduceTask);
 
@@ -407,7 +383,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
             else
                 MPI_Send(a->fromBuf, a->count, dataType, reduceTask, 1, comm);
         }
-        if (laik_isInGroup(t, a->outputGroup, myid)) {
+        if (laik_trans_isInGroup(t, a->outputGroup, myid)) {
             laik_log(1, "        %s MPI_Recv from T%d",
                      record ? "record" : "exec", reduceTask);
 
@@ -421,10 +397,10 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
     // we are the reduce task
 
-    int inCount = subgroupCount(t, a->inputGroup);
+    int inCount = laik_trans_groupCount(t, a->inputGroup);
     uint64_t byteCount = a->count * data->elemsize;
 
-    bool inputFromMe = laik_isInGroup(t, a->inputGroup, myid);
+    bool inputFromMe = laik_trans_isInGroup(t, a->inputGroup, myid);
 
     // for recording
     int bufID = 0;
@@ -452,7 +428,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         bufOff[0] = 0;
     }
     for(int i = 0; i< inCount; i++) {
-        int inTask = taskInSubgroup(t, a->inputGroup, i);
+        int inTask = laik_trans_taskInGroup(t, a->inputGroup, i);
         if (inTask == myid) {
 
 #ifdef LOG_EXEC_DOUBLE_VALUES
@@ -562,9 +538,9 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     }
 
     // send result to tasks in output group
-    int outCount = subgroupCount(t, a->outputGroup);
+    int outCount = laik_trans_groupCount(t, a->outputGroup);
     for(int i = 0; i< outCount; i++) {
-        int outTask = taskInSubgroup(t, a->outputGroup, i);
+        int outTask = laik_trans_taskInGroup(t, a->outputGroup, i);
         if (outTask == myid) {
             // that's myself: nothing to do
             continue;
@@ -797,7 +773,7 @@ void laik_execOrRecord(bool record,
             uint64_t elemCount = to - from;
 
             // if current task is receiver, toBase should be allocated
-            if (laik_isInGroup(t, op->outputGroup, myid))
+            if (laik_trans_isInGroup(t, op->outputGroup, myid))
                 assert(toBase != 0);
             else
                 toBase = 0; // no interest in receiving anything

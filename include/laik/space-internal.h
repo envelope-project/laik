@@ -251,6 +251,16 @@ struct _Laik_Transition {
     TaskGroup *subgroup;
 };
 
+// return size of task group with ID <subgroup> in transition <t>
+int laik_trans_groupCount(Laik_Transition* t, int subgroup);
+
+// return task ID of <i>'th task in group with ID <subgroup> in transition <t>
+int laik_trans_taskInGroup(Laik_Transition* t, int subgroup, int i);
+
+// true if a task is part of the group with ID <subgroup> in transition <t>
+bool laik_trans_isInGroup(Laik_Transition* t, int subgroup, int task);
+
+
 // initialize the LAIK space module, called from laik_new_instance
 void laik_space_init();
 

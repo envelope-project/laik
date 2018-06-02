@@ -1188,9 +1188,9 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             }
             if (actionCount > 1) {
                 bufSize += count;
-                if (laik_isInGroup(tc->transition, inputGroup, myid))
+                if (laik_trans_isInGroup(tc->transition, inputGroup, myid))
                     copyRanges += actionCount;
-                if (laik_isInGroup(tc->transition, outputGroup, myid))
+                if (laik_trans_isInGroup(tc->transition, outputGroup, myid))
                     copyRanges += actionCount;
             }
             break;
@@ -1388,7 +1388,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 int startBufOff = bufOff;
 
                 // if I provide input: copy pieces into temporary buffer
-                if (laik_isInGroup(tc->transition, inputGroup, myid)) {
+                if (laik_trans_isInGroup(tc->transition, inputGroup, myid)) {
                     laik_aseq_addCopyToRBuf(as, ba->round,
                                             as->ce + rangeOff,
                                             bufID, 0,
@@ -1418,7 +1418,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                                              count, redOp);
 
                 // if I want output: copy pieces from temporary buffer
-                if (laik_isInGroup(tc->transition, outputGroup, myid)) {
+                if (laik_trans_isInGroup(tc->transition, outputGroup, myid)) {
                     laik_aseq_addCopyFromRBuf(as, ba->round,
                                               as->ce + rangeOff,
                                               bufID, 0,
