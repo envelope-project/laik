@@ -350,23 +350,18 @@ void laik_mpi_exec_reduce(Laik_TransitionContext* tc, Laik_BackendAction* a,
 // which are interested in the result. All other processes with input
 // send their data to him, he does the reduction, and sends to all processes
 // interested in the result
-//
-// if <as> is non-null, the reduction is not executed, but actions are recorded
 static
 void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                                Laik_BackendAction* a,
-                               MPI_Datatype dataType, MPI_Comm comm,
-                               Laik_ActionSeq* as)
+                               MPI_Datatype dataType, MPI_Comm comm)
 {
     assert(a->type == LAIK_AT_GroupReduce);
     Laik_Transition* t = tc->transition;
     Laik_Data* data = tc->data;
-    bool record = (as != 0);
 
     // do the manual reduction on smallest rank of output group
     int reduceTask = laik_trans_taskInGroup(t, a->outputGroup, 0);
-    laik_log(1, "      %s reduce at T%d",
-             record ? "record" : "exec", reduceTask);
+    laik_log(1, "      exec reduce at T%d", reduceTask);
 
     int myid = t->group->myid;
     MPI_Status st;
@@ -375,45 +370,25 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         // not the reduce task: eventually send input and recv result
 
         if (laik_trans_isInGroup(t, a->inputGroup, myid)) {
-            laik_log(1, "        %s MPI_Send to T%d",
-                     as ? "record" : "exec", reduceTask);
-
-            if (record)
-                laik_aseq_addBufSend(as, 0, a->fromBuf, a->count, reduceTask);
-            else
-                MPI_Send(a->fromBuf, a->count, dataType, reduceTask, 1, comm);
+            laik_log(1, "        exec MPI_Send to T%d", reduceTask);
+            MPI_Send(a->fromBuf, a->count, dataType, reduceTask, 1, comm);
         }
         if (laik_trans_isInGroup(t, a->outputGroup, myid)) {
-            laik_log(1, "        %s MPI_Recv from T%d",
-                     record ? "record" : "exec", reduceTask);
-
-            if (record)
-                laik_aseq_addBufRecv(as, 2, a->toBuf, a->count, reduceTask);
-            else
-                MPI_Recv(a->toBuf, a->count, dataType, reduceTask, 1, comm, &st);
+            laik_log(1, "        exec MPI_Recv from T%d", reduceTask);
+            MPI_Recv(a->toBuf, a->count, dataType, reduceTask, 1, comm, &st);
         }
         return;
     }
 
     // we are the reduce task
-
     int inCount = laik_trans_groupCount(t, a->inputGroup);
     uint64_t byteCount = a->count * data->elemsize;
-
     bool inputFromMe = laik_trans_isInGroup(t, a->inputGroup, myid);
 
-    // for recording
-    int bufID = 0;
+    // for direct execution: use global <packbuf> (size PACKBUFSIZE)
+    // check that bufsize is enough. TODO: dynamically increase?
     int bufSize = (inCount - (inputFromMe ? 1:0)) * byteCount;
-
-    if (record) {
-        bufID = laik_aseq_addBufReserve(as, bufSize, -1);
-    }
-    else {
-        // for direct execution: use global <packbuf> (size PACKBUFSIZE)
-        // check that bufsize is enough. TODO: dynamically increase?
-        assert(bufSize < PACKBUFSIZE);
-    }
+    assert(bufSize < PACKBUFSIZE);
 
     // collect values from tasks in input group
     int bufOff[32], off = 0;
@@ -446,96 +421,58 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
             continue;
         }
 
-        laik_log(1, "        %s MPI_Recv from T%d (buf off %d, count %d)",
-                 record ? "record" : "exec", inTask, off, a->count);
+        laik_log(1, "        exec MPI_Recv from T%d (buf off %d, count %d)",
+                 inTask, off, a->count);
 
         bufOff[ii++] = off;
-        if (record)
-            laik_aseq_addRBufRecv(as, 0, bufID, off, a->count, inTask);
-        else {
-            MPI_Recv(packbuf + off, a->count, dataType, inTask, 1, comm, &st);
-
-#ifdef LOG_EXEC_DOUBLE_VALUES
-            if (laik_log_begin(1)) {
-                laik_log_Checksum(packbuf + off, a->count, data->type);
-                laik_log_flush(0);
-            }
-
-            assert(data->elemsize == 8);
-            for(int i = 0; i < a->count; i++)
-                laik_log(1, "    got at %d: %f", i,
-                         ((double*)(packbuf + off))[i]);
-#endif
-        }
-        off += byteCount;
-    }
-    assert(ii == inCount);
-    assert(off == bufSize);
-
-    if (record) {
-        if (inCount == 0) {
-            laik_log(1, "        record call to init (count %d)", a->count);
-            laik_aseq_addBufInit(as, 1, data->type, a->redOp,
-                                    a->toBuf, a->count);
-        }
-        else {
-            // move first input to a->toBuf, and then reduce on that
-
-            if (inputFromMe) {
-                if (a->fromBuf != a->toBuf) {
-                    laik_log(1, "        record call to copy (count %d)",
-                             a->count);
-                    laik_aseq_addBufCopy(as, 1,
-                                            a->fromBuf, a ->toBuf, a->count);
-                }
-            }
-            else {
-                laik_log(1, "        record call to RBuf copy (count %d)",
-                         a->count);
-                laik_aseq_addRBufCopy(as, 1, bufID, bufOff[0],
-                                         a->toBuf, a->count);
-            }
-
-            laik_log(1, "        record %d calls to reduce (count %d)",
-                     inCount - 1, a->count);
-            for(int t = 1; t < inCount; t++)
-                laik_aseq_addRBufLocalReduce(as, 1, data->type, a->redOp,
-                                                bufID, bufOff[t],
-                                                a->toBuf, a->count);
-        }
-    }
-    else {
-        // do the reduction, put result back to my input buffer
-        if (data->type->reduce) {
-            // reduce with 0/1 inputs by setting input pointer to 0
-            char* buf0 = inputFromMe ? a->fromBuf : (packbuf + bufOff[0]);
-            (data->type->reduce)(a->toBuf,
-                                 (inCount < 1) ? 0 : buf0,
-                                 (inCount < 2) ? 0 : (packbuf + bufOff[1]),
-                    a->count, a->redOp);
-            for(int t = 2; t < inCount; t++)
-                (data->type->reduce)(a->toBuf, a->toBuf, packbuf + bufOff[t],
-                                     a->count, a->redOp);
-        }
-        else {
-            laik_log(LAIK_LL_Panic,
-                     "Need reduce function for type '%s'. Not set!",
-                     data->type->name);
-            assert(0);
-        }
+        MPI_Recv(packbuf + off, a->count, dataType, inTask, 1, comm, &st);
 
 #ifdef LOG_EXEC_DOUBLE_VALUES
         if (laik_log_begin(1)) {
-            laik_log_append("reduction (count %d) result ", a->count);
-            laik_log_Checksum(a->toBuf, a->count, data->type);
+            laik_log_Checksum(packbuf + off, a->count, data->type);
             laik_log_flush(0);
         }
 
         assert(data->elemsize == 8);
         for(int i = 0; i < a->count; i++)
-            laik_log(1, "    sum at %d: %f", i, ((double*)a->toBuf)[i]);
+            laik_log(1, "    got at %d: %f", i,
+                     ((double*)(packbuf + off))[i]);
 #endif
+        off += byteCount;
     }
+    assert(ii == inCount);
+    assert(off == bufSize);
+
+    // do the reduction, put result back to my input buffer
+    if (data->type->reduce) {
+        // reduce with 0/1 inputs by setting input pointer to 0
+        char* buf0 = inputFromMe ? a->fromBuf : (packbuf + bufOff[0]);
+        (data->type->reduce)(a->toBuf,
+                             (inCount < 1) ? 0 : buf0,
+                             (inCount < 2) ? 0 : (packbuf + bufOff[1]),
+                a->count, a->redOp);
+        for(int t = 2; t < inCount; t++)
+            (data->type->reduce)(a->toBuf, a->toBuf, packbuf + bufOff[t],
+                                 a->count, a->redOp);
+    }
+    else {
+        laik_log(LAIK_LL_Panic,
+                 "Need reduce function for type '%s'. Not set!",
+                 data->type->name);
+        assert(0);
+    }
+
+#ifdef LOG_EXEC_DOUBLE_VALUES
+    if (laik_log_begin(1)) {
+        laik_log_append("reduction (count %d) result ", a->count);
+        laik_log_Checksum(a->toBuf, a->count, data->type);
+        laik_log_flush(0);
+    }
+
+    assert(data->elemsize == 8);
+    for(int i = 0; i < a->count; i++)
+        laik_log(1, "    sum at %d: %f", i, ((double*)a->toBuf)[i]);
+#endif
 
     // send result to tasks in output group
     int outCount = laik_trans_groupCount(t, a->outputGroup);
@@ -546,12 +483,8 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
             continue;
         }
 
-        laik_log(1, "        %s MPI_Send result to T%d",
-                 record ? "record" : "exec", outTask);
-        if (record)
-            laik_aseq_addBufSend(as, 2, a->toBuf, a->count, outTask);
-        else
-            MPI_Send(a->toBuf, a->count, dataType, outTask, 1, comm);
+        laik_log(1, "        exec MPI_Send result to T%d", outTask);
+        MPI_Send(a->toBuf, a->count, dataType, outTask, 1, comm);
     }
 }
 
@@ -682,7 +615,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_GroupReduce:
-            laik_mpi_exec_groupReduce(tc, a, dataType, comm, 0);
+            laik_mpi_exec_groupReduce(tc, a, dataType, comm);
             break;
 
         case LAIK_AT_RBufLocalReduce:
@@ -826,7 +759,7 @@ void laik_execOrRecord(bool record,
                     laik_aseq_initTContext(&tc,
                                               data, t, fromList, toList);
 
-                    laik_mpi_exec_groupReduce(&tc, &a, mpiDataType, comm, 0);
+                    laik_mpi_exec_groupReduce(&tc, &a, mpiDataType, comm);
                 }
             }
             else {
