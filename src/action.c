@@ -272,7 +272,7 @@ void laik_aseq_addMapSend(Laik_ActionSeq* as, int round,
 
     a->type = LAIK_AT_MapSend;
     a->round = round;
-    a->mapNo = fromMapNo;
+    a->fromMapNo = fromMapNo;
     a->offset = off;
     a->count = count;
     a->peer_rank = to;
@@ -304,7 +304,7 @@ void laik_aseq_addMapRecv(Laik_ActionSeq* as, int round,
 
     a->type = LAIK_AT_MapRecv;
     a->round = round;
-    a->mapNo = toMapNo;
+    a->toMapNo = toMapNo;
     a->offset = off;
     a->count = count;
     a->peer_rank = from;
@@ -399,7 +399,7 @@ void laik_actions_initMapPackAndSend(Laik_BackendAction* a, int round,
 {
     a->type = LAIK_AT_MapPackAndSend;
     a->round = round;
-    a->mapNo = fromMapNo;
+    a->fromMapNo = fromMapNo;
     a->dims = dims;
     a->slc = slc;
     a->peer_rank = to;
@@ -430,7 +430,7 @@ void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
 
     a->type = LAIK_AT_MapPackToRBuf;
     a->round = round;
-    a->mapNo = fromMapNo;
+    a->fromMapNo = fromMapNo;
     a->dims = dims;
     a->slc = slc;
     a->bufID = toBufID;
@@ -510,7 +510,7 @@ void laik_actions_initMapRecvAndUnpack(Laik_BackendAction* a, int round,
 {
     a->type = LAIK_AT_MapRecvAndUnpack;
     a->round = round;
-    a->mapNo = toMapNo;
+    a->toMapNo = toMapNo;
     a->dims = dims;
     a->slc = slc;
     a->peer_rank = from;
@@ -542,7 +542,7 @@ void laik_aseq_addMapUnpackFromRBuf(Laik_ActionSeq* as, int round,
     a->dims = dims;
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
-    a->mapNo = toMapNo;
+    a->toMapNo = toMapNo;
     a->slc = slc;
     a->count = laik_slice_size(dims, slc);
     assert(a->count > 0);
@@ -586,6 +586,31 @@ void laik_actions_addRBufReduce(Laik_ActionSeq* as,
 
     assert(count > 0);
     as->reduceCount += count;
+}
+
+// append group reduce action
+void laik_aseq_addMapGroupReduce(Laik_ActionSeq* as,
+                                 int inputGroup, int outputGroup,
+                                 int myInputMapNo, int myOutputMapNo,
+                                 Laik_Slice* slc, Laik_ReductionOperation redOp)
+{
+    Laik_BackendAction* a = laik_aseq_addBAction(as);
+
+    Laik_TransitionContext* tc = as->context[0];
+    int dims = tc->transition->space->dims;
+
+    a->type = LAIK_AT_MapGroupReduce;
+    a->inputGroup = inputGroup;
+    a->outputGroup = outputGroup;
+    a->fromMapNo = myInputMapNo;
+    a->toMapNo = myOutputMapNo;
+    a->dims = dims;
+    a->slc = slc;
+    a->count = laik_slice_size(dims, slc);
+    a->redOp = redOp;
+
+    assert(a->count > 0);
+    as->reduceCount += a->count;
 }
 
 
@@ -718,6 +743,24 @@ bool laik_action_isRecv(Laik_BackendAction* ba)
 }
 
 
+// add all reduce ops from a transition to an ActionSeq.
+void laik_aseq_addReds(Laik_ActionSeq* as,
+                       Laik_Data* data, Laik_Transition* t)
+{
+    Laik_TransitionContext* tc = as->context[0];
+    assert(tc->data == data);
+    assert(tc->transition == t);
+    assert(t->group->myid >= 0);
+
+    for(int i=0; i < t->redCount; i++) {
+        struct redTOp* op = &(t->red[i]);
+        laik_aseq_addMapGroupReduce(as,
+                                    op->inputGroup, op->outputGroup,
+                                    op->myInputMapNo, op->myOutputMapNo,
+                                    &(op->slc), op->redOp);
+    }
+}
+
 // add all receive ops from a transition to an ActionSeq.
 // before execution, a deadlock-avoidance action sorting is required
 void laik_aseq_addRecvs(Laik_ActionSeq* as, int round,
@@ -727,7 +770,6 @@ void laik_aseq_addRecvs(Laik_ActionSeq* as, int round,
     assert(tc->data == data);
     assert(tc->transition == t);
     assert(t->group->myid >= 0);
-
 
     for(int i=0; i < t->recvCount; i++) {
         struct recvTOp* op = &(t->recv[i]);
@@ -745,7 +787,6 @@ void laik_aseq_addSends(Laik_ActionSeq* as, int round,
     assert(tc->data == data);
     assert(tc->transition == t);
     assert(t->group->myid >= 0);
-
 
     for(int i=0; i < t->sendCount; i++) {
         struct sendTOp* op = &(t->send[i]);
@@ -932,7 +973,7 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
         break;
 
     case LAIK_AT_MapSend:
-        laik_aseq_addMapSend(as, ba->round, ba->mapNo, ba->offset,
+        laik_aseq_addMapSend(as, ba->round, ba->fromMapNo, ba->offset,
                              ba->count, ba->peer_rank);
         break;
 
@@ -947,7 +988,7 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
         break;
 
     case LAIK_AT_MapRecv:
-        laik_aseq_addMapRecv(as, ba->round, ba->mapNo, ba->offset,
+        laik_aseq_addMapRecv(as, ba->round, ba->toMapNo, ba->offset,
                              ba->count, ba->peer_rank);
         break;
 
@@ -963,7 +1004,7 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
 
     case LAIK_AT_MapPackToRBuf:
         laik_aseq_addMapPackToRBuf(as, ba->round,
-                                   ba->mapNo, ba->slc, ba->bufID, ba->offset);
+                                   ba->fromMapNo, ba->slc, ba->bufID, ba->offset);
         break;
 
     case LAIK_AT_PackToRBuf:
@@ -977,7 +1018,7 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
 
     case LAIK_AT_MapPackAndSend:
         laik_aseq_addMapPackAndSend(as, ba->round,
-                                    ba->mapNo, ba->slc, ba->peer_rank);
+                                    ba->fromMapNo, ba->slc, ba->peer_rank);
         break;
 
     case LAIK_AT_PackAndSend:
@@ -988,7 +1029,7 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
     case LAIK_AT_MapUnpackFromRBuf:
         laik_aseq_addMapUnpackFromRBuf(as, ba->round,
                                        ba->bufID, ba->offset,
-                                       ba->mapNo, ba->slc);
+                                       ba->toMapNo, ba->slc);
         break;
 
     case LAIK_AT_UnpackFromRBuf:
@@ -1004,7 +1045,7 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
 
     case LAIK_AT_MapRecvAndUnpack:
         laik_actions_addMapRecvAndUnpack(as, ba->round,
-                                         ba->mapNo, ba->slc, ba->peer_rank);
+                                         ba->toMapNo, ba->slc, ba->peer_rank);
         break;
 
     case LAIK_AT_RecvAndUnpack:
@@ -1030,6 +1071,13 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
     case LAIK_AT_Reduce:
         laik_aseq_addReduce(as, ba->fromBuf, ba->toBuf, ba->count,
                             ba->peer_rank, ba->redOp);
+        break;
+
+    case LAIK_AT_MapGroupReduce:
+        laik_aseq_addMapGroupReduce(as,
+                                    ba->inputGroup, ba->outputGroup,
+                                    ba->fromMapNo, ba->toMapNo,
+                                    ba->slc, ba->redOp);
         break;
 
     case LAIK_AT_GroupReduce:
@@ -1732,8 +1780,8 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         switch(ba->type) {
         case LAIK_AT_MapPackAndSend:
             if (tc->fromList)
-                assert(ba->mapNo < tc->fromList->count);
-            map = tc->fromList ? &(tc->fromList->map[ba->mapNo]) : 0;
+                assert(ba->fromMapNo < tc->fromList->count);
+            map = tc->fromList ? &(tc->fromList->map[ba->fromMapNo]) : 0;
 
             if (map && (ba->dims == 1)) {
                 // mapping known and 1d: can use direct send/recv
@@ -1751,7 +1799,7 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                                          to - from, ba->peer_rank);
                 else
                     laik_aseq_addMapSend(as2, ba->round,
-                                         ba->mapNo, from * elemsize,
+                                         ba->fromMapNo, from * elemsize,
                                          to - from, ba->peer_rank);
             }
             else {
@@ -1762,7 +1810,7 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                                             map, ba->slc, bufID, 0);
                 else
                     laik_aseq_addMapPackToRBuf(as2, ba->round,
-                                               ba->mapNo, ba->slc, bufID, 0);
+                                               ba->fromMapNo, ba->slc, bufID, 0);
 
                 laik_aseq_addRBufSend(as2, ba->round, bufID, 0,
                                       ba->count, ba->peer_rank);
@@ -1772,8 +1820,8 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
         case LAIK_AT_MapRecvAndUnpack:
             if (tc->toList)
-                assert(ba->mapNo < tc->toList->count);
-            map = tc->toList ? &(tc->toList->map[ba->mapNo]) : 0;
+                assert(ba->toMapNo < tc->toList->count);
+            map = tc->toList ? &(tc->toList->map[ba->toMapNo]) : 0;
 
             if (map && (ba->dims == 1)) {
                 // mapping known and 1d: can use direct send/recv
@@ -1791,7 +1839,7 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                                          to - from, ba->peer_rank);
                 else
                     laik_aseq_addMapRecv(as2, ba->round,
-                                         ba->mapNo, from * elemsize,
+                                         ba->toMapNo, from * elemsize,
                                          to - from, ba->peer_rank);
             }
             else {
@@ -1804,7 +1852,7 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                                                 bufID, 0, map, ba->slc);
                 else
                     laik_aseq_addMapUnpackFromRBuf(as2, ba->round,
-                                                   bufID, 0, ba->mapNo, ba->slc);
+                                                   bufID, 0, ba->toMapNo, ba->slc);
             }
             handled = true;
             break;

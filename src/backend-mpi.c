@@ -534,8 +534,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_MapSend: {
-            assert(a->mapNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[a->mapNo]);
+            assert(a->fromMapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[a->fromMapNo]);
             assert(fromMap->base != 0);
             MPI_Send(fromMap->base + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm);
@@ -554,8 +554,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_MapRecv: {
-            assert(a->mapNo < toList->count);
-            Laik_Mapping* toMap = &(toList->map[a->mapNo]);
+            assert(a->toMapNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[a->toMapNo]);
             assert(toMap->base != 0);
             MPI_Recv(toMap->base + a->offset, a->count,
                      dataType, a->peer_rank, tag, comm, &st);
@@ -596,8 +596,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_MapPackAndSend: {
-            assert(a->mapNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[a->mapNo]);
+            assert(a->fromMapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[a->fromMapNo]);
             assert(fromMap->base != 0);
             laik_mpi_exec_packAndSend(a, fromMap, dims, dataType, tag, comm);
             break;
@@ -608,8 +608,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         case LAIK_AT_MapRecvAndUnpack: {
-            assert(a->mapNo < toList->count);
-            Laik_Mapping* toMap = &(toList->map[a->mapNo]);
+            assert(a->toMapNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[a->toMapNo]);
             assert(toMap->base);
             laik_mpi_exec_recvAndUnpack(a, toMap, dims, elemsize, dataType, tag, comm);
             break;
@@ -644,7 +644,7 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
             break;
 
         default:
-            laik_log(LAIK_LL_Panic, "unknown action %d", a->type);
+            laik_log(LAIK_LL_Panic, "mpi_exec: unknown action %d", a->type);
             assert(0);
         }
     }
@@ -688,7 +688,13 @@ void laik_execOrRecord(bool record,
     assert(gd); // must have been updated by laik_mpi_updateGroup()
     MPI_Comm comm = gd->comm;
 
+#if 0
+    if (record)
+        laik_aseq_addReds(as, data, t);
+    else if (t->redCount > 0) {
+#else
     if (t->redCount > 0) {
+#endif
         assert(dims == 1);
         assert(fromList);
 

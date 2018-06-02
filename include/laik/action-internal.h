@@ -44,7 +44,8 @@ typedef struct _Laik_BackendAction {
     Laik_Type* dtype;  // for RBufReduce, BufInit
 
     Laik_Mapping* map; // for Pack, Unpack, PackAndSend, RecvAndUnpack
-    int mapNo;         // for MapSend, MapRecv
+    int fromMapNo;     // for MapSend, MapGroupReduce
+    int toMapNo;       // for MapRecv, MapGroupReduce
     uint64_t offset;   // for MapSend, MapRecv, RBufSend, RBufRecv
 
     char* fromBuf;     // for SendBuf, Pack, Copy, Reduce
@@ -57,8 +58,8 @@ typedef struct _Laik_BackendAction {
     Laik_Slice* slc;   // for Pack, Unpack, PackAndSend, RecvAndUnpack
 
     // subgroup IDs defined in transition
-    int inputGroup, outputGroup;      // for Reduce
-    Laik_ReductionOperation redOp; // for Reduce
+    int inputGroup, outputGroup;   // for GroupReduce
+    Laik_ReductionOperation redOp; // for GroupReduce, Reduce
 
 } Laik_BackendAction;
 
@@ -268,6 +269,10 @@ void laik_aseq_addCopyToRBuf(Laik_ActionSeq* as, int round,
 void laik_aseq_addCopyFromRBuf(Laik_ActionSeq* as, int round,
                                Laik_CopyEntry* ce,
                                int fromBufID, int fromByteOffset, int count);
+
+// add all reduce ops from a transition to an ActionSeq.
+void laik_aseq_addReds(Laik_ActionSeq* as,
+                       Laik_Data* data, Laik_Transition* t);
 
 // add all receive ops from a transition to an ActionSeq
 void laik_aseq_addRecvs(Laik_ActionSeq* as, int round,
