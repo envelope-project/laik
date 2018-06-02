@@ -319,20 +319,29 @@ void laik_mpi_exec_reduce(Laik_TransitionContext* tc, Laik_BackendAction* a,
 #endif
 
     if (rootTask == -1) {
-        if (a->fromBuf == a->toBuf)
+        if (a->fromBuf == a->toBuf) {
+            laik_log(1, "      exec MPI_Allreduce in-place, count %d", a->count);
             MPI_Allreduce(MPI_IN_PLACE, a->toBuf, a->count,
                           dataType, mpiRedOp, comm);
-        else
+        }
+        else {
+            laik_log(1, "      exec MPI_Allreduce, count %d", a->count);
             MPI_Allreduce(a->fromBuf, a->toBuf, a->count,
                           dataType, mpiRedOp, comm);
+        }
     }
     else {
-        if ((a->fromBuf == a->toBuf) && (tc->transition->group->myid == rootTask))
+        if ((a->fromBuf == a->toBuf) && (tc->transition->group->myid == rootTask)) {
+            laik_log(1, "      exec MPI_Reduce in-place, count %d, root %d",
+                     a->count, rootTask);
             MPI_Reduce(MPI_IN_PLACE, a->toBuf, a->count,
                        dataType, mpiRedOp, rootTask, comm);
-        else
+        }
+        else {
+            laik_log(1, "      exec MPI_Reduce, count %d, root %d", a->count, rootTask);
             MPI_Reduce(a->fromBuf, a->toBuf, a->count,
                        dataType, mpiRedOp, rootTask, comm);
+        }
     }
 
 #ifdef LOG_EXEC_DOUBLE_VALUES
@@ -728,82 +737,48 @@ void laik_execOrRecord(bool record,
             if (op->inputGroup >= 0)
                 assert(t->subgroup[op->inputGroup].count < group->size);
 
-            // do our own reduce algorithm ?
-            // either if forced by LAIK_MPI_REDUCE=0, or when both input and
-            // output groups are real subgroups
-            if ((mpi_reduce == 0) ||
-                ((op->inputGroup >= 0) && (op->outputGroup >= 0))) {
+            if (laik_log_begin(1)) {
+                laik_log_append("    %s reduction: (%lld - %lld) slc/map %d/%d",
+                                record ? "record":"execute",
+                                (long long int) from, (long long int) to,
+                                op->myInputSliceNo, op->myInputMapNo);
+                laik_log_flush(0);
+            }
 
-                if (laik_log_begin(1)) {
-                    laik_log_append("    %s manual reduction: (%lld - %lld) slc/map %d/%d",
-                                    record ? "record":"execute",
-                                    (long long int) from, (long long int) to,
-                                    op->myInputSliceNo, op->myInputMapNo);
-                    laik_log_flush(0);
-                }
-
-                if (record) {
-                    laik_aseq_addGroupReduce(as,
-                                             op->inputGroup, op->outputGroup,
-                                             fromBase, toBase, elemCount, op->redOp);
-                }
-                else {
-                    // fill out action parameters and transition context,
-                    // and execute the action directly
-                    Laik_BackendAction a;
-                    Laik_TransitionContext tc;
-
-                    laik_aseq_initGroupReduce(&a,
-                                                 op->inputGroup, op->outputGroup,
-                                                 fromBase, toBase, elemCount, op->redOp);
-                    laik_aseq_initTContext(&tc,
-                                              data, t, fromList, toList);
-
-                    laik_mpi_exec_groupReduce(&tc, &a, mpiDataType, comm);
-                }
+            if (record) {
+                laik_aseq_addGroupReduce(as,
+                                         op->inputGroup, op->outputGroup,
+                                         fromBase, toBase, elemCount, op->redOp);
             }
             else {
-                // not handled yet: either input or output is all-group
-                assert((op->inputGroup == -1) || (op->outputGroup == -1));
+                // fill out action parameters and transition context,
+                // and execute the action directly
+                Laik_BackendAction a;
+                Laik_TransitionContext tc;
 
-                int rootTask;
-                if (op->outputGroup == -1) rootTask = -1;
-                else {
-                    // TODO: support more then 1 receiver
-                    assert(t->subgroup[op->outputGroup].count == 1);
-                    rootTask = t->subgroup[op->outputGroup].task[0];
-                }
+                laik_aseq_initTContext(&tc,
+                                       data, t, fromList, toList);
 
-                if (laik_log_begin(1)) {
-                    laik_log_append("    %s reduce (root ",
-                                    record ? "record":"execute");
-                    if (rootTask == -1)
-                        laik_log_append("ALL");
+                // can this be replaced with MPI_reduce?
+                bool doReduce = (op->inputGroup == -1);
+                int root = -1;
+                if (op->outputGroup >= 0) {
+                    if (t->subgroup[op->outputGroup].count == 1)
+                        root = t->subgroup[op->outputGroup].task[0];
                     else
-                        laik_log_append("%d", rootTask);
-                    if (fromBase == toBase)
-                        laik_log_append(", IN_PLACE");
-                    laik_log_flush("): (%ld - %ld) in %d/%d out %d/%d (slc/map), "
-                                   "elemsize %d, baseptr from/to %p/%p\n",
-                                   from, to,
-                                   op->myInputSliceNo, op->myInputMapNo,
-                                   op->myOutputSliceNo, op->myOutputMapNo,
-                                   data->elemsize, fromBase, toBase);
+                        doReduce = false;
                 }
 
-                if (record)
-                    laik_aseq_addReduce(as, fromBase, toBase, to - from,
-                                           rootTask, op->redOp);
-                else {
-                    // fill out action parameters and execute directly
-                    Laik_BackendAction a;
-                    Laik_TransitionContext tc;
-
+                if (doReduce) {
                     laik_aseq_initReduce(&a, fromBase, toBase, to - from,
-                                           rootTask, op->redOp);
-                    laik_aseq_initTContext(&tc,
-                                              data, t, fromList, toList);
+                                         root, op->redOp);
                     laik_mpi_exec_reduce(&tc, &a, mpiDataType, comm);
+                }
+                else {
+                    laik_aseq_initGroupReduce(&a,
+                                              op->inputGroup, op->outputGroup,
+                                              fromBase, toBase, elemCount, op->redOp);
+                    laik_mpi_exec_groupReduce(&tc, &a, mpiDataType, comm);
                 }
             }
 
@@ -1020,6 +995,37 @@ void laik_execOrRecord(bool record,
     }
 }
 
+// replace group reductions be reduce actions if possible
+static void detectReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+{
+    Laik_TransitionContext* tc = as->context[0];
+    Laik_Transition* t = tc->transition;
+
+    for(int i = 0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+
+        switch(ba->type) {
+        case LAIK_AT_GroupReduce:
+            if (ba->inputGroup == -1) {
+                if (ba->outputGroup == -1) {
+                    laik_aseq_addReduce(as2, ba->fromBuf, ba->toBuf,
+                                        ba->count, -1, ba->redOp);
+                    continue;
+                }
+                else if (laik_trans_groupCount(t, ba->outputGroup) == 1) {
+                    int root = laik_trans_taskInGroup(t, ba->outputGroup, 0);
+                    laik_aseq_addReduce(as2, ba->fromBuf, ba->toBuf,
+                                        ba->count, root, ba->redOp);
+                    continue;
+                }
+            }
+            // fall-through;
+        default:
+            laik_actions_add(ba, as2);
+            break;
+        }
+    }
+}
 
 static
 Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
@@ -1038,6 +1044,21 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     if (laik_log_begin(1)) {
         laik_log_ActionSeq(as);
         laik_log_flush(0);
+    }
+
+    if (mpi_reduce) {
+        // detect group reduce actions which can be replaced by all-reduce
+        // can be prohibited by setting LAIK_MPI_REDUCE=0
+        as2 = laik_actions_setupTransform(as);
+        detectReduce(as, as2);
+        laik_aseq_free(as);
+        as = as2;
+
+        if (laik_log_begin(1)) {
+            laik_log_append("After all-reduce detection:\n");
+            laik_log_ActionSeq(as);
+            laik_log_flush(0);
+        }
     }
 
     as2 = laik_actions_setupTransform(as);
