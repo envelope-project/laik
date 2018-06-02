@@ -87,7 +87,7 @@ Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size)
         as->action = realloc(as->action,
                              as->actionAllocCount * sizeof(Laik_BackendAction));
         if (!as->action) {
-            laik_panic("Out of memory allocating memory for Laik_TransitionPlan");
+            laik_panic("Out of memory allocating memory for Laik_ActionSeq");
             exit(1); // not actually needed, laik_panic never returns
         }
     }
