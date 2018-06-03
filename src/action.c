@@ -791,7 +791,7 @@ void laik_aseq_addSends(Laik_ActionSeq* as, int round,
 // works in-place; BufReserve actions are marked as NOP but not removed
 // can be called ASEQ_BUFFER_MAX times, allocating a new buffer on each call
 // TODO: convert from in-place
-void laik_aseq_allocBuffer(Laik_ActionSeq* as)
+bool laik_aseq_allocBuffer(Laik_ActionSeq* as)
 {
     int rCount = 0, rActions = 0;
     assert(as->bufferCount < ASEQ_BUFFER_MAX);
@@ -854,10 +854,8 @@ void laik_aseq_allocBuffer(Laik_ActionSeq* as)
     }
 
     if (bufSize == 0) {
-        laik_log(1, "RBuf alloc %d: Nothing to do.", as->bufferCount);
-
         free(resAction);
-        return;
+        return false;
     }
 
 
@@ -935,6 +933,8 @@ void laik_aseq_allocBuffer(Laik_ActionSeq* as)
     // start again with bufID 100 for next reservations
     as->bufReserveCount = 0;
     as->bufferCount++;
+
+    return true;
 }
 
 
@@ -1238,7 +1238,7 @@ static bool isSameReduce(Laik_BackendAction* a, int round, int root,
  * TODO: Instead of nested loops to find actions to combine, do sorting
  * before: (1) by round, (2) by action type, ...
  */
-void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
+bool laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 {
     int combineGroupReduce = 1;
     int combineReduce = 1;
@@ -1371,9 +1371,8 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
     if (bufSize == 0) {
         assert(copyRanges == 0);
-        laik_log(1, "Combining action sequence: nothing to do.");
         laik_aseq_copySeq(oldAS, as);
-        return;
+        return false;
     }
 
     assert(copyRanges > 0);
@@ -1670,6 +1669,8 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     }
     assert(rangeOff == copyRanges);
     assert(bufSize == bufOff);
+
+    return true;
 }
 
 
@@ -1756,9 +1757,9 @@ int cmp2phase(const void* aptr1, const void* aptr2)
  * Actions other the send/recv are moved to front.
  * Copy resorted sequence into as2.
  */
-void laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+bool laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
-    if (as->actionCount == 0) return;
+    if (as->actionCount == 0) return false;
 
     Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
 
@@ -1771,9 +1772,19 @@ void laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq* as2)
     myid4cmp = tc->transition->group->myid;
     qsort(order, as->actionCount, sizeof(void*), cmp2phase);
 
-    addResorted(as->actionCount, order, as2);
+    // check if something changed
+    bool changed = false;
+    for(int i=0; i < as->actionCount; i++) {
+        if (order[i] == &(as->action[i])) continue;
+        changed = true;
+        break;
+    }
 
+    addResorted(as->actionCount, order, as2);
     free(order);
+
+    // return false even if compressing rounds changed something
+    return changed;
 }
 
 static
@@ -1840,9 +1851,9 @@ int cmp_rankdigits(const void* aptr1, const void* aptr2)
  * Actions other the send/recv are moved to front.
  * Copy resorted sequence into as2.
  */
-void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+bool laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
-    if (as->actionCount == 0) return;
+    if (as->actionCount == 0) return false;
 
     Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
 
@@ -1855,9 +1866,19 @@ void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2)
     myid4cmp = tc->transition->group->myid;
     qsort(order, as->actionCount, sizeof(void*), cmp_rankdigits);
 
-    addResorted(as->actionCount, order, as2);
+    // check if something changed
+    bool changed = false;
+    for(int i=0; i < as->actionCount; i++) {
+        if (order[i] == &(as->action[i])) continue;
+        changed = true;
+        break;
+    }
 
+    addResorted(as->actionCount, order, as2);
     free(order);
+
+    // return false even if compressing rounds changed something
+    return changed;
 }
 
 
@@ -1878,9 +1899,9 @@ int cmp_rounds(const void* aptr1, const void* aptr2)
 }
 
 // sort actions according to their rounds, and compress rounds
-void laik_aseq_sort_rounds(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+bool laik_aseq_sort_rounds(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
-    if (as->actionCount == 0) return;
+    if (as->actionCount == 0) return false;
 
     Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
 
@@ -1890,9 +1911,20 @@ void laik_aseq_sort_rounds(Laik_ActionSeq* as, Laik_ActionSeq* as2)
     }
 
     qsort(order, as->actionCount, sizeof(void*), cmp_rounds);
-    addResorted(as->actionCount, order, as2);
 
+    // check if something changed
+    bool changed = false;
+    for(int i=0; i < as->actionCount; i++) {
+        if (order[i] == &(as->action[i])) continue;
+        changed = true;
+        break;
+    }
+
+    addResorted(as->actionCount, order, as2);
     free(order);
+
+    // return false even if compressing rounds changed something
+    return changed;
 }
 
 
@@ -1907,9 +1939,13 @@ void laik_aseq_sort_rounds(Laik_ActionSeq* as, Laik_ActionSeq* as2)
  * - round 2: eventually unpack from buffer into container
  * All action round numbers are spreaded by *3+1, allowing space for added
  * pack/unpack copy actions before/after.
+ *
+ * return true if action sequence changed
 */
-void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+bool laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
+    bool changed = false;
+
     Laik_Mapping *fromMap, *toMap;
     int64_t from, to;
 
@@ -2055,7 +2091,11 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
         if (!handled)
             laik_actions_add(ba, as2, 3 * ba->round + 1);
+        else
+            changed = true;
     }
+
+    return changed;
 }
 
 // helpers for splitReduce transformation
@@ -2268,9 +2308,23 @@ void laik_aseq_addReduce2Rounds(Laik_ActionSeq* as,
 
 // transformation for split reduce actions into basic multiple actions.
 // action round numbers are spreaded by *3+1, allowing space for 3-step
-void laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+bool laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
+    bool reduceFound = false;
+
     Laik_TransitionContext* tc = as->context[0];
+
+    for(int i = 0; i < as->actionCount; i++) {
+        if (as->action[i].type == LAIK_AT_GroupReduce) {
+            reduceFound = true;
+            break;
+        }
+    }
+
+    if (!reduceFound) {
+        laik_aseq_copySeq(as, as2);
+        return false;
+    }
 
     for(int i = 0; i < as->actionCount; i++) {
         Laik_BackendAction* ba = &(as->action[i]);
@@ -2293,4 +2347,6 @@ void laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
             break;
         }
     }
+
+    return true;
 }

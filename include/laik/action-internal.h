@@ -290,7 +290,7 @@ void laik_aseq_addSends(Laik_ActionSeq* as, int round,
 
 // collect buffer reservation actions and update actions referencing them
 // works in-place, only call once
-void laik_aseq_allocBuffer(Laik_ActionSeq* as);
+bool laik_aseq_allocBuffer(Laik_ActionSeq* as);
 
 
 //
@@ -308,19 +308,19 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as, int round);
 void laik_aseq_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 
 // merge send/recv actions from oldAS into as
-void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
+bool laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
 
 // add sorted send/recv actions from as into as2 to avoid deadlocks
-void laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq *as2);
-void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+bool laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq *as2);
+bool laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2);
 
 // sort actions according to their rounds, and compress rounds
-void laik_aseq_sort_rounds(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+bool laik_aseq_sort_rounds(Laik_ActionSeq* as, Laik_ActionSeq* as2);
 
 // transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
-void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+bool laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2);
 
 // transformation for split reduce actions into basic multiple actions
-void laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+bool laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2);
 
 #endif // _LAIK_ACTION_INTERNAL_H_
