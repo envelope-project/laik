@@ -1765,6 +1765,11 @@ void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
 // transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
 // if mapping is known and direct send/recv is possible
+//
+// we enforce the following rounds:
+// - round 0: eventually pack from container to buffer
+// - round 1: send/recv messages
+// - round 2: eventually unpack from buffer into container
 void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
     Laik_Mapping *fromMap, *toMap;
@@ -1795,11 +1800,11 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
                 // replace with different action depending on map allocation done
                 if (fromMap->base)
-                    laik_aseq_addBufSend(as2, ba->round,
+                    laik_aseq_addBufSend(as2, 1,
                                          fromMap->base + from * elemsize,
                                          to - from, ba->peer_rank);
                 else
-                    laik_aseq_addMapSend(as2, ba->round,
+                    laik_aseq_addMapSend(as2, 1,
                                          ba->fromMapNo, from * elemsize,
                                          to - from, ba->peer_rank);
             }
@@ -1807,13 +1812,13 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                 // split off packing and sending, using a buffer of required size
                 int bufID = laik_aseq_addBufReserve(as2, ba->count * elemsize, -1);
                 if (fromMap)
-                    laik_aseq_addPackToRBuf(as2, ba->round,
+                    laik_aseq_addPackToRBuf(as2, 0,
                                             fromMap, ba->slc, bufID, 0);
                 else
-                    laik_aseq_addMapPackToRBuf(as2, ba->round,
+                    laik_aseq_addMapPackToRBuf(as2, 0,
                                                ba->fromMapNo, ba->slc, bufID, 0);
 
-                laik_aseq_addRBufSend(as2, ba->round, bufID, 0,
+                laik_aseq_addRBufSend(as2, 1, bufID, 0,
                                       ba->count, ba->peer_rank);
             }
             handled = true;
@@ -1835,24 +1840,24 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
                 // replace with different action depending on map allocation done
                 if (toMap->base)
-                    laik_aseq_addBufRecv(as2, ba->round,
+                    laik_aseq_addBufRecv(as2, 1,
                                          toMap->base + from * elemsize,
                                          to - from, ba->peer_rank);
                 else
-                    laik_aseq_addMapRecv(as2, ba->round,
+                    laik_aseq_addMapRecv(as2, 1,
                                          ba->toMapNo, from * elemsize,
                                          to - from, ba->peer_rank);
             }
             else {
                 // split off receiving and unpacking, using buffer of required size
                 int bufID = laik_aseq_addBufReserve(as2, ba->count * elemsize, -1);
-                laik_aseq_addRBufRecv(as2, ba->round, bufID, 0,
+                laik_aseq_addRBufRecv(as2, 1, bufID, 0,
                                       ba->count, ba->peer_rank);
                 if (toMap)
-                    laik_aseq_addUnpackFromRBuf(as2, ba->round,
+                    laik_aseq_addUnpackFromRBuf(as2, 2,
                                                 bufID, 0, toMap, ba->slc);
                 else
-                    laik_aseq_addMapUnpackFromRBuf(as2, ba->round,
+                    laik_aseq_addMapUnpackFromRBuf(as2, 2,
                                                    bufID, 0, ba->toMapNo, ba->slc);
             }
             handled = true;

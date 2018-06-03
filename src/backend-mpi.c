@@ -1045,8 +1045,6 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_flush(0);
     }
 
-    // not enabled yet, as sorting afterwards breaks required order
-#if 0
     as2 = laik_actions_setupTransform(as);
     laik_aseq_flattenPacking(as, as2);
     laik_aseq_free(as);
@@ -1057,7 +1055,6 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
-#endif
 
     if (mpi_reduce) {
         // detect group reduce actions which can be replaced by all-reduce
@@ -1093,17 +1090,6 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
 
     if (laik_log_begin(1)) {
         laik_log_append("After sorting actions:\n");
-        laik_log_ActionSeq(as);
-        laik_log_flush(0);
-    }
-
-    as2 = laik_actions_setupTransform(as);
-    laik_aseq_flattenPacking(as, as2);
-    laik_aseq_free(as);
-    as = as2;
-
-    if (laik_log_begin(1)) {
-        laik_log_append("After flattening actions:\n");
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
