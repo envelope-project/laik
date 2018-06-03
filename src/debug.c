@@ -449,13 +449,21 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_Reduce:
-        laik_log_append("    Reduce: count %d, from %p, to %p, root %d",
-                        ba->count, (void*) ba->fromBuf, (void*) ba->toBuf, ba->peer_rank);
+        laik_log_append("    Reduce: count %d, from %p, to %p, root ",
+                        ba->count, (void*) ba->fromBuf, (void*) ba->toBuf);
+        if (ba->peer_rank == -1)
+            laik_log_append("(all)");
+        else
+            laik_log_append("%d", ba->peer_rank);
         break;
 
     case LAIK_AT_RBufReduce:
-        laik_log_append("    RBufReduce: count %d, from/to buf %d off %lld, root %d",
-                        ba->count, ba->bufID, ba->offset, ba->peer_rank);
+        laik_log_append("    RBufReduce: count %d, from/to buf %d off %lld, root ",
+                        ba->count, ba->bufID, ba->offset);
+        if (ba->peer_rank == -1)
+            laik_log_append("(all)");
+        else
+            laik_log_append("%d", ba->peer_rank);
         break;
 
     case LAIK_AT_MapGroupReduce:
