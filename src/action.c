@@ -37,7 +37,9 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
     as->bufferCount = 0;
     as->bufReserveCount = 0;
 
-    as->ce = 0;
+    for(int i = 0; i < ASEQ_COPYENTRY_MAX; i++)
+        as->ce[i] = 0;
+    as->ceCount = 0;
 
     as->actionCount = 0;
     as->actionAllocCount = 0;
@@ -71,7 +73,8 @@ void laik_aseq_free(Laik_ActionSeq* as)
     for(int i = 0; i < as->contextCount; i++)
         free(as->context[i]);
 
-    free(as->ce);
+    for(int i = 0; i < as->ceCount; i++)
+        free(as->ce[i]);
 
     free(as->action);
     free(as);
@@ -945,7 +948,7 @@ Laik_ActionSeq* laik_actions_setupTransform(Laik_ActionSeq* oldAS)
                           tc->fromList, tc->toList);
 
     // take over already allocated buffers
-    for(int i = 0; i < ASEQ_BUFFER_MAX; i++) {
+    for(int i = 0; i < oldAS->bufferCount; i++) {
         as->buf[i] = oldAS->buf[i];
         as->bufSize[i] = oldAS->bufSize[i];
         // do not double-free (cannot exec oldAS anymore!)
@@ -956,9 +959,13 @@ Laik_ActionSeq* laik_actions_setupTransform(Laik_ActionSeq* oldAS)
     // skip already used bufIDs for reservation
     as->bufReserveCount = oldAS->bufReserveCount;
 
-    // take care of CopyEntries
-    as->ce = oldAS->ce;
-    oldAS->ce = 0;
+    // take over already allocated CopyEntries
+    for(int i = 0; i < oldAS->ceCount; i++) {
+        as->ce[i] = oldAS->ce[i];
+        // do not double-free (cannot exec oldAS anymore!)
+        oldAS->ce[i] = 0;
+    }
+    as->ceCount = oldAS->ceCount;
 
     return as;
 }
@@ -1370,11 +1377,14 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
     }
 
     assert(copyRanges > 0);
-    assert(as->ce == 0);  // ensure no entries yet allocated
+    Laik_CopyEntry* ce = malloc(copyRanges * sizeof(Laik_CopyEntry));
+
+    assert(as->ceCount < ASEQ_COPYENTRY_MAX);
+    assert(as->ce[as->ceCount] == 0);
+    as->ce[as->ceCount] = ce;
+    as->ceCount++;
 
     int bufID = laik_aseq_addBufReserve(as, bufSize * elemsize, -1);
-
-    as->ce = malloc(copyRanges * sizeof(Laik_CopyEntry));
 
     laik_log(1, "Reservation for combined actions: length %d x %d, ranges %d",
              bufSize, elemsize, copyRanges);
@@ -1411,7 +1421,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 //laik_log(1,"Send Seq %d - %d, rangeOff %d, bufOff %d, count %d",
                 //         i, j, rangeOff, bufOff, count);
                 laik_aseq_addCopyToRBuf(as, 3 * ba->round,
-                                        as->ce + rangeOff,
+                                        ce + rangeOff,
                                         bufID, 0,
                                         actionCount);
                 laik_aseq_addRBufSend(as, 3 * ba->round + 1,
@@ -1423,9 +1433,9 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                     if (!isSameBufSend(ba2, round, rank)) continue;
 
                     assert(rangeOff < copyRanges);
-                    as->ce[rangeOff].ptr = ba2->fromBuf;
-                    as->ce[rangeOff].bytes = ba2->count * elemsize;
-                    as->ce[rangeOff].offset = bufOff * elemsize;
+                    ce[rangeOff].ptr = ba2->fromBuf;
+                    ce[rangeOff].bytes = ba2->count * elemsize;
+                    ce[rangeOff].offset = bufOff * elemsize;
                     bufOff += ba2->count;
                     rangeOff++;
                 }
@@ -1455,7 +1465,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                                       bufID, bufOff * elemsize,
                                       count, rank);
                 laik_aseq_addCopyFromRBuf(as, 3 * ba->round + 2,
-                                          as->ce + rangeOff,
+                                          ce + rangeOff,
                                           bufID, 0,
                                           actionCount);
                 int oldRangeOff = rangeOff;
@@ -1464,9 +1474,9 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                     if (!isSameBufRecv(ba2, round, rank)) continue;
 
                     assert(rangeOff < copyRanges);
-                    as->ce[rangeOff].ptr = ba2->toBuf;
-                    as->ce[rangeOff].bytes = ba2->count * elemsize;
-                    as->ce[rangeOff].offset = bufOff * elemsize;
+                    ce[rangeOff].ptr = ba2->toBuf;
+                    ce[rangeOff].bytes = ba2->count * elemsize;
+                    ce[rangeOff].offset = bufOff * elemsize;
                     bufOff += ba2->count;
                     rangeOff++;
                 }
@@ -1510,7 +1520,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 // if I provide input: copy pieces into temporary buffer
                 if (laik_trans_isInGroup(tc->transition, iGroup, myid)) {
                     laik_aseq_addCopyToRBuf(as, 3 * round,
-                                            as->ce + rangeOff,
+                                            ce + rangeOff,
                                             bufID, 0,
                                             actionCount);
                     // ranges for input pieces
@@ -1521,9 +1531,9 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                             continue;
 
                         assert(rangeOff < copyRanges);
-                        as->ce[rangeOff].ptr = ba2->fromBuf;
-                        as->ce[rangeOff].bytes = ba2->count * elemsize;
-                        as->ce[rangeOff].offset = bufOff * elemsize;
+                        ce[rangeOff].ptr = ba2->fromBuf;
+                        ce[rangeOff].bytes = ba2->count * elemsize;
+                        ce[rangeOff].offset = bufOff * elemsize;
                         bufOff += ba2->count;
                         rangeOff++;
                     }
@@ -1539,7 +1549,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 // if I want output: copy pieces from temporary buffer
                 if (laik_trans_isInGroup(tc->transition, oGroup, myid)) {
                     laik_aseq_addCopyFromRBuf(as, 3 * round + 2,
-                                              as->ce + rangeOff,
+                                              ce + rangeOff,
                                               bufID, 0,
                                               actionCount);
                     bufOff = startBufOff;
@@ -1550,9 +1560,9 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                             continue;
 
                         assert(rangeOff < copyRanges);
-                        as->ce[rangeOff].ptr = ba2->toBuf;
-                        as->ce[rangeOff].bytes = ba2->count * elemsize;
-                        as->ce[rangeOff].offset = bufOff * elemsize;
+                        ce[rangeOff].ptr = ba2->toBuf;
+                        ce[rangeOff].bytes = ba2->count * elemsize;
+                        ce[rangeOff].offset = bufOff * elemsize;
                         bufOff += ba2->count;
                         rangeOff++;
                     }
@@ -1596,7 +1606,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
                 // copy input pieces into temporary buffer
                 laik_aseq_addCopyToRBuf(as, 3 * ba->round,
-                                        as->ce + rangeOff,
+                                        ce + rangeOff,
                                         bufID, 0,
                                         actionCount);
                 // ranges for input pieces
@@ -1606,9 +1616,9 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                     if (!isSameReduce(ba2, round, root, redOp)) continue;
 
                     assert(rangeOff < copyRanges);
-                    as->ce[rangeOff].ptr = ba2->fromBuf;
-                    as->ce[rangeOff].bytes = ba2->count * elemsize;
-                    as->ce[rangeOff].offset = bufOff * elemsize;
+                    ce[rangeOff].ptr = ba2->fromBuf;
+                    ce[rangeOff].bytes = ba2->count * elemsize;
+                    ce[rangeOff].offset = bufOff * elemsize;
                     bufOff += ba2->count;
                     rangeOff++;
                 }
@@ -1625,7 +1635,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                     // collect output ranges: we cannot reuse copy ranges from
                     // input pieces because of potentially other output buffers
                     laik_aseq_addCopyFromRBuf(as, 3 * round + 2,
-                                              as->ce + rangeOff,
+                                              ce + rangeOff,
                                               bufID, 0,
                                               actionCount);
                     bufOff = startBufOff;
@@ -1635,9 +1645,9 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                         if (!isSameReduce(ba2, round, root, redOp)) continue;
 
                         assert(rangeOff < copyRanges);
-                        as->ce[rangeOff].ptr = ba2->toBuf;
-                        as->ce[rangeOff].bytes = ba2->count * elemsize;
-                        as->ce[rangeOff].offset = bufOff * elemsize;
+                        ce[rangeOff].ptr = ba2->toBuf;
+                        ce[rangeOff].bytes = ba2->count * elemsize;
+                        ce[rangeOff].offset = bufOff * elemsize;
                         bufOff += ba2->count;
                         rangeOff++;
                     }

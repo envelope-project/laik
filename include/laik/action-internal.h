@@ -87,7 +87,9 @@ struct _Laik_ActionSeq {
     int bufReserveCount; // current number of BufReserve actions
 
     // for copy actions
-    Laik_CopyEntry* ce;
+#define ASEQ_COPYENTRY_MAX 5
+    Laik_CopyEntry* ce[ASEQ_COPYENTRY_MAX];
+    int ceCount;
 
     // action sequence to trigger on execution
     int actionCount, actionAllocCount;
