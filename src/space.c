@@ -1682,6 +1682,7 @@ laik_calc_transition(Laik_Space* space,
     assert(tList == ((char*)t) + tsize);
 
     if (laik_log_begin(1)) {
+        laik_log_append("calculated transition ");
         laik_log_Transition(t, true);
         laik_log_flush(0);
     }

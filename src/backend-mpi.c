@@ -1071,6 +1071,19 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         }
     }
 
+#if 0
+    as2 = laik_actions_setupTransform(as);
+    laik_aseq_combineActions(as, as2);
+    laik_aseq_free(as);
+    as = as2;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After combining actions:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+#endif
+
     as2 = laik_actions_setupTransform(as);
     laik_aseq_splitReduce(as, as2);
     laik_aseq_free(as);

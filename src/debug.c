@@ -172,7 +172,7 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
 
 void laik_log_Transition(Laik_Transition* t, bool showActions)
 {
-    laik_log_append("transition (%s/",
+    laik_log_append("(%s/",
                     t->fromPartitioning ? t->fromPartitioning->name : "none");
     laik_log_DataFlow(t->fromFlow);
     laik_log_append(" => %s/",
@@ -323,10 +323,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_BufReserve:
-        laik_log_append("    BufReserve: buf id %d, size %d (off %llu)",
-                        ba->bufID,
-                        ba->count,
-                        (long long int) ba->offset);
+        laik_log_append("    BufReserve: buf id %d, size %d",
+                        ba->bufID, ba->count);
         break;
 
     case LAIK_AT_MapSend:
@@ -588,11 +586,22 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 
 void laik_log_ActionSeq(Laik_ActionSeq *as)
 {
-    Laik_TransitionContext* tc = as->context[0];
-    laik_log_append("actions for ");
-    laik_log_Transition(tc->transition, false);
-    laik_log_append(" on '%s' (%d actions)\n",
-                    tc->data->name, as->actionCount);
+    laik_log_append("action seq for %d transition(s): %d buffers, %d actions\n",
+                    as->contextCount, as->bufferCount, as->actionCount);
+
+    Laik_TransitionContext* tc = 0;
+    for(int i = 0; i < as->contextCount; i++) {
+        tc = as->context[i];
+        laik_log_append("  transition %d: ", 0);
+        laik_log_Transition(tc->transition, false);
+        laik_log_append(" on data '%s'\n", tc->data->name);
+    }
+    assert(as->contextCount == 1);
+
+    for(int i = 0; i < as->bufferCount; i++) {
+        laik_log_append("  buffer %d: len %d at %p\n",
+                        i, as->bufSize[i], as->buf[i]);
+    }
 
     for(int i = 0; i < as->actionCount; i++) {
         laik_log_Action((Laik_Action*) &(as->action[i]), tc);

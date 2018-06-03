@@ -77,12 +77,13 @@ struct _Laik_ActionSeq {
     // actions can refer to different transition contexts
 #define ASEQ_CONTEXTS_MAX 1
     void* context[ASEQ_CONTEXTS_MAX];
+    int contextCount;
 
     // each call to laik_actions_allocBuffer() allocates another buffer
 #define ASEQ_BUFFER_MAX 5
     char* buf[ASEQ_BUFFER_MAX];
     int bufSize[ASEQ_BUFFER_MAX];
-    int currentBuf;
+    int bufferCount;
     int bufReserveCount; // current number of BufReserve actions
 
     // for copy actions
