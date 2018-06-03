@@ -1087,6 +1087,25 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
                               ba->toBuf, ba->count);
         break;
 
+
+    case LAIK_AT_CopyFromBuf:
+        laik_aseq_addCopyFromBuf(as, ba->round, ba->ce, ba->fromBuf, ba->count);
+        break;
+
+    case LAIK_AT_CopyToBuf:
+        laik_aseq_addCopyToBuf(as, ba->round, ba->ce, ba->toBuf, ba->count);
+        break;
+
+    case LAIK_AT_CopyFromRBuf:
+        laik_aseq_addCopyFromRBuf(as, ba->round, ba->ce,
+                                  ba->bufID, ba->offset, ba->count);
+        break;
+
+    case LAIK_AT_CopyToRBuf:
+        laik_aseq_addCopyToRBuf(as, ba->round, ba->ce,
+                                ba->bufID, ba->offset, ba->count);
+        break;
+
     case LAIK_AT_RBufReduce:
         laik_actions_addRBufReduce(as, ba->bufID, ba->offset, ba->count,
                                    ba->peer_rank, ba->redOp);
@@ -1109,6 +1128,13 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
                                  ba->inputGroup, ba->outputGroup,
                                  ba->fromBuf, ba->toBuf,
                                  ba->count, ba->redOp);
+        break;
+
+    case LAIK_AT_RBufGroupReduce:
+        laik_aseq_addRBufGroupReduce(as,
+                                     ba->inputGroup, ba->outputGroup,
+                                     ba->bufID, ba->offset,
+                                     ba->count, ba->redOp);
         break;
 
     case LAIK_AT_RBufLocalReduce:
