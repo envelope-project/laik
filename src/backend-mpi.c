@@ -1071,47 +1071,13 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         }
     }
 
-#if 0
     as2 = laik_actions_setupTransform(as);
     laik_aseq_combineActions(as, as2);
     laik_aseq_free(as);
     as = as2;
 
     if (laik_log_begin(1)) {
-        laik_log_append("After combining actions:\n");
-        laik_log_ActionSeq(as);
-        laik_log_flush(0);
-    }
-
-    laik_aseq_allocBuffer(as);
-
-    if (laik_log_begin(1)) {
-        laik_log_append("After buffer allocation:\n");
-        laik_log_ActionSeq(as);
-        laik_log_flush(0);
-    }
-
-#endif
-
-    as2 = laik_actions_setupTransform(as);
-    laik_aseq_splitReduce(as, as2);
-    laik_aseq_free(as);
-    as = as2;
-
-    if (laik_log_begin(1)) {
-        laik_log_append("After splitting reduce actions:\n");
-        laik_log_ActionSeq(as);
-        laik_log_flush(0);
-    }
-
-    as2 = laik_actions_setupTransform(as);
-    //laik_aseq_sort_2phases(as, as2);
-    laik_aseq_sort_rankdigits(as, as2);
-    laik_aseq_free(as);
-    as = as2;
-
-    if (laik_log_begin(1)) {
-        laik_log_append("After sorting actions:\n");
+        laik_log_append("After combining actions 1:\n");
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
@@ -1125,12 +1091,12 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     }
 
     as2 = laik_actions_setupTransform(as);
-    laik_aseq_combineActions(as, as2);
+    laik_aseq_splitReduce(as, as2);
     laik_aseq_free(as);
     as = as2;
 
     if (laik_log_begin(1)) {
-        laik_log_append("After combining actions:\n");
+        laik_log_append("After splitting reduce actions:\n");
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
@@ -1139,6 +1105,48 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
 
     if (laik_log_begin(1)) {
         laik_log_append("After buffer allocation 2:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
+    as2 = laik_actions_setupTransform(as);
+    laik_aseq_sort_rounds(as, as2);
+    laik_aseq_free(as);
+    as = as2;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After sorting rounds:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
+    as2 = laik_actions_setupTransform(as);
+    laik_aseq_combineActions(as, as2);
+    laik_aseq_free(as);
+    as = as2;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After combining actions 2:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
+    laik_aseq_allocBuffer(as);
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After buffer allocation 3:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
+    as2 = laik_actions_setupTransform(as);
+    laik_aseq_sort_2phases(as, as2);
+    //laik_aseq_sort_rankdigits(as, as2);
+    laik_aseq_free(as);
+    as = as2;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After sorting actions:\n");
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
