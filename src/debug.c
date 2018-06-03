@@ -443,12 +443,14 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_Copy:
-        laik_log_append("    Copy: count %d", ba->count);
+        laik_log_append("    Copy (R %d): count %d",
+                        ba->round, ba->count);
         break;
 
     case LAIK_AT_Reduce:
-        laik_log_append("    Reduce: count %d, from %p, to %p, root ",
-                        ba->count, (void*) ba->fromBuf, (void*) ba->toBuf);
+        laik_log_append("    Reduce (R %d): count %d, from %p, to %p, root ",
+                        ba->round, ba->count,
+                        (void*) ba->fromBuf, (void*) ba->toBuf);
         if (ba->peer_rank == -1)
             laik_log_append("(all)");
         else
@@ -456,8 +458,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_RBufReduce:
-        laik_log_append("    RBufReduce: count %d, from/to buf %d off %lld, root ",
-                        ba->count, ba->bufID, ba->offset);
+        laik_log_append("    RBufReduce (R %d): count %d, from/to buf %d off %lld, root ",
+                        ba->round, ba->count, ba->bufID, ba->offset);
         if (ba->peer_rank == -1)
             laik_log_append("(all)");
         else
@@ -465,7 +467,7 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_MapGroupReduce:
-        laik_log_append("    MapGroupReduce: ");
+        laik_log_append("    MapGroupReduce (R %d): ", ba->round);
         laik_log_Slice(ba->dims, ba->slc);
         laik_log_append(" myInMapNo %d, myOutMapNo %d, count %d, input ",
                         ba->fromMapNo, ba->toMapNo, ba->count);
@@ -475,16 +477,18 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         break;
 
     case LAIK_AT_GroupReduce:
-        laik_log_append("    GroupReduce: count %d, from %p, to %p, input ",
-                        ba->count, (void*) ba->fromBuf, (void*) ba->toBuf);
+        laik_log_append("    GroupReduce (R %d): count %d, from %p, to %p, input ",
+                        ba->round, ba->count,
+                        (void*) ba->fromBuf, (void*) ba->toBuf);
         laik_log_TransitionGroup(tc->transition, ba->inputGroup);
         laik_log_append(", output ");
         laik_log_TransitionGroup(tc->transition, ba->outputGroup);
         break;
 
     case LAIK_AT_RBufGroupReduce:
-        laik_log_append("    RBufGroupReduce: count %d, from/to buf %d, off %lld, input ",
-                        ba->count, ba->bufID, (long long int) ba->offset);
+        laik_log_append("    RBufGroupReduce (R %d): count %d, from/to buf %d, off %lld, input ",
+                        ba->round, ba->count,
+                        ba->bufID, (long long int) ba->offset);
         laik_log_TransitionGroup(tc->transition, ba->inputGroup);
         laik_log_append(", output ");
         laik_log_TransitionGroup(tc->transition, ba->outputGroup);
@@ -586,8 +590,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 
 void laik_log_ActionSeq(Laik_ActionSeq *as)
 {
-    laik_log_append("action seq for %d transition(s): %d buffers, %d actions\n",
-                    as->contextCount, as->bufferCount, as->actionCount);
+    laik_log_append("action seq for %d transition(s): %d rounds, %d buffers, %d actions\n",
+                    as->contextCount, as->roundCount, as->bufferCount, as->actionCount);
 
     Laik_TransitionContext* tc = 0;
     for(int i = 0; i < as->contextCount; i++) {

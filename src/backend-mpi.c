@@ -691,7 +691,7 @@ void laik_execOrRecord(bool record,
     // when recording, just create actions
     // TODO: pull out of backend
     if (record) {
-        laik_aseq_addReds(as, data, t);
+        laik_aseq_addReds(as, 0, data, t);
         laik_aseq_addSends(as, 0, data, t);
         laik_aseq_addRecvs(as, 0, data, t);
         return;
@@ -755,7 +755,7 @@ void laik_execOrRecord(bool record,
             }
 
             if (record) {
-                laik_aseq_addGroupReduce(as,
+                laik_aseq_addGroupReduce(as, 0,
                                          op->inputGroup, op->outputGroup,
                                          fromBase, toBase, elemCount, op->redOp);
             }
@@ -892,7 +892,7 @@ void laik_execOrRecord(bool record,
                                                   &(op->slc), op->fromTask);
                 else {
                     Laik_BackendAction a;
-                    laik_aseq_initRecvAndUnpack(&a, 0, toMap,
+                    laik_aseq_initRecvAndUnpack(&a, toMap,
                                                    dims, &(op->slc), op->fromTask);
                     laik_mpi_exec_recvAndUnpack(&a, a.map, dims, data->elemsize,
                                                 mpiDataType, 1, comm);
@@ -977,7 +977,7 @@ void laik_execOrRecord(bool record,
                                                 &(op->slc), op->toTask);
                 else {
                     Laik_BackendAction a;
-                    laik_aseq_initPackAndSend(&a, 0, fromMap,
+                    laik_aseq_initPackAndSend(&a, fromMap,
                                                  dims, &(op->slc), op->toTask);
                     laik_mpi_exec_packAndSend(&a, a.map, dims, mpiDataType, 1, comm);
                     count = a.count;
@@ -1007,20 +1007,20 @@ static void detectReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         case LAIK_AT_GroupReduce:
             if (ba->inputGroup == -1) {
                 if (ba->outputGroup == -1) {
-                    laik_aseq_addReduce(as2, ba->fromBuf, ba->toBuf,
+                    laik_aseq_addReduce(as2, ba->round, ba->fromBuf, ba->toBuf,
                                         ba->count, -1, ba->redOp);
                     continue;
                 }
                 else if (laik_trans_groupCount(t, ba->outputGroup) == 1) {
                     int root = laik_trans_taskInGroup(t, ba->outputGroup, 0);
-                    laik_aseq_addReduce(as2, ba->fromBuf, ba->toBuf,
+                    laik_aseq_addReduce(as2, ba->round, ba->fromBuf, ba->toBuf,
                                         ba->count, root, ba->redOp);
                     continue;
                 }
             }
             // fall-through;
         default:
-            laik_actions_add(ba, as2);
+            laik_actions_add(ba, as2, -1);
             break;
         }
     }
@@ -1082,6 +1082,15 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
         laik_log_ActionSeq(as);
         laik_log_flush(0);
     }
+
+    laik_aseq_allocBuffer(as);
+
+    if (laik_log_begin(1)) {
+        laik_log_append("After buffer allocation:\n");
+        laik_log_ActionSeq(as);
+        laik_log_flush(0);
+    }
+
 #endif
 
     as2 = laik_actions_setupTransform(as);

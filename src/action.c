@@ -42,6 +42,7 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
     as->actionCount = 0;
     as->actionAllocCount = 0;
     as->action = 0;
+    as->roundCount = 0;
 
     as->sendCount = 0;
     as->recvCount = 0;
@@ -102,13 +103,16 @@ Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size)
 }
 
 
-Laik_BackendAction* laik_aseq_addBAction(Laik_ActionSeq* as)
+Laik_BackendAction* laik_aseq_addBAction(Laik_ActionSeq* as, int round)
 {
     Laik_BackendAction* ba;
     ba = (Laik_BackendAction*) laik_aseq_addAction(as, sizeof(Laik_BackendAction));
 
     ba->tid = 0; // always refer to single transition context
-    ba->round = 0;
+    ba->round = round;
+
+    if (as->roundCount <= round)
+        as->roundCount = round + 1;
 
     return ba;
 }
@@ -161,7 +165,8 @@ int laik_aseq_addBufReserve(Laik_ActionSeq* as, int size, int bufID)
     else if (bufID > as->bufReserveCount + 99)
         as->bufReserveCount = bufID - 99;
 
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    // BufReserve in round 0: allocation is done before exec
+    Laik_BackendAction* a = laik_aseq_addBAction(as, 0);
     a->type = LAIK_AT_BufReserve;
     a->count = size;
     a->bufID = bufID;
@@ -175,10 +180,9 @@ void laik_aseq_addRBufSend(Laik_ActionSeq* as, int round,
                            int bufID, int byteOffset,
                            int count, int to)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_RBufSend;
-    a->round = round;
     a->bufID = bufID;
     a->offset = byteOffset;
     a->count = count;
@@ -190,10 +194,9 @@ void laik_aseq_addRBufRecv(Laik_ActionSeq* as, int round,
                            int bufID, int byteOffset,
                            int count, int from)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_RBufRecv;
-    a->round = round;
     a->bufID = bufID;
     a->offset = byteOffset;
     a->count = count;
@@ -208,10 +211,9 @@ void laik_aseq_addRBufLocalReduce(Laik_ActionSeq* as, int round,
                                   int fromBufID, int fromByteOffset,
                                   char* toBuf, int count)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_RBufLocalReduce;
-    a->round = round;
     a->dtype = dtype;
     a->redOp = redOp;
     a->toBuf = toBuf;
@@ -226,10 +228,9 @@ void laik_aseq_addBufInit(Laik_ActionSeq* as, int round,
                           Laik_ReductionOperation redOp,
                           char* toBuf, int count)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_BufInit;
-    a->round = round;
     a->dtype = dtype;
     a->redOp = redOp;
     a->toBuf = toBuf;
@@ -242,10 +243,9 @@ void laik_aseq_addRBufCopy(Laik_ActionSeq* as, int round,
                            int fromBufID, int fromByteOffset,
                            char* toBuf, int count)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_RBufCopy;
-    a->round = round;
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
     a->toBuf = toBuf;
@@ -258,7 +258,7 @@ void laik_aseq_addBufCopy(Laik_ActionSeq* as, int round,
 {
     assert(fromBuf != toBuf);
 
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_BufCopy;
     a->round = round;
@@ -273,10 +273,9 @@ void laik_aseq_addMapSend(Laik_ActionSeq* as, int round,
                           int fromMapNo, uint64_t off,
                           int count, int to)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_MapSend;
-    a->round = round;
     a->fromMapNo = fromMapNo;
     a->offset = off;
     a->count = count;
@@ -289,10 +288,9 @@ void laik_aseq_addMapSend(Laik_ActionSeq* as, int round,
 void laik_aseq_addBufSend(Laik_ActionSeq* as, int round,
                           char* fromBuf, int count, int to)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_BufSend;
-    a->round = round;
     a->fromBuf = fromBuf;
     a->count = count;
     a->peer_rank = to;
@@ -305,10 +303,9 @@ void laik_aseq_addMapRecv(Laik_ActionSeq* as, int round,
                           int toMapNo, uint64_t off,
                           int count, int from)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_MapRecv;
-    a->round = round;
     a->toMapNo = toMapNo;
     a->offset = off;
     a->count = count;
@@ -321,10 +318,9 @@ void laik_aseq_addMapRecv(Laik_ActionSeq* as, int round,
 void laik_aseq_addBufRecv(Laik_ActionSeq* as, int round,
                           char* toBuf, int count, int from)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_BufRecv;
-    a->round = round;
     a->toBuf = toBuf;
     a->count = count;
     a->peer_rank = from;
@@ -333,12 +329,11 @@ void laik_aseq_addBufRecv(Laik_ActionSeq* as, int round,
 }
 
 
-void laik_aseq_initPackAndSend(Laik_BackendAction* a, int round,
+void laik_aseq_initPackAndSend(Laik_BackendAction* a,
                                Laik_Mapping* fromMap, int dims, Laik_Slice* slc,
                                int to)
 {
     a->type = LAIK_AT_PackAndSend;
-    a->round = round;
     a->map = fromMap;
     a->dims = dims;
     a->slc = slc;
@@ -350,11 +345,11 @@ void laik_aseq_initPackAndSend(Laik_BackendAction* a, int round,
 void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
                               Laik_Mapping* fromMap, Laik_Slice* slc, int to)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
-    laik_aseq_initPackAndSend(a, round, fromMap, dims, slc, to);
+    laik_aseq_initPackAndSend(a, fromMap, dims, slc, to);
 
     as->sendCount += a->count;
 }
@@ -363,13 +358,12 @@ void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
                              Laik_Mapping* fromMap, Laik_Slice* slc,
                              int toBufID, int toByteOffset)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
 
     a->type = LAIK_AT_PackToRBuf;
-    a->round = round;
     a->map = fromMap;
     a->dims = dims;
     a->slc = slc;
@@ -382,13 +376,12 @@ void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
 void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
                             Laik_Mapping* fromMap, Laik_Slice* slc, char* toBuf)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
 
     a->type = LAIK_AT_PackToBuf;
-    a->round = round;
     a->map = fromMap;
     a->dims = dims;
     a->slc = slc;
@@ -398,12 +391,11 @@ void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
 }
 
 
-void laik_actions_initMapPackAndSend(Laik_BackendAction* a, int round,
+void laik_actions_initMapPackAndSend(Laik_BackendAction* a,
                                      int fromMapNo, int dims, Laik_Slice* slc,
                                      int to)
 {
     a->type = LAIK_AT_MapPackAndSend;
-    a->round = round;
     a->fromMapNo = fromMapNo;
     a->dims = dims;
     a->slc = slc;
@@ -415,11 +407,11 @@ void laik_actions_initMapPackAndSend(Laik_BackendAction* a, int round,
 void laik_aseq_addMapPackAndSend(Laik_ActionSeq* as, int round,
                                  int fromMapNo, Laik_Slice* slc, int to)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
-    laik_actions_initMapPackAndSend(a, round, fromMapNo, dims, slc, to);
+    laik_actions_initMapPackAndSend(a, fromMapNo, dims, slc, to);
 
     as->sendCount += a->count;
 }
@@ -428,13 +420,12 @@ void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
                                 int fromMapNo, Laik_Slice* slc,
                                 int toBufID, int toByteOffset)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
 
     a->type = LAIK_AT_MapPackToRBuf;
-    a->round = round;
     a->fromMapNo = fromMapNo;
     a->dims = dims;
     a->slc = slc;
@@ -445,12 +436,11 @@ void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
 }
 
 
-void laik_aseq_initRecvAndUnpack(Laik_BackendAction* a, int round,
+void laik_aseq_initRecvAndUnpack(Laik_BackendAction* a,
                                  Laik_Mapping* toMap, int dims, Laik_Slice* slc,
                                  int from)
 {
     a->type = LAIK_AT_RecvAndUnpack;
-    a->round = round;
     a->map = toMap;
     a->dims = dims;
     a->slc = slc;
@@ -462,11 +452,11 @@ void laik_aseq_initRecvAndUnpack(Laik_BackendAction* a, int round,
 void laik_aseq_addRecvAndUnpack(Laik_ActionSeq* as, int round,
                                 Laik_Mapping* toMap, Laik_Slice* slc, int from)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
-    laik_aseq_initRecvAndUnpack(a, round, toMap, dims, slc, from);
+    laik_aseq_initRecvAndUnpack(a, toMap, dims, slc, from);
 
     as->recvCount += a->count;
 }
@@ -475,13 +465,12 @@ void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
                                  int fromBufID, int fromByteOffset,
                                  Laik_Mapping* toMap, Laik_Slice* slc)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
 
     a->type = LAIK_AT_UnpackFromRBuf;
-    a->round = round;
     a->dims = dims;
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
@@ -494,13 +483,12 @@ void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
 void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
                                 char* fromBuf, Laik_Mapping* toMap, Laik_Slice* slc)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
 
     a->type = LAIK_AT_UnpackFromBuf;
-    a->round = round;
     a->dims = dims;
     a->fromBuf = fromBuf;
     a->map = toMap;
@@ -509,12 +497,11 @@ void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
     assert(a->count > 0);
 }
 
-void laik_actions_initMapRecvAndUnpack(Laik_BackendAction* a, int round,
+void laik_actions_initMapRecvAndUnpack(Laik_BackendAction* a,
                                        int toMapNo, int dims, Laik_Slice* slc,
                                        int from)
 {
     a->type = LAIK_AT_MapRecvAndUnpack;
-    a->round = round;
     a->toMapNo = toMapNo;
     a->dims = dims;
     a->slc = slc;
@@ -526,24 +513,23 @@ void laik_actions_initMapRecvAndUnpack(Laik_BackendAction* a, int round,
 void laik_actions_addMapRecvAndUnpack(Laik_ActionSeq* as, int round,
                                       int toMapNo, Laik_Slice* slc, int from)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
-    laik_actions_initMapRecvAndUnpack(a, round, toMapNo, dims, slc, from);
+    laik_actions_initMapRecvAndUnpack(a, toMapNo, dims, slc, from);
 }
 
 void laik_aseq_addMapUnpackFromRBuf(Laik_ActionSeq* as, int round,
                                     int fromBufID, int fromByteOffset,
                                     int toMapNo, Laik_Slice* slc)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
 
     a->type = LAIK_AT_MapUnpackFromRBuf;
-    a->round = round;
     a->dims = dims;
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
@@ -566,22 +552,22 @@ void laik_aseq_initReduce(Laik_BackendAction* a,
 }
 
 
-void laik_aseq_addReduce(Laik_ActionSeq* as,
+void laik_aseq_addReduce(Laik_ActionSeq* as, int round,
                          char* fromBuf, char* toBuf, int count,
                          int rootTask, Laik_ReductionOperation redOp)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
     laik_aseq_initReduce(a, fromBuf, toBuf, count, rootTask, redOp);
 
     assert(count > 0);
     as->reduceCount += count;
 }
 
-void laik_actions_addRBufReduce(Laik_ActionSeq* as,
+void laik_actions_addRBufReduce(Laik_ActionSeq* as, int round,
                                 int bufID, int byteOffset, int count,
                                 int rootTask, Laik_ReductionOperation redOp)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
     a->type = LAIK_AT_RBufReduce;
     a->bufID = bufID;
     a->offset = byteOffset;
@@ -594,12 +580,12 @@ void laik_actions_addRBufReduce(Laik_ActionSeq* as,
 }
 
 // append group reduce action
-void laik_aseq_addMapGroupReduce(Laik_ActionSeq* as,
+void laik_aseq_addMapGroupReduce(Laik_ActionSeq* as, int round,
                                  int inputGroup, int outputGroup,
                                  int myInputMapNo, int myOutputMapNo,
                                  Laik_Slice* slc, Laik_ReductionOperation redOp)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     Laik_TransitionContext* tc = as->context[0];
     int dims = tc->transition->space->dims;
@@ -633,12 +619,12 @@ void laik_aseq_initGroupReduce(Laik_BackendAction* a,
     a->redOp = redOp;
 }
 
-void laik_aseq_addGroupReduce(Laik_ActionSeq* as,
+void laik_aseq_addGroupReduce(Laik_ActionSeq* as, int round,
                               int inputGroup, int outputGroup,
                               char* fromBuf, char* toBuf, int count,
                               Laik_ReductionOperation redOp)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
     laik_aseq_initGroupReduce(a, inputGroup, outputGroup,
                               fromBuf, toBuf, count, redOp);
 
@@ -647,12 +633,12 @@ void laik_aseq_addGroupReduce(Laik_ActionSeq* as,
 }
 
 // similar to addGroupReduce
-void laik_aseq_addRBufGroupReduce(Laik_ActionSeq* as,
+void laik_aseq_addRBufGroupReduce(Laik_ActionSeq* as, int round,
                                   int inputGroup, int outputGroup,
                                   int bufID, int byteOffset, int count,
                                   Laik_ReductionOperation redOp)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_RBufGroupReduce;
     a->inputGroup = inputGroup;
@@ -671,10 +657,9 @@ void laik_aseq_addRBufGroupReduce(Laik_ActionSeq* as,
 void laik_aseq_addCopyToBuf(Laik_ActionSeq* as, int round,
                             Laik_CopyEntry* ce, char* toBuf, int count)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_CopyToBuf;
-    a->round = round;
     a->ce = ce;
     a->toBuf = toBuf;
     a->count = count;
@@ -683,10 +668,9 @@ void laik_aseq_addCopyToBuf(Laik_ActionSeq* as, int round,
 void laik_aseq_addCopyFromBuf(Laik_ActionSeq* as, int round,
                               Laik_CopyEntry* ce, char* fromBuf, int count)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_CopyFromBuf;
-    a->round = round;
     a->ce = ce;
     a->fromBuf = fromBuf;
     a->count = count;
@@ -696,10 +680,9 @@ void laik_aseq_addCopyToRBuf(Laik_ActionSeq* as, int round,
                              Laik_CopyEntry* ce,
                              int toBufID, int toByteOffset, int count)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_CopyToRBuf;
-    a->round = round;
     a->ce = ce;
     a->bufID = toBufID;
     a->offset = toByteOffset;
@@ -711,10 +694,9 @@ void laik_aseq_addCopyFromRBuf(Laik_ActionSeq* as, int round,
                                Laik_CopyEntry* ce,
                                int fromBufID, int fromByteOffset, int count)
 {
-    Laik_BackendAction* a = laik_aseq_addBAction(as);
+    Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
     a->type = LAIK_AT_CopyFromRBuf;
-    a->round = round;
     a->ce = ce;
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
@@ -749,7 +731,7 @@ bool laik_action_isRecv(Laik_BackendAction* ba)
 
 
 // add all reduce ops from a transition to an ActionSeq.
-void laik_aseq_addReds(Laik_ActionSeq* as,
+void laik_aseq_addReds(Laik_ActionSeq* as, int round,
                        Laik_Data* data, Laik_Transition* t)
 {
     Laik_TransitionContext* tc = as->context[0];
@@ -759,7 +741,7 @@ void laik_aseq_addReds(Laik_ActionSeq* as,
 
     for(int i=0; i < t->redCount; i++) {
         struct redTOp* op = &(t->red[i]);
-        laik_aseq_addMapGroupReduce(as,
+        laik_aseq_addMapGroupReduce(as, round,
                                     op->inputGroup, op->outputGroup,
                                     op->myInputMapNo, op->myOutputMapNo,
                                     &(op->slc), op->redOp);
@@ -982,8 +964,12 @@ Laik_ActionSeq* laik_actions_setupTransform(Laik_ActionSeq* oldAS)
 }
 
 // append actions to <as>
-void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
+// allows to change round of added action when <round> >= 0
+void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as, int round)
 {
+    if (round < 0)
+        round = ba->round;
+
     switch(ba->type) {
     case LAIK_AT_Nop:
         // no need to copy a NOP operation
@@ -997,154 +983,166 @@ void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as)
         break;
 
     case LAIK_AT_MapSend:
-        laik_aseq_addMapSend(as, ba->round, ba->fromMapNo, ba->offset,
+        laik_aseq_addMapSend(as, round,
+                             ba->fromMapNo, ba->offset,
                              ba->count, ba->peer_rank);
         break;
 
     case LAIK_AT_BufSend:
-        laik_aseq_addBufSend(as, ba->round,
+        laik_aseq_addBufSend(as, round,
                              ba->fromBuf, ba->count, ba->peer_rank);
         break;
 
     case LAIK_AT_RBufSend:
-        laik_aseq_addRBufSend(as, ba->round, ba->bufID, ba->offset,
+        laik_aseq_addRBufSend(as, round,
+                              ba->bufID, ba->offset,
                               ba->count, ba->peer_rank);
         break;
 
     case LAIK_AT_MapRecv:
-        laik_aseq_addMapRecv(as, ba->round, ba->toMapNo, ba->offset,
+        laik_aseq_addMapRecv(as, round,
+                             ba->toMapNo, ba->offset,
                              ba->count, ba->peer_rank);
         break;
 
     case LAIK_AT_BufRecv:
-        laik_aseq_addBufRecv(as, ba->round,
+        laik_aseq_addBufRecv(as, round,
                              ba->toBuf, ba->count, ba->peer_rank);
         break;
 
     case LAIK_AT_RBufRecv:
-        laik_aseq_addRBufRecv(as, ba->round, ba->bufID, ba->offset,
+        laik_aseq_addRBufRecv(as, round,
+                              ba->bufID, ba->offset,
                               ba->count, ba->peer_rank);
         break;
 
     case LAIK_AT_MapPackToRBuf:
-        laik_aseq_addMapPackToRBuf(as, ba->round,
+        laik_aseq_addMapPackToRBuf(as, round,
                                    ba->fromMapNo, ba->slc, ba->bufID, ba->offset);
         break;
 
     case LAIK_AT_PackToRBuf:
-        laik_aseq_addPackToRBuf(as, ba->round,
+        laik_aseq_addPackToRBuf(as, round,
                                 ba->map, ba->slc, ba->bufID, ba->offset);
         break;
 
     case LAIK_AT_PackToBuf:
-        laik_aseq_addPackToBuf(as, ba->round, ba->map, ba->slc, ba->toBuf);
+        laik_aseq_addPackToBuf(as, round,
+                               ba->map, ba->slc, ba->toBuf);
         break;
 
     case LAIK_AT_MapPackAndSend:
-        laik_aseq_addMapPackAndSend(as, ba->round,
+        laik_aseq_addMapPackAndSend(as, round,
                                     ba->fromMapNo, ba->slc, ba->peer_rank);
         break;
 
     case LAIK_AT_PackAndSend:
-        laik_aseq_addPackAndSend(as, ba->round,
+        laik_aseq_addPackAndSend(as, round,
                                  ba->map, ba->slc, ba->peer_rank);
         break;
 
     case LAIK_AT_MapUnpackFromRBuf:
-        laik_aseq_addMapUnpackFromRBuf(as, ba->round,
+        laik_aseq_addMapUnpackFromRBuf(as, round,
                                        ba->bufID, ba->offset,
                                        ba->toMapNo, ba->slc);
         break;
 
     case LAIK_AT_UnpackFromRBuf:
-        laik_aseq_addUnpackFromRBuf(as, ba->round,
+        laik_aseq_addUnpackFromRBuf(as, round,
                                     ba->bufID, ba->offset,
                                     ba->map, ba->slc);
         break;
 
     case LAIK_AT_UnpackFromBuf:
-        laik_aseq_addUnpackFromBuf(as, ba->round,
+        laik_aseq_addUnpackFromBuf(as, round,
                                    ba->fromBuf, ba->map, ba->slc);
         break;
 
     case LAIK_AT_MapRecvAndUnpack:
-        laik_actions_addMapRecvAndUnpack(as, ba->round,
+        laik_actions_addMapRecvAndUnpack(as, round,
                                          ba->toMapNo, ba->slc, ba->peer_rank);
         break;
 
     case LAIK_AT_RecvAndUnpack:
-        laik_aseq_addRecvAndUnpack(as, ba->round,
+        laik_aseq_addRecvAndUnpack(as, round,
                                    ba->map, ba->slc, ba->peer_rank);
         break;
 
     case LAIK_AT_BufCopy:
-        laik_aseq_addBufCopy(as, ba->round,
+        laik_aseq_addBufCopy(as, round,
                              ba->fromBuf, ba->toBuf, ba->count);
         break;
 
     case LAIK_AT_RBufCopy:
-        laik_aseq_addRBufCopy(as, ba->round, ba->bufID, ba->offset,
+        laik_aseq_addRBufCopy(as, round,
+                              ba->bufID, ba->offset,
                               ba->toBuf, ba->count);
         break;
 
 
     case LAIK_AT_CopyFromBuf:
-        laik_aseq_addCopyFromBuf(as, ba->round, ba->ce, ba->fromBuf, ba->count);
+        laik_aseq_addCopyFromBuf(as, round,
+                                 ba->ce, ba->fromBuf, ba->count);
         break;
 
     case LAIK_AT_CopyToBuf:
-        laik_aseq_addCopyToBuf(as, ba->round, ba->ce, ba->toBuf, ba->count);
+        laik_aseq_addCopyToBuf(as, round,
+                               ba->ce, ba->toBuf, ba->count);
         break;
 
     case LAIK_AT_CopyFromRBuf:
-        laik_aseq_addCopyFromRBuf(as, ba->round, ba->ce,
-                                  ba->bufID, ba->offset, ba->count);
+        laik_aseq_addCopyFromRBuf(as, round,
+                                  ba->ce, ba->bufID, ba->offset, ba->count);
         break;
 
     case LAIK_AT_CopyToRBuf:
-        laik_aseq_addCopyToRBuf(as, ba->round, ba->ce,
-                                ba->bufID, ba->offset, ba->count);
+        laik_aseq_addCopyToRBuf(as, round,
+                                ba->ce, ba->bufID, ba->offset, ba->count);
         break;
 
     case LAIK_AT_RBufReduce:
-        laik_actions_addRBufReduce(as, ba->bufID, ba->offset, ba->count,
+        laik_actions_addRBufReduce(as, round,
+                                   ba->bufID, ba->offset, ba->count,
                                    ba->peer_rank, ba->redOp);
         break;
 
     case LAIK_AT_Reduce:
-        laik_aseq_addReduce(as, ba->fromBuf, ba->toBuf, ba->count,
+        laik_aseq_addReduce(as, round,
+                            ba->fromBuf, ba->toBuf, ba->count,
                             ba->peer_rank, ba->redOp);
         break;
 
     case LAIK_AT_MapGroupReduce:
-        laik_aseq_addMapGroupReduce(as,
+        laik_aseq_addMapGroupReduce(as, round,
                                     ba->inputGroup, ba->outputGroup,
                                     ba->fromMapNo, ba->toMapNo,
                                     ba->slc, ba->redOp);
         break;
 
     case LAIK_AT_GroupReduce:
-        laik_aseq_addGroupReduce(as,
+        laik_aseq_addGroupReduce(as, round,
                                  ba->inputGroup, ba->outputGroup,
                                  ba->fromBuf, ba->toBuf,
                                  ba->count, ba->redOp);
         break;
 
     case LAIK_AT_RBufGroupReduce:
-        laik_aseq_addRBufGroupReduce(as,
+        laik_aseq_addRBufGroupReduce(as, round,
                                      ba->inputGroup, ba->outputGroup,
                                      ba->bufID, ba->offset,
                                      ba->count, ba->redOp);
         break;
 
     case LAIK_AT_RBufLocalReduce:
-        laik_aseq_addRBufLocalReduce(as, ba->round, ba->dtype, ba->redOp,
+        laik_aseq_addRBufLocalReduce(as, round,
+                                     ba->dtype, ba->redOp,
                                      ba->bufID, ba->offset,
                                      ba->toBuf, ba->count);
         break;
 
     case LAIK_AT_BufInit:
-        laik_aseq_addBufInit(as, ba->round, ba->dtype, ba->redOp,
+        laik_aseq_addBufInit(as, round,
+                             ba->dtype, ba->redOp,
                              ba->toBuf, ba->count);
         break;
 
@@ -1161,7 +1159,7 @@ void laik_aseq_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 {
     for(int i = 0; i < oldAS->actionCount; i++) {
         Laik_BackendAction* ba = &(oldAS->action[i]);
-        laik_actions_add(ba, as);
+        laik_actions_add(ba, as, -1);
     }
 }
 
@@ -1178,6 +1176,9 @@ void laik_aseq_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
  *   (only if this process receives output)
  * Before generating the new actions, merge candidates are identified
  * and space required for temporary buffers and copy ranges.
+ *
+ * Action round numbers are spreaded by *3+1, allowing space for added
+ * combine/split copy actions before/after.
  *
  * This merge transformation is easy to see in LAIK_LOG=1 output of the
  * "the markov2 -f ..." test.
@@ -1224,8 +1225,8 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
                 if (oldAS->action[j].type != LAIK_AT_BufSend) continue;
-                if (oldAS->action[j].peer_rank != rank) continue;
                 if (oldAS->action[j].round != round) continue;
+                if (oldAS->action[j].peer_rank != rank) continue;
 
                 // should be unmarked
                 assert(oldAS->action[j].mark == 0);
@@ -1249,8 +1250,8 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
                 if (oldAS->action[j].type != LAIK_AT_BufRecv) continue;
-                if (oldAS->action[j].peer_rank != rank) continue;
                 if (oldAS->action[j].round != round) continue;
+                if (oldAS->action[j].peer_rank != rank) continue;
 
                 // should be unmarked
                 assert(oldAS->action[j].mark == 0);
@@ -1271,12 +1272,14 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             // combine all GroupReduce actions with same
             // inputGroup, outputGroup, and redOp
             count = ba->count;
+            round = ba->round;
             int inputGroup = ba->inputGroup;
             int outputGroup = ba->outputGroup;
             Laik_ReductionOperation redOp = ba->redOp;
             int actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
                 if (oldAS->action[j].type != LAIK_AT_GroupReduce) continue;
+                if (oldAS->action[j].round != round) continue;
                 if (oldAS->action[j].inputGroup != inputGroup) continue;
                 if (oldAS->action[j].outputGroup != outputGroup) continue;
                 if (oldAS->action[j].redOp != redOp) continue;
@@ -1301,11 +1304,13 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
             // combine all reduce actions with same root and redOp
             count = ba->count;
+            round = ba->round;
             int root = ba->peer_rank;
             Laik_ReductionOperation redOp = ba->redOp;
             int actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
                 if (oldAS->action[j].type != LAIK_AT_Reduce) continue;
+                if (oldAS->action[j].round != round) continue;
                 if (oldAS->action[j].peer_rank != root) continue;
                 if (oldAS->action[j].redOp != redOp) continue;
                 // should be unmarked
@@ -1383,18 +1388,18 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             if (actionCount > 1) {
                 //laik_log(1,"Send Seq %d - %d, rangeOff %d, bufOff %d, count %d",
                 //         i, j, rangeOff, bufOff, count);
-                laik_aseq_addCopyToRBuf(as, ba->round,
+                laik_aseq_addCopyToRBuf(as, 3 * ba->round,
                                         as->ce + rangeOff,
                                         bufID, 0,
                                         actionCount);
-                laik_aseq_addRBufSend(as, ba->round,
+                laik_aseq_addRBufSend(as, 3 * ba->round + 1,
                                       bufID, bufOff * elemsize,
                                       count, rank);
                 int oldRangeOff = rangeOff;
                 for(int k = i; k < oldAS->actionCount; k++) {
                     if (oldAS->action[k].type != LAIK_AT_BufSend) continue;
-                    if (oldAS->action[k].peer_rank != rank) continue;
                     if (oldAS->action[k].round != round) continue;
+                    if (oldAS->action[k].peer_rank != rank) continue;
 
                     assert(rangeOff < copyRanges);
                     as->ce[rangeOff].ptr = oldAS->action[k].fromBuf;
@@ -1406,7 +1411,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 assert(oldRangeOff + actionCount == rangeOff);
             }
             else
-                laik_aseq_addBufSend(as, ba->round,
+                laik_aseq_addBufSend(as, 3 * ba->round + 1,
                                      ba->fromBuf, count, rank);
             break;
 
@@ -1418,8 +1423,8 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
                 if (oldAS->action[j].type != LAIK_AT_BufRecv) continue;
-                if (oldAS->action[j].peer_rank != rank) continue;
                 if (oldAS->action[j].round != round) continue;
+                if (oldAS->action[j].peer_rank != rank) continue;
 
                 assert(oldAS->action[j].mark == 0);
                 oldAS->action[j].mark = 1;
@@ -1428,18 +1433,18 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 actionCount++;
             }
             if (actionCount > 1) {
-                laik_aseq_addRBufRecv(as, ba->round,
+                laik_aseq_addRBufRecv(as, 3 * ba->round + 1,
                                       bufID, bufOff * elemsize,
                                       count, rank);
-                laik_aseq_addCopyFromRBuf(as, ba->round,
+                laik_aseq_addCopyFromRBuf(as, 3 * ba->round + 2,
                                           as->ce + rangeOff,
                                           bufID, 0,
                                           actionCount);
                 int oldRangeOff = rangeOff;
                 for(int k = i; k < oldAS->actionCount; k++) {
                     if (oldAS->action[k].type != LAIK_AT_BufRecv) continue;
-                    if (oldAS->action[k].peer_rank != rank) continue;
                     if (oldAS->action[k].round != round) continue;
+                    if (oldAS->action[k].peer_rank != rank) continue;
 
                     assert(rangeOff < copyRanges);
                     as->ce[rangeOff].ptr = oldAS->action[k].toBuf;
@@ -1451,14 +1456,14 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 assert(oldRangeOff + actionCount == rangeOff);
             }
             else
-                laik_aseq_addBufRecv(as, ba->round,
+                laik_aseq_addBufRecv(as, 3 * ba->round + 1,
                                      ba->toBuf, count, rank);
             break;
 
         case LAIK_AT_GroupReduce: {
             if (!combineGroupReduce) {
                 // pass through
-                laik_aseq_addGroupReduce(as,
+                laik_aseq_addGroupReduce(as, 3 * ba->round + 1,
                                          ba->inputGroup, ba->outputGroup,
                                          ba->fromBuf, ba->toBuf,
                                          ba->count, ba->redOp);
@@ -1466,12 +1471,14 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
             }
 
             count = ba->count;
+            round = ba->round;
             int inputGroup = ba->inputGroup;
             int outputGroup = ba->outputGroup;
             Laik_ReductionOperation redOp = ba->redOp;
             int actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
                 if (oldAS->action[j].type != LAIK_AT_GroupReduce) continue;
+                if (oldAS->action[j].round != round) continue;
                 if (oldAS->action[j].inputGroup != inputGroup) continue;
                 if (oldAS->action[j].outputGroup != outputGroup) continue;
                 if (oldAS->action[j].redOp != redOp) continue;
@@ -1489,7 +1496,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
                 // if I provide input: copy pieces into temporary buffer
                 if (laik_trans_isInGroup(tc->transition, inputGroup, myid)) {
-                    laik_aseq_addCopyToRBuf(as, ba->round,
+                    laik_aseq_addCopyToRBuf(as, 3 * round,
                                             as->ce + rangeOff,
                                             bufID, 0,
                                             actionCount);
@@ -1497,6 +1504,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                     int oldRangeOff = rangeOff;
                     for(int k = i; k < oldAS->actionCount; k++) {
                         if (oldAS->action[k].type != LAIK_AT_GroupReduce) continue;
+                        if (oldAS->action[k].round != round) continue;
                         if (oldAS->action[k].inputGroup != inputGroup) continue;
                         if (oldAS->action[k].outputGroup != outputGroup) continue;
                         if (oldAS->action[k].redOp != redOp) continue;
@@ -1512,14 +1520,14 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 }
 
                 // use temporary buffer for both input and output
-                laik_aseq_addRBufGroupReduce(as,
+                laik_aseq_addRBufGroupReduce(as, 3 * round + 1,
                                              inputGroup, outputGroup,
                                              bufID, startBufOff * elemsize,
                                              count, redOp);
 
                 // if I want output: copy pieces from temporary buffer
                 if (laik_trans_isInGroup(tc->transition, outputGroup, myid)) {
-                    laik_aseq_addCopyFromRBuf(as, ba->round,
+                    laik_aseq_addCopyFromRBuf(as, 3 * round + 2,
                                               as->ce + rangeOff,
                                               bufID, 0,
                                               actionCount);
@@ -1527,6 +1535,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                     int oldRangeOff = rangeOff;
                     for(int k = i; k < oldAS->actionCount; k++) {
                         if (oldAS->action[k].type != LAIK_AT_GroupReduce) continue;
+                        if (oldAS->action[k].round != round) continue;
                         if (oldAS->action[k].inputGroup != inputGroup) continue;
                         if (oldAS->action[k].outputGroup != outputGroup) continue;
                         if (oldAS->action[k].redOp != redOp) continue;
@@ -1543,7 +1552,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 bufOff = startBufOff + count;
             }
             else
-                laik_aseq_addGroupReduce(as,
+                laik_aseq_addGroupReduce(as, 3 * ba->round + 1,
                                          ba->inputGroup, ba->outputGroup,
                                          ba->fromBuf, ba->toBuf,
                                          ba->count, ba->redOp);
@@ -1553,17 +1562,20 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
         case LAIK_AT_Reduce: {
             if (!combineReduce) {
                 // pass through
-                laik_aseq_addReduce(as, ba->fromBuf, ba->toBuf,
+                laik_aseq_addReduce(as, 3 * ba->round + 1,
+                                    ba->fromBuf, ba->toBuf,
                                     ba->count, ba->peer_rank, ba->redOp);
                 break;
             }
 
             count = ba->count;
+            round = ba->round;
             int root = ba->peer_rank;
             Laik_ReductionOperation redOp = ba->redOp;
             int actionCount = 1;
             for(j = i+1; j < oldAS->actionCount; j++) {
                 if (oldAS->action[j].type != LAIK_AT_Reduce) continue;
+                if (oldAS->action[j].round != round) continue;
                 if (oldAS->action[j].peer_rank != root) continue;
                 if (oldAS->action[j].redOp != redOp) continue;
                 // should be unmarked
@@ -1577,7 +1589,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 int startBufOff = bufOff;
 
                 // copy input pieces into temporary buffer
-                laik_aseq_addCopyToRBuf(as, ba->round,
+                laik_aseq_addCopyToRBuf(as, 3 * ba->round,
                                         as->ce + rangeOff,
                                         bufID, 0,
                                         actionCount);
@@ -1585,6 +1597,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 int oldRangeOff = rangeOff;
                 for(int k = i; k < oldAS->actionCount; k++) {
                     if (oldAS->action[k].type != LAIK_AT_Reduce) continue;
+                    if (oldAS->action[k].round != round) continue;
                     if (oldAS->action[k].peer_rank != root) continue;
                     if (oldAS->action[k].redOp != redOp) continue;
 
@@ -1599,14 +1612,15 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 assert(startBufOff + count == bufOff);
 
                 // use temporary buffer for both input and output
-                laik_actions_addRBufReduce(as, bufID, startBufOff * elemsize,
+                laik_actions_addRBufReduce(as, 3 * round + 1,
+                                           bufID, startBufOff * elemsize,
                                            count, root, redOp);
 
                 // if I want result, copy output ranges
                 if ((root == myid) || (root == -1)) {
                     // collect output ranges: we cannot reuse copy ranges from
                     // input pieces because of potentially other output buffers
-                    laik_aseq_addCopyFromRBuf(as, ba->round,
+                    laik_aseq_addCopyFromRBuf(as, 3 * round + 2,
                                               as->ce + rangeOff,
                                               bufID, 0,
                                               actionCount);
@@ -1614,6 +1628,7 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                     int oldRangeOff = rangeOff;
                     for(int k = i; k < oldAS->actionCount; k++) {
                         if (oldAS->action[k].type != LAIK_AT_Reduce) continue;
+                        if (oldAS->action[k].round != round) continue;
                         if (oldAS->action[k].peer_rank != root) continue;
                         if (oldAS->action[k].redOp != redOp) continue;
 
@@ -1629,14 +1644,15 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
                 bufOff = startBufOff + count;
             }
             else
-                laik_aseq_addReduce(as, ba->fromBuf, ba->toBuf,
+                laik_aseq_addReduce(as, 3 * ba->round + 1,
+                                    ba->fromBuf, ba->toBuf,
                                     ba->count, ba->peer_rank, ba->redOp);
             break;
         }
 
         default:
             // pass through
-            laik_actions_add(ba, as);
+            laik_actions_add(ba, as, 3 * ba->round + 1);
             break;
         }
     }
@@ -1646,6 +1662,28 @@ void laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as)
 
 
 // helpers for action resorting
+
+// helper for action sorting if it sorts by rounds:
+// add actions already sorted in pointer array <order> to <as>, compress rounds
+static
+void addResorted(int count, Laik_BackendAction** order, Laik_ActionSeq* as)
+{
+    assert(count > 0);
+
+    // add actions in new order to as2, compress rounds
+    int round;
+    int oldRound = order[0]->round;
+    int newRound = 0;
+    for(int i = 0; i < count; i++) {
+        round = order[i]->round;
+        assert(round >= oldRound); // must be sorted
+        if (round > oldRound) {
+            oldRound = round;
+            newRound++;
+        }
+        laik_actions_add(order[i], as, newRound);
+    }
+}
 
 // used by compare functions, set directly before sort
 static int myid4cmp;
@@ -1708,6 +1746,8 @@ int cmp2phase(const void* aptr1, const void* aptr2)
  */
 void laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
+    if (as->actionCount == 0) return;
+
     Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
 
     for(int i=0; i < as->actionCount; i++) {
@@ -1719,10 +1759,7 @@ void laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq* as2)
     myid4cmp = tc->transition->group->myid;
     qsort(order, as->actionCount, sizeof(void*), cmp2phase);
 
-    // add actions in new order to as2
-    for(int i = 0; i < as->actionCount; i++) {
-        laik_actions_add(order[i], as2);
-    }
+    addResorted(as->actionCount, order, as2);
 
     free(order);
 }
@@ -1793,6 +1830,8 @@ int cmp_rankdigits(const void* aptr1, const void* aptr2)
  */
 void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
+    if (as->actionCount == 0) return;
+
     Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
 
     for(int i=0; i < as->actionCount; i++) {
@@ -1804,22 +1843,59 @@ void laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2)
     myid4cmp = tc->transition->group->myid;
     qsort(order, as->actionCount, sizeof(void*), cmp_rankdigits);
 
-    // add actions in new order to as2
-    for(int i = 0; i < as->actionCount; i++) {
-        laik_actions_add(order[i], as2);
-    }
+    addResorted(as->actionCount, order, as2);
 
     free(order);
 }
 
 
-// transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
-// if mapping is known and direct send/recv is possible
-//
-// we enforce the following rounds:
-// - round 0: eventually pack from container to buffer
-// - round 1: send/recv messages
-// - round 2: eventually unpack from buffer into container
+// helper for just sorting by rounds
+
+static
+int cmp_rounds(const void* aptr1, const void* aptr2)
+{
+    Laik_BackendAction* ba1 = *((Laik_BackendAction**) aptr1);
+    Laik_BackendAction* ba2 = *((Laik_BackendAction**) aptr2);
+
+    if (ba1->round != ba2->round)
+        return ba1->round - ba2->round;
+
+    // otherwise, keep original order
+    // we can compare pointers to actions (as they are not sorted directly!)
+    return (int) (ba1 - ba2);
+}
+
+// sort actions according to their rounds, and compress rounds
+void laik_aseq_sort_rounds(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+{
+    if (as->actionCount == 0) return;
+
+    Laik_BackendAction** order = malloc(as->actionCount * sizeof(void*));
+
+    for(int i=0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+        order[i] = ba;
+    }
+
+    qsort(order, as->actionCount, sizeof(void*), cmp_rounds);
+    addResorted(as->actionCount, order, as2);
+
+    free(order);
+}
+
+
+
+/*
+ * transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
+ * if mapping is known and direct send/recv is possible
+ *
+ * we enforce the following rounds:
+ * - round 0: eventually pack from container to buffer
+ * - round 1: send/recv messages
+ * - round 2: eventually unpack from buffer into container
+ * All action round numbers are spreaded by *3+1, allowing space for added
+ * pack/unpack copy actions before/after.
+*/
 void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
     Laik_Mapping *fromMap, *toMap;
@@ -1850,11 +1926,11 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
                 // replace with different action depending on map allocation done
                 if (fromMap->base)
-                    laik_aseq_addBufSend(as2, 1,
+                    laik_aseq_addBufSend(as2, 3 * ba->round + 1,
                                          fromMap->base + from * elemsize,
                                          to - from, ba->peer_rank);
                 else
-                    laik_aseq_addMapSend(as2, 1,
+                    laik_aseq_addMapSend(as2, 3 * ba->round + 1,
                                          ba->fromMapNo, from * elemsize,
                                          to - from, ba->peer_rank);
             }
@@ -1862,14 +1938,14 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                 // split off packing and sending, using a buffer of required size
                 int bufID = laik_aseq_addBufReserve(as2, ba->count * elemsize, -1);
                 if (fromMap)
-                    laik_aseq_addPackToRBuf(as2, 0,
+                    laik_aseq_addPackToRBuf(as2, 3 * ba->round,
                                             fromMap, ba->slc, bufID, 0);
                 else
-                    laik_aseq_addMapPackToRBuf(as2, 0,
+                    laik_aseq_addMapPackToRBuf(as2, 3 * ba->round,
                                                ba->fromMapNo, ba->slc, bufID, 0);
 
-                laik_aseq_addRBufSend(as2, 1, bufID, 0,
-                                      ba->count, ba->peer_rank);
+                laik_aseq_addRBufSend(as2, 3 * ba->round + 1,
+                                      bufID, 0, ba->count, ba->peer_rank);
             }
             handled = true;
             break;
@@ -1890,24 +1966,24 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 
                 // replace with different action depending on map allocation done
                 if (toMap->base)
-                    laik_aseq_addBufRecv(as2, 1,
+                    laik_aseq_addBufRecv(as2, 3 * ba->round + 1,
                                          toMap->base + from * elemsize,
                                          to - from, ba->peer_rank);
                 else
-                    laik_aseq_addMapRecv(as2, 1,
+                    laik_aseq_addMapRecv(as2, 3 * ba->round + 1,
                                          ba->toMapNo, from * elemsize,
                                          to - from, ba->peer_rank);
             }
             else {
                 // split off receiving and unpacking, using buffer of required size
                 int bufID = laik_aseq_addBufReserve(as2, ba->count * elemsize, -1);
-                laik_aseq_addRBufRecv(as2, 1, bufID, 0,
-                                      ba->count, ba->peer_rank);
+                laik_aseq_addRBufRecv(as2, 3 * ba->round + 1,
+                                      bufID, 0, ba->count, ba->peer_rank);
                 if (toMap)
-                    laik_aseq_addUnpackFromRBuf(as2, 2,
+                    laik_aseq_addUnpackFromRBuf(as2, 3 * ba->round + 2,
                                                 bufID, 0, toMap, ba->slc);
                 else
-                    laik_aseq_addMapUnpackFromRBuf(as2, 2,
+                    laik_aseq_addMapUnpackFromRBuf(as2, 3 * ba->round + 2,
                                                    bufID, 0, ba->toMapNo, ba->slc);
             }
             handled = true;
@@ -1955,7 +2031,7 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
                     toBase += (from - toMap->requiredSlice.from.i[0]) * elemsize;
                 }
 
-                laik_aseq_addGroupReduce(as2,
+                laik_aseq_addGroupReduce(as2, 3 * ba->round + 1,
                                          ba->inputGroup, ba->outputGroup,
                                          fromBase, toBase, to - from, ba->redOp);
                 handled = true;
@@ -1966,12 +2042,15 @@ void laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         }
 
         if (!handled)
-            laik_actions_add(ba, as2);
+            laik_actions_add(ba, as2, 3 * ba->round + 1);
     }
 }
 
 // helpers for splitReduce transformation
 
+// add actions for 3-step manual reduction for a group-reduce action
+// spread rounds by 3
+// round 0: send to reduce task, round 1: reduction, round 2: send back
 static
 void laik_aseq_addReduce3Rounds(Laik_ActionSeq* as,
                                 Laik_TransitionContext* tc, Laik_BackendAction* a)
@@ -1989,12 +2068,14 @@ void laik_aseq_addReduce3Rounds(Laik_ActionSeq* as,
 
         if (laik_trans_isInGroup(t, a->inputGroup, myid)) {
             // send action in round 0
-            laik_aseq_addBufSend(as, 0, a->fromBuf, a->count, reduceTask);
+            laik_aseq_addBufSend(as, 3 * a->round,
+                                 a->fromBuf, a->count, reduceTask);
         }
 
         if (laik_trans_isInGroup(t, a->outputGroup, myid)) {
             // recv action only in round 2
-            laik_aseq_addBufRecv(as, 2, a->toBuf, a->count, reduceTask);
+            laik_aseq_addBufRecv(as, 3 * a->round + 2,
+                                 a->toBuf, a->count, reduceTask);
         }
 
         return;
@@ -2028,7 +2109,8 @@ void laik_aseq_addReduce3Rounds(Laik_ActionSeq* as,
         int inTask = laik_trans_taskInGroup(t, a->inputGroup, i);
         if (inTask == myid) continue;
 
-        laik_aseq_addRBufRecv(as, 0, bufID, off, a->count, inTask);
+        laik_aseq_addRBufRecv(as, 3 * a->round,
+                              bufID, off, a->count, inTask);
         bufOff[ii++] = off;
         off += byteCount;
     }
@@ -2037,24 +2119,28 @@ void laik_aseq_addReduce3Rounds(Laik_ActionSeq* as,
 
     if (inCount == 0) {
         // no input: add init action for neutral element of reduction
-        laik_aseq_addBufInit(as, 1, data->type, a->redOp, a->toBuf, a->count);
+        laik_aseq_addBufInit(as, 3 * a->round + 1,
+                             data->type, a->redOp, a->toBuf, a->count);
     }
     else {
         // move first input to a->toBuf, and then reduce on that
         if (inputFromMe) {
             if (a->fromBuf != a->toBuf) {
                 // if my input is not already at a->toBuf, copy it
-                laik_aseq_addBufCopy(as, 1, a->fromBuf, a ->toBuf, a->count);
+                laik_aseq_addBufCopy(as, 3 * a->round + 1,
+                                     a->fromBuf, a ->toBuf, a->count);
             }
         }
         else {
             // copy first input to a->toBuf
-            laik_aseq_addRBufCopy(as, 1, bufID, bufOff[0], a->toBuf, a->count);
+            laik_aseq_addRBufCopy(as,  3 * a->round + 1,
+                                  bufID, bufOff[0], a->toBuf, a->count);
         }
 
         // do reduction with other inputs
         for(int t = 1; t < inCount; t++)
-            laik_aseq_addRBufLocalReduce(as, 1, data->type, a->redOp,
+            laik_aseq_addRBufLocalReduce(as, 3 * a->round + 1,
+                                         data->type, a->redOp,
                                          bufID, bufOff[t],
                                          a->toBuf, a->count);
     }
@@ -2068,10 +2154,14 @@ void laik_aseq_addReduce3Rounds(Laik_ActionSeq* as,
             continue;
         }
 
-        laik_aseq_addBufSend(as, 2, a->toBuf, a->count, outTask);
+        laik_aseq_addBufSend(as,  3 * a->round + 2,
+                             a->toBuf, a->count, outTask);
     }
 }
 
+// add actions for 2-step manual reduction for a group-reduce action
+// intermixed with 3-step reduction, thus need to spread rounds by 3
+// round 0: send/recv, round 1: reduction
 static
 void laik_aseq_addReduce2Rounds(Laik_ActionSeq* as,
                                 Laik_TransitionContext* tc, Laik_BackendAction* a)
@@ -2094,7 +2184,8 @@ void laik_aseq_addReduce2Rounds(Laik_ActionSeq* as,
                 continue;
             }
 
-            laik_aseq_addBufSend(as, 0, a->fromBuf, a->count, outTask);
+            laik_aseq_addBufSend(as,  3 * a->round,
+                                 a->fromBuf, a->count, outTask);
         }
     }
 
@@ -2126,7 +2217,8 @@ void laik_aseq_addReduce2Rounds(Laik_ActionSeq* as,
         int inTask = laik_trans_taskInGroup(t, a->inputGroup, i);
         if (inTask == myid) continue;
 
-        laik_aseq_addRBufRecv(as, 0, bufID, off, a->count, inTask);
+        laik_aseq_addRBufRecv(as, 3 * a->round,
+                              bufID, off, a->count, inTask);
         bufOff[ii++] = off;
         off += byteCount;
     }
@@ -2135,30 +2227,35 @@ void laik_aseq_addReduce2Rounds(Laik_ActionSeq* as,
 
     if (inCount == 0) {
         // no input: add init action for neutral element of reduction
-        laik_aseq_addBufInit(as, 1, data->type, a->redOp, a->toBuf, a->count);
+        laik_aseq_addBufInit(as, 3 * a->round + 1,
+                             data->type, a->redOp, a->toBuf, a->count);
     }
     else {
         // move first input to a->toBuf, and then reduce on that
         if (inputFromMe) {
             if (a->fromBuf != a->toBuf) {
                 // if my input is not already at a->toBuf, copy it
-                laik_aseq_addBufCopy(as, 1, a->fromBuf, a ->toBuf, a->count);
+                laik_aseq_addBufCopy(as, 3 * a->round +1,
+                                     a->fromBuf, a ->toBuf, a->count);
             }
         }
         else {
             // copy first input to a->toBuf
-            laik_aseq_addRBufCopy(as, 1, bufID, bufOff[0], a->toBuf, a->count);
+            laik_aseq_addRBufCopy(as, 3 * a->round + 1,
+                                  bufID, bufOff[0], a->toBuf, a->count);
         }
 
         // do reduction with other inputs
         for(int t = 1; t < inCount; t++)
-            laik_aseq_addRBufLocalReduce(as, 1, data->type, a->redOp,
+            laik_aseq_addRBufLocalReduce(as, 3 * a->round +1,
+                                         data->type, a->redOp,
                                          bufID, bufOff[t],
                                          a->toBuf, a->count);
     }
 }
 
-// transformation for split reduce actions into basic multiple actions
+// transformation for split reduce actions into basic multiple actions.
+// action round numbers are spreaded by *3+1, allowing space for 3-step
 void laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
 {
     Laik_TransitionContext* tc = as->context[0];
@@ -2180,7 +2277,7 @@ void laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         }
 
         default:
-            laik_actions_add(ba, as2);
+            laik_actions_add(ba, as2, 3 * ba->round + 1);
             break;
         }
     }
