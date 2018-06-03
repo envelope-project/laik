@@ -527,7 +527,8 @@ void log_flush()
         // sorting makes chunks from output of each MPI task
         line_counter++;
         off2 = sprintf(buf2,
-                       "== LAIK-%03d.%02d T%2d/%d %04d.%02d %-10s ",
+                       "=%c LAIK-%03d.%02d T%2d/%d %04d.%02d %-10s ",
+                       (line_counter == 1) ? '>' : '=',
                        laik_loginst->control->phase_counter,
                        laik_loginst->control->cur_iteration,
                        laik_loginst->myid, laik_loginst->size,
