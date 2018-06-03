@@ -780,7 +780,7 @@ void laik_append_phase(Laik_PartGroup* g, Laik_AccessPhase* ap)
 // - for 1d, does not cope with overlapping slices belonging to same task
 
 // print verbose debug output for creating slices for reductions?
-#define DEBUG_REDUCTIONSLICES 1
+//#define DEBUG_REDUCTIONSLICES 1
 
 
 static TaskGroup* groupList = 0;

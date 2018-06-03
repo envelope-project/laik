@@ -567,7 +567,7 @@ int laik_partitioning_isSingle(Laik_Partitioning* p)
 // internal helpers for laik_partitioning_coversSpace
 
 // print verbose debug output?
-#define DEBUG_COVERSPACE 1
+//#define DEBUG_COVERSPACE 1
 
 // TODO: use dynamic list
 #define COVERLIST_MAX 100

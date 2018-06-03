@@ -1018,7 +1018,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
     free(glist);
 
-    laik_log(2, "Allocated reservations for '%s'", data->name);
+    laik_log(1, "Allocated reservations for '%s'", data->name);
 
     // (4) set final sizes of base mappings, and do allocation
     for(int i = 0; i < mCount; i++) {
@@ -1034,7 +1034,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
         laik_allocateMap(m, data->stat);
 
-        if (laik_log_begin(2)) {
+        if (laik_log_begin(1)) {
             laik_log_append(" map [%d] ", m->mapNo);
             laik_log_Slice(dims, &(m->allocatedSlice));
             laik_log_flush(0);
@@ -1044,7 +1044,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
     // (5) set parameters for embedded mappings
     for(int r = 0; r < res->count; r++) {
         Laik_Partitioning* p = res->entry[r].p;
-        laik_log(2, " part '%s':", p->name);
+        laik_log(1, " part '%s':", p->name);
         for(int mapNo = 0; mapNo < p->myMapCount; mapNo++) {
             Laik_Mapping* m = &(res->entry[r].mList->map[mapNo]);
 
@@ -1059,7 +1059,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
             initEmbeddedMapping(m, m->baseMapping);
 
-            if (laik_log_begin(2)) {
+            if (laik_log_begin(1)) {
                 laik_log_append("  [%d] ", m->mapNo);
                 laik_log_Slice(dims, &(m->requiredSlice));
                 laik_log_flush(" in map [%d] with byte-off %llu",
