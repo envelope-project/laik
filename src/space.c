@@ -1700,9 +1700,11 @@ laik_calc_transition(Laik_Space* space,
         laik_log_flush(0);
     }
     else if (laik_log_begin(2)) {
-            laik_log_append("Calculated transition ");
+            laik_log_append("Calc transition ");
             laik_log_Transition(t, false);
-            laik_log_flush(0);
+            laik_log_flush(": %d init, %d loc, %d red, %d send, %d recv",
+                           t->initCount, t->localCount, t->redCount,
+                           t->sendCount, t->recvCount);
     }
 
     return t;

@@ -130,5 +130,9 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance* inst);
 // free all resources allocated for an action sequence
 void laik_aseq_free(Laik_ActionSeq* as);
 
+// get sum of sizes of all allocated temporary buffers
+int laik_aseq_bufsize(Laik_ActionSeq* as);
+
+
 
 #endif // _LAIK_ACTIONS_H_

@@ -80,6 +80,16 @@ void laik_aseq_free(Laik_ActionSeq* as)
     free(as);
 }
 
+// get sum of sizes of all allocated temporary buffers
+int laik_aseq_bufsize(Laik_ActionSeq* as)
+{
+    int total = 0;
+    for(int i = 0; i < as->bufferCount; i++)
+        total += as->bufSize[i];
+
+    return total;
+}
+
 // append an invalid action of given size
 Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size)
 {

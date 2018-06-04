@@ -1018,14 +1018,16 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
     free(glist);
 
-    laik_log(2, "Allocated reservations for '%s'", data->name);
+    laik_log(1, "reservations for '%s'", data->name);
 
     // (4) set final sizes of base mappings, and do allocation
+    uint64_t total = 0;
     for(int i = 0; i < mCount; i++) {
         Laik_Mapping* m = &(mList[i]);
         Laik_Slice* slc = &(m->requiredSlice);
         int count = laik_slice_size(dims, slc);
         assert(count > 0);
+        total += count;
 
         m->count = count;
         m->size[0] = slc->to.i[0] - slc->from.i[0];
@@ -1040,6 +1042,9 @@ void laik_reservation_alloc(Laik_Reservation* res)
             laik_log_flush(0);
         }
     }
+
+    laik_log(2, "Alloc reservations for '%s': %.3f MB",
+             data->name, 0.000001 * (total * data->elemsize));
 
     // (5) set parameters for embedded mappings
     for(int r = 0; r < res->count; r++) {
@@ -1119,10 +1124,11 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
     Laik_ActionSeq* as = (backend->prepare)(d, t, fromList, toList);
 
     if (laik_log_begin(2)) {
-        laik_log_append("Calculated action for '%s', transition ",
-                        d->name);
+        laik_log_append("Calc actions for ");
         laik_log_Transition(t, false);
-        laik_log_flush(0);
+        laik_log_flush(" on '%s': %d acts, %.3f MB",
+                       d->name, as->actionCount,
+                       0.000001 * laik_aseq_bufsize(as));
     }
 
     return as;
