@@ -20,6 +20,7 @@
 
 #include <laik.h>         // for Laik_Instance, Laik_Group, Laik_AccessPhase
 #include <stdbool.h>      // for bool
+#include <sys/time.h>     // for struct timeval
 #include "definitions.h"  // for MAX_DATAS, MAX_GROUPS, MAX_MAPPINGS
 
 // key-value store (see below)
@@ -53,6 +54,9 @@ struct _Laik_Instance {
     char* mylocation;
     char guid[64];
 
+    // for time logging
+    struct timeval init_time;
+
     // to synchronize internal data among tasks
     Laik_KVNode* kvstore;
 
@@ -66,8 +70,7 @@ struct _Laik_Instance {
     Laik_Data* data[MAX_DATAS];
     Laik_Mapping* mapping[MAX_MAPPINGS]; // active mappings
 
-    Laik_Program_Control* control; //new, for iteration numer and program phase
-
+    Laik_Program_Control* control; // for iteration number and program phase
 
     // profiling
     Laik_Profiling_Controller* profiling;

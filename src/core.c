@@ -146,6 +146,9 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     instance->myid = myid;
     instance->mylocation = strdup(location);
 
+    // for logging wall-clock time since LAIK initialization
+    gettimeofday(&(instance->init_time), NULL);
+
     instance->firstSpaceForInstance = 0;
 
     instance->kvstore = laik_kv_newNode(0, 0, 0); // empty root
@@ -520,6 +523,11 @@ void log_flush()
     int spaces = 0, last_break = 0;
     bool at_newline = true;
 
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    double wtime = (double)(now.tv_sec - laik_loginst->init_time.tv_sec) +
+                   0.000001 * (now.tv_usec - laik_loginst->init_time.tv_usec);
+
     // append prefix at beginning of each line of msg
     while(buf1[off1]) {
 
@@ -527,12 +535,12 @@ void log_flush()
         // sorting makes chunks from output of each MPI task
         line_counter++;
         off2 = sprintf(buf2,
-                       "=%c LAIK-%03d.%02d T%2d/%d %04d.%02d %-10s ",
+                       "=%c LAIK-%03d.%02d T%03d/%d %04d.%02d %6.3f %-10s ",
                        (line_counter == 1) ? '>' : '=',
                        laik_loginst->control->phase_counter,
                        laik_loginst->control->cur_iteration,
                        laik_loginst->myid, laik_loginst->size,
-                       counter, line_counter, phase);
+                       counter, line_counter, wtime, phase);
         if (lstr)
                 off2 += sprintf(buf2+off2, "%-7s: ",
                                 (line_counter == 1) ? lstr : "");
