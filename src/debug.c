@@ -149,7 +149,7 @@ void laik_log_DataFlow(Laik_DataFlow flow)
         out = true;
     }
     if (!out)
-        laik_log_append("none");
+        laik_log_append("-");
 }
 
 void laik_log_TransitionGroup(Laik_Transition* t, int group)
@@ -172,11 +172,15 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
 
 void laik_log_Transition(Laik_Transition* t, bool showActions)
 {
-    laik_log_append("(%s/",
-                    t->fromPartitioning ? t->fromPartitioning->name : "none");
+    if (t->fromPartitioning)
+        laik_log_append("('%s'/", t->fromPartitioning->name);
+    else
+        laik_log_append("(-/");
     laik_log_DataFlow(t->fromFlow);
-    laik_log_append(" => %s/",
-                    t->toPartitioning->name ? t->toPartitioning->name : "none");
+    if (t->toPartitioning)
+        laik_log_append(" => '%s'/", t->toPartitioning->name);
+    else
+        laik_log_append(" => -/");
     laik_log_DataFlow(t->toFlow);
     if (!showActions) {
         laik_log_append(")");

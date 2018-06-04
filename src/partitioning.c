@@ -777,7 +777,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
         laik_log_flush(0);
     }
     else
-        laik_log(2, "run partitioner '%s' (group %d, space '%s'): %d slices",
+        laik_log(2, "Run partitioner '%s' (group %d, space '%s'): %d slices",
                  pr->name, g->gid, space->name, p->count);
 
 

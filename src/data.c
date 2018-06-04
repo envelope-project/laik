@@ -1018,7 +1018,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
     free(glist);
 
-    laik_log(1, "Allocated reservations for '%s'", data->name);
+    laik_log(2, "Allocated reservations for '%s'", data->name);
 
     // (4) set final sizes of base mappings, and do allocation
     for(int i = 0; i < mCount; i++) {
@@ -1117,6 +1117,14 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
     assert(backend->prepare);
 
     Laik_ActionSeq* as = (backend->prepare)(d, t, fromList, toList);
+
+    if (laik_log_begin(2)) {
+        laik_log_append("Calculated action for '%s', transition ",
+                        d->name);
+        laik_log_Transition(t, false);
+        laik_log_flush(0);
+    }
+
     return as;
 }
 
