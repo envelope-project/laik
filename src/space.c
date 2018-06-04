@@ -1394,9 +1394,9 @@ void calcAddReductions(int tflags,
 
 // Calculate communication required for transitioning between partitionings
 Laik_Transition*
-laik_calc_transition(Laik_Space* space,
-                     Laik_Partitioning* fromP, Laik_DataFlow fromFlow,
-                     Laik_Partitioning* toP, Laik_DataFlow toFlow)
+do_calc_transition(Laik_Space* space,
+                   Laik_Partitioning* fromP, Laik_DataFlow fromFlow,
+                   Laik_Partitioning* toP, Laik_DataFlow toFlow)
 {
     Laik_Slice* slc;
 
@@ -1680,6 +1680,19 @@ laik_calc_transition(Laik_Space* space,
         tList += tListSize;
     }
     assert(tList == ((char*)t) + tsize);
+
+    return t;
+}
+
+
+// Calculate communication required for transitioning between partitionings
+Laik_Transition*
+laik_calc_transition(Laik_Space* space,
+                     Laik_Partitioning* fromP, Laik_DataFlow fromFlow,
+                     Laik_Partitioning* toP, Laik_DataFlow toFlow)
+{
+    Laik_Transition* t;
+    t = do_calc_transition(space, fromP, fromFlow, toP, toFlow);
 
     if (laik_log_begin(1)) {
         laik_log_append("Calculated transition ");

@@ -1208,10 +1208,10 @@ void laik_switchto_partitioning(Laik_Data* d,
     }
 
     Laik_MappingList* toList = prepareMaps(d, toP, 0);
-    Laik_Transition* t = laik_calc_transition(d->space,
-                                              d->activePartitioning,
-                                              d->activeFlow,
-                                              toP, toFlow);
+    Laik_Transition* t = do_calc_transition(d->space,
+                                            d->activePartitioning,
+                                            d->activeFlow,
+                                            toP, toFlow);
 
     doTransition(d, t, 0, d->activeMappings, toList);
 
@@ -1247,9 +1247,9 @@ void laik_switchto_phase(Laik_Data* d,
     }
 
     Laik_MappingList* toList = prepareMaps(d, toP, 0);
-    Laik_Transition* t = laik_calc_transition(d->space,
-                                              fromP, d->activeFlow,
-                                              toP, toFlow);
+    Laik_Transition* t = do_calc_transition(d->space,
+                                            fromP, d->activeFlow,
+                                            toP, toFlow);
 
     if (laik_log_begin(1)) {
         laik_log_append("switch access phase for data '%s':\n"
