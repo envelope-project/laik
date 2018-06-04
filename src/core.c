@@ -392,13 +392,12 @@ bool laik_logshown(int l)
  * A prefix is added which allows sorting to get stable output
  * from the arbitrarily interleaved output of multiple MPI tasks:
  *
- * == LAIK-<phasectr>.<iter> T<task>/<tasks> <phasemsgctr>.<line> <pname>
+ * == LAIK-I<iter>-T<task> <itermsgctr>.<line> <wtime>
  *
- * <phasectr>    a counter incremented on every phase change
  * <iter>        iteration counter set by application
  * <task>        task rank in this LAIK instance
- * <phasemsgctr> log message counter, reset at each phase change
- * <pname>       phase name set by application
+ * <itermsgctr>  incrementing message counter, reset at each iteration change
+ * <wtime>       wall clock time since LAIK instance initialization
  *
  * To build the message step by step:
  * - start: laik_log_begin(<level>)
@@ -502,12 +501,12 @@ void log_flush()
 
     // counters for stable output
     static int counter = 0;
-    static int last_phase_counter = 0;
+    static int last_iter = 0;
     int line_counter = 0;
     assert(laik_loginst != 0);
-    if (last_phase_counter != laik_loginst->control->phase_counter) {
+    if (last_iter != laik_loginst->control->cur_iteration) {
         counter = 0;
-        last_phase_counter = laik_loginst->control->phase_counter;
+        last_iter = laik_loginst->control->cur_iteration;
     }
     counter++;
 
@@ -518,8 +517,6 @@ void log_flush()
 
     char* buf1 = current_logBuffer;
 
-    const char* phase = laik_loginst->control->cur_phase_name;
-    if (!phase) phase = "";
     int spaces = 0, last_break = 0;
     bool at_newline = true;
 
@@ -527,6 +524,8 @@ void log_flush()
     gettimeofday(&now, NULL);
     double wtime = (double)(now.tv_sec - laik_loginst->init_time.tv_sec) +
                    0.000001 * (now.tv_usec - laik_loginst->init_time.tv_usec);
+    int wtime_min = (int) (wtime/60.0);
+    double wtime_s = wtime - 60.0 * wtime_min;
 
     // append prefix at beginning of each line of msg
     while(buf1[off1]) {
@@ -535,12 +534,12 @@ void log_flush()
         // sorting makes chunks from output of each MPI task
         line_counter++;
         off2 = sprintf(buf2,
-                       "=%c LAIK-%03d.%02d T%03d/%d %04d.%02d %6.3f %-10s ",
+                       "=%c LAIK-I%04d-T%02d %04d.%02d %2d:%06.3f | ",
                        (line_counter == 1) ? '>' : '=',
-                       laik_loginst->control->phase_counter,
                        laik_loginst->control->cur_iteration,
-                       laik_loginst->myid, laik_loginst->size,
-                       counter, line_counter, wtime, phase);
+                       laik_loginst->myid,
+                       counter, line_counter,
+                       wtime_min, wtime_s);
         if (lstr)
                 off2 += sprintf(buf2+off2, "%-7s: ",
                                 (line_counter == 1) ? lstr : "");

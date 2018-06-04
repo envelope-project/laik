@@ -54,7 +54,7 @@ void laik_set_phase(Laik_Instance* i,
     i->control->cur_phase_name = name;
     i->control->pData = pData;
 
-    i->control->phase_counter++;
+    laik_log(2, "Enter phase '%s'", name);
 }
 
 // get current program phase control

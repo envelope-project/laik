@@ -27,9 +27,6 @@ struct tag_laik_program_control
     // current iteration number iterations
     int cur_iteration;
 
-    // internal counter: incremented on every phase change
-    int phase_counter;
-
     // allow automatic re-launches if set
     int argc;    // 0: invalid
     char** argv;
