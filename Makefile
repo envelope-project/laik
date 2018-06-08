@@ -18,7 +18,7 @@ IFLAGS += $(TCP_INC)
 LDLIBS += $(TCP_LIBS)
 endif
 HEADERS = $(wildcard $(SDIR)include/*.h $(SDIR)include/laik/*.h)
-OBJS = $(SRCS:$(SDIR)%.c=%.o)
+OBJS = $(SRCS:$(SDIR)%.c=%.o) revinfo.o
 
 CFLAGS=$(OPT) $(WARN) $(DEFS) $(IFLAGS) -std=gnu99 -fPIC
 
@@ -30,10 +30,25 @@ CFLAGS+=-MMD -MP
 MPICC ?= $(CC)
 LAIKLIB = liblaik.so
 
+GIT_VERSION := $(shell git describe --abbrev=5 --dirty --always --tags)
+
 # build targets
-.PHONY: $(SUBDIRS)
+.PHONY: $(SUBDIRS) force
 
 all: $(LAIKLIB) $(SUBDIRS)
+
+# version/compile information for first line of LAIK_LOG=2
+# only trigger compile if git revision changes
+git-version: force
+	echo '$(GIT_VERSION)' | cmp -s - $@ || echo '$(GIT_VERSION)' > $@
+
+revinfo.c: git-version
+	@echo "// Warning: Generated, changes will be overwritten" > revinfo.c
+	@echo "#include <laik.h>" >> revinfo.c
+	@echo "void laik_log_append_info(void) { laik_log_append(" >> revinfo.c
+	@echo "  \"LAIK git version: "$(GIT_VERSION)" \"" >> revinfo.c
+	@echo "  \"OPT='"$(OPT)"'\"); }" >> revinfo.c
+
 
 external/MQTT: $(LAIKLIB)
 	cd external/MQTT && $(MAKE)
@@ -55,6 +70,7 @@ examples: $(LAIKLIB)
 
 examples/c++: $(LAIKLIB)
 	cd examples/c++ && $(MAKE)
+
 
 # tests
 test: examples

@@ -23,6 +23,9 @@
 #include <sys/time.h>     // for struct timeval
 #include "definitions.h"  // for MAX_DATAS, MAX_GROUPS, MAX_MAPPINGS
 
+// dynamically generated revision/opt flags information, in info.c
+void laik_log_append_info(void);
+
 // key-value store (see below)
 typedef struct _Laik_KVNode Laik_KVNode;
 

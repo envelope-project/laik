@@ -132,7 +132,7 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
     sprintf(inst->guid, "%d", rank);
 
-    laik_log(1, "MPI backend initialized (location '%s', pid %d)\n",
+    laik_log(2, "MPI backend initialized (location '%s', pid %d)\n",
              inst->mylocation, (int) getpid());
 
     // for intentionally buggy MPI backend behavior
