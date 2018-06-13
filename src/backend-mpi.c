@@ -994,9 +994,10 @@ void laik_execOrRecord(bool record,
 }
 
 // replace group reductions be reduce actions if possible
-static bool detectReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
+static bool detectReduce(Laik_ActionSeq* as)
 {
     bool changed = false;
+    assert(as->newActionCount == 0);
 
     Laik_TransitionContext* tc = as->context[0];
     Laik_Transition* t = tc->transition;
@@ -1009,25 +1010,32 @@ static bool detectReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2)
         case LAIK_AT_GroupReduce:
             if (ba->inputGroup == -1) {
                 if (ba->outputGroup == -1) {
-                    laik_aseq_addReduce(as2, ba->round, ba->fromBuf, ba->toBuf,
+                    laik_aseq_addReduce(as, ba->round, ba->fromBuf, ba->toBuf,
                                         ba->count, -1, ba->redOp);
                     changed = true;
                     continue;
                 }
                 else if (laik_trans_groupCount(t, ba->outputGroup) == 1) {
                     int root = laik_trans_taskInGroup(t, ba->outputGroup, 0);
-                    laik_aseq_addReduce(as2, ba->round, ba->fromBuf, ba->toBuf,
+                    laik_aseq_addReduce(as, ba->round, ba->fromBuf, ba->toBuf,
                                         ba->count, root, ba->redOp);
                     changed = true;
                     continue;
                 }
             }
-            // fall-through;
+            laik_aseq_add(ba, as, -1);
+            break;
+
         default:
-            laik_actions_add(ba, as2, -1);
+            laik_aseq_add(ba, as, -1);
             break;
         }
     }
+
+    if (changed)
+        laik_aseq_activateNewActions(as);
+    else
+        laik_aseq_discardNewActions(as);
 
     return changed;
 }
@@ -1055,73 +1063,51 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     laik_log(1, "MPI backend: prepare sequence for transition on data '%s'\n",
              d->name);
 
-    Laik_ActionSeq *as, *as2;
+    Laik_ActionSeq *as;
     bool changed;
 
     as = laik_aseq_new(d->space->inst);
     laik_aseq_addTContext(as, d, t, fromList, toList);
     laik_execOrRecord(true, d, t, as, fromList, toList);
+    laik_aseq_activateNewActions(as);
+    logASeq(true, as, "After recording");
 
-    if (laik_log_begin(1)) {
-        laik_log_ActionSeq(as);
-        laik_log_flush(0);
-    }
-
-    as2 = laik_actions_setupTransform(as);
-    changed = laik_aseq_flattenPacking(as, as2);
-    logASeq(changed, as2, "After flattening actions");
-    laik_aseq_free(as);
-    as = as2;
+    changed = laik_aseq_flattenPacking(as);
+    logASeq(changed, as, "After flattening actions");
 
     if (mpi_reduce) {
         // detect group reduce actions which can be replaced by all-reduce
         // can be prohibited by setting LAIK_MPI_REDUCE=0
-        as2 = laik_actions_setupTransform(as);
-        changed = detectReduce(as, as2);
-        logASeq(changed, as2, "After all-reduce detection");
-        laik_aseq_free(as);
-        as = as2;
+        changed = detectReduce(as);
+        logASeq(changed, as, "After all-reduce detection");
     }
 
-    as2 = laik_actions_setupTransform(as);
-    changed = laik_aseq_combineActions(as, as2);
-    logASeq(changed, as2, "After combining actions 1");
-    laik_aseq_free(as);
-    as = as2;
+    changed = laik_aseq_combineActions(as);
+    logASeq(changed, as, "After combining actions 1");
 
     changed = laik_aseq_allocBuffer(as);
     logASeq(changed, as, "After buffer allocation 1");
 
-    as2 = laik_actions_setupTransform(as);
-    changed = laik_aseq_splitReduce(as, as2);
-    logASeq(changed, as2, "After splitting reduce actions");
-    laik_aseq_free(as);
-    as = as2;
+    changed = laik_aseq_splitReduce(as);
+    logASeq(changed, as, "After splitting reduce actions");
 
     changed = laik_aseq_allocBuffer(as);
     logASeq(changed, as, "After buffer allocation 2");
 
-    as2 = laik_actions_setupTransform(as);
-    changed = laik_aseq_sort_rounds(as, as2);
-    logASeq(changed, as2, "After sorting rounds");
-    laik_aseq_free(as);
-    as = as2;
+    changed = laik_aseq_sort_rounds(as);
+    logASeq(changed, as, "After sorting rounds");
 
-    as2 = laik_actions_setupTransform(as);
-    changed = laik_aseq_combineActions(as, as2);
-    logASeq(changed, as2, "After combining actions 2");
-    laik_aseq_free(as);
-    as = as2;
+    changed = laik_aseq_combineActions(as);
+    logASeq(changed, as, "After combining actions 2");
 
     changed = laik_aseq_allocBuffer(as);
     logASeq(changed, as, "After buffer allocation 3");
 
-    as2 = laik_actions_setupTransform(as);
-    changed = laik_aseq_sort_2phases(as, as2);
-    //changed = laik_aseq_sort_rankdigits(as, as2);
-    logASeq(changed, as2, "After sorting for deadlock avoidance");
-    laik_aseq_free(as);
-    as = as2;
+    changed = laik_aseq_sort_2phases(as);
+    //changed = laik_aseq_sort_rankdigits(as);
+    logASeq(changed, as, "After sorting for deadlock avoidance");
+
+    laik_aseq_freeTempSpace(as);
 
     return as;
 }

@@ -29,16 +29,15 @@ typedef struct _Laik_CopyEntry {
 
 // TODO: split off into different action types with minimal space requirements
 typedef struct _Laik_BackendAction {
-    char type;
-    char len;
-
-    // transition context ID
-    char tid;
+    // header
+    unsigned char type;
+    unsigned char len;
+    unsigned char tid;    // ID of transition context for this action
+    unsigned char round;  // actions are order by rounds
 
     // for marking processed actions (used for combining optimization)
     char mark;
 
-    int round;         // order specification into rounds
     int count;         // for Send, Recv, Copy, Reduce
     int bufID;         // for BufReserve, RBufSend, RBufRecv
     Laik_Type* dtype;  // for RBufReduce, BufInit
@@ -92,17 +91,34 @@ struct _Laik_ActionSeq {
     int ceCount;
 
     // action sequence to trigger on execution
-    int actionCount, actionAllocCount;
+    int actionCount;
     Laik_BackendAction* action;
     // how many rounds
     int roundCount;
+
+    // temporary action sequence storage used during generation by
+    // laik_aseq_addAction(). Call laik_aseq_finish to make it active
+    // (ie. set <action> array to this temporary seq)
+    int newActionCount, newBytesUsed, newBytesAlloc;
+    Laik_BackendAction* newAction;
+    int newRoundCount;
+
 
     // summary to update statistics
     int sendCount, recvCount, reduceCount;
 };
 
 // append an invalid action of given size
-Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size);
+Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size, int round);
+
+// discard any new built actions (e.g. if there was no change to old seq)
+void laik_aseq_discardNewActions(Laik_ActionSeq* as);
+
+// finish building an action sequence, activate the new built sequence
+void laik_aseq_activateNewActions(Laik_ActionSeq* as);
+
+// free temporary space used for building a new sequence
+void laik_aseq_freeTempSpace(Laik_ActionSeq* as);
 
 // append an invalid backend action
 Laik_BackendAction* laik_aseq_addBAction(Laik_ActionSeq* as, int round);
@@ -297,30 +313,27 @@ bool laik_aseq_allocBuffer(Laik_ActionSeq* as);
 // generic transformation passes for action sequences
 // (called by backends)
 
-// returns a new empty action sequence with same transition context
-Laik_ActionSeq* laik_actions_setupTransform(Laik_ActionSeq* oldAS);
-
 // append action <ba> to <as>, change round if not negative
-void laik_actions_add(Laik_BackendAction* ba, Laik_ActionSeq* as, int round);
+void laik_aseq_add(Laik_BackendAction* ba, Laik_ActionSeq* as, int round);
 
 
 // just copy actions from oldAS into as
-void laik_aseq_copySeq(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
+void laik_aseq_copySeq(Laik_ActionSeq* as);
 
 // merge send/recv actions from oldAS into as
-bool laik_aseq_combineActions(Laik_ActionSeq* oldAS, Laik_ActionSeq* as);
+bool laik_aseq_combineActions(Laik_ActionSeq* as);
 
 // add sorted send/recv actions from as into as2 to avoid deadlocks
-bool laik_aseq_sort_2phases(Laik_ActionSeq* as, Laik_ActionSeq *as2);
-bool laik_aseq_sort_rankdigits(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+bool laik_aseq_sort_2phases(Laik_ActionSeq* as);
+bool laik_aseq_sort_rankdigits(Laik_ActionSeq* as);
 
 // sort actions according to their rounds, and compress rounds
-bool laik_aseq_sort_rounds(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+bool laik_aseq_sort_rounds(Laik_ActionSeq* as);
 
 // transform MapPackAndSend/MapRecvAndUnpack into simple Send/Recv actions
-bool laik_aseq_flattenPacking(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+bool laik_aseq_flattenPacking(Laik_ActionSeq* as);
 
 // transformation for split reduce actions into basic multiple actions
-bool laik_aseq_splitReduce(Laik_ActionSeq* as, Laik_ActionSeq* as2);
+bool laik_aseq_splitReduce(Laik_ActionSeq* as);
 
 #endif // _LAIK_ACTION_INTERNAL_H_
