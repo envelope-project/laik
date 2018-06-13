@@ -1067,10 +1067,13 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     bool changed;
 
     as = laik_aseq_new(d->space->inst);
-    laik_aseq_addTContext(as, d, t, fromList, toList);
-    laik_execOrRecord(true, d, t, as, fromList, toList);
+    int tid = laik_aseq_addTContext(as, d, t, fromList, toList);
+    laik_aseq_addTExec(as, tid);
     laik_aseq_activateNewActions(as);
     logASeq(true, as, "After recording");
+
+    changed = laik_aseq_splitTransitionExecs(as);
+    logASeq(changed, as, "After splitting transition execs");
 
     changed = laik_aseq_flattenPacking(as);
     logASeq(changed, as, "After flattening actions");

@@ -154,6 +154,9 @@ void laik_aseq_initRecvAndUnpack(Laik_BackendAction* a,
                                  Laik_Mapping* toMap, int dims, Laik_Slice* slc,
                                  int from);
 
+// append action to do the transition specified by the transition context ID
+void laik_aseq_addTExec(Laik_ActionSeq* as, int tid);
+
 // append action to reserve buffer space, return bufID
 int laik_aseq_addBufReserve(Laik_ActionSeq* as, int size, int bufID);
 
@@ -335,5 +338,8 @@ bool laik_aseq_flattenPacking(Laik_ActionSeq* as);
 
 // transformation for split reduce actions into basic multiple actions
 bool laik_aseq_splitReduce(Laik_ActionSeq* as);
+
+// replace transition exec actions with equivalent reduce/send/recv actions
+bool laik_aseq_splitTransitionExecs(Laik_ActionSeq* as);
 
 #endif // _LAIK_ACTION_INTERNAL_H_

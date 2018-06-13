@@ -56,7 +56,7 @@ typedef enum _Laik_ActionType {
     LAIK_AT_Nop,
 
     // high-level
-    LAIK_AT_Transition,
+    LAIK_AT_TExec,
 
     // low-level, independent from backend
 

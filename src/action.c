@@ -203,6 +203,16 @@ int laik_aseq_addTContext(Laik_ActionSeq* as,
     return contextID;
 }
 
+// append action to do the transition specified by the transition context ID
+// call laik_aseq_addTContext() before to add a context and get the ID.
+void laik_aseq_addTExec(Laik_ActionSeq* as, int tid)
+{
+    Laik_BackendAction* a = laik_aseq_addBAction(as, 0);
+
+    a->type = LAIK_AT_TExec;
+    a->tid = tid;
+}
+
 // append action to reserve buffer space
 // if <bufID> is negative, a new ID is generated (always > 100)
 // returns bufID.
@@ -2392,6 +2402,44 @@ bool laik_aseq_splitReduce(Laik_ActionSeq* as)
 
         default:
             laik_aseq_add(ba, as, 3 * ba->round + 1);
+            break;
+        }
+    }
+
+    laik_aseq_activateNewActions(as);
+    return true;
+}
+
+// replace transition exec actions with equivalent reduce/send/recv actions
+bool laik_aseq_splitTransitionExecs(Laik_ActionSeq* as)
+{
+    // must not have new actions, we want to start a new build
+    assert(as->newActionCount == 0);
+
+    Laik_TransitionContext* tc = as->context[0];
+    bool found = false;
+    for(int i = 0; i < as->actionCount; i++) {
+        if (as->action[i].type == LAIK_AT_TExec) {
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        return false;
+
+    for(int i = 0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+
+        switch(ba->type) {
+        case LAIK_AT_TExec:
+            assert(ba->tid == 0);
+            laik_aseq_addReds(as, ba->round, tc->data, tc->transition);
+            laik_aseq_addSends(as, ba->round, tc->data, tc->transition);
+            laik_aseq_addRecvs(as, ba->round, tc->data, tc->transition);
+            break;
+
+        default:
+            laik_aseq_add(ba, as, -1);
             break;
         }
     }

@@ -326,6 +326,10 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
         laik_log_append("    NOP");
         break;
 
+    case LAIK_AT_TExec:
+        laik_log_append("    TExec: transition ID %d", ba->tid);
+        break;
+
     case LAIK_AT_BufReserve:
         laik_log_append("    BufReserve: buf id %d, size %d",
                         ba->bufID, ba->count);
