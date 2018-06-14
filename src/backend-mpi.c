@@ -63,10 +63,6 @@ struct _MPIGroupData {
     MPI_Comm comm;
 };
 
-// intentially make MPI backend buggy by setting LAIK_MPI_BUG=1
-// useful to ensure that a test is sentitive to backend bugs
-static int mpi_bug = 0;
-
 //----------------------------------------------------------------
 // MPI backend behavior configurable by environment variables
 
@@ -129,12 +125,8 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     laik_log(2, "MPI backend initialized (location '%s', pid %d)\n",
              inst->mylocation, (int) getpid());
 
-    // for intentionally buggy MPI backend behavior
-    char* str = getenv("LAIK_MPI_BUG");
-    if (str) mpi_bug = atoi(str);
-
     // do own reduce algorithm?
-    str = getenv("LAIK_MPI_REDUCE");
+    char* str = getenv("LAIK_MPI_REDUCE");
     if (str) mpi_reduce = atoi(str);
 
     // wait for debugger to attach?
