@@ -738,6 +738,18 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
         return;
     }
 
+    // be careful when reusing mappings:
+    // the backend wants to send/receive data in arbitrary order
+    // (to avoid deadlocks), but it never should overwrite data
+    // before it gets sent by data already received.
+    // thus it is bad to reuse a mapping for different index ranges.
+    // but reusing mappings such that same indexes go to same address
+    // is fine.
+    checkMapReuse(toList, fromList);
+
+    // allocate space for mappings for which reuse is not possible
+    allocateMappings(toList, d->stat);
+
     bool doASeqCleanup = false;
     if (as) {
         // we are given a prepared action sequence:
@@ -751,20 +763,13 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
     else {
         // create the action sequence for requested transition on the fly
         as = createTransASeq(d, t, fromList, toList);
+#if 0
+        const Laik_Backend* backend = d->space->inst->backend;
+        if (backend->prepare)
+            (backend->prepare)(as);
+#endif
         doASeqCleanup = true;
     }
-
-    // be careful when reusing mappings:
-    // the backend wants to send/receive data in arbitrary order
-    // (to avoid deadlocks), but it never should overwrite data
-    // before it gets sent by data already received.
-    // thus it is bad to reuse a mapping for different index ranges.
-    // but reusing mappings such that same indexes go to same address
-    // is fine.
-    checkMapReuse(toList, fromList);
-
-    // allocate space for mappings for which reuse is not possible
-    allocateMappings(toList, d->stat);
 
     if (t->sendCount + t->recvCount + t->redCount > 0) {
         // let backend do send/recv/reduce actions
