@@ -11,14 +11,14 @@ LDFLAGS=$(OPT)
 IFLAGS=-I$(SDIR)include -I$(SDIR)src
 LDLIBS=-ldl
 
-SRCS = $(wildcard $(SDIR)src/*.c)
+SRCS = $(wildcard $(SDIR)src/*.c) revinfo.c
 ifdef USE_TCP
 SRCS += $(wildcard $(SDIR)src/backends/tcp/*.c)
 IFLAGS += $(TCP_INC)
 LDLIBS += $(TCP_LIBS)
 endif
 HEADERS = $(wildcard $(SDIR)include/*.h $(SDIR)include/laik/*.h)
-OBJS = $(SRCS:$(SDIR)%.c=%.o) revinfo.o
+OBJS = $(SRCS:$(SDIR)%.c=%.o)
 
 CFLAGS=$(OPT) $(WARN) $(DEFS) $(IFLAGS) -std=gnu99 -fPIC
 
@@ -92,7 +92,7 @@ SUBDIRS_CLEAN=$(addprefix clean_, $(SUBDIRS))
 clean: clean_laik $(SUBDIRS_CLEAN)
 
 clean_laik:
-	rm -f *~ *.o $(OBJS) $(DEPS) $(LAIKLIB)
+	rm -f *~ *.o revinfo.c $(OBJS) $(DEPS) $(LAIKLIB)
 
 $(SUBDIRS_CLEAN): clean_%:
 	+$(MAKE) clean -C $*
