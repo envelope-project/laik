@@ -35,8 +35,7 @@
 // forward decls, types/structs , global variables
 
 static void laik_mpi_finalize();
-static Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
-                                        Laik_MappingList *fromList, Laik_MappingList *toList);
+static void laik_mpi_prepare(Laik_ActionSeq*);
 static void laik_mpi_cleanup(Laik_ActionSeq*);
 static void laik_mpi_exec(Laik_ActionSeq* as);
 static void laik_mpi_updateGroup(Laik_Group*);
@@ -671,23 +670,15 @@ void laik_mpi_exec(Laik_ActionSeq* as)
 
 
 static
-Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
-                                 Laik_MappingList* fromList,
-                                 Laik_MappingList* toList)
+void laik_mpi_prepare(Laik_ActionSeq* as)
 {
+    Laik_TransitionContext* tc = as->context[0];
     laik_log(1, "MPI backend: prepare sequence for transition on data '%s'\n",
-             d->name);
+             tc->data->name);
 
-    Laik_ActionSeq *as;
-    bool changed;
+    laik_log_ActionSeqIfChanged(true, as, "Original sequence");
 
-    as = laik_aseq_new(d->space->inst);
-    int tid = laik_aseq_addTContext(as, d, t, fromList, toList);
-    laik_aseq_addTExec(as, tid);
-    laik_aseq_activateNewActions(as);
-    laik_log_ActionSeqIfChanged(true, as, "After recording");
-
-    changed = laik_aseq_splitTransitionExecs(as);
+    bool changed = laik_aseq_splitTransitionExecs(as);
     laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
 
     changed = laik_aseq_flattenPacking(as);
@@ -726,8 +717,6 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
 
     laik_aseq_freeTempSpace(as);
-
-    return as;
 }
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)

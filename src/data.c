@@ -708,6 +708,21 @@ void allocateMappings(Laik_MappingList* toList, Laik_SwitchStat* ss)
 }
 
 static
+Laik_ActionSeq* createTransASeq(Laik_Data* d, Laik_Transition* t,
+                                Laik_MappingList* fromList,
+                                Laik_MappingList* toList)
+{
+    // create the action sequence for requested transition
+    Laik_ActionSeq* as = laik_aseq_new(d->space->inst);
+    int tid = laik_aseq_addTContext(as, d, t, fromList, toList);
+    laik_aseq_addTExec(as, tid);
+    laik_aseq_activateNewActions(as);
+
+    return as;
+}
+
+
+static
 void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
                   Laik_MappingList* fromList, Laik_MappingList* toList)
 {
@@ -735,10 +750,7 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
     }
     else {
         // create the action sequence for requested transition on the fly
-        as = laik_aseq_new(d->space->inst);
-        int tid = laik_aseq_addTContext(as, d, t, fromList, toList);
-        laik_aseq_addTExec(as, tid);
-        laik_aseq_activateNewActions(as);
+        as = createTransASeq(d, t, fromList, toList);
         doASeqCleanup = true;
     }
 
@@ -1112,10 +1124,11 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
     if (toRes)
         toList = laik_reservation_getMList(toRes, t->toPartitioning);
 
+
+    Laik_ActionSeq* as = createTransASeq(d, t, fromList, toList);
     const Laik_Backend* backend = d->space->inst->backend;
     assert(backend->prepare);
-
-    Laik_ActionSeq* as = (backend->prepare)(d, t, fromList, toList);
+    (backend->prepare)(as);
     assert(as->backend == backend);
 
     if (laik_log_begin(2)) {

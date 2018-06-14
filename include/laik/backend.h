@@ -48,8 +48,7 @@ struct _Laik_Backend {
   //   plans for one data container.
   // - prepare an optimized communcation schedule using the pre-allocated
   //   resources
-  Laik_ActionSeq* (*prepare)(Laik_Data*, Laik_Transition*,
-                             Laik_MappingList*, Laik_MappingList*);
+  void (*prepare)(Laik_ActionSeq*);
 
   // free resources allocated for an action sequence
   void (*cleanup)(Laik_ActionSeq*);
