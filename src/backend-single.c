@@ -62,7 +62,7 @@ void laik_single_exec(Laik_ActionSeq* as)
 {
     // we only support 1 transition exec action
     assert(as->actionCount == 1);
-    assert(as->action[0].type = LAIK_AT_TExec);
+    assert(as->action[0].type == LAIK_AT_TExec);
     Laik_TransitionContext* tc = as->context[0];
     Laik_Data* d = tc->data;
     Laik_Transition* t = tc->transition;
