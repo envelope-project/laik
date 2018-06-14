@@ -129,17 +129,6 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     char* str = getenv("LAIK_MPI_REDUCE");
     if (str) mpi_reduce = atoi(str);
 
-    // wait for debugger to attach?
-    char* rstr = getenv("LAIK_DEBUG_RANK");
-    if (rstr) {
-        int wrank = atoi(rstr);
-        if ((wrank < 0) || (wrank == rank)) {
-            // as long as "wait" is 1, wait in loop for debugger
-            volatile int wait = 1;
-            while(wait) { usleep(10000); }
-        }
-    }
-
     mpi_instance = inst;
     return inst;
 }

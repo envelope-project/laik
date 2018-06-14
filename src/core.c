@@ -50,36 +50,58 @@ extern const char *__progname;
 Laik_Instance* laik_init (int* argc, char*** argv)
 {
     const char* override = getenv("LAIK_BACKEND");
+    Laik_Instance* inst = 0;
 
 #ifdef USE_MPI
-    // default to MPI if available, or if explicitly wanted
-    if ((override == 0) || (strcmp(override, "mpi") == 0)) {
-        return laik_init_mpi(argc, argv);
+    if (inst == 0) {
+        // default to MPI if available, or if explicitly wanted
+        if ((override == 0) || (strcmp(override, "mpi") == 0)) {
+            inst = laik_init_mpi(argc, argv);
+        }
     }
 #endif
 
-    // fall-back to "single" backend as default if MPI is not available, or
-    // if "single" backend is explicitly requested
-    if ((override == 0) || (strcmp(override, "single") == 0)) {
-        (void) argc;
-        (void) argv;
-        return laik_init_single();
+    if (inst == 0) {
+        // fall-back to "single" backend as default if MPI is not available, or
+        // if "single" backend is explicitly requested
+        if ((override == 0) || (strcmp(override, "single") == 0)) {
+            (void) argc;
+            (void) argv;
+            inst = laik_init_single();
+        }
     }
 
 #ifdef USE_TCP
-    if ((override == 0) || (strcmp(override, "tcp") == 0)) {
-        return laik_init_tcp(argc, argv);
+    if (inst == 0) {
+        if ((override == 0) || (strcmp(override, "tcp") == 0)) {
+            inst = laik_init_tcp(argc, argv);
+        }
     }
 #endif
 
-    // Error: unknown backend wanted
-    assert(override != 0);
+    if (inst == 0) {
+        // Error: unknown backend wanted
+        assert(override != 0);
 
-    // create dummy backend for laik_log to work
-    laik_init_single();
-    laik_log(LAIK_LL_Panic,
-             "Unknwown backend '%s' requested by LAIK_BACKEND", override);
-    exit (1);
+        // create dummy backend for laik_log to work
+        laik_init_single();
+        laik_log(LAIK_LL_Panic,
+                 "Unknwown backend '%s' requested by LAIK_BACKEND", override);
+        exit (1);
+    }
+
+    // wait for debugger to attach?
+    char* rstr = getenv("LAIK_DEBUG_RANK");
+    if (rstr) {
+        int wrank = atoi(rstr);
+        if ((wrank < 0) || (wrank == inst->myid)) {
+            // as long as "wait" is 1, wait in loop for debugger
+            volatile int wait = 1;
+            while(wait) { usleep(10000); }
+        }
+    }
+
+    return inst;
 }
 
 
