@@ -583,20 +583,21 @@ static void* laik_tcp_backend_run_async_sends (void* data, Laik_Tcp_Errors* erro
 
 /* API functions */
 
-static void laik_tcp_backend_exec
-    ( Laik_Data* data
-    , Laik_Transition* transition
-    , Laik_ActionSeq* plan __attribute__ ((unused))
-    , Laik_MappingList* input_list
-    , Laik_MappingList* output_list
-    )
+static void laik_tcp_backend_exec (Laik_ActionSeq* as)
 {
-    laik_tcp_always (data);
-    laik_tcp_always (transition);
-    laik_tcp_always (!plan);
+    laik_tcp_always (as);
 
     g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
+
+    // we only support 1 transition exec action
+    assert(as->actionCount == 1);
+    assert(as->action[0].type = LAIK_AT_TExec);
+    Laik_TransitionContext* tc = as->context[0];
+    Laik_Data* data = tc->data;
+    Laik_Transition* transition = tc->transition;
+    Laik_MappingList* input_list = tc->fromList;
+    Laik_MappingList* output_list = tc->toList;
 
     const Laik_Group* group = data->activePartitioning->group;
 
@@ -769,10 +770,8 @@ Laik_Instance* laik_init_tcp (int* argc, char*** argv) {
         .finalize    = laik_tcp_backend_finalize,
         .name        = "TCP Backend",
         .prepare     = NULL,
-        .probe       = NULL,
         .sync        = NULL,
         .updateGroup = laik_tcp_backend_update_group,
-        .wait        = NULL,
     };
 
     // Determine if the MPI subsystem is already initialized

@@ -621,6 +621,7 @@ void laik_log_ActionSeq(Laik_ActionSeq *as)
     }
 }
 
+
 void laik_log_Checksum(char* buf, int count, Laik_Type* t)
 {
     assert(t == laik_Double);
@@ -628,4 +629,22 @@ void laik_log_Checksum(char* buf, int count, Laik_Type* t)
     for(int i = 0; i < count; i++)
         sum += ((double*)buf)[i];
     laik_log_append("checksum %f", sum);
+}
+
+
+// logging helpers not just appending
+
+// write action sequence at level 1 if <changed> is true, prepend with title
+void laik_log_ActionSeqIfChanged(bool changed, Laik_ActionSeq* as, char* title)
+{
+    if (laik_log_begin(1)) {
+        laik_log_append(title);
+        if (changed) {
+            laik_log_append(":\n");
+            laik_log_ActionSeq(as);
+        }
+        else
+            laik_log_append(": nothing changed\n");
+        laik_log_flush(0);
+    }
 }

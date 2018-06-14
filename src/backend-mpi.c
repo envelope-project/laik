@@ -38,10 +38,7 @@ static void laik_mpi_finalize();
 static Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
                                         Laik_MappingList *fromList, Laik_MappingList *toList);
 static void laik_mpi_cleanup(Laik_ActionSeq*);
-static void laik_mpi_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* tp,
-                          Laik_MappingList* from, Laik_MappingList* to);
-static void laik_mpi_wait(Laik_ActionSeq* as, int mapNo);
-static bool laik_mpi_probe(Laik_ActionSeq* as, int mapNo);
+static void laik_mpi_exec(Laik_ActionSeq* as);
 static void laik_mpi_updateGroup(Laik_Group*);
 
 // C guarantees that unset function pointers are NULL
@@ -51,8 +48,6 @@ static Laik_Backend laik_backend_mpi = {
     .prepare     = laik_mpi_prepare,
     .cleanup     = laik_mpi_cleanup,
     .exec        = laik_mpi_exec,
-    .wait        = laik_mpi_wait,
-    .probe       = laik_mpi_probe,
     .updateGroup = laik_mpi_updateGroup
 };
 
@@ -497,16 +492,32 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
     }
 }
 
-
 static
-void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
+void laik_mpi_exec(Laik_ActionSeq* as)
 {
-    assert(as->actionCount > 0);
+    if (as->actionCount == 0) {
+        laik_log(1, "MPI backend exec: nothing to do\n");
+        return;
+    }
 
-    laik_log(1, "MPI backend: exec %d actions\n", as->actionCount);
+    if (as->backend == 0) {
+        // no preparation: do minimal transformations, sorting send/recv
+        laik_log(1, "MPI backend exec: do simple prepare before exec\n");
+        bool changed = laik_aseq_splitTransitionExecs(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After splitting texecs");
+        changed = laik_aseq_flattenPacking(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After flattening");
+        changed = laik_aseq_allocBuffer(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After buffer alloc");
+        changed = laik_aseq_sort_2phases(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After sorting");
+    }
+
+    laik_log(1, "MPI backend exec: %d actions\n", as->actionCount);
 
     // TODO: use transition context given by each action
     Laik_TransitionContext* tc = as->context[0];
+    Laik_SwitchStat* ss = tc->data->stat;
     Laik_MappingList* fromList = tc->fromList;
     Laik_MappingList* toList = tc->toList;
     int dims = tc->data->space->dims;
@@ -656,404 +667,8 @@ void laik_mpi_exec_actions(Laik_ActionSeq* as, Laik_SwitchStat* ss)
 
 
 
-static
-void laik_execOrRecord(bool record,
-                       Laik_Data *data, Laik_Transition *t, Laik_ActionSeq* as,
-                       Laik_MappingList* fromList, Laik_MappingList* toList)
-{
-    if (record) {
-        assert(as && (as->actionCount == 0));
-
-        assert((fromList != 0) && (toList != 0) &&
-               "recording without mappings not supported at the moment");
-    }
-
-    Laik_Group* group = t->group;
-    int myid  = group->myid;
-    int dims = data->space->dims;
-    Laik_SwitchStat* ss = data->stat;
-
-    laik_log(1, "MPI backend: %s transition (data '%s', group %d:%d/%d)\n"
-             "    actions: %d reductions, %d sends, %d recvs",
-             record ? "record":"execute",
-             data->name, group->gid, myid, group->size,
-             t->redCount, t->sendCount, t->recvCount);
-
-    if (myid < 0) {
-        // this task is not part of the communicator to use
-        return;
-    }
-
-    MPIGroupData* gd = mpiGroupData(group);
-    assert(gd); // must have been updated by laik_mpi_updateGroup()
-    MPI_Comm comm = gd->comm;
-
-    // when recording, just create actions
-    // TODO: pull out of backend
-    if (record) {
-        laik_aseq_addReds(as, 0, data, t);
-        laik_aseq_addSends(as, 0, data, t);
-        laik_aseq_addRecvs(as, 0, data, t);
-        return;
-    }
-
-    if (t->redCount > 0) {
-        assert(dims == 1);
-        assert(fromList);
-
-        for(int i=0; i < t->redCount; i++) {
-            struct redTOp* op = &(t->red[i]);
-            int64_t from = op->slc.from.i[0];
-            int64_t to   = op->slc.to.i[0];
-
-            Laik_Mapping* fromMap = 0;
-            if (fromList && (fromList->count > 0) && (op->myInputMapNo >= 0)) {
-                assert(op->myInputMapNo < fromList->count);
-                fromMap = &(fromList->map[op->myInputMapNo]);
-            }
-
-            Laik_Mapping* toMap = 0;
-            if (toList && (toList->count > 0) && (op->myOutputMapNo >= 0)) {
-                assert(op->myOutputMapNo < toList->count);
-                toMap = &(toList->map[op->myOutputMapNo]);
-                assert(toMap->base != 0);
-            }
-
-            char* fromBase = fromMap ? fromMap->base : 0;
-            char* toBase = toMap ? toMap->base : 0;
-            uint64_t elemCount = to - from;
-
-            // if current task is receiver, toBase should be allocated
-            if (laik_trans_isInGroup(t, op->outputGroup, myid))
-                assert(toBase != 0);
-            else
-                toBase = 0; // no interest in receiving anything
-
-            if (fromBase) {
-                assert(from >= fromMap->requiredSlice.from.i[0]);
-                fromBase += (from - fromMap->requiredSlice.from.i[0]) * data->elemsize;
-            }
-            if (toBase) {
-                assert(from >= toMap->requiredSlice.from.i[0]);
-                toBase += (from - toMap->requiredSlice.from.i[0]) * data->elemsize;
-            }
-
-            MPI_Datatype mpiDataType = getMPIDataType(data);
-
-            // all-groups never should be specified explicitly
-            if (op->outputGroup >= 0)
-                assert(t->subgroup[op->outputGroup].count < group->size);
-            if (op->inputGroup >= 0)
-                assert(t->subgroup[op->inputGroup].count < group->size);
-
-            if (laik_log_begin(1)) {
-                laik_log_append("    %s reduction: (%lld - %lld) slc/map %d/%d",
-                                record ? "record":"execute",
-                                (long long int) from, (long long int) to,
-                                op->myInputSliceNo, op->myInputMapNo);
-                laik_log_flush(0);
-            }
-
-            if (record) {
-                laik_aseq_addGroupReduce(as, 0,
-                                         op->inputGroup, op->outputGroup,
-                                         fromBase, toBase, elemCount, op->redOp);
-            }
-            else {
-                // fill out action parameters and transition context,
-                // and execute the action directly
-                Laik_BackendAction a;
-                Laik_TransitionContext tc;
-
-                laik_aseq_initTContext(&tc,
-                                       data, t, fromList, toList);
-
-                // can this be replaced with MPI_reduce?
-                bool doReduce = (op->inputGroup == -1);
-                int root = -1;
-                if (op->outputGroup >= 0) {
-                    if (t->subgroup[op->outputGroup].count == 1)
-                        root = t->subgroup[op->outputGroup].task[0];
-                    else
-                        doReduce = false;
-                }
-
-                if (doReduce) {
-                    laik_aseq_initReduce(&a, fromBase, toBase, to - from,
-                                         root, op->redOp);
-                    laik_mpi_exec_reduce(&tc, &a, mpiDataType, comm);
-                }
-                else {
-                    laik_aseq_initGroupReduce(&a,
-                                              op->inputGroup, op->outputGroup,
-                                              fromBase, toBase, elemCount, op->redOp);
-                    laik_mpi_exec_groupReduce(&tc, &a, mpiDataType, comm);
-                }
-            }
-
-            if ((record == 0) && ss) {
-                ss->reduceCount++;
-                ss->reducedBytes += (to - from) * data->elemsize;
-            }
-        }
-    }
-
-    // use 2x <taskcount> phases to avoid deadlocks
-    // - count phases X: 0..<taskcount - 1>
-    //     - receive from <task X> if <task X> lower rank
-    //     - send to <task X> if <task X> is higher rank
-    // - count phases Y: 0..<taskcount - 1>
-    //     - receive from <taskcount - Y> if it is higher rank
-    //     - send to <taskcount - 1 - Y> if it is lower rank
-    //
-    // TODO: prepare communication schedule with sorted transitions actions!
-
-    int tcount = group->size;
-    for(int phase = 0; phase < 2*tcount; phase++) {
-        int task = (phase < tcount) ? phase : (2*tcount-phase-1);
-        bool sendToHigher   = (phase < tcount);
-        bool recvFromLower  = (phase < tcount);
-        bool sendToLower    = (phase >= tcount);
-        bool recvFromHigher = (phase >= tcount);
-
-        // receive
-        for(int i=0; i < t->recvCount; i++) {
-            struct recvTOp* op = &(t->recv[i]);
-            if (task != op->fromTask) continue;
-            if (recvFromLower  && (myid < task)) continue;
-            if (recvFromHigher && (myid > task)) continue;
-
-            if (laik_log_begin(1)) {
-                laik_log_append("    %s recv ", record ? "record":"execute");
-                laik_log_Slice(dims, &(op->slc));
-                laik_log_flush(" from T%d", op->fromTask);
-            }
-
-            assert(myid != op->fromTask);
-
-            assert(op->mapNo < toList->count);
-            Laik_Mapping* toMap = &(toList->map[op->mapNo]);
-            assert(toMap != 0);
-            assert(toMap->base != 0);
-
-            MPI_Status s;
-            uint64_t count = 0;
-
-            MPI_Datatype mpiDataType = getMPIDataType(data);
-
-            // TODO:
-            // - tag 1 may conflict with application
-            // - check status
-
-            if (dims == 1) {
-                // we directly support 1d data layouts
-
-                // from global to receiver-local indexes
-                int64_t from = op->slc.from.i[0] - toMap->requiredSlice.from.i[0];
-                int64_t to   = op->slc.to.i[0] - toMap->requiredSlice.from.i[0];
-                assert(from >= 0);
-                assert(to > from);
-                count = to - from;
-
-                laik_log(1, "  direct recv to local [%lld;%lld[, slc/map %d/%d, "
-                         "elemsize %d, baseptr %p\n",
-                         (long long int) from, (long long int) to,
-                         op->sliceNo, op->mapNo,
-                         data->elemsize, (void*) toMap->base);
-
-                if (mpi_bug > 0) {
-                    // intentional bug: ignore small amounts of data received
-                    if (count < 1000) {
-                        char dummy[8000];
-                        MPI_Recv(dummy, count,
-                                 mpiDataType, op->fromTask, 1, comm, &s);
-                        continue;
-                    }
-                }
-
-                if (record)
-                    laik_aseq_addBufRecv(as, 0,
-                                            toMap->base + from * data->elemsize,
-                                            count, op->fromTask);
-                else {
-                    // TODO: tag 1 may conflict with application
-                    MPI_Recv(toMap->base + from * data->elemsize, count,
-                             mpiDataType, op->fromTask, 1, comm, &s);
-                }
-            }
-            else {
-                // use temporary receive buffer and layout-specific unpack
-
-                // the used layout must support unpacking
-                assert(toMap->layout->unpack);
-
-                if (record)
-                    laik_aseq_addRecvAndUnpack(as, 0, toMap,
-                                                  &(op->slc), op->fromTask);
-                else {
-                    Laik_BackendAction a;
-                    laik_aseq_initRecvAndUnpack(&a, toMap,
-                                                   dims, &(op->slc), op->fromTask);
-                    laik_mpi_exec_recvAndUnpack(&a, a.map, dims, data->elemsize,
-                                                mpiDataType, 1, comm);
-                    count = a.count;
-                }
-            }
-
-            if ((record == 0) && ss) {
-                ss->recvCount++;
-                ss->receivedBytes += count * data->elemsize;
-            }
 
 
-        }
-
-        // send
-        for(int i=0; i < t->sendCount; i++) {
-            struct sendTOp* op = &(t->send[i]);
-            if (task != op->toTask) continue;
-            if (sendToLower  && (myid < task)) continue;
-            if (sendToHigher && (myid > task)) continue;
-
-            if (laik_log_begin(1)) {
-                laik_log_append("    %s send ", record ? "record":"execute");
-                laik_log_Slice(dims, &(op->slc));
-                laik_log_flush(" to T%d", op->toTask);
-            }
-
-            assert(myid != op->toTask);
-
-            assert(op->mapNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[op->mapNo]);
-            // data to send must exist in local memory
-            assert(fromMap);
-            if (!fromMap->base) {
-                laik_log_begin(LAIK_LL_Panic);
-                laik_log_append("About to send data ('%s', slice ", data->name);
-                laik_log_Slice(dims, &(op->slc));
-                laik_log_flush(") to preserve it for the next phase as"
-                                " requested by you, but it never was written"
-                                " to in the previous phase. Fix your code!");
-                assert(0);
-            }
-
-            uint64_t count = 0;
-            MPI_Datatype mpiDataType = getMPIDataType(data);
-
-            if (dims == 1) {
-                // we directly support 1d data layouts
-
-                // from global to sender-local indexes
-                int64_t from = op->slc.from.i[0] - fromMap->requiredSlice.from.i[0];
-                int64_t to   = op->slc.to.i[0] - fromMap->requiredSlice.from.i[0];
-                assert(from >= 0);
-                assert(to > from);
-                count = to - from;
-
-                laik_log(1, "  direct send: from local [%lld;%lld[, slice/map %d/%d, "
-                            "elemsize %d, baseptr %p\n",
-                         (long long int) from, (long long int) to,
-                         op->sliceNo, op->mapNo,
-                         data->elemsize, (void*) fromMap->base);
-
-                if (record)
-                    laik_aseq_addBufSend(as, 0,
-                                            fromMap->base + from * data->elemsize,
-                                            count, op->toTask);
-                else {
-                    // TODO: tag 1 may conflict with application
-                    MPI_Send(fromMap->base + from * data->elemsize, count,
-                             mpiDataType, op->toTask, 1, comm);
-                }
-            }
-            else {
-                // use temporary receive buffer and layout-specific unpack
-
-                // the used layout must support packing
-                assert(fromMap->layout->pack);
-
-                if (record)
-                    laik_aseq_addPackAndSend(as, 0, fromMap,
-                                                &(op->slc), op->toTask);
-                else {
-                    Laik_BackendAction a;
-                    laik_aseq_initPackAndSend(&a, fromMap,
-                                                 dims, &(op->slc), op->toTask);
-                    laik_mpi_exec_packAndSend(&a, a.map, dims, mpiDataType, 1, comm);
-                    count = a.count;
-                }
-            }
-
-            if ((record == 0) && ss) {
-                ss->sendCount++;
-                ss->sentBytes += count * data->elemsize;
-            }
-        }
-    
-    }
-}
-
-// replace group reductions be reduce actions if possible
-static bool detectReduce(Laik_ActionSeq* as)
-{
-    bool changed = false;
-    assert(as->newActionCount == 0);
-
-    Laik_TransitionContext* tc = as->context[0];
-    Laik_Transition* t = tc->transition;
-
-    for(int i = 0; i < as->actionCount; i++) {
-        Laik_BackendAction* ba = &(as->action[i]);
-
-        switch(ba->type) {
-        // TODO: LAIK_AT_MapGroupReduce
-        case LAIK_AT_GroupReduce:
-            if (ba->inputGroup == -1) {
-                if (ba->outputGroup == -1) {
-                    laik_aseq_addReduce(as, ba->round, ba->fromBuf, ba->toBuf,
-                                        ba->count, -1, ba->redOp);
-                    changed = true;
-                    continue;
-                }
-                else if (laik_trans_groupCount(t, ba->outputGroup) == 1) {
-                    int root = laik_trans_taskInGroup(t, ba->outputGroup, 0);
-                    laik_aseq_addReduce(as, ba->round, ba->fromBuf, ba->toBuf,
-                                        ba->count, root, ba->redOp);
-                    changed = true;
-                    continue;
-                }
-            }
-            laik_aseq_add(ba, as, -1);
-            break;
-
-        default:
-            laik_aseq_add(ba, as, -1);
-            break;
-        }
-    }
-
-    if (changed)
-        laik_aseq_activateNewActions(as);
-    else
-        laik_aseq_discardNewActions(as);
-
-    return changed;
-}
-
-
-static void logASeq(bool changed, Laik_ActionSeq* as, char* title)
-{
-    if (laik_log_begin(1)) {
-        laik_log_append(title);
-        if (changed) {
-            laik_log_append(":\n");
-            laik_log_ActionSeq(as);
-        }
-        else
-            laik_log_append(": nothing changed\n");
-        laik_log_flush(0);
-    }
-}
 
 static
 Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
@@ -1070,45 +685,45 @@ Laik_ActionSeq* laik_mpi_prepare(Laik_Data* d, Laik_Transition* t,
     int tid = laik_aseq_addTContext(as, d, t, fromList, toList);
     laik_aseq_addTExec(as, tid);
     laik_aseq_activateNewActions(as);
-    logASeq(true, as, "After recording");
+    laik_log_ActionSeqIfChanged(true, as, "After recording");
 
     changed = laik_aseq_splitTransitionExecs(as);
-    logASeq(changed, as, "After splitting transition execs");
+    laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
 
     changed = laik_aseq_flattenPacking(as);
-    logASeq(changed, as, "After flattening actions");
+    laik_log_ActionSeqIfChanged(changed, as, "After flattening actions");
 
     if (mpi_reduce) {
         // detect group reduce actions which can be replaced by all-reduce
         // can be prohibited by setting LAIK_MPI_REDUCE=0
-        changed = detectReduce(as);
-        logASeq(changed, as, "After all-reduce detection");
+        changed = laik_aseq_replaceWithAllReduce(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After all-reduce detection");
     }
 
     changed = laik_aseq_combineActions(as);
-    logASeq(changed, as, "After combining actions 1");
+    laik_log_ActionSeqIfChanged(changed, as, "After combining actions 1");
 
     changed = laik_aseq_allocBuffer(as);
-    logASeq(changed, as, "After buffer allocation 1");
+    laik_log_ActionSeqIfChanged(changed, as, "After buffer allocation 1");
 
     changed = laik_aseq_splitReduce(as);
-    logASeq(changed, as, "After splitting reduce actions");
+    laik_log_ActionSeqIfChanged(changed, as, "After splitting reduce actions");
 
     changed = laik_aseq_allocBuffer(as);
-    logASeq(changed, as, "After buffer allocation 2");
+    laik_log_ActionSeqIfChanged(changed, as, "After buffer allocation 2");
 
     changed = laik_aseq_sort_rounds(as);
-    logASeq(changed, as, "After sorting rounds");
+    laik_log_ActionSeqIfChanged(changed, as, "After sorting rounds");
 
     changed = laik_aseq_combineActions(as);
-    logASeq(changed, as, "After combining actions 2");
+    laik_log_ActionSeqIfChanged(changed, as, "After combining actions 2");
 
     changed = laik_aseq_allocBuffer(as);
-    logASeq(changed, as, "After buffer allocation 3");
+    laik_log_ActionSeqIfChanged(changed, as, "After buffer allocation 3");
 
     changed = laik_aseq_sort_2phases(as);
     //changed = laik_aseq_sort_rankdigits(as);
-    logASeq(changed, as, "After sorting for deadlock avoidance");
+    laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
 
     laik_aseq_freeTempSpace(as);
 
@@ -1121,42 +736,5 @@ static void laik_mpi_cleanup(Laik_ActionSeq* as)
              as->actionCount);
     assert(as->backend == &laik_backend_mpi);
 }
-
-static void laik_mpi_wait(Laik_ActionSeq* as, int mapNo)
-{
-    // required due to interface signature
-    (void) as;
-    (void) mapNo;
-
-    // nothing to wait for: this backend driver currently is synchronous
-}
-
-static bool laik_mpi_probe(Laik_ActionSeq* p, int mapNo)
-{
-    // required due to interface signature
-    (void) p;
-    (void) mapNo;
-
-    // all communication finished: this backend driver currently is synchronous
-    return true;
-}
-
-static
-void laik_mpi_exec(Laik_Data *d, Laik_Transition *t, Laik_ActionSeq* as,
-                   Laik_MappingList* fromList, Laik_MappingList* toList)
-{
-    if (!as) {
-        laik_execOrRecord(false, d, t, as, fromList, toList);
-        return;
-    }
-
-    Laik_TransitionContext* tc = as->context[0];
-    assert(d == tc->data);
-    assert(t == tc->transition);
-
-    if (as->actionCount > 0)
-        laik_mpi_exec_actions(as, d->stat);
-}
-
 
 #endif // USE_MPI

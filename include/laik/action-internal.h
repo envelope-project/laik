@@ -398,6 +398,9 @@ bool laik_aseq_flattenPacking(Laik_ActionSeq* as);
 // transformation for split reduce actions into basic multiple actions
 bool laik_aseq_splitReduce(Laik_ActionSeq* as);
 
+// replace group reduction actions with all-reduction actions if possible
+bool laik_aseq_replaceWithAllReduce(Laik_ActionSeq* as);
+
 // replace transition exec actions with equivalent reduce/send/recv actions
 bool laik_aseq_splitTransitionExecs(Laik_ActionSeq* as);
 

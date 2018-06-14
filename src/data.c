@@ -717,7 +717,15 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
             d->stat->switches_noactions++;
     }
 
+    if (t == 0) {
+        // no transition to exec, just free old mappings
+        freeMaps(fromList, d->stat);
+        return;
+    }
+
+    bool doASeqCleanup = false;
     if (as) {
+        // we are given a prepared action sequence:
         // check that <as> has actions for given transition
         Laik_TransitionContext* tc = as->context[0];
         assert(tc->data == d);
@@ -725,64 +733,50 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
         if (fromList) assert(tc->fromList == fromList);
         if (toList) assert(tc->toList == toList);
     }
-
-    if (t) {
-        // be careful when reusing mappings:
-        // the backend wants to send/receive data in arbitrary order
-        // (to avoid deadlocks), but it never should overwrite data
-        // before it gets sent by data already received.
-        // thus it is bad to reuse a mapping for different index ranges.
-        // but reusing mappings such that same indexes go to same address
-        // is fine.
-        checkMapReuse(toList, fromList);
-
-        // allocate space for mappings for which reuse is not possible
-        allocateMappings(toList, d->stat);
-
-        if (t->sendCount + t->recvCount + t->redCount > 0) {
-            // let backend do send/recv/reduce actions
-
-            Laik_Instance* inst = d->space->inst;
-            if (inst->profiling->do_profiling)
-                inst->profiling->timer_backend = laik_wtime();
-
-#if 1
-            // test action recording
-            if (inst->backend->prepare) {
-                // HACK: if p is given, just execute it without cleanup
-                // We really should check that the plan matches!!
-                bool prepareAndCleanupPlan = (as == 0);
-
-                // backend driver supports asynchronous communication
-                if (prepareAndCleanupPlan)
-                    as = (inst->backend->prepare)(d, t, fromList, toList);
-
-                (inst->backend->exec)(d, t, as, fromList, toList);
-                // TODO: only wait in laik_map/laik_wait
-                (inst->backend->wait)(as, -1);
-
-                if (prepareAndCleanupPlan)
-                    laik_aseq_free(as);
-            }
-            else
-#endif
-            {
-                (inst->backend->exec)(d, t, as, fromList, toList);
-                //if (as) (inst->backend->wait)(as, -1);
-            }
-
-            if (inst->profiling->do_profiling)
-                inst->profiling->time_backend += laik_wtime() - inst->profiling->timer_backend;
-        }
-
-        // local copy actions
-        if (t->localCount > 0)
-            copyMaps(t, toList, fromList, d->stat);
-
-        // local init action
-        if (t->initCount > 0)
-            initMaps(t, toList, fromList, d->stat);
+    else {
+        // create the action sequence for requested transition on the fly
+        as = laik_aseq_new(d->space->inst);
+        int tid = laik_aseq_addTContext(as, d, t, fromList, toList);
+        laik_aseq_addTExec(as, tid);
+        laik_aseq_activateNewActions(as);
+        doASeqCleanup = true;
     }
+
+    // be careful when reusing mappings:
+    // the backend wants to send/receive data in arbitrary order
+    // (to avoid deadlocks), but it never should overwrite data
+    // before it gets sent by data already received.
+    // thus it is bad to reuse a mapping for different index ranges.
+    // but reusing mappings such that same indexes go to same address
+    // is fine.
+    checkMapReuse(toList, fromList);
+
+    // allocate space for mappings for which reuse is not possible
+    allocateMappings(toList, d->stat);
+
+    if (t->sendCount + t->recvCount + t->redCount > 0) {
+        // let backend do send/recv/reduce actions
+
+        Laik_Instance* inst = d->space->inst;
+        if (inst->profiling->do_profiling)
+            inst->profiling->timer_backend = laik_wtime();
+
+        (inst->backend->exec)(as);
+
+        if (inst->profiling->do_profiling)
+            inst->profiling->time_backend += laik_wtime() - inst->profiling->timer_backend;
+    }
+
+    if (doASeqCleanup)
+        laik_aseq_free(as);
+
+    // local copy actions
+    if (t->localCount > 0)
+        copyMaps(t, toList, fromList, d->stat);
+
+    // local init action
+    if (t->initCount > 0)
+        initMaps(t, toList, fromList, d->stat);
 
     // free old mapping/partitioning
     if (fromList)

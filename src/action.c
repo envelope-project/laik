@@ -2416,6 +2416,53 @@ bool laik_aseq_splitReduce(Laik_ActionSeq* as)
     return true;
 }
 
+// replace group reduction actions with all-reduction actions if possible
+bool laik_aseq_replaceWithAllReduce(Laik_ActionSeq* as)
+{
+    bool changed = false;
+    assert(as->newActionCount == 0);
+
+    Laik_TransitionContext* tc = as->context[0];
+    Laik_Transition* t = tc->transition;
+
+    for(int i = 0; i < as->actionCount; i++) {
+        Laik_BackendAction* ba = &(as->action[i]);
+
+        switch(ba->type) {
+        // TODO: LAIK_AT_MapGroupReduce
+        case LAIK_AT_GroupReduce:
+            if (ba->inputGroup == -1) {
+                if (ba->outputGroup == -1) {
+                    laik_aseq_addReduce(as, ba->round, ba->fromBuf, ba->toBuf,
+                                        ba->count, -1, ba->redOp);
+                    changed = true;
+                    continue;
+                }
+                else if (laik_trans_groupCount(t, ba->outputGroup) == 1) {
+                    int root = laik_trans_taskInGroup(t, ba->outputGroup, 0);
+                    laik_aseq_addReduce(as, ba->round, ba->fromBuf, ba->toBuf,
+                                        ba->count, root, ba->redOp);
+                    changed = true;
+                    continue;
+                }
+            }
+            laik_aseq_add(ba, as, -1);
+            break;
+
+        default:
+            laik_aseq_add(ba, as, -1);
+            break;
+        }
+    }
+
+    if (changed)
+        laik_aseq_activateNewActions(as);
+    else
+        laik_aseq_discardNewActions(as);
+
+    return changed;
+}
+
 // replace transition exec actions with equivalent reduce/send/recv actions
 bool laik_aseq_splitTransitionExecs(Laik_ActionSeq* as)
 {

@@ -25,8 +25,7 @@
 #include <stdio.h>
 
 // forward decl
-void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
-                      Laik_MappingList* fromList, Laik_MappingList* toList);
+void laik_single_exec(Laik_ActionSeq* as);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_single = {
@@ -59,10 +58,16 @@ Laik_Group* laik_single_world()
     return single_instance->group[0];
 }
 
-void laik_single_exec(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* p,
-                      Laik_MappingList* fromList, Laik_MappingList* toList)
+void laik_single_exec(Laik_ActionSeq* as)
 {
-    assert(p == 0); // does not support transition plans
+    // we only support 1 transition exec action
+    assert(as->actionCount == 1);
+    assert(as->action[0].type = LAIK_AT_TExec);
+    Laik_TransitionContext* tc = as->context[0];
+    Laik_Data* d = tc->data;
+    Laik_Transition* t = tc->transition;
+    Laik_MappingList* fromList = tc->fromList;
+    Laik_MappingList* toList = tc->toList;
 
     Laik_Instance* inst = d->space->inst;
     if (t->redCount > 0) {

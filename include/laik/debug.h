@@ -38,4 +38,8 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext *tc);
 void laik_log_ActionSeq(Laik_ActionSeq* as);
 void laik_log_Checksum(char* buf, int count, Laik_Type* t);
 
+// write action sequence at level 1 if <changed> is true, prepend with title
+void laik_log_ActionSeqIfChanged(bool changed, Laik_ActionSeq* as, char* title);
+
+
 #endif // _LAIK_DEBUG_H_
