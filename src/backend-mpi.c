@@ -1119,7 +1119,7 @@ static void laik_mpi_cleanup(Laik_ActionSeq* as)
 {
     laik_log(1, "MPI backend: cleanup action sequence (%d actions)\n",
              as->actionCount);
-    laik_aseq_free(as);
+    assert(as->backend == &laik_backend_mpi);
 }
 
 static void laik_mpi_wait(Laik_ActionSeq* as, int mapNo)

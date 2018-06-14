@@ -762,7 +762,7 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
                 (inst->backend->wait)(as, -1);
 
                 if (prepareAndCleanupPlan)
-                    (inst->backend->cleanup)(as);
+                    laik_aseq_free(as);
             }
             else
 #endif
@@ -1122,6 +1122,7 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
     assert(backend->prepare);
 
     Laik_ActionSeq* as = (backend->prepare)(d, t, fromList, toList);
+    assert(as->backend == backend);
 
     if (laik_log_begin(2)) {
         laik_log_append("Calc actions for ");
@@ -1170,6 +1171,10 @@ void laik_exec_actions(Laik_ActionSeq* as)
         laik_panic("laik_exec_transitionplan ends with wrong mappings!");
         exit(1);
     }
+
+    // only execute by backend which optimized the sequence
+    if (as->backend)
+        assert(as->backend == d->space->inst->backend);
 
     doTransition(d, t, as, d->activeMappings, toList);
 

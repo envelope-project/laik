@@ -20,8 +20,28 @@
 
 #include <laik.h>         // for Laik_Instance, Laik_Group, Laik_AccessPhase
 
+// Action sequences are used in the public LAIK API as abstraction
+// for compound communication requests, e.g. consisting of multiple
+// container transitions. Users can build such sequences and trigger
+// their execution, but the data structures and actions within sequences
+// are hidden to LAIK users.
+//
+// Action sequences and actions are used in the interface to backends
+// to (1) specify what compound communication should be executed, and
+// (2) to allow backends to do transformations and internal resource
+// allocations before actual execution of an action sequence, to optimize
+// their execution. For (2), a backend can define its own custom action
+// types, and do transformations which add such back-end specific actions
+// for faster execution afterwards.
+//
+// In this file, backend-independent actions and transformation
+// funactions are defined. They may be useful by backends for optimizing
+// a sequence.
 
-// for CopyFromBuf / CopyToBuf
+// Backend-independent Actions
+// TODO: split up in seperate structs for minimal memory consumption
+
+// helper struct for CopyFromBuf / CopyToBuf
 typedef struct _Laik_CopyEntry {
     char* ptr;
     int offset, bytes;
@@ -63,6 +83,11 @@ typedef struct _Laik_BackendAction {
 } Laik_BackendAction;
 
 
+// a transition context, referenced in an action sequence
+//
+// this specifies a concrete transition to be done on a data container
+// which uses a given set of memory mappings before/after the transition
+
 struct _Laik_TransitionContext {
     Laik_Transition* transition;
     Laik_Data* data;
@@ -70,8 +95,35 @@ struct _Laik_TransitionContext {
     Laik_MappingList *toList;
 };
 
+
+// An action sequence is a list of actions for a compound communication
+// request, to be executed in some order.
+//
+// Each action belongs to a round; actions within a round have no dependence
+// on each other and can be executed asynchronously in parallel. This is
+// useful to specify required ordering, e.g. copy actions into a temporary
+// buffer before this buffer is sent. But it also enables asynchronity with
+// action triggering a communciation in hardware, and other actions waiting
+// on completion.
+//
+// The execution of an action sequence expects actions to be sorted by rounds.
+// An execution request to a backend can ask only for some rounds to be
+// executed, allowing LAIK to expose an API to users which enables overlap
+// of computation and communication.
+//
+// Once a action sequence is optimized by a given backend, it only can
+// be executed by this backend, as it may contain backend-specific actions.
+// There are backend-independent actions and transformations provided which
+// allow backends to request allocation of temporary buffers, which can be
+// used in other actions. LAIK will allocated such buffers for the backend
+// before execution, and clean them up when the action sequence is deleted.
+
 struct _Laik_ActionSeq {
     Laik_Instance* inst;
+
+    // if non-null, only this backend can execute the sequence, and
+    // the backend gets called for clean-up when the sequence is destroyed
+    Laik_Backend* backend;
 
     // actions can refer to different transition contexts
 #define ASEQ_CONTEXTS_MAX 1
@@ -107,6 +159,13 @@ struct _Laik_ActionSeq {
     // summary to update statistics
     int sendCount, recvCount, reduceCount;
 };
+
+
+// helpers for building new action sequences. New actions are first
+// stored in temporary space, and only becoming active when calling
+// laik_aseq_activateNewActions(). During build, there may already exist
+// an active sequence. Transformation typically travers the active sequence
+// and build up a new sequence within the same action sequence object.
 
 // append an invalid action of given size
 Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size, int round);

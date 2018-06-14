@@ -26,6 +26,7 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
 {
     Laik_ActionSeq* as = malloc(sizeof(Laik_ActionSeq));
     as->inst = inst;
+    as->backend = 0;
 
     for(int i = 0; i < ASEQ_CONTEXTS_MAX; i++)
         as->context[i] = 0;
@@ -63,6 +64,11 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
 // this may include backend-specific resources
 void laik_aseq_free(Laik_ActionSeq* as)
 {
+    if (as->backend) {
+        // ask backend to do its own cleanup for this action sequence
+        (as->backend->cleanup)(as);
+    }
+
     Laik_TransitionContext* tc = as->context[0];
 
     for(int i = 0; i < as->bufferCount; i++) {
