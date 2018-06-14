@@ -170,7 +170,20 @@ if miscvars:
     cfile.write(miscvars)
 
 if "PREFIX" in os.environ:
-    cfile.write("PREFIX=" + os.path.abspath(os.environ['PREFIX']) + "\n")
+    prefix = os.environ['PREFIX']
+    cfile.write("PREFIX=" + os.path.abspath(prefix) + "\n")
+    print("Setting PREFIX to '" + prefix + "' as requested.")
+
+if "OPT" in os.environ:
+    opt = os.environ['OPT']
+    cfile.write("OPT=" + opt + "\n")
+    print("Setting OPT to '" + opt + "' as requested.")
+
+if "WARN" in os.environ:
+    warn = os.environ['WARN']
+    cfile.write("WARN=" + warn + "\n")
+    print("Setting WARN to '" + warn + "' as requested.")
+
 cfile.close()
 
 print("Generated 'Makefile.config'")
