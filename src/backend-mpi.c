@@ -581,7 +581,8 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             break;
 
         default:
-            laik_log(LAIK_LL_Panic, "mpi_exec: unknown action %d", a->type);
+            laik_log(LAIK_LL_Panic, "mpi_exec: no idea how to exec action %d (%s)",
+                     a->type, laik_at_str(a->type));
             assert(0);
         }
     }
@@ -640,6 +641,10 @@ void laik_mpi_prepare(Laik_ActionSeq* as)
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
 
     laik_aseq_freeTempSpace(as);
+
+    // request for cleanup function to be called
+    // (not really needed at the moment)
+    as->backend = &laik_backend_mpi;
 }
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)

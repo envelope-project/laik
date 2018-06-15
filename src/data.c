@@ -757,8 +757,9 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
         Laik_TransitionContext* tc = as->context[0];
         assert(tc->data == d);
         assert(tc->transition == t);
-        if (fromList) assert(tc->fromList == fromList);
-        if (toList) assert(tc->toList == toList);
+        // if sequence was prepared with mappings, they must be the same
+        if (tc->fromList) assert(tc->fromList == fromList);
+        if (tc->toList) assert(tc->toList == toList);
     }
     else {
         // create the action sequence for requested transition on the fly
@@ -1132,16 +1133,13 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
 
     Laik_ActionSeq* as = createTransASeq(d, t, fromList, toList);
     const Laik_Backend* backend = d->space->inst->backend;
-    assert(backend->prepare);
-    (backend->prepare)(as);
-    assert(as->backend == backend);
+    if (backend->prepare)
+        (backend->prepare)(as);
 
     if (laik_log_begin(2)) {
-        laik_log_append("Calc actions for ");
-        laik_log_Transition(t, false);
-        laik_log_flush(" on '%s': %d acts, %.3f MB",
-                       d->name, as->actionCount,
-                       0.000001 * laik_aseq_bufsize(as));
+        laik_log_append("Calculated actions:");
+        laik_log_ActionSeq(as, laik_log_shown(1));
+        laik_log_flush(0);
     }
 
     return as;
@@ -1176,11 +1174,11 @@ void laik_exec_actions(Laik_ActionSeq* as)
     Laik_MappingList* toList = prepareMaps(d, t->toPartitioning, 0);
 
     if (tc->fromList && (tc->fromList != d->activeMappings)) {
-        laik_panic("laik_exec_transitionplan starts with wrong mappings!");
+        laik_panic("laik_exec_actions: start mappings mismatch!");
         exit(1);
     }
     if (tc->toList && (tc->toList != toList)) {
-        laik_panic("laik_exec_transitionplan ends with wrong mappings!");
+        laik_panic("laik_exec_actions: end mappings mismatch!");
         exit(1);
     }
 

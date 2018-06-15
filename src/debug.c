@@ -620,10 +620,13 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
     }
 }
 
-void laik_log_ActionSeq(Laik_ActionSeq *as)
+void laik_log_ActionSeq(Laik_ActionSeq *as, bool showDetails)
 {
-    laik_log_append("action seq for %d transition(s): %d rounds, %d buffers, %d actions (length %d bytes)\n",
-                    as->contextCount, as->roundCount, as->bufferCount,
+    laik_log_append("action seq for %d transition(s), backend cleanup: %s\n"
+                    "  %d rounds, %d buffers (%.3f MB), %d actions (%d B)\n",
+                    as->contextCount, as->backend ? as->backend->name : "none",
+                    as->roundCount,
+                    as->bufferCount, 0.000001 * laik_aseq_bufsize(as),
                     as->actionCount, as->bytesUsed);
 
     Laik_TransitionContext* tc = 0;
@@ -634,6 +637,7 @@ void laik_log_ActionSeq(Laik_ActionSeq *as)
         laik_log_append(" on data '%s'\n", tc->data->name);
     }
     assert(as->contextCount == 1);
+    if (!showDetails) return;
 
     for(int i = 0; i < as->bufferCount; i++) {
         laik_log_append("  buffer %d: len %d at %p\n",
@@ -668,7 +672,7 @@ void laik_log_ActionSeqIfChanged(bool changed, Laik_ActionSeq* as, char* title)
         laik_log_append(title);
         if (changed) {
             laik_log_append(":\n");
-            laik_log_ActionSeq(as);
+            laik_log_ActionSeq(as, true);
         }
         else
             laik_log_append(": nothing changed\n");

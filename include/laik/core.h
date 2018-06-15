@@ -140,7 +140,7 @@ void laik_panic(const char* msg);
 
 // check for log level: return true if given log level will be shown
 // use this to guard possibly complex calculations for debug output
-bool laik_logshown(int level);
+bool laik_log_shown(int level);
 
 // to overwrite environment variable LAIK_LOG
 void laik_set_loglevel(int level);

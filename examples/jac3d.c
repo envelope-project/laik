@@ -429,7 +429,7 @@ int main(int argc, char* argv[])
 
     // statistics for all iterations and reductions
     // using work load in all tasks
-    if (laik_logshown(2)) {
+    if (laik_log_shown(2)) {
         t = laik_wtime();
         int diter = iter;
         double dt = t - t1;

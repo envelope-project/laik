@@ -409,7 +409,7 @@ void laik_set_loglevel(int l)
 }
 
 // check for log level: return true if given log level will be shown
-bool laik_logshown(int l)
+bool laik_log_shown(int l)
 {
     return (l >= laik_loglevel);
 }
