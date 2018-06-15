@@ -41,6 +41,18 @@
 // Backend-independent Actions
 // TODO: split up in seperate structs for minimal memory consumption
 
+// all actions must start with this header
+struct _Laik_Action {
+    unsigned char type;
+    unsigned char len;
+    unsigned char round;   // actions are order by rounds
+    unsigned char tid  :7; // ID of transition context for this action
+    unsigned char mark :1; // boolean flag used in some transformation
+};
+
+// for traversal of action sequence
+#define nextAction(a) (Laik_Action*) (((char*)a) + a->len)
+
 // helper struct for CopyFromBuf / CopyToBuf
 typedef struct _Laik_CopyEntry {
     char* ptr;
@@ -50,13 +62,7 @@ typedef struct _Laik_CopyEntry {
 // TODO: split off into different action types with minimal space requirements
 typedef struct _Laik_BackendAction {
     // header
-    unsigned char type;
-    unsigned char len;
-    unsigned char tid;    // ID of transition context for this action
-    unsigned char round;  // actions are order by rounds
-
-    // for marking processed actions (used for combining optimization)
-    char mark;
+    Laik_Action h;
 
     int count;         // for Send, Recv, Copy, Reduce
     int bufID;         // for BufReserve, RBufSend, RBufRecv
@@ -143,8 +149,8 @@ struct _Laik_ActionSeq {
     int ceCount;
 
     // action sequence to trigger on execution
-    int actionCount;
-    Laik_BackendAction* action;
+    int actionCount, bytesUsed;
+    Laik_Action* action;
     // how many rounds
     int roundCount;
 
@@ -161,6 +167,20 @@ struct _Laik_ActionSeq {
 };
 
 
+// action structs
+
+typedef struct {
+    Laik_Action h;
+} Laik_ATExec;
+
+typedef struct {
+    Laik_Action h;
+    int size;  // in bytes
+    int bufID;
+    int offset;
+} Laik_ABufReserve;
+
+
 // helpers for building new action sequences. New actions are first
 // stored in temporary space, and only becoming active when calling
 // laik_aseq_activateNewActions(). During build, there may already exist
@@ -168,7 +188,8 @@ struct _Laik_ActionSeq {
 // and build up a new sequence within the same action sequence object.
 
 // append an invalid action of given size
-Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size, int round);
+Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size,
+                                 Laik_ActionType type, int round, int tid);
 
 // discard any new built actions (e.g. if there was no change to old seq)
 void laik_aseq_discardNewActions(Laik_ActionSeq* as);
@@ -376,7 +397,7 @@ bool laik_aseq_allocBuffer(Laik_ActionSeq* as);
 // (called by backends)
 
 // append action <ba> to <as>, change round if not negative
-void laik_aseq_add(Laik_BackendAction* ba, Laik_ActionSeq* as, int round);
+void laik_aseq_add(Laik_Action* a, Laik_ActionSeq* as, int round);
 
 
 // just copy actions from oldAS into as

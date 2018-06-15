@@ -24,6 +24,8 @@
 #include "space.h"   // for Laik_DataFlow, Laik_Index, Laik_Partitioning
 #include "action.h"  // for Laik_Action
 
+char* laik_at_str(Laik_ActionType t);
+
 void laik_log_IntList(int len, int* list);
 void laik_log_PrettyInt(uint64_t v);
 void laik_log_Space(Laik_Space* spc);

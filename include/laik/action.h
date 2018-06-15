@@ -107,12 +107,7 @@ typedef enum _Laik_ActionType {
 //
 
 // all actions must start with this header
-typedef struct _Laik_Action {
-    unsigned char type;
-    unsigned char len;
-    unsigned char tid;    // ID of transition context for this action
-    unsigned char round;  // actions are order by rounds
-} Laik_Action;
+typedef struct _Laik_Action Laik_Action;
 
 // for actions refering to a transition
 typedef struct _Laik_TransitionContext Laik_TransitionContext;

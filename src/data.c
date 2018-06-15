@@ -763,7 +763,7 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
     else {
         // create the action sequence for requested transition on the fly
         as = createTransASeq(d, t, fromList, toList);
-#if 0
+#if 1
         const Laik_Backend* backend = d->space->inst->backend;
         if (backend->prepare)
             (backend->prepare)(as);

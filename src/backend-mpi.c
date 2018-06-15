@@ -322,7 +322,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                                Laik_BackendAction* a,
                                MPI_Datatype dataType, MPI_Comm comm)
 {
-    assert(a->type == LAIK_AT_GroupReduce);
+    assert(a->h.type == LAIK_AT_GroupReduce);
     Laik_Transition* t = tc->transition;
     Laik_Data* data = tc->data;
 
@@ -426,7 +426,8 @@ void laik_mpi_exec(Laik_ActionSeq* as)
 
     if (as->backend == 0) {
         // no preparation: do minimal transformations, sorting send/recv
-        laik_log(1, "MPI backend exec: do simple prepare before exec\n");
+        laik_log(1, "MPI backend exec: prepare before exec\n");
+        laik_log_ActionSeqIfChanged(true, as, "Original sequence");
         bool changed = laik_aseq_splitTransitionExecs(as);
         laik_log_ActionSeqIfChanged(changed, as, "After splitting texecs");
         changed = laik_aseq_flattenPacking(as);
@@ -455,10 +456,11 @@ void laik_mpi_exec(Laik_ActionSeq* as)
     MPI_Datatype dataType = getMPIDataType(tc->data);
     MPI_Status st;
 
-    for(int i = 0; i < as->actionCount; i++) {
-        Laik_BackendAction* a = &(as->action[i]);
+    Laik_Action* a = as->action;
+    for(int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+        Laik_BackendAction* ba = (Laik_BackendAction*) a;
         if (laik_log_begin(1)) {
-            laik_log_Action((Laik_Action*) a, tc);
+            laik_log_Action(a, tc);
             laik_log_flush(0);
         }
 
@@ -469,113 +471,113 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             break;
 
         case LAIK_AT_MapSend: {
-            assert(a->fromMapNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[a->fromMapNo]);
+            assert(ba->fromMapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
             assert(fromMap->base != 0);
-            MPI_Send(fromMap->base + a->offset, a->count,
-                     dataType, a->peer_rank, tag, comm);
+            MPI_Send(fromMap->base + ba->offset, ba->count,
+                     dataType, ba->peer_rank, tag, comm);
             break;
         }
 
         case LAIK_AT_RBufSend:
-            assert(a->bufID < ASEQ_BUFFER_MAX);
-            MPI_Send(as->buf[a->bufID] + a->offset, a->count,
-                     dataType, a->peer_rank, tag, comm);
+            assert(ba->bufID < ASEQ_BUFFER_MAX);
+            MPI_Send(as->buf[ba->bufID] + ba->offset, ba->count,
+                     dataType, ba->peer_rank, tag, comm);
             break;
 
         case LAIK_AT_BufSend:
-            MPI_Send(a->fromBuf, a->count,
-                     dataType, a->peer_rank, tag, comm);
+            MPI_Send(ba->fromBuf, ba->count,
+                     dataType, ba->peer_rank, tag, comm);
             break;
 
         case LAIK_AT_MapRecv: {
-            assert(a->toMapNo < toList->count);
-            Laik_Mapping* toMap = &(toList->map[a->toMapNo]);
+            assert(ba->toMapNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
             assert(toMap->base != 0);
-            MPI_Recv(toMap->base + a->offset, a->count,
-                     dataType, a->peer_rank, tag, comm, &st);
+            MPI_Recv(toMap->base + ba->offset, ba->count,
+                     dataType, ba->peer_rank, tag, comm, &st);
             break;
         }
 
         case LAIK_AT_RBufRecv:
-            assert(a->bufID < ASEQ_BUFFER_MAX);
-            MPI_Recv(as->buf[a->bufID] + a->offset, a->count,
-                     dataType, a->peer_rank, tag, comm, &st);
+            assert(ba->bufID < ASEQ_BUFFER_MAX);
+            MPI_Recv(as->buf[ba->bufID] + ba->offset, ba->count,
+                     dataType, ba->peer_rank, tag, comm, &st);
             break;
 
         case LAIK_AT_BufRecv:
-            MPI_Recv(a->toBuf, a->count,
-                     dataType, a->peer_rank, tag, comm, &st);
+            MPI_Recv(ba->toBuf, ba->count,
+                     dataType, ba->peer_rank, tag, comm, &st);
             break;
 
         case LAIK_AT_CopyFromBuf:
-            for(int i = 0; i < a->count; i++)
-                memcpy(a->ce[i].ptr,
-                       a->fromBuf + a->ce[i].offset,
-                       a->ce[i].bytes);
+            for(int i = 0; i < ba->count; i++)
+                memcpy(ba->ce[i].ptr,
+                       ba->fromBuf + ba->ce[i].offset,
+                       ba->ce[i].bytes);
             break;
 
         case LAIK_AT_CopyToBuf:
-            for(int i = 0; i < a->count; i++)
-                memcpy(a->toBuf + a->ce[i].offset,
-                       a->ce[i].ptr,
-                       a->ce[i].bytes);
+            for(int i = 0; i < ba->count; i++)
+                memcpy(ba->toBuf + ba->ce[i].offset,
+                       ba->ce[i].ptr,
+                       ba->ce[i].bytes);
             break;
 
         case LAIK_AT_PackToBuf:
-            laik_mpi_exec_pack(a, a->map);
+            laik_mpi_exec_pack(ba, ba->map);
             break;
 
         case LAIK_AT_UnpackFromBuf:
-            laik_mpi_exec_unpack(a, a->map);
+            laik_mpi_exec_unpack(ba, ba->map);
             break;
 
         case LAIK_AT_MapPackAndSend: {
-            assert(a->fromMapNo < fromList->count);
-            Laik_Mapping* fromMap = &(fromList->map[a->fromMapNo]);
+            assert(ba->fromMapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
             assert(fromMap->base != 0);
-            laik_mpi_exec_packAndSend(a, fromMap, dims, dataType, tag, comm);
+            laik_mpi_exec_packAndSend(ba, fromMap, dims, dataType, tag, comm);
             break;
         }
 
         case LAIK_AT_PackAndSend:
-            laik_mpi_exec_packAndSend(a, a->map, dims, dataType, tag, comm);
+            laik_mpi_exec_packAndSend(ba, ba->map, dims, dataType, tag, comm);
             break;
 
         case LAIK_AT_MapRecvAndUnpack: {
-            assert(a->toMapNo < toList->count);
-            Laik_Mapping* toMap = &(toList->map[a->toMapNo]);
+            assert(ba->toMapNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
             assert(toMap->base);
-            laik_mpi_exec_recvAndUnpack(a, toMap, dims, elemsize, dataType, tag, comm);
+            laik_mpi_exec_recvAndUnpack(ba, toMap, dims, elemsize, dataType, tag, comm);
             break;
         }
 
         case LAIK_AT_RecvAndUnpack:
-            laik_mpi_exec_recvAndUnpack(a, a->map, dims, elemsize, dataType, tag, comm);
+            laik_mpi_exec_recvAndUnpack(ba, ba->map, dims, elemsize, dataType, tag, comm);
             break;
 
         case LAIK_AT_Reduce:
-            laik_mpi_exec_reduce(tc, a, dataType, comm);
+            laik_mpi_exec_reduce(tc, ba, dataType, comm);
             break;
 
         case LAIK_AT_GroupReduce:
-            laik_mpi_exec_groupReduce(tc, a, dataType, comm);
+            laik_mpi_exec_groupReduce(tc, ba, dataType, comm);
             break;
 
         case LAIK_AT_RBufLocalReduce:
-            assert(a->bufID < ASEQ_BUFFER_MAX);
-            assert(a->dtype->reduce != 0);
-            (a->dtype->reduce)(a->toBuf, a->toBuf, as->buf[a->bufID] + a->offset,
-                               a->count, a->redOp);
+            assert(ba->bufID < ASEQ_BUFFER_MAX);
+            assert(ba->dtype->reduce != 0);
+            (ba->dtype->reduce)(ba->toBuf, ba->toBuf, as->buf[ba->bufID] + ba->offset,
+                               ba->count, ba->redOp);
             break;
 
         case LAIK_AT_RBufCopy:
-            assert(a->bufID < ASEQ_BUFFER_MAX);
-            memcpy(a->toBuf, as->buf[a->bufID] + a->offset, a->count * elemsize);
+            assert(ba->bufID < ASEQ_BUFFER_MAX);
+            memcpy(ba->toBuf, as->buf[ba->bufID] + ba->offset, ba->count * elemsize);
             break;
 
         case LAIK_AT_BufCopy:
-            memcpy(a->toBuf, a->fromBuf, a->count * elemsize);
+            memcpy(ba->toBuf, ba->fromBuf, ba->count * elemsize);
             break;
 
         default:
@@ -583,6 +585,7 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             assert(0);
         }
     }
+    assert( ((char*)as->action) + as->bytesUsed == ((char*)a) );
 
     ss->sentBytes     += as->sendCount * tc->data->elemsize;
     ss->receivedBytes += as->recvCount * tc->data->elemsize;
