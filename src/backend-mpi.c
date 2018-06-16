@@ -236,7 +236,7 @@ void laik_mpi_exec_packAndSend(Laik_BackendAction* a, Laik_Mapping* map, int dim
                                      packbuf, PACKBUFSIZE);
         assert(packed > 0);
         MPI_Send(packbuf, packed,
-                 dataType, a->peer_rank, tag, comm);
+                 dataType, a->rank, tag, comm);
         count += packed;
         if (laik_index_isEqual(dims, &idx, &(a->slc->to))) break;
     }
@@ -265,7 +265,7 @@ void laik_mpi_exec_recvAndUnpack(Laik_BackendAction* a, Laik_Mapping* map,
     int count = 0;
     while(1) {
         MPI_Recv(packbuf, PACKBUFSIZE / elemsize,
-                 dataType, a->peer_rank, tag, comm, &st);
+                 dataType, a->rank, tag, comm, &st);
         MPI_Get_count(&st, dataType, &recvCount);
         unpacked = (map->layout->unpack)(map, a->slc, &idx,
                                          packbuf, recvCount * elemsize);
@@ -283,7 +283,7 @@ void laik_mpi_exec_reduce(Laik_TransitionContext* tc, Laik_BackendAction* a,
     assert(mpi_reduce > 0);
 
     MPI_Op mpiRedOp = getMPIOp(a->redOp);
-    int rootTask = a->peer_rank;
+    int rootTask = a->rank;
 
     if (rootTask == -1) {
         if (a->fromBuf == a->toBuf) {
@@ -475,40 +475,48 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
             assert(fromMap->base != 0);
             MPI_Send(fromMap->base + ba->offset, ba->count,
-                     dataType, ba->peer_rank, tag, comm);
+                     dataType, ba->rank, tag, comm);
             break;
         }
 
-        case LAIK_AT_RBufSend:
-            assert(ba->bufID < ASEQ_BUFFER_MAX);
-            MPI_Send(as->buf[ba->bufID] + ba->offset, ba->count,
-                     dataType, ba->peer_rank, tag, comm);
+        case LAIK_AT_RBufSend: {
+            Laik_A_RBufSend* aa = (Laik_A_RBufSend*) a;
+            assert(aa->bufID < ASEQ_BUFFER_MAX);
+            MPI_Send(as->buf[aa->bufID] + aa->offset, aa->count,
+                     dataType, aa->to_rank, tag, comm);
             break;
+        }
 
-        case LAIK_AT_BufSend:
-            MPI_Send(ba->fromBuf, ba->count,
-                     dataType, ba->peer_rank, tag, comm);
+        case LAIK_AT_BufSend: {
+            Laik_A_BufSend* aa = (Laik_A_BufSend*) a;
+            MPI_Send(aa->buf, aa->count,
+                     dataType, aa->to_rank, tag, comm);
             break;
+        }
 
         case LAIK_AT_MapRecv: {
             assert(ba->toMapNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
             assert(toMap->base != 0);
             MPI_Recv(toMap->base + ba->offset, ba->count,
-                     dataType, ba->peer_rank, tag, comm, &st);
+                     dataType, ba->rank, tag, comm, &st);
             break;
         }
 
-        case LAIK_AT_RBufRecv:
-            assert(ba->bufID < ASEQ_BUFFER_MAX);
-            MPI_Recv(as->buf[ba->bufID] + ba->offset, ba->count,
-                     dataType, ba->peer_rank, tag, comm, &st);
+        case LAIK_AT_RBufRecv: {
+            Laik_A_RBufRecv* aa = (Laik_A_RBufRecv*) a;
+            assert(aa->bufID < ASEQ_BUFFER_MAX);
+            MPI_Recv(as->buf[aa->bufID] + aa->offset, aa->count,
+                     dataType, aa->from_rank, tag, comm, &st);
             break;
+        }
 
-        case LAIK_AT_BufRecv:
-            MPI_Recv(ba->toBuf, ba->count,
-                     dataType, ba->peer_rank, tag, comm, &st);
+        case LAIK_AT_BufRecv: {
+            Laik_A_BufRecv* aa = (Laik_A_BufRecv*) a;
+            MPI_Recv(aa->buf, aa->count,
+                     dataType, aa->from_rank, tag, comm, &st);
             break;
+        }
 
         case LAIK_AT_CopyFromBuf:
             for(int i = 0; i < ba->count; i++)

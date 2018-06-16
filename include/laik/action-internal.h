@@ -55,15 +55,47 @@ struct _Laik_Action {
 // only requried if further parameters need to be stored, ie. not for
 //   Nop, Halt, TExec, ...
 
+// BufReserve action
 typedef struct {
     Laik_Action h;
     int size;  // in bytes
     int bufID;
     int offset;
-} Laik_ABufReserve;
+} Laik_A_BufReserve;
 
+// RBufSend action
+typedef struct {
+    Laik_Action h;
+    int bufID;
+    int offset;
+    int count;
+    int to_rank;
+} Laik_A_RBufSend;
 
+// RBufRecv action
+typedef struct {
+    Laik_Action h;
+    int bufID;
+    int offset;
+    int count;
+    int from_rank;
+} Laik_A_RBufRecv;
 
+// BufSend action
+typedef struct {
+    Laik_Action h;
+    char* buf;
+    int count;
+    int to_rank;
+} Laik_A_BufSend;
+
+// BufRecv action
+typedef struct {
+    Laik_Action h;
+    char* buf;
+    int count;
+    int from_rank;
+} Laik_A_BufRecv;
 
 
 // helper struct for CopyFromBuf / CopyToBuf
@@ -84,11 +116,11 @@ typedef struct _Laik_BackendAction {
     Laik_Mapping* map; // for Pack, Unpack, PackAndSend, RecvAndUnpack
     int fromMapNo;     // for MapSend, MapGroupReduce
     int toMapNo;       // for MapRecv, MapGroupReduce
-    uint64_t offset;   // for MapSend, MapRecv, RBufSend, RBufRecv
+    int offset;        // for MapSend, MapRecv, RBufSend, RBufRecv
 
     char* fromBuf;     // for SendBuf, Pack, Copy, Reduce
     char* toBuf;       // for RecvBuf, Unpack, Copy, Reduce
-    int peer_rank;     // for Send, Recv, PackAndSend, RecvAndUnpack, Reduce
+    int rank;     // for Send, Recv, PackAndSend, RecvAndUnpack, Reduce
     Laik_CopyEntry* ce; // for CopyFromBuf, CopyToBuf
 
     // points to slice given in operation of transition
