@@ -293,8 +293,8 @@ int main(int argc, char **argv)
     Laik_Data* yval = laik_new_data(space, laik_Double);
     Laik_Data* zval = laik_new_data(space, laik_Double);
 
-    Laik_AccessPhase* pImage = laik_new_accessphase(world, space2d,
-                                  laik_new_bisection_partitioner(), 0);
+    Laik_Partitioner* parter = laik_new_bisection_partitioner();
+    Laik_Partitioning* pImage = laik_new_partitioning(parter, world, space2d, 0);
 
     double *xvalues;
     double *yvalues;
@@ -304,12 +304,13 @@ int main(int argc, char **argv)
     double fov = 30, aspectratio = width / double(height); 
     double angle = tan(M_PI * 0.5 * fov / 180.); 
 
-    laik_switchto_new_phase(xval, world, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
-    laik_switchto_new_phase(yval, world, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
-    laik_switchto_new_phase(zval, world, laik_All, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    Laik_Partitioning* pValAll = laik_new_partitioning(laik_All, world, space, 0);
+    laik_switchto_partitioning(xval, pValAll, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_partitioning(yval, pValAll, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_partitioning(zval, pValAll, LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
 
     int64_t xstart, xend, ystart, yend;
-    laik_phase_myslice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
+    laik_my_slice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
 
     laik_map_def1(xval, (void**)&xvalues, 0);
     laik_map_def1(yval, (void**)&yvalues, 0);
@@ -330,32 +331,26 @@ int main(int argc, char **argv)
         } 
     } 
 
-    laik_switchto_new_phase(xval, world, laik_Master, LAIK_DF_CopyIn);
-    laik_switchto_new_phase(yval, world, laik_Master, LAIK_DF_CopyIn);
-    laik_switchto_new_phase(zval, world, laik_Master, LAIK_DF_CopyIn);
+    Laik_Partitioning* pValMaster = laik_new_partitioning(laik_Master, world, space, 0);
+    laik_switchto_partitioning(xval, pValMaster, LAIK_DF_CopyIn);
+    laik_switchto_partitioning(yval, pValMaster, LAIK_DF_CopyIn);
+    laik_switchto_partitioning(zval, pValMaster, LAIK_DF_CopyIn);
 
-    //TODO: need reduction!
-    //laik_switchto_new(image, laik_Master, LAIK_DF_CopyIn);
-    //laik_map_def1(image, (void**)&pixel, 0);
-
-
-
-    if(laik_myid(world) == 0){
+    if (laik_myid(world) == 0) {
         laik_map_def1(xval, (void**)&xvalues, 0);
         laik_map_def1(yval, (void**)&yvalues, 0);
         laik_map_def1(zval, (void**)&zvalues, 0);
-    // Save result to a PPM image (keep these flags if you compile under Windows)
-    std::ofstream ofs("./untitled.ppm", std::ios::out | std::ios::binary);
-    ofs << "P6\n" << width << " " << height << "\n255\n"; 
-    for (unsigned i = 0; i < width * height; ++i) { 
-        ofs << (unsigned char)(std::min(double(1), xvalues[i]) * 255) << 
-               (unsigned char)(std::min(double(1), yvalues[i]) * 255) << 
-               (unsigned char)(std::min(double(1), zvalues[i]) * 255); 
-    } 
-    ofs.close(); 
-    
+        // Save result to a PPM image (keep these flags if you compile under Windows)
+        std::ofstream ofs("./untitled.ppm", std::ios::out | std::ios::binary);
+        ofs << "P6\n" << width << " " << height << "\n255\n";
+        for (unsigned i = 0; i < width * height; ++i) {
+            ofs << (unsigned char)(std::min(double(1), xvalues[i]) * 255) <<
+                   (unsigned char)(std::min(double(1), yvalues[i]) * 255) <<
+                   (unsigned char)(std::min(double(1), zvalues[i]) * 255);
+        }
+        ofs.close();
     }
 
     laik_finalize(inst);
-    return 0; 
-} 
+    return 0;
+}
