@@ -1139,9 +1139,6 @@ static bool isSameReduce(Laik_BackendAction* ba, Laik_Action* a)
  */
 bool laik_aseq_combineActions(Laik_ActionSeq* as)
 {
-    int combineGroupReduce = 1;
-    int combineReduce = 1;
-
     // must not have new actions, we want to start a new build
     assert(as->newActionCount == 0);
 
@@ -1206,8 +1203,6 @@ bool laik_aseq_combineActions(Laik_ActionSeq* as)
         }
 
         case LAIK_AT_GroupReduce: {
-            if (!combineGroupReduce) break;
-
             // combine all GroupReduce actions with same
             // inputGroup, outputGroup, and redOp
             Laik_BackendAction* ba = (Laik_BackendAction*) a;
@@ -1232,8 +1227,6 @@ bool laik_aseq_combineActions(Laik_ActionSeq* as)
         }
 
         case LAIK_AT_Reduce: {
-            if (!combineReduce) break;
-
             // combine all reduce actions with same root and redOp
             Laik_BackendAction* ba = (Laik_BackendAction*) a;
             int countSum = 0;
@@ -1384,15 +1377,6 @@ bool laik_aseq_combineActions(Laik_ActionSeq* as)
 
         case LAIK_AT_GroupReduce: {
             Laik_BackendAction* ba = (Laik_BackendAction*) a;
-            if (!combineGroupReduce) {
-                // pass through
-                laik_aseq_addGroupReduce(as, 3 * a->round + 1,
-                                         ba->inputGroup, ba->outputGroup,
-                                         ba->fromBuf, ba->toBuf,
-                                         ba->count, ba->redOp);
-                break;
-            }
-
             int countSum = 0;
             int actionCount = 0;
             Laik_Action* a2 = a;
@@ -1472,14 +1456,6 @@ bool laik_aseq_combineActions(Laik_ActionSeq* as)
 
         case LAIK_AT_Reduce: {
             Laik_BackendAction* ba = (Laik_BackendAction*) a;
-            if (!combineReduce) {
-                // pass through
-                laik_aseq_addReduce(as, 3 * a->round + 1,
-                                    ba->fromBuf, ba->toBuf,
-                                    ba->count, ba->rank, ba->redOp);
-                break;
-            }
-
             int countSum = 0;
             int actionCount = 0;
             Laik_Action* a2 = a;

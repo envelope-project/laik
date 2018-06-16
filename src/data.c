@@ -1137,7 +1137,7 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
         (backend->prepare)(as);
 
     if (laik_log_begin(2)) {
-        laik_log_append("Calculated actions:");
+        laik_log_append("Calculated actions:\n");
         laik_log_ActionSeq(as, laik_log_shown(1));
         laik_log_flush(0);
     }
