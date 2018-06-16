@@ -231,12 +231,12 @@ int laik_aseq_addBufReserve(Laik_ActionSeq* as, int size, int bufID)
 {
     if (bufID < 0) {
         // generate new buf ID
-        // only return IDs > 0. ID 0 is reserved for actually allocated buffer
+        // only return IDs > 100. ID <100 are reserved for actual buffers
         bufID = as->bufReserveCount + 100;
         as->bufReserveCount++;
     }
-    else if (bufID > as->bufReserveCount + 99)
-        as->bufReserveCount = bufID - 99;
+    else
+        assert(bufID <= as->bufReserveCount + 99);
 
     // BufReserve in round 0: allocation is done before exec
     Laik_ABufReserve* a;
@@ -829,7 +829,6 @@ void laik_aseq_addSends(Laik_ActionSeq* as, int round,
 // collect buffer reservation actions and update actions referencing them
 // works in-place; BufReserve actions are marked as NOP but not removed
 // can be called ASEQ_BUFFER_MAX times, allocating a new buffer on each call
-// TODO: convert from in-place
 bool laik_aseq_allocBuffer(Laik_ActionSeq* as)
 {
     int rCount = 0, rActions = 0;
@@ -902,7 +901,6 @@ bool laik_aseq_allocBuffer(Laik_ActionSeq* as)
         return false;
     }
 
-
     char* buf = malloc(bufSize);
     assert(buf != 0);
 
@@ -916,46 +914,59 @@ bool laik_aseq_allocBuffer(Laik_ActionSeq* as)
         Laik_BackendAction* ba = (Laik_BackendAction*) a;
         switch(a->type) {
         case LAIK_AT_BufReserve:
-            a->type = LAIK_AT_Nop; // works as a->len stays!
+            // BufReserve actions processed, can be removed
             break;
         case LAIK_AT_RBufSend:
-            ba->fromBuf = buf + ba->offset;
-            a->type = LAIK_AT_BufSend;
+            // replace RBufSend with BufSend action
+            laik_aseq_addBufSend(as, a->round,
+                                 buf + ba->offset, ba->count, ba->peer_rank);
             break;
         case LAIK_AT_RBufRecv:
-            ba->toBuf = buf + ba->offset;
-            a->type = LAIK_AT_BufRecv;
+            // replace RBufRecv with BufRecv action
+            laik_aseq_addBufRecv(as, a->round,
+                                 buf + ba->offset, ba->count, ba->peer_rank);
             break;
         case LAIK_AT_PackToRBuf:
-            ba->toBuf = buf + ba->offset;
-            a->type = LAIK_AT_PackToBuf;
+            // replace PackToRBuf with PackToBuf action
+            laik_aseq_addPackToBuf(as, a->round,
+                                   ba->map, ba->slc, buf + ba->offset);
             break;
         case LAIK_AT_UnpackFromRBuf:
-            ba->fromBuf = buf + ba->offset;
-            a->type = LAIK_AT_UnpackFromBuf;
+            // replace UnpackFromRbuf to UnpackFromBuf
+            laik_aseq_addUnpackFromBuf(as, a->round,
+                                       buf + ba->offset, ba->map, ba->slc);
             break;
         case LAIK_AT_CopyFromRBuf:
-            ba->fromBuf = buf + ba->offset;
-            a->type = LAIK_AT_CopyFromBuf;
+            // replace CopyFromRBuf with CopyFromBuf
+            laik_aseq_addCopyFromBuf(as, a->round,
+                                     ba->ce, buf + ba->offset, ba->count);
             break;
         case LAIK_AT_CopyToRBuf:
-            ba->toBuf = buf + ba->offset;
-            a->type = LAIK_AT_CopyToBuf;
+            // replace CopyToRBuf with CopyToBuf
+            laik_aseq_addCopyToBuf(as, a->round,
+                                   ba->ce, buf + ba->offset, ba->count);
             break;
         case LAIK_AT_RBufReduce:
-            ba->fromBuf = buf + ba->offset;
-            ba->toBuf   = buf + ba->offset;
-            a->type = LAIK_AT_Reduce;
+            // replace RBufReduce with Reduce
+            laik_aseq_addReduce(as, a->round,
+                                buf + ba->offset, buf + ba->offset,
+                                ba->count, ba->peer_rank, ba->redOp);
             break;
         case LAIK_AT_RBufGroupReduce:
-            ba->fromBuf = buf + ba->offset;
-            ba->toBuf   = buf + ba->offset;
-            a->type = LAIK_AT_GroupReduce;
+            // replace RBufGroupReduce with GroupReduce
+            laik_aseq_addGroupReduce(as, a->round,
+                                     ba->inputGroup, ba->outputGroup,
+                                     buf + ba->offset, buf + ba->offset,
+                                     ba->count, ba->redOp);
             break;
-        default: break;
+        default:
+            // pass through
+            laik_aseq_add(a, as, -1);
+            break;
         }
     }
     assert(as->bytesUsed == ((char*)a) - ((char*)as->action));
+    laik_aseq_activateNewActions(as);
 
     as->bufSize[as->bufferCount] = bufSize;
     as->buf[as->bufferCount] = buf;
