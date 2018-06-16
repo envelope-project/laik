@@ -757,9 +757,12 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
         Laik_TransitionContext* tc = as->context[0];
         assert(tc->data == d);
         assert(tc->transition == t);
+        // provide current mappings to context
+        tc->toList = toList;
+        tc->fromList = fromList;
         // if sequence was prepared with mappings, they must be the same
-        if (tc->fromList) assert(tc->fromList == fromList);
-        if (tc->toList) assert(tc->toList == toList);
+        if (tc->prepFromList) assert(tc->prepFromList == fromList);
+        if (tc->prepToList) assert(tc->prepToList == toList);
     }
     else {
         // create the action sequence for requested transition on the fly
@@ -1133,8 +1136,14 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
 
     Laik_ActionSeq* as = createTransASeq(d, t, fromList, toList);
     const Laik_Backend* backend = d->space->inst->backend;
-    if (backend->prepare)
+    if (backend->prepare) {
         (backend->prepare)(as);
+
+        // remember mappings at prepare time
+        Laik_TransitionContext* tc = as->context[0];
+        tc->prepFromList = fromList;
+        tc->prepToList = toList;
+    }
 
     if (laik_log_begin(2)) {
         laik_log_append("Calculated actions:\n");

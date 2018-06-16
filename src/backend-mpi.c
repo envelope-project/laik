@@ -536,9 +536,26 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             laik_mpi_exec_pack(ba, ba->map);
             break;
 
+        case LAIK_AT_MapPackToBuf: {
+            assert(ba->fromMapNo < fromList->count);
+            Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
+            assert(fromMap->base != 0);
+            laik_mpi_exec_pack(ba, fromMap);
+            break;
+        }
+
         case LAIK_AT_UnpackFromBuf:
             laik_mpi_exec_unpack(ba, ba->map);
             break;
+
+        case LAIK_AT_MapUnpackFromBuf: {
+            assert(ba->toMapNo < toList->count);
+            Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
+            assert(toMap->base);
+            laik_mpi_exec_unpack(ba, toMap);
+            break;
+        }
+
 
         case LAIK_AT_MapPackAndSend: {
             assert(ba->fromMapNo < fromList->count);

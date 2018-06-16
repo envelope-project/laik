@@ -347,11 +347,13 @@ char* laik_at_str(Laik_ActionType t)
     case LAIK_AT_PackToBuf:         return "PackToBuf";
     case LAIK_AT_PackToRBuf:        return "PackToRBuf";
     case LAIK_AT_MapPackToRBuf:     return "MapPackToRBuf";
+    case LAIK_AT_MapPackToBuf:      return "MapPackToBuf";
     case LAIK_AT_MapPackAndSend:    return "MapPackAndSend";
     case LAIK_AT_PackAndSend:       return "PackAndSend";
     case LAIK_AT_UnpackFromBuf:     return "UnpackFromBuf";
     case LAIK_AT_UnpackFromRBuf:    return "UnpackFromRBuf";
     case LAIK_AT_MapUnpackFromRBuf: return "MapUnpackFromRBuf";
+    case LAIK_AT_MapUnpackFromBuf:  return "MapUnpackFromBuf";
     case LAIK_AT_RecvAndUnpack:     return "RecvAndUnpack";
     case LAIK_AT_MapRecvAndUnpack:  return "MapRecvAndUnpack";
     default: break;
@@ -575,6 +577,13 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
                         ba->fromMapNo, ba->count, ba->bufID, ba->offset);
         break;
 
+    case LAIK_AT_MapPackToBuf:
+        laik_log_append(": ");
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" mapNo %d, count %d ==> buf %p",
+                        ba->fromMapNo, ba->count, (void*) ba->toBuf);
+        break;
+
     case LAIK_AT_MapPackAndSend:
         laik_log_append(": ");
         laik_log_Slice(ba->dims, ba->slc);
@@ -603,6 +612,12 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
 
     case LAIK_AT_MapUnpackFromRBuf:
         laik_log_append(": buf %d, off %lld ==> ", ba->bufID, ba->offset);
+        laik_log_Slice(ba->dims, ba->slc);
+        laik_log_append(" mapNo %d, count %d", ba->toMapNo, ba->count);
+        break;
+
+    case LAIK_AT_MapUnpackFromBuf:
+        laik_log_append(": buf %p ==> ", (void*) ba->fromBuf);
         laik_log_Slice(ba->dims, ba->slc);
         laik_log_append(" mapNo %d, count %d", ba->toMapNo, ba->count);
         break;
