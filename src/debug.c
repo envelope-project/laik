@@ -359,17 +359,17 @@ char* laik_at_str(Laik_ActionType t)
     return "???";
 }
 
-void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
+void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
 {
-    laik_log_append("    %s (R %d)", laik_at_str(a->type), a->round);
+    Laik_TransitionContext* tc = as->context[a->tid];
+    laik_log_append("  %4d %s (R %d, tid %d)",
+                    ((char*)a) - ((char*)(as->action)),
+                    laik_at_str(a->type), a->round, a->tid);
 
     Laik_BackendAction* ba = (Laik_BackendAction*) a;
     switch(a->type) {
     case LAIK_AT_Nop:
-        break;
-
     case LAIK_AT_TExec:
-        laik_log_append(": tid %d", a->tid);
         break;
 
     case LAIK_AT_BufReserve: {
@@ -630,11 +630,13 @@ void laik_log_Action(Laik_Action* a, Laik_TransitionContext* tc)
 void laik_log_ActionSeq(Laik_ActionSeq *as, bool showDetails)
 {
     laik_log_append("action seq for %d transition(s), backend cleanup: %s\n"
-                    "  %d rounds, %d buffers (%.3f MB), %d actions (%d B)\n",
+                    "  %d rounds, %d buffers (%.3f MB),"
+                    " %d actions (%d B), %d ranges (%d B)\n",
                     as->contextCount, as->backend ? as->backend->name : "none",
                     as->roundCount,
                     as->bufferCount, 0.000001 * laik_aseq_bufsize(as),
-                    as->actionCount, as->bytesUsed);
+                    as->actionCount, as->bytesUsed,
+                    as->ceRanges, sizeof(Laik_CopyEntry) * as->ceRanges);
 
     Laik_TransitionContext* tc = 0;
     for(int i = 0; i < as->contextCount; i++) {
@@ -653,7 +655,7 @@ void laik_log_ActionSeq(Laik_ActionSeq *as, bool showDetails)
 
     Laik_Action* a = as->action;
     for(int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
-        laik_log_Action(a, tc);
+        laik_log_Action(a, as);
         laik_log_append("\n");
     }
     assert(as->bytesUsed == ((char*)a) - ((char*)as->action));

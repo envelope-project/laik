@@ -460,7 +460,7 @@ void laik_mpi_exec(Laik_ActionSeq* as)
     for(int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
         Laik_BackendAction* ba = (Laik_BackendAction*) a;
         if (laik_log_begin(1)) {
-            laik_log_Action(a, tc);
+            laik_log_Action(a, as);
             laik_log_flush(0);
         }
 

@@ -84,17 +84,17 @@ typedef struct {
 // BufSend action
 typedef struct {
     Laik_Action h;
-    char* buf;
     int count;
     int to_rank;
+    char* buf;
 } Laik_A_BufSend;
 
 // BufRecv action
 typedef struct {
     Laik_Action h;
-    char* buf;
     int count;
     int from_rank;
+    char* buf;
 } Laik_A_BufRecv;
 
 
@@ -192,6 +192,7 @@ struct _Laik_ActionSeq {
 #define ASEQ_COPYENTRY_MAX 5
     Laik_CopyEntry* ce[ASEQ_COPYENTRY_MAX];
     int ceCount;
+    int ceRanges;
 
     // action sequence to trigger on execution
     int actionCount, bytesUsed;

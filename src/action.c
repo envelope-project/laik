@@ -42,6 +42,7 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
     for(int i = 0; i < ASEQ_COPYENTRY_MAX; i++)
         as->ce[i] = 0;
     as->ceCount = 0;
+    as->ceRanges = 0;
 
     as->actionCount = 0;
     as->bytesUsed = 0;
@@ -998,7 +999,6 @@ bool laik_aseq_allocBuffer(Laik_ActionSeq* as)
         }
     }
     assert(as->bytesUsed == ((char*)a) - ((char*)as->action));
-    laik_aseq_activateNewActions(as);
 
     as->bufSize[as->bufferCount] = bufSize;
     as->buf[as->bufferCount] = buf;
@@ -1009,9 +1009,9 @@ bool laik_aseq_allocBuffer(Laik_ActionSeq* as)
                         (void*) as->buf[as->bufferCount]);
         for(int i = 0; i < as->bufReserveCount; i++) {
             if (resAction[i] == 0) continue;
-            laik_log_append("\n    RBuf %d (len %d) ==> off %llu at %p",
+            laik_log_append("\n    RBuf %d (len %d) ==> off %d at %p",
                             i + 100, resAction[i]->size,
-                            (long long unsigned) resAction[i]->offset,
+                            resAction[i]->offset,
                             (void*) (buf + resAction[i]->offset));
         }
         laik_log_flush(0);
@@ -1019,6 +1019,7 @@ bool laik_aseq_allocBuffer(Laik_ActionSeq* as)
 
     assert(rCount == as->bufReserveCount);
     free(resAction);
+    laik_aseq_activateNewActions(as);
 
     // start again with bufID 100 for next reservations
     as->bufReserveCount = 0;
@@ -1275,6 +1276,7 @@ bool laik_aseq_combineActions(Laik_ActionSeq* as)
     assert(as->ce[as->ceCount] == 0);
     as->ce[as->ceCount] = ce;
     as->ceCount++;
+    as->ceRanges += copyRanges;
 
     int bufID = laik_aseq_addBufReserve(as, bufSize * elemsize, -1);
 
