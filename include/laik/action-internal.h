@@ -38,20 +38,33 @@
 // funactions are defined. They may be useful by backends for optimizing
 // a sequence.
 
-// Backend-independent Actions
-// TODO: split up in seperate structs for minimal memory consumption
-
-// all actions must start with this header
+// all actions must start with this 4-byte header
 struct _Laik_Action {
     unsigned char type;
     unsigned char len;
     unsigned char round;   // actions are order by rounds
     unsigned char tid  :7; // ID of transition context for this action
-    unsigned char mark :1; // boolean flag used in some transformation
+    unsigned char mark :1; // boolean flag used in some transformations
 };
 
-// for traversal of action sequence
-#define nextAction(a) (Laik_Action*) (((char*)a) + a->len)
+// for iterating action sequences
+#define nextAction(a) ((Laik_Action*) (((char*)a) + a->len))
+
+
+// backend-independent action structs:
+// only requried if further parameters need to be stored, ie. not for
+//   Nop, Halt, TExec, ...
+
+typedef struct {
+    Laik_Action h;
+    int size;  // in bytes
+    int bufID;
+    int offset;
+} Laik_ABufReserve;
+
+
+
+
 
 // helper struct for CopyFromBuf / CopyToBuf
 typedef struct _Laik_CopyEntry {
@@ -167,19 +180,6 @@ struct _Laik_ActionSeq {
 };
 
 
-// action structs
-
-typedef struct {
-    Laik_Action h;
-} Laik_ATExec;
-
-typedef struct {
-    Laik_Action h;
-    int size;  // in bytes
-    int bufID;
-    int offset;
-} Laik_ABufReserve;
-
 
 // helpers for building new action sequences. New actions are first
 // stored in temporary space, and only becoming active when calling
@@ -204,35 +204,14 @@ void laik_aseq_freeTempSpace(Laik_ActionSeq* as);
 Laik_BackendAction* laik_aseq_addBAction(Laik_ActionSeq* as, int round);
 
 
-// initialize transition context
-void laik_aseq_initTContext(Laik_TransitionContext* tc,
-                            Laik_Data* data, Laik_Transition* transition,
-                            Laik_MappingList* fromList,
-                            Laik_MappingList* toList);
-
 // returns the transaction ID
 int laik_aseq_addTContext(Laik_ActionSeq* as,
                           Laik_Data* d, Laik_Transition* transition,
                           Laik_MappingList* fromList,
                           Laik_MappingList* toList);
 
-// initialize actions
-void laik_aseq_initReduce(Laik_BackendAction* a,
-                          char* fromBuf, char* toBuf, int count,
-                          int rootTask, Laik_ReductionOperation redOp);
-
-void laik_aseq_initGroupReduce(Laik_BackendAction* a,
-                               int inputGroup, int outputGroup,
-                               char* fromBuf, char* toBuf, int count,
-                               Laik_ReductionOperation redOp);
-
-void laik_aseq_initPackAndSend(Laik_BackendAction* a,
-                               Laik_Mapping* fromMap, int dims, Laik_Slice* slc,
-                               int to);
-
-void laik_aseq_initRecvAndUnpack(Laik_BackendAction* a,
-                                 Laik_Mapping* toMap, int dims, Laik_Slice* slc,
-                                 int from);
+// append action to stop execution (even if there are more in the sequence)
+void laik_aseq_addHalt(Laik_ActionSeq* as);
 
 // append action to do the transition specified by the transition context ID
 void laik_aseq_addTExec(Laik_ActionSeq* as, int tid);

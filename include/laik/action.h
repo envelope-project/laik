@@ -52,7 +52,10 @@
 typedef enum _Laik_ActionType {
     LAIK_AT_Invalid = 0,
 
-    // NOP action.
+    // HALT action: stop execution
+    LAIK_At_Halt,
+
+    // NOP action: to allow to "remove" actions by patching
     LAIK_AT_Nop,
 
     // high-level
