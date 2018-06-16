@@ -1182,11 +1182,11 @@ void laik_exec_actions(Laik_ActionSeq* as)
 
     Laik_MappingList* toList = prepareMaps(d, t->toPartitioning, 0);
 
-    if (tc->fromList && (tc->fromList != d->activeMappings)) {
+    if (tc->prepFromList && (tc->prepFromList != d->activeMappings)) {
         laik_panic("laik_exec_actions: start mappings mismatch!");
         exit(1);
     }
-    if (tc->toList && (tc->toList != toList)) {
+    if (tc->prepToList && (tc->prepToList != toList)) {
         laik_panic("laik_exec_actions: end mappings mismatch!");
         exit(1);
     }
