@@ -11,14 +11,14 @@ LDFLAGS=$(OPT)
 IFLAGS=-I$(SDIR)include -I$(SDIR)src
 LDLIBS=-ldl
 
-SRCS = $(wildcard $(SDIR)src/*.c) revinfo.c
+SRCS = $(wildcard $(SDIR)src/*.c)
 ifdef USE_TCP
 SRCS += $(wildcard $(SDIR)src/backends/tcp/*.c)
 IFLAGS += $(TCP_INC)
 LDLIBS += $(TCP_LIBS)
 endif
 HEADERS = $(wildcard $(SDIR)include/*.h $(SDIR)include/laik/*.h)
-OBJS = $(SRCS:$(SDIR)%.c=%.o)
+OBJS = $(SRCS:$(SDIR)%.c=%.o) revinfo.o
 
 CFLAGS=$(OPT) $(WARN) $(DEFS) $(IFLAGS) -std=gnu99 -fPIC
 
