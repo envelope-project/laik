@@ -209,24 +209,37 @@ bool laik_is_reduction(Laik_ReductionOperation redOp)
 // do we need to copy values in?
 bool laik_do_copyin(Laik_DataFlow flow)
 {
-    if (flow & LAIK_DF_CopyIn)
+    switch(flow) {
+    case LAIK_DF_CopyIn:
+    case LAIK_DF_CopyInOut:
         return true;
+    default: break;
+    }
     return false;
 }
 
 // do we need to copy values out?
 bool laik_do_copyout(Laik_DataFlow flow)
 {
-    if (flow & LAIK_DF_CopyOut)
+    switch(flow) {
+    case LAIK_DF_CopyOut:
+    case LAIK_DF_CopyInOut:
+    case LAIK_DF_InitInCopyOut:
         return true;
+    default: break;
+    }
     return false;
 }
 
 // do we need to init values?
 bool laik_do_init(Laik_DataFlow flow)
 {
-    if (flow & LAIK_DF_Init)
+    switch(flow) {
+    case LAIK_DF_InitInCopyOut:
         return true;
+    default:
+        break;
+    }
     return false;
 }
 

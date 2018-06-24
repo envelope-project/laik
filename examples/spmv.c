@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
 
     // other way to push results to master: use sum reduction
     laik_switchto_new_phase(resD, world, laik_All,
-                            LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
+                            LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
     laik_map_def1(resD, (void**) &res, &count);
     laik_phase_myslice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {

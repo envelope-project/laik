@@ -67,7 +67,7 @@ simple LAIK data container.
         laik_fill_double(sum, mysum);
         // we specify that all values from writers should be added using a
         // sum reduction, with the result available at master (process 0)
-        laik_switchto_new(sum, laik_Master, LAIK_DF_CopyIn | LAIK_DF_Sum);
+        laik_switchto_new(sum, laik_Master, LAIK_DF_CopyIn, LAIK_RO_Sum);
 
         if (laik_myid(world) == 0) {
             laik_map_def1(sum, (void**) &base, &count);

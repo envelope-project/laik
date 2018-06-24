@@ -236,7 +236,7 @@ int main(int argc, char* argv[])
             res_iters++;
 
             // calculate global residuum
-            laik_switchto_flow(sumD, LAIK_DF_ReduceOut, LAIK_RO_Sum);
+            laik_switchto_flow(sumD, LAIK_DF_CopyOut, LAIK_RO_Sum);
             laik_map_def1(sumD, (void**) &sumPtr, 0);
             *sumPtr = res;
             laik_switchto_flow(sumD, LAIK_DF_CopyIn, LAIK_RO_None);

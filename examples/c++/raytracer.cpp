@@ -52,13 +52,6 @@ typedef struct _programops{
     int max_depth;
 }programops_t;
 
-// C++ additions to LAIK header
-inline Laik_DataFlow operator|(Laik_DataFlow a, Laik_DataFlow b)
-{
-    return static_cast<Laik_DataFlow>(static_cast<int>(a) | static_cast<int>(b));
-}
-
-
 static int  MAX_RAY_DEPTH = 10;
 
 static inline  
@@ -305,9 +298,9 @@ int main(int argc, char **argv)
     double angle = tan(M_PI * 0.5 * fov / 180.); 
 
     Laik_Partitioning* pValAll = laik_new_partitioning(laik_All, world, space, 0);
-    laik_switchto_partitioning(xval, pValAll, LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
-    laik_switchto_partitioning(yval, pValAll, LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
-    laik_switchto_partitioning(zval, pValAll, LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
+    laik_switchto_partitioning(xval, pValAll, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+    laik_switchto_partitioning(yval, pValAll, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+    laik_switchto_partitioning(zval, pValAll, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
 
     int64_t xstart, xend, ystart, yend;
     laik_my_slice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);

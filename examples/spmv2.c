@@ -283,7 +283,7 @@ int main(int argc, char* argv[])
         // only done by tasks which still take part in SPMV
         assert(laik_myid(laik_data_get_group(sumD)) >= 0);
 
-        laik_switchto_flow(sumD, LAIK_DF_ReduceOut, LAIK_RO_Sum);
+        laik_switchto_flow(sumD, LAIK_DF_CopyOut, LAIK_RO_Sum);
         laik_map_def1(sumD, (void**) &sumPtr, 0);
         *sumPtr = sum;
         laik_switchto_flow(sumD, LAIK_DF_CopyIn, LAIK_RO_None);
@@ -303,8 +303,7 @@ int main(int argc, char* argv[])
         if (useReduction) {
             // varian 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
-            laik_switchto_phase(inpD, allVec,
-                          LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
+            laik_switchto_phase(inpD, allVec, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
             laik_map_def1(inpD, (void**) &inp, 0);
 
             // loop over all local slices of result vector

@@ -145,7 +145,7 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto_phase(dWrite, pWrite,
-                            LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
+                            LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         dstFrom = laik_local2global_1d(dWrite, 0);
 
@@ -225,7 +225,7 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto_phase(dWrite, pWrite,
-                      LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
+                      LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
 
         if (doPrint) {

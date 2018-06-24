@@ -56,15 +56,14 @@ typedef struct _Laik_Partitioner Laik_Partitioner;
  *   ReduceOut
  **/
 typedef enum _Laik_DataFlow {
-    LAIK_DF_None       = 0,
+    LAIK_DF_None = 0,
 
-    LAIK_DF_CopyIn     = 1,     // preserve values of previous phase
-    LAIK_DF_CopyOut    = 2,     // propagate values to next phase
-    LAIK_DF_Init       = 4,     // Initialize, needs reduction operation
-    LAIK_DF_ReduceOut  = 8,     // output aggregated, needs reduction operation
+    LAIK_DF_CopyIn,          // preserve values of previous phase
+    LAIK_DF_CopyOut,         // propagate values to next phase
+    LAIK_DF_CopyInOut,       // preserve values from previous phase and propagate to next
+    LAIK_DF_InitInCopyOut, // Initialize and aggregate, needs reduction operation
 
-    LAIK_DF_Sharable   = 16,    // tasks can share memory
-    LAIK_DF_Previous   = 32,    // derive from previously set flow
+    LAIK_DF_Previous,        // derive from previously set flow
 
 } Laik_DataFlow;
 

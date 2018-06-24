@@ -180,7 +180,7 @@ double data_check_sum(Laik_Data* d, Laik_AccessPhase *p, Laik_Group* world)
 
     Laik_Data* laik_sum = laik_new_data_1d(laik_inst(world), laik_Double, 1);
     laik_switchto_new_phase(laik_sum, world, laik_All,
-                            LAIK_DF_ReduceOut, LAIK_RO_Sum);
+                            LAIK_DF_CopyOut, LAIK_RO_Sum);
     laik_map_def1(laik_sum, (void**) &base, &count);
     *base=sum;
     laik_switchto_new_phase(laik_sum, world, laik_All,
@@ -312,7 +312,7 @@ int main(int argc, char* argv[])
     laik_switchto_phase(element, pElements, LAIK_DF_CopyIn, LAIK_RO_None);
 
     // distribution of the nodes
-    laik_switchto_phase(node, pNodes, LAIK_DF_ReduceOut, LAIK_RO_Sum);
+    laik_switchto_phase(node, pNodes, LAIK_DF_CopyOut, LAIK_RO_Sum);
     //laik_switchto(node, pNodes, LAIK_DF_CopyOut);
     int nSlicesNodes = laik_phase_my_slicecount(pNodes);
     for (int n = 0; n < nSlicesNodes; ++n)
@@ -386,7 +386,7 @@ int main(int argc, char* argv[])
         // update the nodes using elements
         // go through all the elements and refere
         // to their neighbouring nodes and update them
-        laik_switchto_phase(node, pNodes, LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
+        laik_switchto_phase(node, pNodes, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
         for(int m = 0; m < nMapsElements; m++) {
             laik_map_def(element, m, (void **)&baseE, &countE);
 

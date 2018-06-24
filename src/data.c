@@ -1233,7 +1233,7 @@ void laik_switchto_partitioning(Laik_Data* d,
 
     if (toFlow == LAIK_DF_Previous) {
         if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeRedOp)) {
-            toFlow = LAIK_DF_CopyIn | LAIK_DF_CopyOut;
+            toFlow = LAIK_DF_CopyInOut;
             toRedOp = LAIK_RO_None; // reduction already done
         }
         else {

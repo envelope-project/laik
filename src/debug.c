@@ -122,29 +122,14 @@ void laik_log_Reduction(Laik_ReductionOperation op)
 
 void laik_log_DataFlow(Laik_DataFlow flow)
 {
-    bool out = false;
-
-    if (flow & LAIK_DF_CopyIn) {
-        laik_log_append("copyin");
-        out = true;
+    switch(flow) {
+    case LAIK_DF_None:            laik_log_append("-"); break;
+    case LAIK_DF_CopyIn:          laik_log_append("in"); break;
+    case LAIK_DF_CopyOut:         laik_log_append("out"); break;
+    case LAIK_DF_CopyInOut:       laik_log_append("in-out"); break;
+    case LAIK_DF_InitInCopyOut: laik_log_append("init-reduce"); break;
+    default: assert(0);
     }
-    if (flow & LAIK_DF_CopyOut) {
-        if (out) laik_log_append("|");
-        laik_log_append("copyout");
-        out = true;
-    }
-    if (flow & LAIK_DF_Init) {
-        if (out) laik_log_append("|");
-        laik_log_append("init");
-        out = true;
-    }
-    if (flow & LAIK_DF_ReduceOut) {
-        if (out) laik_log_append("|");
-        laik_log_append("reduceout");
-        out = true;
-    }
-    if (!out)
-        laik_log_append("-");
 }
 
 void laik_log_TransitionGroup(Laik_Transition* t, int group)
