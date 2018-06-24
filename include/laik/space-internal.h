@@ -220,6 +220,7 @@ struct _Laik_Transition {
     Laik_Group* group;
     Laik_Partitioning *fromPartitioning, *toPartitioning;
     Laik_DataFlow fromFlow, toFlow;
+    Laik_ReductionOperation fromRedOp, toRedOp;
 
     int dims;
     int actionCount;
@@ -253,8 +254,10 @@ struct _Laik_Transition {
 
 // same as laik_calc_transition without logging
 Laik_Transition* do_calc_transition(Laik_Space* space,
-                                    Laik_Partitioning* fromP, Laik_DataFlow fromFlow,
-                                    Laik_Partitioning* toP, Laik_DataFlow toFlow);
+                                    Laik_Partitioning* fromP,
+                                    Laik_DataFlow fromFlow, Laik_ReductionOperation fromRedOp,
+                                    Laik_Partitioning* toP,
+                                    Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
 
 // return size of task group with ID <subgroup> in transition <t>
 int laik_trans_groupCount(Laik_Transition* t, int subgroup);

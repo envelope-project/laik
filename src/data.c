@@ -1207,7 +1207,8 @@ void laik_exec_actions(Laik_ActionSeq* as)
 // switch to new partitioning borders
 // new flow is derived from previous flow when set to LAIK_DF_Previous
 void laik_switchto_partitioning(Laik_Data* d,
-                                Laik_Partitioning* toP, Laik_DataFlow toFlow)
+                                Laik_Partitioning* toP, Laik_DataFlow toFlow,
+                                Laik_ReductionOperation toRedOp)
 {
     // calculate actions to be done for switching
 
@@ -1231,29 +1232,34 @@ void laik_switchto_partitioning(Laik_Data* d,
     }
 
     if (toFlow == LAIK_DF_Previous) {
-        if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeFlow))
+        if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeRedOp)) {
             toFlow = LAIK_DF_CopyIn | LAIK_DF_CopyOut;
-        else
+            toRedOp = LAIK_RO_None; // reduction already done
+        }
+        else {
             toFlow = LAIK_DF_None;
+            toRedOp = LAIK_RO_None;
+        }
     }
 
     Laik_MappingList* toList = prepareMaps(d, toP, 0);
     Laik_Transition* t = do_calc_transition(d->space,
                                             d->activePartitioning,
-                                            d->activeFlow,
-                                            toP, toFlow);
+                                            d->activeFlow, d->activeRedOp,
+                                            toP, toFlow, toRedOp);
 
     doTransition(d, t, 0, d->activeMappings, toList);
 
     // set new mapping/partitioning active
     d->activePartitioning = toP;
     d->activeFlow = toFlow;
+    d->activeRedOp = toRedOp;
     d->activeMappings = toList;
 }
 
 // switch from active to another partitioning
-void laik_switchto_phase(Laik_Data* d,
-                         Laik_AccessPhase* toAP, Laik_DataFlow toFlow)
+void laik_switchto_phase(Laik_Data* d, Laik_AccessPhase* toAP,
+                         Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp)
 {
     if (d->space->inst->profiling->do_profiling)
         d->space->inst->profiling->timer_total = laik_wtime();
@@ -1278,16 +1284,20 @@ void laik_switchto_phase(Laik_Data* d,
 
     Laik_MappingList* toList = prepareMaps(d, toP, 0);
     Laik_Transition* t = do_calc_transition(d->space,
-                                            fromP, d->activeFlow,
-                                            toP, toFlow);
+                                            fromP, d->activeFlow, d->activeRedOp,
+                                            toP, toFlow, toRedOp);
 
     if (laik_log_begin(1)) {
         laik_log_append("switch access phase for data '%s':\n"
                         "  %s/",
                         d->name, fromAP ? fromAP->name : "(none)");
         laik_log_DataFlow(d->activeFlow);
+        laik_log_append("/");
+        laik_log_Reduction(d->activeRedOp);
         laik_log_append(" => %s/", toAP ? toAP->name : "(none)");
         laik_log_DataFlow(toFlow);
+        laik_log_append("/");
+        laik_log_Reduction(toRedOp);
         laik_log_append(":\n    ");
         laik_log_Transition(t, true);
         laik_log_flush(0);
@@ -1312,6 +1322,7 @@ void laik_switchto_phase(Laik_Data* d,
     d->activeAccessPhase = toAP;
     d->activePartitioning = toP;
     d->activeFlow = toFlow;
+    d->activeRedOp = toRedOp;
     d->activeMappings = toList;
     if (toAP)
         laik_addDataForAccessPhase(toAP, d);
@@ -1322,13 +1333,14 @@ void laik_switchto_phase(Laik_Data* d,
 }
 
 // switch to another data flow, keep partitioning
-void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow)
+void laik_switchto_flow(Laik_Data* d,
+                        Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp)
 {
     if (!d->activePartitioning) {
         // makes no sense without partitioning
         laik_panic("laik_switch_flow without active partitioning!");
     }
-    laik_switchto_partitioning(d, d->activePartitioning, toFlow);
+    laik_switchto_partitioning(d, d->activePartitioning, toFlow, toRedOp);
 }
 
 
@@ -1341,7 +1353,8 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n)
 
 Laik_AccessPhase* laik_switchto_new_phase(Laik_Data* d, Laik_Group* g,
                                           Laik_Partitioner* pr,
-                                          Laik_DataFlow flow)
+                                          Laik_DataFlow flow,
+                                          Laik_ReductionOperation redOp)
 {
     if (laik_myid(g) < 0) return 0;
 
@@ -1351,7 +1364,7 @@ Laik_AccessPhase* laik_switchto_new_phase(Laik_Data* d, Laik_Group* g,
     laik_log(1, "switch data '%s' to new access phase '%s'",
              d->name, ap->name);
 
-    laik_switchto_phase(d, ap, flow);
+    laik_switchto_phase(d, ap, flow, redOp);
     return ap;
 }
 
@@ -1366,7 +1379,7 @@ void laik_migrate_data(Laik_Data* d, Laik_Group* g)
              d->name, g->gid, g->size, g->myid);
 
     // switch to invalid partitioning
-    laik_switchto_phase(d, 0, LAIK_DF_None);
+    laik_switchto_phase(d, 0, LAIK_DF_None, LAIK_RO_None);
 }
 
 void laik_fill_double(Laik_Data* d, double v)

@@ -133,14 +133,15 @@ void laik_exec_actions(Laik_ActionSeq* as);
 
 // switch to new partitioning (new flow is derived from previous flow)
 void laik_switchto_partitioning(Laik_Data* d,
-                                Laik_Partitioning* toP, Laik_DataFlow toFlow);
+                                Laik_Partitioning* toP,
+                                Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
 
 // switch from active to another access phase
 void laik_switchto_phase(Laik_Data* d, Laik_AccessPhase* toAp,
-                         Laik_DataFlow toFlow);
+                         Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
 
 // switch to use another data flow, keep access phase/partitioning
-void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow);
+void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
 
 // migrate data container to use another group
 // (only possible if data does not have to be preserved)
@@ -155,7 +156,8 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 // switch from active to a newly created access phase using a given
 // partitioner algorithm, and return it
 Laik_AccessPhase* laik_switchto_new_phase(Laik_Data*, Laik_Group* g,
-                                    Laik_Partitioner* pr, Laik_DataFlow flow);
+                                          Laik_Partitioner* pr,
+                                          Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
 void laik_fill_double(Laik_Data* data, double v);
 

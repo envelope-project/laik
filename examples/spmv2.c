@@ -213,14 +213,14 @@ int main(int argc, char* argv[])
     // for global normalization, to broadcast a vector sum to all
     Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new_phase(sumD, world, laik_All, LAIK_DF_None);
+    laik_switchto_new_phase(sumD, world, laik_All, LAIK_DF_None, LAIK_RO_None);
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner(0, 1, getEW, 0, m);
     laik_set_index_weight(pr, getEW, m);
     Laik_AccessPhase* p = laik_new_accessphase(world, s, pr, 0);
     // nothing to preserve between iterations (assume at least one iter)
-    laik_switchto_phase(resD, p, LAIK_DF_None);
+    laik_switchto_phase(resD, p, LAIK_DF_None, LAIK_RO_None);
 
     // partitionings for all task taking part in calculation
     Laik_AccessPhase* allVec = laik_new_accessphase(world, s, laik_All, 0);
@@ -230,7 +230,7 @@ int main(int argc, char* argv[])
     int64_t fromRow, toRow;
 
     // initialize input vector at master, broadcast to all
-    laik_switchto_new_phase(inpD, world, laik_Master, LAIK_DF_CopyOut);
+    laik_switchto_new_phase(inpD, world, laik_Master, LAIK_DF_CopyOut, LAIK_RO_None);
     laik_map_def1(inpD, (void**) &inp, &icount);
     for(i = 0; i < icount; i++) inp[i] = 1.0;
 
@@ -246,10 +246,10 @@ int main(int argc, char* argv[])
 
         // flow for result: only at last iteration, copy out
         if (iter + 1 == maxiter)
-            laik_switchto_phase(resD, p, LAIK_DF_CopyOut);
+            laik_switchto_phase(resD, p, LAIK_DF_CopyOut, LAIK_RO_None);
 
         // access to complete input vector (local indexing = global indexing)
-        laik_switchto_phase(inpD, allVec, LAIK_DF_CopyIn);
+        laik_switchto_phase(inpD, allVec, LAIK_DF_CopyIn, LAIK_RO_None);
         laik_map_def1(inpD, (void**) &inp, 0);
 
         // SpMV operation, for my range of rows
@@ -283,10 +283,10 @@ int main(int argc, char* argv[])
         // only done by tasks which still take part in SPMV
         assert(laik_myid(laik_data_get_group(sumD)) >= 0);
 
-        laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+        laik_switchto_flow(sumD, LAIK_DF_ReduceOut, LAIK_RO_Sum);
         laik_map_def1(sumD, (void**) &sumPtr, 0);
         *sumPtr = sum;
-        laik_switchto_flow(sumD, LAIK_DF_CopyIn);
+        laik_switchto_flow(sumD, LAIK_DF_CopyIn, LAIK_RO_None);
         laik_map_def1(sumD, (void**) &sumPtr, 0);
         sum = *sumPtr;
 
@@ -304,7 +304,7 @@ int main(int argc, char* argv[])
             // varian 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
             laik_switchto_phase(inpD, allVec,
-                          LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                          LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
             laik_map_def1(inpD, (void**) &inp, 0);
 
             // loop over all local slices of result vector
@@ -317,7 +317,7 @@ int main(int argc, char* argv[])
         }
         else {
             // variant 2: broadcast written input values directly
-            laik_switchto_phase(inpD, p, LAIK_DF_CopyOut);
+            laik_switchto_phase(inpD, p, LAIK_DF_CopyOut, LAIK_RO_None);
             // loop over all local slices of result and input vector
             for(int sNo = 0; laik_phase_my_slice(p, sNo) != 0; sNo++) {
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
@@ -356,10 +356,10 @@ int main(int argc, char* argv[])
 
     // push result to master
     laik_switchto_new_phase(inpD, laik_data_get_group(inpD),
-                            laik_Master, LAIK_DF_CopyIn);
+                            laik_Master, LAIK_DF_CopyIn, LAIK_RO_None);
     //if (laik_myid(laik_data_get_group(resD)) >= 0)
         laik_switchto_new_phase(resD, laik_data_get_group(resD),
-                                laik_Master, LAIK_DF_CopyIn);
+                                laik_Master, LAIK_DF_CopyIn, LAIK_RO_None);
     if (laik_myid(laik_data_get_group(inpD)) == 0) {
         double sum = 0.0;
         laik_map_def1(resD, (void**) &res, &rcount);

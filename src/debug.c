@@ -109,7 +109,7 @@ void laik_log_Slice(int dims, Laik_Slice* slc)
 void laik_log_Reduction(Laik_ReductionOperation op)
 {
     switch(op) {
-    case LAIK_RO_None: laik_log_append("none"); break;
+    case LAIK_RO_None: laik_log_append("-"); break;
     case LAIK_RO_Sum:  laik_log_append("sum"); break;
     case LAIK_RO_Prod: laik_log_append("prod"); break;
     case LAIK_RO_Min:  laik_log_append("min"); break;
@@ -143,11 +143,6 @@ void laik_log_DataFlow(Laik_DataFlow flow)
         laik_log_append("reduceout");
         out = true;
     }
-    if (flow & LAIK_DF_Sum) {
-        if (out) laik_log_append("|");
-        laik_log_append("sum");
-        out = true;
-    }
     if (!out)
         laik_log_append("-");
 }
@@ -177,11 +172,15 @@ void laik_log_Transition(Laik_Transition* t, bool showActions)
     else
         laik_log_append("(-/");
     laik_log_DataFlow(t->fromFlow);
+    laik_log_append("/");
+    laik_log_Reduction(t->fromRedOp);
     if (t->toPartitioning)
         laik_log_append(" => '%s'/", t->toPartitioning->name);
     else
         laik_log_append(" => -/");
     laik_log_DataFlow(t->toFlow);
+    laik_log_append("/");
+    laik_log_Reduction(t->toRedOp);
     if (!showActions) {
         laik_log_append(")");
         return;

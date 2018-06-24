@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
     Laik_Partitioner* pr = laik_new_block_partitioner1();
     laik_set_index_weight(pr, getEW, m);
     Laik_AccessPhase* p = laik_new_accessphase(world, s, pr, 0);
-    laik_switchto_phase(resD, p, LAIK_DF_CopyOut);
+    laik_switchto_phase(resD, p, LAIK_DF_CopyOut, LAIK_RO_None);
 
     double* res;
     uint64_t count;
@@ -110,7 +110,7 @@ int main(int argc, char* argv[])
         laik_set_iteration(inst, r-fromRow);
     }
     // push result to master
-    laik_switchto_new_phase(resD, world, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(resD, world, laik_Master, LAIK_DF_CopyIn, LAIK_RO_None);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;
@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
 
     // other way to push results to master: use sum reduction
     laik_switchto_new_phase(resD, world, laik_All,
-                            LAIK_DF_Init | LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                            LAIK_DF_Init | LAIK_DF_ReduceOut, LAIK_RO_Sum);
     laik_map_def1(resD, (void**) &res, &count);
     laik_phase_myslice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
@@ -134,7 +134,7 @@ int main(int argc, char* argv[])
             res[r] += m->val[o] * v[m->col[o]];
         laik_set_iteration(inst, r-fromRow);
     }
-    laik_switchto_new_phase(resD, world, laik_Master, LAIK_DF_CopyIn);
+    laik_switchto_new_phase(resD, world, laik_Master, LAIK_DF_CopyIn, LAIK_RO_None);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;

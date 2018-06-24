@@ -90,14 +90,14 @@ int main(int argc, char* argv[])
     Laik_Partitioning* sumP = laik_new_partitioning(laik_All, world, sp1, 0);
     Laik_Data* sumD = laik_new_data(sp1, laik_Double);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_partitioning(sumD, sumP, LAIK_DF_None);
+    laik_switchto_partitioning(sumD, sumP, LAIK_DF_None, LAIK_RO_None);
 
     // start with writing (= initialization) data1
     Laik_Data* dWrite = data1;
     Laik_Data* dRead = data2;
 
     // distributed initialization
-    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
+    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
     laik_my_slice_1d(pWrite, 0, &gx1, &gx2);
 
     // arbitrary non-zero values based on global indexes to detect bugs
@@ -131,8 +131,8 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn);
-        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut);
+        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
         laik_map_def1(dRead,  (void**) &baseR, &countR);
         laik_map_def1(dWrite, (void**) &baseW, &countW);
 
@@ -175,10 +175,10 @@ int main(int argc, char* argv[])
             res_iters++;
 
             // calculate global residuum
-            laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+            laik_switchto_flow(sumD, LAIK_DF_ReduceOut, LAIK_RO_Sum);
             laik_map_def1(sumD, (void**) &sumPtr, 0);
             *sumPtr = res;
-            laik_switchto_flow(sumD, LAIK_DF_CopyIn);
+            laik_switchto_flow(sumD, LAIK_DF_CopyIn, LAIK_RO_None);
             laik_map_def1(sumD, (void**) &sumPtr, 0);
             res = *sumPtr;
 
@@ -222,8 +222,8 @@ int main(int argc, char* argv[])
             pWriteNew = laik_new_partitioning(prWrite, world, space, 0);
             pReadNew  = laik_new_partitioning(prRead, world, space, pWriteNew);
             laik_switchto_partitioning(dWrite, pWriteNew,
-                                       LAIK_DF_CopyIn | LAIK_DF_CopyOut);
-            laik_switchto_partitioning(dRead, pReadNew, LAIK_DF_None);
+                                       LAIK_DF_CopyIn | LAIK_DF_CopyOut, LAIK_RO_None);
+            laik_switchto_partitioning(dRead, pReadNew, LAIK_DF_None, LAIK_RO_None);
             laik_free_partitioning(pWrite);
             laik_free_partitioning(pRead);
             pWrite = pWriteNew;
@@ -254,10 +254,10 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < countW; i++) sum += baseW[i];
 
     // global reduction of local sum values
-    laik_switchto_flow(sumD, LAIK_DF_ReduceOut | LAIK_DF_Sum);
+    laik_switchto_flow(sumD, LAIK_DF_ReduceOut, LAIK_RO_Sum);
     laik_map_def1(sumD, (void**) &sumPtr, 0);
     *sumPtr = sum;
-    laik_switchto_flow(sumD, LAIK_DF_CopyIn);
+    laik_switchto_flow(sumD, LAIK_DF_CopyIn, LAIK_RO_None);
     laik_map_def1(sumD, (void**) &sumPtr, 0);
     sum = *sumPtr;
 

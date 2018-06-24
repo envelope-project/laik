@@ -90,7 +90,9 @@ struct _Laik_Data {
 
     // currently used partitioning and data flow
     Laik_Partitioning* activePartitioning;
+    // TODO: remove with API change to relate data flow only to transition
     Laik_DataFlow activeFlow;
+    Laik_ReductionOperation activeRedOp;
 
     // if access phase is set, it must be consistent with active partitioning
     Laik_AccessPhase* activeAccessPhase;

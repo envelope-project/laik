@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
 
     // allocate and initialize at master (others have empty partition)
     part1 = laik_new_partitioning(laik_Master, world, space, 0);
-    laik_switchto_partitioning(array, part1, LAIK_DF_CopyOut);
+    laik_switchto_partitioning(array, part1, LAIK_DF_CopyOut, LAIK_RO_None);
     if (laik_myid(world) == 0) {
         // it is ensured this is exactly one slice
         laik_map_def1(array, (void**) &base, &count);
@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
 
     // distribute data equally among all
     part2 = laik_new_partitioning(laik_new_block_partitioner1(), world, space, 0);
-    laik_switchto_partitioning(array, part2, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+    laik_switchto_partitioning(array, part2, LAIK_DF_CopyIn | LAIK_DF_CopyOut, LAIK_RO_None);
 
     // partial sum using equally-sized blocks
     laik_map_def1(array, (void**) &base, &count);
@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
     // distribution using element-wise weights equal to index
     part3 = laik_new_partitioning(laik_new_block_partitioner_iw1(getEW, 0),
                                   world, space, 0);
-    laik_switchto_partitioning(array, part3, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+    laik_switchto_partitioning(array, part3, LAIK_DF_CopyIn | LAIK_DF_CopyOut, LAIK_RO_None);
 
     // partial sum using blocks sized by element weights
     laik_map_def1(array, (void**) &base, &count);
@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
         // distribution using task-wise weights: without master
         part4 = laik_new_partitioning(laik_new_block_partitioner_tw1(getTW, 0),
                                       world, space, 0);
-        laik_switchto_partitioning(array, part4, LAIK_DF_CopyIn | LAIK_DF_CopyOut);
+        laik_switchto_partitioning(array, part4, LAIK_DF_CopyIn | LAIK_DF_CopyOut, LAIK_RO_None);
 
         // partial sum using blocks sized by task weights
         laik_map_def1(array, (void**) &base, &count);
@@ -139,7 +139,7 @@ int main(int argc, char* argv[])
     sumdata  = laik_new_data(sumspace, laik_Double);
     sumpart1 = laik_new_partitioning(laik_All, world, sumspace, 0);
     laik_switchto_partitioning(sumdata, sumpart1,
-                               LAIK_DF_ReduceOut | LAIK_DF_Sum);
+                               LAIK_DF_ReduceOut, LAIK_RO_Sum);
 
     laik_map_def1(sumdata, (void**) &base, &count);
     assert(count == 4);
@@ -149,7 +149,7 @@ int main(int argc, char* argv[])
  
     // master-only partitioning: add partial values to be read at master
     sumpart2 = laik_new_partitioning(laik_Master, world, sumspace, 0);
-    laik_switchto_partitioning(sumdata, sumpart2, LAIK_DF_CopyIn);
+    laik_switchto_partitioning(sumdata, sumpart2, LAIK_DF_CopyIn, LAIK_RO_None);
     if (laik_myid(world) == 0) {
         laik_map_def1(sumdata, (void**) &base, &count);
         printf("Total sums: %.0f, %.0f, %.0f, %.0f\n",

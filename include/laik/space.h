@@ -66,7 +66,6 @@ typedef enum _Laik_DataFlow {
     LAIK_DF_Sharable   = 16,    // tasks can share memory
     LAIK_DF_Previous   = 32,    // derive from previously set flow
 
-    LAIK_DF_Sum        = 1<<16  // sum reduction (for Init/ReduceOut)
 } Laik_DataFlow;
 
 // reduction operation
@@ -117,9 +116,7 @@ typedef struct _Laik_Transition Laik_Transition;
  *********************************************************************/
 
 // is this a reduction?
-bool laik_is_reduction(Laik_DataFlow flow);
-// return the reduction operation from data flow behavior
-Laik_ReductionOperation laik_get_reduction(Laik_DataFlow flow);
+bool laik_is_reduction(Laik_ReductionOperation redOp);
 // do we need to copy values in?
 bool laik_do_copyin(Laik_DataFlow flow);
 // do we need to copy values out?
@@ -498,8 +495,8 @@ void laik_append_phase(Laik_PartGroup* g, Laik_AccessPhase* ap);
 // partitioning borders
 Laik_Transition*
 laik_calc_transition(Laik_Space* space,
-                     Laik_Partitioning* fromP, Laik_DataFlow fromFlow,
-                     Laik_Partitioning* toP, Laik_DataFlow toFlow);
+                     Laik_Partitioning* fromP, Laik_DataFlow fromFlow, Laik_ReductionOperation fromRedOp,
+                     Laik_Partitioning* toP, Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
 
 // Calculate communication for transitioning between partitioning groups
 Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
