@@ -115,11 +115,11 @@ void run_markovPartitioner(Laik_Partitioner* pr,
 
 
 
-// iteratively calculate probability distribution, return last written data
-// this version expects one (sparse) mapping of data1/data2 each
+// Iteratively calculate probability distribution, return last written data.
+// This version expects one (sparse) mapping of data1/data2 each
 Laik_Data* runSparse(MGraph* mg, int miter,
                      Laik_Data* data1, Laik_Data* data2,
-                     Laik_AccessPhase* pWrite, Laik_AccessPhase* pRead)
+                     Laik_Partitioning* pWrite, Laik_Partitioning* pRead)
 {
     int out = mg->out;
     int* cm = mg->cm;
@@ -138,14 +138,14 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         laik_set_iteration(laik_data_get_inst(data1), iter+1);
 
         // switch dRead to pRead, dWrite to pWrite
-        laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
         laik_map_def1(dRead, (void**) &src, &srcCount);
-        laik_phase_myslice_1d(pRead, 0, &srcFrom, &srcTo);
+        laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
         assert(srcFrom < srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
-        laik_switchto_phase(dWrite, pWrite,
-                            LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+        laik_switchto_partitioning(dWrite, pWrite,
+                                   LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         dstFrom = laik_local2global_1d(dWrite, 0);
 
@@ -195,7 +195,7 @@ Laik_Data* runSparse(MGraph* mg, int miter,
 // this assumes a compact mapping for data1/2, using indirection
 Laik_Data* runIndirection(MGraph* mg, int miter,
                           Laik_Data* data1, Laik_Data* data2, Laik_Data* idata,
-                          Laik_AccessPhase* pWrite, Laik_AccessPhase* pRead)
+                          Laik_Partitioning* pWrite, Laik_Partitioning* pRead)
 {
     int out = mg->out;
     double* pm = mg->pm;
@@ -218,14 +218,14 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         laik_set_iteration(laik_data_get_inst(data1), iter+1);
 
         // switch dRead to pRead, dWrite to pWrite
-        laik_switchto_phase(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
         laik_map_def1(dRead, (void**) &src, &srcCount);
-        laik_phase_myslice_1d(pRead, 0, &srcFrom, &srcTo);
+        laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
         assert(srcFrom < srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
-        laik_switchto_phase(dWrite, pWrite,
-                      LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+        laik_switchto_partitioning(dWrite, pWrite,
+                                   LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
 
         if (doPrint) {
@@ -342,22 +342,22 @@ int main(int argc, char* argv[])
     if (doProfiling)
         laik_enable_profiling_file(inst, "markov2_profiling.txt");
 
-    // access phase types:
-    // - pRead  : distributes the states owned by tasks, propagating from
-    // - pWrite : provides access to out-going states to propagate values to
+    // partitionings used:
+    // - pWrite: distribution of states
+    // - pRead : access to values of incoming states
     // - pMaster: all data at master, for checksum
     // pRead/pWrite are assigned to either data1/data2,
     // exchanged after every iteration
-    Laik_AccessPhase *pRead, *pWrite, *pMaster;
+    Laik_Partitioning *pRead, *pWrite, *pMaster;
     Laik_Partitioner* pr;
-    pRead = laik_new_accessphase(world, space,
-                                  laik_new_block_partitioner1(), 0);
+    pRead = laik_new_partitioning(laik_new_block_partitioner1(),
+                                  world, space, 0);
     pr = laik_new_partitioner("markov-out", run_markovPartitioner, &mg,
                               LAIK_PF_Merge |
                               (useSingleIndex ? LAIK_PF_SingleIndex : 0) |
                               (doCompact ? LAIK_PF_Compact : 0));
-    pWrite = laik_new_accessphase(world, space, pr, pRead);
-    pMaster = laik_new_accessphase(world, space, laik_Master, 0);
+    pWrite = laik_new_partitioning(pr, world, space, pRead);
+    pMaster = laik_new_partitioning(laik_Master, world, space, 0);
 
     // for indirection, we store local indexes in a LAIK container
     Laik_Type* itype = laik_type_register("l-indexes", (out + 1) * sizeof(int));
@@ -367,7 +367,7 @@ int main(int argc, char* argv[])
         // register initialization function for global-to-local index data
         // this is called whenever the partitioning is changing
         // FIXME: add API to specify function for init
-        laik_switchto_phase(idata, pRead, 0, LAIK_RO_None);
+        laik_switchto_partitioning(idata, pRead, LAIK_DF_None, LAIK_RO_None);
         // TODO: move to inititialization function
         int* iarray;
         uint64_t icount, ioff;
@@ -393,7 +393,7 @@ int main(int argc, char* argv[])
     //  from owned states later in the iterations)
     double *v;
     uint64_t count, off;
-    laik_switchto_phase(data1, pRead, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(data1, pRead, LAIK_DF_CopyOut, LAIK_RO_None);
     laik_map_def1(data1, (void**) &v, &count);
     double p = (onestate < 0) ? (1.0 / n) : 0.0;
     for(uint64_t i = 0; i < count; i++)
@@ -426,7 +426,7 @@ int main(int argc, char* argv[])
     laik_reset_profiling(inst);
     laik_set_phase(inst, 3, "Collect", 0);
 
-    laik_switchto_phase(dRes, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
     laik_writeout_profile();
     laik_map_def1(dRes, (void**) &v, &count);
     laik_set_phase(inst, 4, "Out", 0);
