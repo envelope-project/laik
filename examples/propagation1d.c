@@ -5,47 +5,41 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "laik-internal.h"
-
 #define SIZE 8
 
-void runLuleshPartitioner1d(Laik_Partitioner* pr,
-                            Laik_Partitioning* ba, Laik_Partitioning* otherBA)
+/**
+ * Very simple 1d finite element example
+ *
+ * Domain:
+ *  chain of elements (e), with 2 nodes (n) as element boundaries:
+ *   n0 - e0 - n1 - e1 - n2 - e2 - ... e7 - n8
+ *
+ * We use seperate data containers for elements and nodes, and derive
+ * the node partitioning from the element partitioning
+**/
+
+// provide partitioning for nodes from partitioning of elements (<o>)
+void runMyParter(Laik_Partitioner* pr,
+                 Laik_Partitioning* p, Laik_Partitioning* o)
 {
-    (void) pr; /* FIXME: Why have this parameter if it's never used */
+    (void) pr; /* unused parameter in partitioner interface */
 
-    assert(ba->space->dims == otherBA->space->dims);
-    Laik_Space* space = ba->space;
-    //Laik_Group* g = ba->group;
-    Laik_Slice slc = space->s;
-
-    for(int i = 0; i < otherBA->count; i++) {
-        slc.from.i[0] = otherBA->tslice[i].s.from.i[0];
-        slc.to.i[0] = otherBA->tslice[i].s.to.i[0]+1;
-        laik_append_slice(ba, otherBA->tslice[i].task, &slc, 0, 0);
+    // iterate over all element partitions used as basis
+    for(int i = 0; i < laik_partitioning_slicecount(o); i++) {
+        Laik_TaskSlice* ts = laik_partitioning_get_tslice(o, i);
+        // does a private copy of original slice which can be modified
+        Laik_Slice slc = *laik_taskslice_get_slice(ts);
+        // extend 1d slice of elements by 1 at end for corresponding node partition
+        slc.to.i[0]++;
+        laik_append_slice(p, laik_taskslice_get_task(ts), &slc, 0, 0);
     }
-
-}
-
-Laik_Partitioner* laik_new_lulesh_partitioner_1d()
-{
-    return laik_new_partitioner("lulesh1d", runLuleshPartitioner1d, 0, LAIK_PF_Merge);
 }
 
 int main(int argc, char* argv[])
 {
-    Laik_Instance* inst = laik_init (&argc, &argv);
-    Laik_Group* world = laik_world(inst);
+    Laik_Instance* inst = laik_init(&argc, &argv);
+    Laik_Group* myworld = laik_world(inst);
 
-    #ifdef DBG
-        if (laik_myid(world)==0)
-        {
-            int pause = 1;
-            while (pause != 0);
-        }
-        
-    #endif
-    
     // application defines the number of elements and nodes
     int size_nodes = (SIZE+1);
     int size_elems = SIZE;
@@ -58,23 +52,26 @@ int main(int argc, char* argv[])
     Laik_Space* element_space = laik_new_space_1d(inst, size_elems);
     Laik_Data* element = laik_new_data(element_space, laik_Double);
 
-    Laik_AccessPhase *pNodes, *pElements;
+    Laik_Partitioning *pNodes, *pElements;
+    Laik_Partitioner *nodeParter;
 
-    pElements = laik_new_accessphase(world, element_space,
-                                   laik_new_block_partitioner1(), 0);
-    pNodes = laik_new_accessphase(world, node_space,
-                                   laik_new_lulesh_partitioner_1d(), pElements);
+    pElements = laik_new_partitioning(laik_new_block_partitioner1(),
+                                      myworld, element_space, 0);
+    nodeParter = laik_new_partitioner("myNodeParter", runMyParter, 0, 0);
+    pNodes = laik_new_partitioning(nodeParter, myworld, node_space, pElements);
 
-    double *base;
-    uint64_t count;
+    double *ebase, *nbase;
+    uint64_t ecount, ncount;
 
     // distribution of the elements
-    laik_switchto_phase(element, pElements, LAIK_DF_CopyOut, LAIK_RO_None);
-    laik_map_def1(element, (void**) &base, &count);
+    laik_switchto_partitioning(element, pElements, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_map_def1(element, (void**) &ebase, &ecount);
 
     // distribution of the nodes
-    laik_switchto_phase(node, pNodes, LAIK_DF_CopyOut, LAIK_RO_None);
-    laik_map_def1(node, (void**) &base, &count);
+    laik_switchto_partitioning(node, pNodes, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_map_def1(node, (void**) &nbase, &ncount);
+
+    // do something with elements and nodes...
 
     laik_finalize(inst);
     return 0;
