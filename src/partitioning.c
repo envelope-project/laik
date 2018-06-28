@@ -817,7 +817,7 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
             assert(p->off[i] == p->off[i+1]);
     }
 
-    // update slice IDs
+    // update slice task IDs
     for(int i = 0; i < p->count; i++) {
         int oldT = p->tslice[i].task;
         assert((oldT >= 0) && (oldT < oldg->size));
