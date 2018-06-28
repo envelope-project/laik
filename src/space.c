@@ -193,6 +193,12 @@ const Laik_Slice* laik_space_asslice(Laik_Space* space)
     return &(space->s);
 }
 
+// number of indexes in the space
+uint64_t laik_space_size(const Laik_Space* s)
+{
+    return laik_slice_size(s->dims, &(s->s));
+}
+
 // get the number of dimensions if this is a regular space
 int laik_space_getdimensions(Laik_Space* space)
 {
@@ -333,11 +339,6 @@ void laik_free_space(Laik_Space* s)
     free(s->name);
     laik_removeSpaceFromInstance(s->inst, s);
     // TODO
-}
-
-uint64_t laik_space_size(Laik_Space* s)
-{
-    return laik_slice_size(s->dims, &(s->s));
 }
 
 

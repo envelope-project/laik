@@ -23,56 +23,20 @@
 #include <stdint.h>   // for int64_t, uint64_t
 #include "core.h"     // for Laik_Group, Laik_Instance
 
+
 /*********************************************************************/
-/* LAIK Spaces - Distributed partitioning of index spaces
+/* LAIK Spaces Module - Distributed partitioning of index spaces
  *********************************************************************/
 
-// A Partitioner implements a specific algorithm to partition
-// an index space. There are predefined partitioners, but applications
-// may define their own.
 
-typedef struct _Laik_Partitioner Laik_Partitioner;
-
-
-/**
- * Data flows to adhere to when switching from one partitioning
- * to another (ie. in a transition).
- *
- * Consistency rules:
- * - CopyIn only possible if previous phase is CopyOut or
- *   ReduceOut
- **/
-typedef enum _Laik_DataFlow {
-    LAIK_DF_None = 0,
-
-    LAIK_DF_CopyIn,          // preserve values of previous phase
-    LAIK_DF_CopyOut,         // propagate values to next phase
-    LAIK_DF_CopyInOut,       // preserve values from previous phase and propagate to next
-    LAIK_DF_InitInCopyOut, // Initialize and aggregate, needs reduction operation
-
-    LAIK_DF_Previous,        // derive from previously set flow
-
-} Laik_DataFlow;
-
-// reduction operation to be used in a transition
-typedef enum _Laik_ReductionOperation {
-    LAIK_RO_None = 0,
-    LAIK_RO_Sum, LAIK_RO_Prod,
-    LAIK_RO_Min, LAIK_RO_Max,
-    LAIK_RO_And, LAIK_RO_Or
-} Laik_ReductionOperation;
+//---------------------------------------------------------------------
+// forward decls of structs as typedefs
 
 // a point in an index space
 typedef struct _Laik_Index Laik_Index;
-struct _Laik_Index {
-    int64_t i[3]; // at most 3 dimensions
-};
 
-// a rectangle-shaped slice from an index space [from;to[
+// a rectangle-shaped slice from an index space
 typedef struct _Laik_Slice Laik_Slice;
-struct _Laik_Slice {
-  Laik_Index from, to;
-};
 
 // a participating task in the distribution of an index space
 typedef struct _Laik_Task Laik_Task;
@@ -95,14 +59,35 @@ typedef struct _Laik_Partitioning Laik_Partitioning;
 // communication requirements when switching partitioning groups
 typedef struct _Laik_Transition Laik_Transition;
 
+// a partitioner is an algorithm mapping slices of an index space to tasks
+typedef struct _Laik_Partitioner Laik_Partitioner;
 
 
-/*********************************************************************/
-/* LAIK API for distributed index spaces
- *********************************************************************/
+//---------------------------------------------------------------------
+// enums for space module
 
-// is this a reduction?
-bool laik_is_reduction(Laik_ReductionOperation redOp);
+/**
+ * Laik_DataFlow
+ *
+ * Specifies the data flows to adhere to when switching from one
+ * partitioning to another in a transition.
+ *
+ * Consistency rules:
+ * - CopyIn only possible if previous phase is CopyOut or
+ *   ReduceOut
+ */
+typedef enum _Laik_DataFlow {
+    LAIK_DF_None = 0,
+
+    LAIK_DF_CopyIn,          // preserve values of previous phase
+    LAIK_DF_CopyOut,         // propagate values to next phase
+    LAIK_DF_CopyInOut,       // preserve values from previous phase and propagate to next
+    LAIK_DF_InitInCopyOut,   // Initialize and aggregate, needs reduction operation
+
+    LAIK_DF_Previous,        // derive from previously set flow
+
+} Laik_DataFlow;
+
 // do we need to copy values in?
 bool laik_do_copyin(Laik_DataFlow flow);
 // do we need to copy values out?
@@ -111,33 +96,47 @@ bool laik_do_copyout(Laik_DataFlow flow);
 bool laik_do_init(Laik_DataFlow flow);
 
 
+/**
+ * Laik_ReductionOperation
+ *
+ * The reduction operation to be executed in a transition
+ */
+typedef enum _Laik_ReductionOperation {
+    LAIK_RO_None = 0,
+    LAIK_RO_Sum, LAIK_RO_Prod,
+    LAIK_RO_Min, LAIK_RO_Max,
+    LAIK_RO_And, LAIK_RO_Or
+} Laik_ReductionOperation;
+
+// is this a reduction?
+bool laik_is_reduction(Laik_ReductionOperation redOp);
+
+
 //--------------------------------------------------------------------------
-// LAIK spaces, indexes, slices
-//
+// structs used in the space module: spaces, indexes, slices
 
-// create a new index space object (initially invalid)
-Laik_Space* laik_new_space(Laik_Instance* inst);
-
-// create a new index space object with an initial size
-Laik_Space* laik_new_space_1d(Laik_Instance* i, int64_t s1);
-Laik_Space* laik_new_space_2d(Laik_Instance* i, int64_t s1, int64_t s2);
-Laik_Space* laik_new_space_3d(Laik_Instance* i,
-                              int64_t s1, int64_t s2, int64_t s3);
-
-// free a space with all resources depending on it (e.g. paritionings)
-void laik_free_space(Laik_Space* s);
-
-// number of indexes in the space
-uint64_t laik_space_size(Laik_Space* s);
-
-// set a space a name, for debug output
-void laik_set_space_name(Laik_Space* s, char* n);
-
-// change the size of an index space, eventually triggering a repartitiong
-void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1);
+/**
+ * Laik_Index
+ *
+ * A point in an index space
+ */
+struct _Laik_Index {
+    int64_t i[3]; // at most 3 dimensions
+};
 
 // are the indexes equal?
 bool laik_index_isEqual(int dims, const Laik_Index* i1, const Laik_Index* i2);
+
+
+
+/**
+ * Laik_Slice
+ *
+ * A rectangle-shaped slice from an index space [from;to[
+ */
+struct _Laik_Slice {
+  Laik_Index from, to;
+};
 
 // is the given slice empty?
 bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
@@ -160,8 +159,37 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
 // number of indexes in the slice
 uint64_t laik_slice_size(int dims, const Laik_Slice* s);
 
+
+/**
+ * Laik_Space
+ *
+ * A discrete domain consisting of index points which can be related
+ * to data and work load. Distribution of data/work load is specified by
+ * partitioning a Laik_Space with a paritioner algorithm.
+ *
+ * The struct is opaque to the LAIK applications.
+ */
+
+// create a new index space object (initially invalid)
+Laik_Space* laik_new_space(Laik_Instance* inst);
+
+// create a new index space object with an initial size
+Laik_Space* laik_new_space_1d(Laik_Instance* i, int64_t s1);
+Laik_Space* laik_new_space_2d(Laik_Instance* i, int64_t s1, int64_t s2);
+Laik_Space* laik_new_space_3d(Laik_Instance* i,
+                              int64_t s1, int64_t s2, int64_t s3);
+
+// free a space with all resources depending on it (e.g. paritionings)
+void laik_free_space(Laik_Space* s);
+
+// set a space a name, for debug output
+void laik_set_space_name(Laik_Space* s, char* n);
+
 // get the index slice covered by the space
 const Laik_Slice* laik_space_asslice(Laik_Space* space);
+
+// number of indexes in the space
+uint64_t laik_space_size(const Laik_Space* s);
 
 // get the number of dimensions if this is a regular space
 int laik_space_getdimensions(Laik_Space* space);
