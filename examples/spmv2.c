@@ -112,13 +112,9 @@ void help(char* err)
 
 int main(int argc, char* argv[])
 {
-    Laik_Instance* inst = laik_init (&argc, &argv);
+    Laik_Instance* inst = laik_init(&argc, &argv);
     Laik_Group* world = laik_world(inst);
 
-#ifdef USE_EXT_INTF
-    Laik_RepartitionControl* repartctrl;
-    laik_agent* agent;
-#endif
     // command line args: spmv [<maxiter> [<size>]] (def: spmv 10 10000)
     int maxiter = 0, size = 0, nextshrink = -1, shrink = -1, removeTask = 0;
     bool useReduction = false;
@@ -171,20 +167,6 @@ int main(int argc, char* argv[])
         arg++;
     }
 
-#ifdef USE_EXT_INTF
-    if(shrink){
-        char soargs[2][2];
-        sprintf(soargs[0], "%d", shrink);
-        sprintf(soargs[1], "%d", removeTask);
-        agent = laik_ext_load_agent_from_file (
-            "Simple Agent",
-            "../external/simple/libsimpleagent.so",
-            2,
-            soargs
-        );
-    }
-#endif
-
     if (maxiter == 0) maxiter = 10;
     if (size == 0) size = 10000;
 
@@ -196,7 +178,8 @@ int main(int argc, char* argv[])
     }
     tt = wtime();
 
-    // generate a sparse matrix
+    // generate a sparse matrix: globally available in every process
+    // not managed by LAIK, but SpMV work distribution from LAIK partitioning
     SpM* m = newSpM(size);
 
     tt2 = wtime();
@@ -213,29 +196,32 @@ int main(int argc, char* argv[])
     // for global normalization, to broadcast a vector sum to all
     Laik_Data* sumD = laik_new_data_1d(inst, laik_Double, 1);
     laik_data_set_name(sumD, "sum");
-    laik_switchto_new_phase(sumD, world, laik_All, LAIK_DF_None, LAIK_RO_None);
+    laik_switchto_new_partitioning(sumD, world, laik_All, LAIK_DF_None, LAIK_RO_None);
 
     // block partitioning according to number of non-zero elems in matrix rows
     Laik_Partitioner* pr = laik_new_block_partitioner(0, 1, getEW, 0, m);
     laik_set_index_weight(pr, getEW, m);
-    Laik_AccessPhase* p = laik_new_accessphase(world, s, pr, 0);
+    Laik_Partitioning* p = laik_new_partitioning(pr, world, s, 0);
     // nothing to preserve between iterations (assume at least one iter)
-    laik_switchto_phase(resD, p, LAIK_DF_None, LAIK_RO_None);
+    laik_switchto_partitioning(resD, p, LAIK_DF_None, LAIK_RO_None);
 
-    // partitionings for all task taking part in calculation
-    Laik_AccessPhase* allVec = laik_new_accessphase(world, s, laik_All, 0);
+    // partitionings for all tasks taking part in calculation
+    Laik_Partitioning* pAll = laik_new_partitioning(laik_All, world, s, 0);
 
     double *inp, *res, sum, *sumPtr;
     uint64_t icount, rcount, i;
     int64_t fromRow, toRow;
 
     // initialize input vector at master, broadcast to all
-    laik_switchto_new_phase(inpD, world, laik_Master, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_new_partitioning(inpD, world, laik_Master, LAIK_DF_CopyOut, LAIK_RO_None);
     laik_map_def1(inpD, (void**) &inp, &icount);
     for(i = 0; i < icount; i++) inp[i] = 1.0;
 
     // better debug output
     laik_set_phase(inst, 1, "SpmV", NULL);
+
+    // broadcast complete input vector
+    laik_switchto_partitioning(inpD, pAll, LAIK_DF_CopyIn, LAIK_RO_None);
 
     // do a sequence of SpMV, starting with v as input vector,
     // normalize result after each step to use as input for the next round
@@ -246,10 +232,9 @@ int main(int argc, char* argv[])
 
         // flow for result: only at last iteration, copy out
         if (iter + 1 == maxiter)
-            laik_switchto_phase(resD, p, LAIK_DF_CopyOut, LAIK_RO_None);
+            laik_switchto_partitioning(resD, p, LAIK_DF_CopyOut, LAIK_RO_None);
 
         // access to complete input vector (local indexing = global indexing)
-        laik_switchto_phase(inpD, allVec, LAIK_DF_CopyIn, LAIK_RO_None);
         laik_map_def1(inpD, (void**) &inp, 0);
 
         // SpMV operation, for my range of rows
@@ -260,7 +245,7 @@ int main(int argc, char* argv[])
 
         // loop over all local slices
         for(int sNo = 0; ; sNo++) {
-            if (!laik_phase_myslice_1d(p, sNo, &fromRow, &toRow)) break;
+            if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
 
             // my partition slice of result vector (local indexing, from 0)
             laik_map_def(resD, sNo, (void**) &res, &rcount);
@@ -301,14 +286,14 @@ int main(int argc, char* argv[])
 
         // scale owns results by global sum and write into input partitions
         if (useReduction) {
-            // varian 1: broadcast written input values via sum reduction
+            // variant 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
-            laik_switchto_phase(inpD, allVec, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+            laik_switchto_partitioning(inpD, pAll, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
             laik_map_def1(inpD, (void**) &inp, 0);
 
             // loop over all local slices of result vector
             for(int sNo = 0; ; sNo++) {
-                if (!laik_phase_myslice_1d(p, sNo, &fromRow, &toRow)) break;
+                if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
 
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
                 for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
@@ -316,9 +301,9 @@ int main(int argc, char* argv[])
         }
         else {
             // variant 2: broadcast written input values directly
-            laik_switchto_phase(inpD, p, LAIK_DF_CopyOut, LAIK_RO_None);
+            laik_switchto_partitioning(inpD, p, LAIK_DF_CopyOut, LAIK_RO_None);
             // loop over all local slices of result and input vector
-            for(int sNo = 0; laik_phase_my_slice(p, sNo) != 0; sNo++) {
+            for(int sNo = 0; laik_my_slice(p, sNo) != 0; sNo++) {
                 laik_map_def(resD, sNo, (void**) &res, &rcount);
                 laik_map_def(inpD, sNo, (void**) &inp, 0);
                 for(i = 0; i < rcount; i++) inp[i] = res[i] / sum;
@@ -327,38 +312,58 @@ int main(int argc, char* argv[])
 
         // test task shrinking
         // remove task <removeTask> from all used partitionings
-        Laik_Group* g = laik_get_apgroup(p);
-        if ((iter == nextshrink) &&
-            (laik_size(g) > 1) && (laik_size(g) >= removeTask)) {
+        Laik_Group* g = laik_partitioning_get_group(p);
+        bool doShrink = (iter == nextshrink) && (iter +1 < maxiter) &&
+                        (laik_size(g) > 1) &&
+                        (laik_size(g) >= removeTask);
+        if (doShrink) {
+            nextshrink += shrink;
+
             int removeList[1] = {removeTask};
             laik_log(2, "Shrinking: remove task %d (orig size %d)",
                      removeTask, laik_size(g));
             Laik_Group* g2 = laik_new_shrinked_group(g, 1, removeList);
+            Laik_Partitioning *pAll2, *pSumAll2, *p2;
 
-            Laik_Partitioner* pr = 0;
-            if (useIncremental)
+            // adjust partitioning
+            // - p  + alloc for resD (no need to preserve data)
+            // - pAll + data for inpD (preserve)
+            // - pSumAll for sumD (no need to preserve data)
+
+            // will be used before end of iteration to switch inpD to
+            pAll2 = laik_new_partitioning(laik_All, g2, s, 0);
+
+            pSumAll2 = laik_new_partitioning(laik_All, g2,
+                                             laik_data_get_space(sumD), 0);
+            laik_switchto_partitioning(sumD, pSumAll2, LAIK_DF_None, LAIK_RO_None);
+
+            if (useIncremental) {
                 pr = laik_new_reassign_partitioner(g2, getEW, m);
+                // this still generates a partitioning on <g>, which...
+                p2 = laik_new_partitioning(pr, g, s, p);
+                // ... can be migrated to be valid for <g2>
+                laik_partitioning_migrate(p2, g2);
+            }
+            else
+                p2 = laik_new_partitioning(pr, g2, s, 0);
+            laik_switchto_partitioning(resD, p2, LAIK_DF_None, LAIK_RO_None);
 
-            laik_migrate_and_repartition(p, g2, pr);
-            laik_migrate_and_repartition(allVec, g2, 0);
-            laik_migrate_and_repartition(laik_data_get_accessphase(sumD), g2, 0);
-
-            // TODO: replace world with g2
-            nextshrink += shrink;
-
-            if (laik_myid(g2) == -1) break;
+            // TODO: use ref-counters and decrement
+            pAll = pAll2;
+            p = p2;
+            world = g2;
         }
+        // broadcast complete input vector
+        laik_switchto_partitioning(inpD, pAll, LAIK_DF_CopyIn, LAIK_RO_None);
+
+        if (laik_myid(world) == -1) break;
     }
     
     laik_iter_reset(inst);
     laik_set_phase(inst, 2, "post-proc", NULL);
 
-    // push result to master
-    laik_switchto_new_phase(inpD, laik_data_get_group(inpD),
-                            laik_Master, LAIK_DF_CopyIn, LAIK_RO_None);
-    //if (laik_myid(laik_data_get_group(resD)) >= 0)
-        laik_switchto_new_phase(resD, laik_data_get_group(resD),
-                                laik_Master, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_new_partitioning(resD, laik_data_get_group(resD),
+                                   laik_Master, LAIK_DF_CopyIn, LAIK_RO_None);
     if (laik_myid(laik_data_get_group(inpD)) == 0) {
         double sum = 0.0;
         laik_map_def1(resD, (void**) &res, &rcount);
