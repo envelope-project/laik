@@ -75,7 +75,6 @@
 ../examples/.gitignore
 ../examples/vsum.c
 ../examples/vsum2.c
-../examples/vsum3.c
 ../examples/spmv.c
 ../examples/spmv2.c
 ../examples/jac1d.c

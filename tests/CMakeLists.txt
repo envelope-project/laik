@@ -11,7 +11,6 @@ foreach (test
     "test-spmv2-single.sh"
     "test-spmv-single.sh"
     "test-vsum2-single.sh"
-    "test-vsum3-single.sh"
     "test-vsum-log-single.sh"
     "test-vsum-single.sh"
 )

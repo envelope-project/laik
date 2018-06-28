@@ -16,7 +16,6 @@ TESTS = \
         spmv2_-s_2_-i_10_3000 \
         spmv_4000 \
         vsum2 \
-        vsum3 \
         vsum
 
 all: $(TESTS)
@@ -71,9 +70,6 @@ spmv_4000:
 
 vsum2:
 	$(SDIR)./vsum2.sh
-
-vsum3:
-	$(SDIR)./vsum3.sh
 
 vsum:
 	$(SDIR)./vsum.sh

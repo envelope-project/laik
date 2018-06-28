@@ -38,8 +38,6 @@ if ("USE_MPI" IN_LIST definitions)
         "test-spmv-mpi-4.sh"
         "test-vsum2-mpi-1.sh"
         "test-vsum2-mpi-4.sh"
-        "test-vsum3-mpi-1.sh"
-        "test-vsum3-mpi-4.sh"
         "test-vsum-mpi-1.sh"
         "test-vsum-mpi-4.sh"
     )

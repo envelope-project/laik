@@ -1,7 +1,7 @@
 # often same tests as in tests/, but using 1 and 4 MPI tasks
 
 TESTS= \
-    test-vsum test-vsum2 test-vsum3 \
+    test-vsum test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
     test-spmv2-shrink test-spmv2-shrink-inc \
     test-jac1d test-jac1d-repart \
@@ -22,10 +22,6 @@ test-vsum:
 test-vsum2:
 	$(SDIR)./test-vsum2-mpi-1.sh
 	$(SDIR)./test-vsum2-mpi-4.sh
-
-test-vsum3:
-	$(SDIR)./test-vsum3-mpi-1.sh
-	$(SDIR)./test-vsum3-mpi-4.sh
 
 test-spmv:
 	$(SDIR)./test-spmv-mpi-1.sh

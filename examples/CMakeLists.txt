@@ -13,7 +13,6 @@ foreach (example
     "spmv2"
     "vsum"
     "vsum2"
-    "vsum3"
 )
     add_executable ("${example}"
         "${example}.c"

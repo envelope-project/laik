@@ -18,7 +18,6 @@ if ("USE_TCP" IN_LIST definitions)
         "spmv2_-s_2_-i_10_3000.sh"
         "spmv_4000.sh"
         "vsum2.sh"
-        "vsum3.sh"
         "vsum.sh"
     )
         add_test ("tcp/${test}" "${CMAKE_CURRENT_SOURCE_DIR}/${test}")

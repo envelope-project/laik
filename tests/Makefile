@@ -1,5 +1,5 @@
 TESTS= \
-    test-vsum test-vsum-log test-vsum2 test-vsum3 \
+    test-vsum test-vsum-log test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d test-jac3dr \
@@ -26,9 +26,6 @@ test-vsum-log:
 
 test-vsum2:
 	$(SDIR)./test-vsum2-single.sh
-
-test-vsum3:
-	$(SDIR)./test-vsum3-single.sh
 
 test-spmv:
 	$(SDIR)./test-spmv-single.sh
