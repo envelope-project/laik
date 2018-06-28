@@ -62,12 +62,12 @@ simple LAIK data container.
         // for adding the partial sums and making the result available at
         // master, first, everybody gets write access to a LAIK container
         Laik_Data* sum = laik_new_data_1d(world, laik_Double, 1);
-        laik_switchto_new(sum, laik_All, LAIK_DF_CopyOut);
+        laik_switchto_new_partitioning(sum, laik_All, LAIK_DF_CopyOut, 0);
         // write partial sum
         laik_fill_double(sum, mysum);
         // we specify that all values from writers should be added using a
         // sum reduction, with the result available at master (process 0)
-        laik_switchto_new(sum, laik_Master, LAIK_DF_CopyIn, LAIK_RO_Sum);
+        laik_switchto_new_partitioning(sum, laik_Master, LAIK_DF_CopyIn, LAIK_RO_Sum);
 
         if (laik_myid(world) == 0) {
             laik_map_def1(sum, (void**) &base, &count);

@@ -661,9 +661,7 @@ void laik_set_accessphase_name(Laik_AccessPhase* ap, char* n)
 
 
 
-
-
-// set new partitioning borders
+// set new partitioning for a phase
 void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p)
 {
     assert(ap->group == p->group);
@@ -682,20 +680,20 @@ void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p)
         return;
     }
 
-    // visit all users of this partitioning:
-    // first, all partitionings coupled to this as base
+    // visit all users of this phase:
+    // first, all phases coupled to this phase as base
     Laik_AccessPhase* apdep = ap->firstAccessPhaseForBase;
     while(apdep) {
         assert(apdep->base == ap);
         assert(apdep->partitioner);
         Laik_Partitioning* pdep;
         pdep = laik_new_partitioning(apdep->partitioner,
-                                    apdep->group, apdep->space, p);
+                                     apdep->group, apdep->space, p);
 
         laik_phase_set_partitioning(apdep, pdep);
         apdep = apdep->nextAccessPhaseForBase;
     }
-    // second, all data containers using this partitioning
+    // second, all data containers with this phase currently active
     Laik_Data* d = ap->firstDataForAccessPhase;
     while(d) {
         laik_switchto_partitioning(d, p, LAIK_DF_Previous, LAIK_RO_None);
@@ -1785,7 +1783,7 @@ void laik_couple_nested(Laik_Space* outer, Laik_Space* inner)
     assert(0); // TODO
 }
 
-// migrate a partitioning defined on one task group to another group
+// migrate a phase defined on one task group to another group
 // (no repartitioning: only works if partitions of removed tasks are empty)
 bool laik_migrate_phase(Laik_AccessPhase* ap, Laik_Group* newg)
 {
@@ -1801,7 +1799,7 @@ bool laik_migrate_phase(Laik_AccessPhase* ap, Laik_Group* newg)
     laik_addAcessPhaseForGroup(newg, ap);
     ap->group = newg;
 
-    // make partitioning users (data containers) migrate to new group
+    // make phase users (data containers) migrate to new group
     Laik_Data* d = ap->firstDataForAccessPhase;
     while(d) {
         if (d->activePartitioning) {

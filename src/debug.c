@@ -123,10 +123,10 @@ void laik_log_Reduction(Laik_ReductionOperation op)
 void laik_log_DataFlow(Laik_DataFlow flow)
 {
     switch(flow) {
-    case LAIK_DF_None:            laik_log_append("-"); break;
-    case LAIK_DF_CopyIn:          laik_log_append("in"); break;
-    case LAIK_DF_CopyOut:         laik_log_append("out"); break;
-    case LAIK_DF_CopyInOut:       laik_log_append("in-out"); break;
+    case LAIK_DF_None:          laik_log_append("-"); break;
+    case LAIK_DF_CopyIn:        laik_log_append("in"); break;
+    case LAIK_DF_CopyOut:       laik_log_append("out"); break;
+    case LAIK_DF_CopyInOut:     laik_log_append("in-out"); break;
     case LAIK_DF_InitInCopyOut: laik_log_append("init-reduce"); break;
     default: assert(0);
     }

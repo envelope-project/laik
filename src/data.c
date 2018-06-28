@@ -104,6 +104,7 @@ Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
     d->backend_data = 0;
     d->activePartitioning = 0;
     d->activeFlow = LAIK_DF_None;
+    d->activeRedOp = LAIK_RO_None;
     d->activeAccessPhase = 0;
     d->nextAccessPhaseUser = 0;
     d->activeMappings = 0;
@@ -1350,6 +1351,24 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n)
     if (d->activePartitioning == 0) return 0;
     return laik_my_slice(d->activePartitioning, n);
 }
+
+Laik_Partitioning* laik_switchto_new_partitioning(Laik_Data* d, Laik_Group* g,
+                                                  Laik_Partitioner* pr,
+                                                  Laik_DataFlow flow,
+                                                  Laik_ReductionOperation redOp)
+{
+    if (laik_myid(g) < 0) return 0;
+
+    Laik_Partitioning* p;
+    p = laik_new_partitioning(pr, g, d->space, 0);
+
+    laik_log(1, "switch data '%s' to new partitioning '%s'",
+             d->name, p->name);
+
+    laik_switchto_partitioning(d, p, flow, redOp);
+    return p;
+}
+
 
 Laik_AccessPhase* laik_switchto_new_phase(Laik_Data* d, Laik_Group* g,
                                           Laik_Partitioner* pr,

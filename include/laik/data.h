@@ -153,6 +153,11 @@ Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 
 // convenience functions
 
+// switch to new partitioning calculated with given partitioner algorithm
+Laik_Partitioning* laik_switchto_new_partitioning(Laik_Data*, Laik_Group* g,
+                                                  Laik_Partitioner* pr,
+                                                  Laik_DataFlow flow, Laik_ReductionOperation redOp);
+
 // switch from active to a newly created access phase using a given
 // partitioner algorithm, and return it
 Laik_AccessPhase* laik_switchto_new_phase(Laik_Data*, Laik_Group* g,
