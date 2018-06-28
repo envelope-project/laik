@@ -35,21 +35,8 @@ typedef struct _Laik_Partitioner Laik_Partitioner;
 
 
 /**
- * Set of flags describing how the application accesses its
- * partition of a LAIK data container in a phase, and thus how
- * data needs to be preserved from previous and to next phase.
- *
- * This is used to decide which data needs to be transfered or
- * copied, and whether memory resources can be shared among
- * LAIK tasks.
- *
- * Flags:
- * - CopyIn:  data needs to be preserved from previous phase
- * - CopyOut: data needs to be preserved for next phase
- * - Init:    values need to be initialized for reduction
- * - ReduceOut: values will added for next phase
- *
- * - Sharable: it is safe for LAIK tasks to use shared memory
+ * Data flows to adhere to when switching from one partitioning
+ * to another (ie. in a transition).
  *
  * Consistency rules:
  * - CopyIn only possible if previous phase is CopyOut or
@@ -67,7 +54,7 @@ typedef enum _Laik_DataFlow {
 
 } Laik_DataFlow;
 
-// reduction operation
+// reduction operation to be used in a transition
 typedef enum _Laik_ReductionOperation {
     LAIK_RO_None = 0,
     LAIK_RO_Sum, LAIK_RO_Prod,
