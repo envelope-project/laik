@@ -23,6 +23,7 @@
 // set current interation number
 void laik_set_iteration(Laik_Instance* i, int iter)
 {
+    laik_log_inc();
     i->control->cur_iteration = iter; 
 
     if (i->repart_ctrl){
@@ -50,6 +51,7 @@ int laik_get_iteration(Laik_Instance* i)
 void laik_set_phase(Laik_Instance* i,
                     int n_phase, const char* name, void* pData)
 {
+    laik_log_inc();
     i->control->cur_phase = n_phase;
     i->control->cur_phase_name = name;
     i->control->pData = pData;

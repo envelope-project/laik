@@ -132,6 +132,9 @@ typedef enum _Laik_LogLevel {
     LAIK_LL_Panic    // prefix with "Panic" and immediately exit
 } Laik_LogLevel;
 
+// increment logging counter used in logging prefix
+void laik_log_inc();
+
 // log a message, similar to printf
 void laik_log(int level, const char* msg, ...) __attribute__ ((format (printf, 2, 3)));
 

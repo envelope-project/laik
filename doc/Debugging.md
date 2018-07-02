@@ -29,31 +29,32 @@ with arbitrary interleaving of simultaneously running LAIK tasks.
 Example (showing LAIK debug output):
 
 ```
-    == LAIK-0000.00 T 0/2 0001.01                 MPI backend initialized
-    == LAIK-0000.00 T 1/2 0001.01                 MPI backend initialized
-    == LAIK-0001.00 T 0/2 0001.01 init            new 1d space 'space-0'
-    == LAIK-0001.00 T 0/2 0002.01 init            new 1d data 'data-0'
-    == LAIK-0001.00 T 1/2 0001.01 init            new 1d space 'space-0': [0-999999]
-    == LAIK-0001.00 T 1/2 0002.01 init            new 1d data 'data-0'
-    == LAIK-0002.00 T 1/2 0001.01 element-wise    new partitioning 'partng-2'
-    ...
+    == LAIK-0000-T00 0002.01  0:00.000 | MPI backend initialized (host:1234)
+    == LAIK-0000-T01 0002.01  0:00.000 | MPI backend initialized (host:1235)
+    == LAIK-0001-T00 0001.01  0:00.000 | Enter phase 'init'
+    == LAIK-0001-T00 0002.01  0:00.000 | new 1d space 'space-0': [0;1000000[
+    == LAIK-0001-T00 0003.01  0:00.000 | new data 'data-0':
+    .. LAIK-0001-T00 0003.02  0:00.000 |  type 'double', space 'space-0'
 ```
 
-The prefix uses phases and iteration counters (specified by applications via
-`laik_set_phase` and `laik_set_iteration`), and it has the following format:
+The prefix uses an log counter (which gets incremented on phase/iteration
+changes specified by applications via `laik_set_iteration`/`laik_set_phase`),
+and it has the following format:
 
 ```
-    == LAIK-<phasectr>.<iter> T<task>/<tasks> <phasemsgctr>.<line> <pname>
+    == LAIK-<logctr>-T<task> <itermsgctr>.<line> <wtime>
 ```
 
 With
-* phasectr    : a counter incremented on every phase change
-* iter        : iteration counter set by application
-* task        : task rank in this LAIK instance
-* phasemsgctr : log message counter, reset at each phase change
-* pname       : phase name set by application
+* logctr : counter incremented at iteration/phase borders
+* task   : task rank in this LAIK instance
+* msgctr : log message counter, reset at each logctr change
+* line   : a line counter if a log message consists of multiple lines
+* wtime  : wall clock time since LAIK instance initialization
 
-A Phases and iteration counters enable applications to give
+Instead of `==`, points are used on follow-up lines of one message to
+better spot the border to the next message (or allowing grepping to next
+message).
 
 
 ### Logging Control

@@ -34,6 +34,7 @@
 static int laik_loglevel = LAIK_LL_Error;
 static FILE* laik_logfile = NULL;
 static Laik_Instance* laik_loginst = 0;
+static int laik_logctr = 0;
 // filter
 static int laik_log_fromtask = -1;
 static int laik_log_totask = -1;
@@ -419,12 +420,13 @@ bool laik_log_shown(int l)
  * A prefix is added which allows sorting to get stable output
  * from the arbitrarily interleaved output of multiple MPI tasks:
  *
- * == LAIK-I<iter>-T<task> <itermsgctr>.<line> <wtime>
+ * == LAIK-<logctr>-T<task> <itermsgctr>.<line> <wtime>
  *
- * <iter>        iteration counter set by application
- * <task>        task rank in this LAIK instance
- * <itermsgctr>  incrementing message counter, reset at each iteration change
- * <wtime>       wall clock time since LAIK instance initialization
+ * logctr : counter incremented at iteration/phase borders
+ * task   : task rank in this LAIK instance
+ * msgctr : log message counter, reset at each logctr change
+ * line   : a line counter if a log message consists of multiple lines
+ * wtime  : wall clock time since LAIK instance initialization
  *
  * To build the message step by step:
  * - start: laik_log_begin(<level>)
@@ -512,6 +514,12 @@ void laik_log_append(const char* msg, ...)
     va_end(args);
 }
 
+// increment logging counter used in prefix
+void laik_log_inc()
+{
+    laik_logctr++;
+}
+
 static
 void log_flush()
 {
@@ -528,12 +536,12 @@ void log_flush()
 
     // counters for stable output
     static int counter = 0;
-    static int last_iter = 0;
+    static int last_logctr = 0;
     int line_counter = 0;
     assert(laik_loginst != 0);
-    if (last_iter != laik_loginst->control->cur_iteration) {
+    if (last_logctr != laik_logctr) {
         counter = 0;
-        last_iter = laik_loginst->control->cur_iteration;
+        last_logctr = laik_logctr;
     }
     counter++;
 
@@ -561,10 +569,9 @@ void log_flush()
         // sorting makes chunks from output of each MPI task
         line_counter++;
         off2 = sprintf(buf2,
-                       "=%c LAIK-I%04d-T%02d %04d.%02d %2d:%06.3f | ",
-                       (line_counter == 1) ? '>' : '=',
-                       laik_loginst->control->cur_iteration,
-                       laik_loginst->myid,
+                       "%s LAIK-%04d-T%02d %04d.%02d %2d:%06.3f | ",
+                       (line_counter == 1) ? "==" : "..",
+                       laik_logctr, laik_loginst->myid,
                        counter, line_counter,
                        wtime_min, wtime_s);
         if (lstr)
