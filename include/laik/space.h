@@ -84,8 +84,6 @@ typedef enum _Laik_DataFlow {
     LAIK_DF_CopyInOut,       // preserve values from previous phase and propagate to next
     LAIK_DF_InitInCopyOut,   // Initialize and aggregate, needs reduction operation
 
-    LAIK_DF_Previous,        // derive from previously set flow
-
 } Laik_DataFlow;
 
 // do we need to copy values in?

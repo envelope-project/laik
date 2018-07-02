@@ -1197,8 +1197,7 @@ void laik_exec_actions(Laik_ActionSeq* as)
 }
 
 
-// switch to new partitioning borders
-// new flow is derived from previous flow when set to LAIK_DF_Previous
+// switch to given partitioning
 void laik_switchto_partitioning(Laik_Data* d,
                                 Laik_Partitioning* toP, Laik_DataFlow toFlow,
                                 Laik_ReductionOperation toRedOp)
@@ -1216,17 +1215,6 @@ void laik_switchto_partitioning(Laik_Data* d,
         if (!toP) {
             // nothing to switch from/to
             return;
-        }
-    }
-
-    if (toFlow == LAIK_DF_Previous) {
-        if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeRedOp)) {
-            toFlow = LAIK_DF_CopyInOut;
-            toRedOp = LAIK_RO_None; // reduction already done
-        }
-        else {
-            toFlow = LAIK_DF_None;
-            toRedOp = LAIK_RO_None;
         }
     }
 
