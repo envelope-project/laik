@@ -136,11 +136,11 @@ Laik_Data* runSparse(MGraph* mg, int miter,
     int iter = 0;
     while(1) {
         // switch dRead to pRead, dWrite to pWrite
-        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
         laik_map_def1(dRead, (void**) &src, &srcCount);
         srcFrom = laik_local2global_1d(dRead, 0);
 
-        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         laik_my_slice_1d(pWrite, 0, &dstFrom, &dstTo);
         assert(dstFrom < dstTo);
@@ -191,10 +191,10 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
     int iter = 0;
     while(1) {
         // switch dRead to pRead, dWrite to pWrite
-        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
         laik_map_def1(dRead, (void**) &src, &srcCount);
 
-        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         laik_my_slice_1d(pWrite, 0, &dstFrom, &dstTo);
         assert(dstFrom < dstTo);
@@ -338,7 +338,7 @@ int main(int argc, char* argv[])
     // distributed initialization of data1
     double *v;
     uint64_t count, off;
-    laik_switchto_partitioning(data1, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(data1, pWrite, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(data1, (void**) &v, &count);
     for(uint64_t i = 0; i < count; i++)
         v[i] = (double) 0.0;
@@ -355,7 +355,7 @@ int main(int argc, char* argv[])
     else
         dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
 
-    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
     laik_map_def1(dRes, (void**) &v, &count);
     if (laik_myid(world) == 0) {
         assert((int)count == n);
@@ -368,7 +368,7 @@ int main(int argc, char* argv[])
 
     if (laik_myid(world) == 0)
         printf("Start with state 1 prob 1 ...\n");
-    laik_switchto_partitioning(data1, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(data1, pWrite, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(data1, (void**) &v, &count);
     for(uint64_t i = 0; i < count; i++)
         v[i] = (double) 0.0;
@@ -380,7 +380,7 @@ int main(int argc, char* argv[])
     else
         dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
 
-    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
     laik_map_def1(dRes, (void**) &v, &count);
     if (laik_myid(world) == 0) {
         double sum = 0.0;
@@ -392,7 +392,7 @@ int main(int argc, char* argv[])
 
     if (laik_myid(world) == 0)
         printf("Start with all probs equal ...\n");
-    laik_switchto_partitioning(data1, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(data1, pWrite, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(data1, (void**) &v, &count);
     double p = 1.0 / n;
     for(uint64_t i = 0; i < count; i++)
@@ -403,7 +403,7 @@ int main(int argc, char* argv[])
     else
         dRes = runSparse(&mg, miter, data1, data2, pWrite, pRead);
 
-    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
     laik_map_def1(dRes, (void**) &v, &count);
     if (laik_myid(world) == 0) {
         double sum = 0.0;

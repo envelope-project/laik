@@ -103,8 +103,6 @@ Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
 
     d->backend_data = 0;
     d->activePartitioning = 0;
-    d->activeFlow = LAIK_DF_None;
-    d->activeRedOp = LAIK_RO_None;
     d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free
     d->stat = laik_newSwitchStat();
@@ -1087,21 +1085,14 @@ void laik_reservation_alloc(Laik_Reservation* res)
 void laik_exec_transition(Laik_Data* d, Laik_Transition* t)
 {
     if (laik_log_begin(1)) {
-        laik_log_append("exec transition (");
-        laik_log_DataFlow(t->fromFlow);
-        laik_log_append("/'%s' => ", t->fromPartitioning ? t->fromPartitioning->name : "(none)");
-        laik_log_DataFlow(t->toFlow);
-        laik_log_append("/'%s') on data '%s' (in ",
-                        t->toPartitioning ? t->toPartitioning->name : "(none)", d->name);
-        laik_log_DataFlow(d->activeFlow);
-        laik_log_flush("/'%s')",
-                        d->activePartitioning ? d->activePartitioning->name : "(none)");
+        laik_log_append("exec transition ");
+        laik_log_Transition(t, false);
+        laik_log_flush(" on data '%s'", d->name);
     }
 
     // we only can execute transtion if start state in transition is correct
-    if ((d->activeFlow != t->fromFlow) ||
-        (d->activePartitioning != t->fromPartitioning)) {
-        laik_panic("laik_exec_transition starts in wrong phase!");
+    if (d->activePartitioning != t->fromPartitioning) {
+        laik_panic("laik_exec_transition starts in wrong partitioning!");
         exit(1);
     }
 
@@ -1110,7 +1101,6 @@ void laik_exec_transition(Laik_Data* d, Laik_Transition* t)
 
     // set new mapping/partitioning active
     d->activePartitioning = t->toPartitioning;
-    d->activeFlow = t->toFlow;
     d->activeMappings = toList;
 }
 
@@ -1155,21 +1145,14 @@ void laik_exec_actions(Laik_ActionSeq* as)
     Laik_Data* d = tc->data;
 
     if (laik_log_begin(1)) {
-        laik_log_append("exec actions for (");
-        laik_log_DataFlow(t->fromFlow);
-        laik_log_append("/'%s' => ", t->fromPartitioning ? t->fromPartitioning->name : "(none)");
-        laik_log_DataFlow(t->toFlow);
-        laik_log_append("/'%s') on data '%s' (in ",
-                        t->toPartitioning ? t->toPartitioning->name : "(none)", d->name);
-        laik_log_DataFlow(d->activeFlow);
-        laik_log_flush("/'%s')",
-                        d->activePartitioning ? d->activePartitioning->name : "(none)");
+        laik_log_append("exec actions for transition ");
+        laik_log_Transition(t, false);
+        laik_log_flush(" on data '%s'", d->name);
     }
 
     // we only can execute transtion if start state in transition is correct
-    if ((d->activeFlow != t->fromFlow) ||
-        (d->activePartitioning != t->fromPartitioning)) {
-        laik_panic("laik_exec_transitionplan starts in wrong phase!");
+    if (d->activePartitioning != t->fromPartitioning) {
+        laik_panic("laik_exec_actions starts in wrong partitioning!");
         exit(1);
     }
 
@@ -1192,15 +1175,14 @@ void laik_exec_actions(Laik_ActionSeq* as)
 
     // set new mapping/partitioning active
     d->activePartitioning = t->toPartitioning;
-    d->activeFlow = t->toFlow;
     d->activeMappings = toList;
 }
 
 
 // switch to given partitioning
 void laik_switchto_partitioning(Laik_Data* d,
-                                Laik_Partitioning* toP, Laik_DataFlow toFlow,
-                                Laik_ReductionOperation toRedOp)
+                                Laik_Partitioning* toP, Laik_DataFlow flow,
+                                Laik_ReductionOperation redOp)
 {
     // calculate actions to be done for switching
 
@@ -1220,9 +1202,8 @@ void laik_switchto_partitioning(Laik_Data* d,
 
     Laik_MappingList* toList = prepareMaps(d, toP, 0);
     Laik_Transition* t = do_calc_transition(d->space,
-                                            d->activePartitioning,
-                                            d->activeFlow, d->activeRedOp,
-                                            toP, toFlow, toRedOp);
+                                            d->activePartitioning, toP,
+                                            flow, redOp);
 
     doTransition(d, t, 0, d->activeMappings, toList);
 
@@ -1232,21 +1213,19 @@ void laik_switchto_partitioning(Laik_Data* d,
 
     // set new mapping/partitioning active
     d->activePartitioning = toP;
-    d->activeFlow = toFlow;
-    d->activeRedOp = toRedOp;
     d->activeMappings = toList;
 }
 
 
 // switch to another data flow, keep partitioning
 void laik_switchto_flow(Laik_Data* d,
-                        Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp)
+                        Laik_DataFlow flow, Laik_ReductionOperation redOp)
 {
     if (!d->activePartitioning) {
         // makes no sense without partitioning
         laik_panic("laik_switch_flow without active partitioning!");
     }
-    laik_switchto_partitioning(d, d->activePartitioning, toFlow, toRedOp);
+    laik_switchto_partitioning(d, d->activePartitioning, flow, redOp);
 }
 
 

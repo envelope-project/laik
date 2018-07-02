@@ -69,29 +69,16 @@ typedef struct _Laik_Partitioner Laik_Partitioner;
 /**
  * Laik_DataFlow
  *
- * Specifies the data flows to adhere to when switching from one
+ * Specifies the data flow to adhere to when switching from one
  * partitioning to another in a transition.
- *
- * Consistency rules:
- * - CopyIn only possible if previous phase is CopyOut or
- *   ReduceOut
  */
 typedef enum _Laik_DataFlow {
     LAIK_DF_None = 0,
 
-    LAIK_DF_CopyIn,          // preserve values of previous phase
-    LAIK_DF_CopyOut,         // propagate values to next phase
-    LAIK_DF_CopyInOut,       // preserve values from previous phase and propagate to next
-    LAIK_DF_InitInCopyOut,   // Initialize and aggregate, needs reduction operation
+    LAIK_DF_Preserve,  // preserve values in transition to new partitioning
+    LAIK_DF_Init,      // initialize with neutral element of reduction operation
 
 } Laik_DataFlow;
-
-// do we need to copy values in?
-bool laik_do_copyin(Laik_DataFlow flow);
-// do we need to copy values out?
-bool laik_do_copyout(Laik_DataFlow flow);
-// Do we need to init values?
-bool laik_do_init(Laik_DataFlow flow);
 
 
 /**
@@ -414,8 +401,8 @@ bool laik_index_global2local(Laik_Partitioning*,
 // Calculate communication required for transitioning between partitionings
 Laik_Transition*
 laik_calc_transition(Laik_Space* space,
-                     Laik_Partitioning* fromP, Laik_DataFlow fromFlow, Laik_ReductionOperation fromRedOp,
-                     Laik_Partitioning* toP, Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
+                     Laik_Partitioning* fromP, Laik_Partitioning* toP,
+                     Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
 
 #endif // _LAIK_SPACE_H_

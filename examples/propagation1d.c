@@ -64,11 +64,11 @@ int main(int argc, char* argv[])
     uint64_t ecount, ncount;
 
     // distribution of the elements
-    laik_switchto_partitioning(element, pElements, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(element, pElements, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(element, (void**) &ebase, &ecount);
 
     // distribution of the nodes
-    laik_switchto_partitioning(node, pNodes, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(node, pNodes, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(node, (void**) &nbase, &ncount);
 
     // do something with elements and nodes...

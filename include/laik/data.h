@@ -131,10 +131,10 @@ void laik_exec_actions(Laik_ActionSeq* as);
 // switch to new partitioning (new flow is derived from previous flow)
 void laik_switchto_partitioning(Laik_Data* d,
                                 Laik_Partitioning* toP,
-                                Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
+                                Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
 // switch to use another data flow, keep access phase/partitioning
-void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
+void laik_switchto_flow(Laik_Data* d, Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
 // get slice number <n> in own partition of data container <d>
 // returns 0 if partitioning is not set or slice number <n> is invalid

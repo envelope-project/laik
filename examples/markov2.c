@@ -138,14 +138,13 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         laik_set_iteration(laik_data_get_inst(data1), iter+1);
 
         // switch dRead to pRead, dWrite to pWrite
-        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(dRead,  pRead, LAIK_DF_Preserve, LAIK_RO_Sum);
         laik_map_def1(dRead, (void**) &src, &srcCount);
         laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
         assert(srcFrom < srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
-        laik_switchto_partitioning(dWrite, pWrite,
-                                   LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_Init, LAIK_RO_Sum);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
         dstFrom = laik_local2global_1d(dWrite, 0);
 
@@ -218,14 +217,13 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         laik_set_iteration(laik_data_get_inst(data1), iter+1);
 
         // switch dRead to pRead, dWrite to pWrite
-        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(dRead,  pRead, LAIK_DF_Preserve, LAIK_RO_Sum);
         laik_map_def1(dRead, (void**) &src, &srcCount);
         laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
         assert(srcFrom < srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
-        laik_switchto_partitioning(dWrite, pWrite,
-                                   LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_Init, LAIK_RO_Sum);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
 
         if (doPrint) {
@@ -393,7 +391,7 @@ int main(int argc, char* argv[])
     //  from owned states later in the iterations)
     double *v;
     uint64_t count, off;
-    laik_switchto_partitioning(data1, pRead, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(data1, pRead, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(data1, (void**) &v, &count);
     double p = (onestate < 0) ? (1.0 / n) : 0.0;
     for(uint64_t i = 0; i < count; i++)
@@ -426,7 +424,7 @@ int main(int argc, char* argv[])
     laik_reset_profiling(inst);
     laik_set_phase(inst, 3, "Collect", 0);
 
-    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
     laik_writeout_profile();
     laik_map_def1(dRes, (void**) &v, &count);
     laik_set_phase(inst, 4, "Out", 0);

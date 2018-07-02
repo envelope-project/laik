@@ -202,10 +202,10 @@ double data_check_sum(Laik_Data* d, Laik_Partitioning* p, Laik_Group* world)
     sumspace = laik_new_space_1d(laik_inst(world), 1);
     sumdata  = laik_new_data(sumspace, laik_Double);
     sumpart  = laik_new_partitioning(laik_All, world, sumspace, 0);
-    laik_switchto_partitioning(sumdata, sumpart, LAIK_DF_CopyOut, LAIK_RO_Sum);
+    laik_switchto_partitioning(sumdata, sumpart, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(sumdata, (void**) &base, 0);
     *base = sum;
-    laik_switchto_partitioning(sumdata, sumpart, LAIK_DF_CopyIn, LAIK_RO_Sum);
+    laik_switchto_partitioning(sumdata, sumpart, LAIK_DF_Preserve, LAIK_RO_Sum);
     laik_map_def1(sumdata, (void**) &base, 0);
 
     return *base;
@@ -304,7 +304,7 @@ int main(int argc, char* argv[])
 
     // initialization phase
     // distribution of the elements
-    laik_switchto_partitioning(element, pElements, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(element, pElements, LAIK_DF_None, LAIK_RO_None);
 
     // map the partitioning to the memory
     // first the number of slices in the
@@ -319,10 +319,10 @@ int main(int argc, char* argv[])
             baseE[i] = 1.0;
         }
     }
-    laik_switchto_partitioning(element, pElements, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(element, pElements, LAIK_DF_Preserve, LAIK_RO_None);
 
     // distribution of the nodes
-    laik_switchto_partitioning(node, pNodes, LAIK_DF_CopyOut, LAIK_RO_Sum);
+    laik_switchto_partitioning(node, pNodes, LAIK_DF_None, LAIK_RO_Sum);
     int nSlicesNodes = laik_my_slicecount(pNodes);
     for (int n = 0; n < nSlicesNodes; ++n) {
         laik_map_def(node, n, (void**) &baseN, &countN);
@@ -330,7 +330,7 @@ int main(int argc, char* argv[])
             baseN[i] = 0.0;
         }
     }
-    laik_switchto_partitioning(node, pNodes, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(node, pNodes, LAIK_DF_Preserve, LAIK_RO_Sum);
     // set the boundary conditions on the nodes
     apply_boundary_condition(node, pNodes, Rx, Ry, rx, ry, 0);
 
@@ -354,7 +354,7 @@ int main(int argc, char* argv[])
         // - update the elements using their neighbours,
         // - go through all the elements and refer to their
         //   neighbouring nodes and update the elements
-        laik_switchto_partitioning(element, pElements, LAIK_DF_CopyOut, LAIK_RO_None);
+        laik_switchto_partitioning(element, pElements, LAIK_DF_None, LAIK_RO_None);
         for (int m = 0; m < nMapsElements; m++) {
             laik_map_def(element, m, (void **)&baseE, &countE);
 
@@ -381,13 +381,14 @@ int main(int argc, char* argv[])
                 baseE[i] += baseN[j3] / 4;
             }
         }
-        laik_switchto_partitioning(element, pElements, LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(element, pElements,
+                                   LAIK_DF_Preserve, LAIK_RO_None);
 
         // forward propagation:
         // - update the nodes using elements
         // - go through all the elements and refer
         //   to their neighbouring nodes and update them
-        laik_switchto_partitioning(node, pNodes, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+        laik_switchto_partitioning(node, pNodes, LAIK_DF_Init, LAIK_RO_Sum);
         for(int m = 0; m < nMapsElements; m++) {
             laik_map_def(element, m, (void **)&baseE, &countE);
 
@@ -420,7 +421,7 @@ int main(int argc, char* argv[])
                 baseN[j3] += baseE[i] / 4;
             }
         }
-        laik_switchto_partitioning(node, pNodes, LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(node, pNodes, LAIK_DF_Preserve, LAIK_RO_Sum);
         apply_boundary_condition(node, pNodes, Rx, Ry, rx, ry, pow(2, it));
     }
 

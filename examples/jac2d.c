@@ -163,7 +163,7 @@ int main(int argc, char* argv[])
     Laik_Data* dRead = data2;
 
     // distributed initialization
-    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
     laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
 
     // default mapping order for 2d:
@@ -191,8 +191,8 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_CopyIn, LAIK_RO_None);
-        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_CopyOut, LAIK_RO_None);
+        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
         laik_map_def1_2d(dRead,  (void**) &baseR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
@@ -236,10 +236,10 @@ int main(int argc, char* argv[])
             res_iters++;
 
             // calculate global residuum
-            laik_switchto_flow(sumD, LAIK_DF_CopyOut, LAIK_RO_Sum);
+            laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
             laik_map_def1(sumD, (void**) &sumPtr, 0);
             *sumPtr = res;
-            laik_switchto_flow(sumD, LAIK_DF_CopyIn, LAIK_RO_None);
+            laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
             laik_map_def1(sumD, (void**) &sumPtr, 0);
             res = *sumPtr;
 
@@ -302,7 +302,7 @@ int main(int argc, char* argv[])
         // for check at end: sum up all just written values
         Laik_Partitioning* pMaster;
         pMaster = laik_new_partitioning(laik_Master, activeGroup, space, 0);
-        laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+        laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
 
         if (laik_myid(activeGroup) == 0) {
             double sum = 0.0;

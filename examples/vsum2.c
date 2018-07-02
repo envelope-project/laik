@@ -18,7 +18,7 @@
  * Vector sum example (2).
  *
  * Same as vsum, but using 2-cyclic block paritioning; that is, every
- * task will get to ranges in the block partitiongs. To this end, we
+ * task will get two ranges in the block partitiongs. To this end, we
  * set the cycle count for the block partitioner to 2.
  */
 
@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
 
     // initialize at master (others do nothing, empty partition)
     laik_switchto_new_partitioning(a, world, laik_Master,
-                                   LAIK_DF_CopyOut, LAIK_RO_None);
+                                   LAIK_DF_None, LAIK_RO_None);
     if (laik_myid(world) == 0) {
         // it is ensured this is exactly one slice
         laik_map_def1(a, (void**) &base, &count);
@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
     // distribute data equally among all
     laik_switchto_new_partitioning(a, world,
                                    laik_new_block_partitioner(0, 2, 0, 0, 0),
-                                   LAIK_DF_CopyInOut, LAIK_RO_None);
+                                   LAIK_DF_Preserve, LAIK_RO_None);
     // partial sum using equally-sized blocks, outer loop over slices
     for(int sNo = 0;; sNo++) {
         if (laik_map_def(a, sNo, (void**) &base, &count) == 0) break;
@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
     // distribution using element-wise weights equal to index
     laik_switchto_new_partitioning(a, world,
                                    laik_new_block_partitioner(0, 2, getEW, 0, 0),
-                                   LAIK_DF_CopyInOut, LAIK_RO_None);
+                                   LAIK_DF_Preserve, LAIK_RO_None);
     // partial sum using blocks sized by element weights
     for(int sNo = 0;; sNo++) {
         if (laik_map_def(a, sNo, (void**) &base, &count) == 0) break;
@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
         // distribution using task-wise weights: without master
         laik_switchto_new_partitioning(a, world,
                                        laik_new_block_partitioner(0, 2, 0, getTW, 0),
-                                       LAIK_DF_CopyInOut, LAIK_RO_None);
+                                       LAIK_DF_Preserve, LAIK_RO_None);
         // partial sum using blocks sized by task weights
         for(int sNo = 0;; sNo++) {
             if (laik_map_def(a, sNo, (void**) &base, &count) == 0) break;
@@ -117,14 +117,14 @@ int main(int argc, char* argv[])
     // aggregation functionality when switching to new partitioning
     Laik_Data* sum = laik_new_data_1d(inst, laik_Double, 4);
     laik_switchto_new_partitioning(sum, world, laik_All,
-                                   LAIK_DF_CopyOut, LAIK_RO_Sum);
+                                   LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(sum, (void**) &base, &count);
     assert(count == 4);
     for(int i = 0; i < 4; i++) base[i] = mysum[i];
 
     // master-only partitioning: add partial values to be read at master
     laik_switchto_new_partitioning(sum, world, laik_Master,
-                                   LAIK_DF_CopyIn, LAIK_RO_None);
+                                   LAIK_DF_Preserve, LAIK_RO_Sum);
     if (laik_myid(world) == 0) {
         laik_map_def1(sum, (void**) &base, &count);
         printf("Total sums: %.0f, %.0f, %.0f, %.0f\n",

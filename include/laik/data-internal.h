@@ -90,9 +90,6 @@ struct _Laik_Data {
 
     // currently used partitioning and data flow
     Laik_Partitioning* activePartitioning;
-    // TODO: remove with API change to relate data flow only to transition
-    Laik_DataFlow activeFlow;
-    Laik_ReductionOperation activeRedOp;
 
     // active mappings (multiple possible)
     Laik_MappingList* activeMappings;

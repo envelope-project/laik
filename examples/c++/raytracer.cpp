@@ -298,9 +298,9 @@ int main(int argc, char **argv)
     double angle = tan(M_PI * 0.5 * fov / 180.); 
 
     Laik_Partitioning* pValAll = laik_new_partitioning(laik_All, world, space, 0);
-    laik_switchto_partitioning(xval, pValAll, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
-    laik_switchto_partitioning(yval, pValAll, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
-    laik_switchto_partitioning(zval, pValAll, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+    laik_switchto_partitioning(xval, pValAll, LAIK_DF_Init, LAIK_RO_Sum);
+    laik_switchto_partitioning(yval, pValAll, LAIK_DF_Init, LAIK_RO_Sum);
+    laik_switchto_partitioning(zval, pValAll, LAIK_DF_Init, LAIK_RO_Sum);
 
     int64_t xstart, xend, ystart, yend;
     laik_my_slice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
@@ -325,9 +325,9 @@ int main(int argc, char **argv)
     } 
 
     Laik_Partitioning* pValMaster = laik_new_partitioning(laik_Master, world, space, 0);
-    laik_switchto_partitioning(xval, pValMaster, LAIK_DF_CopyIn, LAIK_RO_None);
-    laik_switchto_partitioning(yval, pValMaster, LAIK_DF_CopyIn, LAIK_RO_None);
-    laik_switchto_partitioning(zval, pValMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(xval, pValMaster, LAIK_DF_Preserve, LAIK_RO_Sum);
+    laik_switchto_partitioning(yval, pValMaster, LAIK_DF_Preserve, LAIK_RO_Sum);
+    laik_switchto_partitioning(zval, pValMaster, LAIK_DF_Preserve, LAIK_RO_Sum);
 
     if (laik_myid(world) == 0) {
         laik_map_def1(xval, (void**)&xvalues, 0);

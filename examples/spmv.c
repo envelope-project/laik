@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
     Laik_Partitioner* pr = laik_new_block_partitioner1();
     laik_set_index_weight(pr, getEW, m);
     Laik_Partitioning* p = laik_new_partitioning(pr, world, s, 0);
-    laik_switchto_partitioning(resD, p, LAIK_DF_CopyOut, LAIK_RO_None);
+    laik_switchto_partitioning(resD, p, LAIK_DF_None, LAIK_RO_None);
 
     double* res;
     uint64_t count;
@@ -111,7 +111,7 @@ int main(int argc, char* argv[])
     }
     // push result to master
     Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, s, 0);
-    laik_switchto_partitioning(resD, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(resD, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;
@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
 
     // other way to push results to master: use sum reduction
     Laik_Partitioning* pAll = laik_new_partitioning(laik_All, world, s, 0);
-    laik_switchto_partitioning(resD, pAll, LAIK_DF_InitInCopyOut, LAIK_RO_Sum);
+    laik_switchto_partitioning(resD, pAll, LAIK_DF_Init, LAIK_RO_Sum);
     laik_map_def1(resD, (void**) &res, &count);
     laik_my_slice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
@@ -134,7 +134,7 @@ int main(int argc, char* argv[])
             res[r] += m->val[o] * v[m->col[o]];
         laik_set_iteration(inst, r - fromRow);
     }
-    laik_switchto_partitioning(resD, pMaster, LAIK_DF_CopyIn, LAIK_RO_None);
+    laik_switchto_partitioning(resD, pMaster, LAIK_DF_Preserve, LAIK_RO_Sum);
     if (laik_myid(world) == 0) {
         laik_map_def1(resD, (void**) &res, &count);
         double sum = 0.0;

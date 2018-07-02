@@ -123,11 +123,9 @@ void laik_log_Reduction(Laik_ReductionOperation op)
 void laik_log_DataFlow(Laik_DataFlow flow)
 {
     switch(flow) {
-    case LAIK_DF_None:          laik_log_append("-"); break;
-    case LAIK_DF_CopyIn:        laik_log_append("in"); break;
-    case LAIK_DF_CopyOut:       laik_log_append("out"); break;
-    case LAIK_DF_CopyInOut:     laik_log_append("in-out"); break;
-    case LAIK_DF_InitInCopyOut: laik_log_append("init-reduce"); break;
+    case LAIK_DF_None:     laik_log_append("-"); break;
+    case LAIK_DF_Preserve: laik_log_append("preserve"); break;
+    case LAIK_DF_Init:     laik_log_append("init"); break;
     default: assert(0);
     }
 }
@@ -153,25 +151,23 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
 void laik_log_Transition(Laik_Transition* t, bool showActions)
 {
     if (t->fromPartitioning)
-        laik_log_append("('%s'/", t->fromPartitioning->name);
+        laik_log_append("'%s'", t->fromPartitioning->name);
     else
-        laik_log_append("(-/");
-    laik_log_DataFlow(t->fromFlow);
-    laik_log_append("/");
-    laik_log_Reduction(t->fromRedOp);
-    if (t->toPartitioning)
-        laik_log_append(" => '%s'/", t->toPartitioning->name);
-    else
-        laik_log_append(" => -/");
-    laik_log_DataFlow(t->toFlow);
-    laik_log_append("/");
-    laik_log_Reduction(t->toRedOp);
-    if (!showActions) {
-        laik_log_append(")");
-        return;
+        laik_log_append("(-)");
+    laik_log_append(" ==(");
+    laik_log_DataFlow(t->flow);
+    if (laik_is_reduction(t->redOp)) {
+        laik_log_append("/");
+        laik_log_Reduction(t->redOp);
     }
+    laik_log_append(")=> ");
+    if (t->toPartitioning)
+        laik_log_append("'%s'", t->toPartitioning->name);
+    else
+        laik_log_append("(-)");
+    if (!showActions) return;
 
-    laik_log_append("): ");
+    laik_log_append(": ");
 
     if ((t == 0) ||
         (t->localCount + t->initCount +

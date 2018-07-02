@@ -209,42 +209,6 @@ bool laik_is_reduction(Laik_ReductionOperation redOp)
     return redOp != LAIK_RO_None;
 }
 
-// do we need to copy values in?
-bool laik_do_copyin(Laik_DataFlow flow)
-{
-    switch(flow) {
-    case LAIK_DF_CopyIn:
-    case LAIK_DF_CopyInOut:
-        return true;
-    default: break;
-    }
-    return false;
-}
-
-// do we need to copy values out?
-bool laik_do_copyout(Laik_DataFlow flow)
-{
-    switch(flow) {
-    case LAIK_DF_CopyOut:
-    case LAIK_DF_CopyInOut:
-    case LAIK_DF_InitInCopyOut:
-        return true;
-    default: break;
-    }
-    return false;
-}
-
-// do we need to init values?
-bool laik_do_init(Laik_DataFlow flow)
-{
-    switch(flow) {
-    case LAIK_DF_InitInCopyOut:
-        return true;
-    default:
-        break;
-    }
-    return false;
-}
 
 
 //-----------------------
@@ -1047,10 +1011,8 @@ void calcAddReductions(int tflags,
 // Calculate communication required for transitioning between partitionings
 Laik_Transition*
 do_calc_transition(Laik_Space* space,
-                   Laik_Partitioning* fromP,
-                   Laik_DataFlow fromFlow, Laik_ReductionOperation fromRedOp,
-                   Laik_Partitioning* toP,
-                   Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp)
+                   Laik_Partitioning* fromP, Laik_Partitioning* toP,
+                   Laik_DataFlow flow, Laik_ReductionOperation redOp)
 {
     Laik_Slice* slc;
 
@@ -1074,17 +1036,13 @@ do_calc_transition(Laik_Space* space,
     else if (toP == 0) {
         // end: go to nothing
         assert(fromP != 0);
-        assert(!laik_do_copyout(fromFlow));
+        assert(flow == LAIK_DF_None);
         assert(fromP->space == space);
 
         group = fromP->group;
     }
     else {
         // to and from set
-        if (laik_do_copyin(toFlow)) {
-            // values must come from something
-            assert(laik_do_copyout(fromFlow) || laik_is_reduction(fromRedOp));
-        }
         assert(fromP->space == space);
         assert(toP->space == space);
 
@@ -1100,38 +1058,32 @@ do_calc_transition(Laik_Space* space,
     int dims = space->dims;
     int taskCount = group->size;
 
-    // init values as next phase does a reduction?
-    if ((toP != 0) && laik_do_init(toFlow)) {
+    // request to initialize values?
+    if ((toP != 0) && (flow == LAIK_DF_Init)) {
 
         for(int o = toP->off[myid]; o < toP->off[myid+1]; o++) {
             if (laik_slice_isEmpty(dims, &(toP->tslice[o].s))) continue;
 
-            assert(toRedOp != LAIK_RO_None);
+            assert(redOp != LAIK_RO_None);
             appendInitTOp( &(toP->tslice[o].s),
                            o - toP->off[myid],
                            toP->tslice[o].mapNo,
-                           toRedOp);
+                           redOp);
         }
     }
 
-    // check for 1d with preserving data between partitionings
-    if ((dims == 1) &&
-        (fromP != 0) && laik_do_copyout(fromFlow) &&
-        (toP != 0) && laik_do_copyin(toFlow)) {
+    if ((fromP != 0) && (toP != 0) && (flow == LAIK_DF_Preserve)) {
+        // check for 1d with preserving data between partitionings
+        if (dims == 1) {
 
-        // just check for reduction action
-        // TODO: Do this always, remove other cases
-        calcAddReductions(tflags,
-                          group, fromRedOp,
-                          fromP, toP);
-    }
-    else
-    if ((fromP != 0) && (toP != 0)) {
-
-        // determine local slices to keep
-        // (may need local copy if from/to mappings are different).
-        // reductions are not handled here, but by backend
-        if (laik_do_copyout(fromFlow) && laik_do_copyin(toFlow)) {
+            // just check for reduction action
+            // TODO: Do this always, remove other cases
+            calcAddReductions(tflags, group, redOp, fromP, toP);
+        }
+        else {
+            // determine local slices to keep
+            // (may need local copy if from/to mappings are different).
+            // reductions are not handled here, but by backend
             for(int o1 = fromP->off[myid]; o1 < fromP->off[myid+1]; o1++) {
                 for(int o2 = toP->off[myid]; o2 < toP->off[myid+1]; o2++) {
                     slc = laik_slice_intersect(dims,
@@ -1146,53 +1098,83 @@ do_calc_transition(Laik_Space* space,
                                    toP->tslice[o2].mapNo);
                 }
             }
-        }
 
-        // something to reduce?
-        if (laik_is_reduction(fromRedOp) && laik_do_copyin(toFlow)) {
-            // special case: reduction on full space involving everyone with
-            //               result to one or all?
-            bool fromAllto1OrAll = false;
-            int outputGroup = -2;
-            if (laik_partitioning_isAll(fromP)) {
-                // reduction result either goes to all or master
-                int task = laik_partitioning_isSingle(toP);
-                if (task < 0) {
-                    // output is not a single task
-                    if (laik_partitioning_isAll(toP)) {
-                        // output -1 is group ALL
-                        outputGroup = -1;
+            // something to reduce?
+            if (laik_is_reduction(redOp)) {
+                // special case: reduction on full space involving everyone with
+                //               result to one or all?
+                bool fromAllto1OrAll = false;
+                int outputGroup = -2;
+                if (laik_partitioning_isAll(fromP)) {
+                    // reduction result either goes to all or master
+                    int task = laik_partitioning_isSingle(toP);
+                    if (task < 0) {
+                        // output is not a single task
+                        if (laik_partitioning_isAll(toP)) {
+                            // output -1 is group ALL
+                            outputGroup = -1;
+                            fromAllto1OrAll = true;
+                        }
+                    }
+                    else {
+                        outputGroup = getTaskGroupSingle(task);
+                        if (taskCount == 1) {
+                            // the process group only consists of 1 process:
+                            // one output process is equivalent to all
+                            assert(task == 0); // must have rank/id 0
+                            outputGroup = -1;
+                        }
                         fromAllto1OrAll = true;
                     }
                 }
+
+                if (fromAllto1OrAll) {
+                    assert(outputGroup > -2);
+                    // complete space, always sliceNo 0 and mapNo 0
+                    appendRedTOp( &(space->s), redOp,
+                                  -1, outputGroup, 0, 0, 0, 0);
+                }
                 else {
-                    outputGroup = getTaskGroupSingle(task);
-                    if (taskCount == 1) {
-                        // the process group only consists of 1 process:
-                        // one output process is equivalent to all
-                        assert(task == 0); // must have rank/id 0
-                        outputGroup = -1;
+                    assert(dims == 1);
+                    calcAddReductions(tflags, group, redOp, fromP, toP);
+                }
+            }
+            else { // no reduction
+
+                // something to receive not coming from a reduction?
+                for(int task = 0; task < taskCount; task++) {
+                    if (task == myid) continue;
+                    for(int o1 = toP->off[myid]; o1 < toP->off[myid+1]; o1++) {
+
+                        // everything we have local will not have been sent
+                        // TODO: we only check for exact match to catch All
+                        // FIXME: should print out a Warning/Error as the App
+                        //        was requesting for overwriting of values!
+                        slc = &(toP->tslice[o1].s);
+                        for(int o2 = fromP->off[myid]; o2 < fromP->off[myid+1]; o2++) {
+                            if (laik_slice_isEqual(dims, slc,
+                                                   &(fromP->tslice[o2].s))) {
+                                slc = 0;
+                                break;
+                            }
+                        }
+                        if (slc == 0) continue;
+
+                        for(int o2 = fromP->off[task]; o2 < fromP->off[task+1]; o2++) {
+
+                            slc = laik_slice_intersect(dims,
+                                                       &(fromP->tslice[o2].s),
+                                                       &(toP->tslice[o1].s));
+                            if (slc == 0) continue;
+
+                            appendRecvTOp(slc, o1 - toP->off[myid],
+                                          toP->tslice[o1].mapNo, task);
+                        }
                     }
-                    fromAllto1OrAll = true;
                 }
             }
 
-            if (fromAllto1OrAll) {
-                assert(outputGroup > -2);
-                // complete space, always sliceNo 0 and mapNo 0
-                appendRedTOp( &(space->s), fromRedOp,
-                              -1, outputGroup, 0, 0, 0, 0);
-            }
-            else {
-                assert(dims == 1);
-                calcAddReductions(tflags,
-                                  group, fromRedOp,
-                                  fromP, toP);
-            }
-        }
-
-        // something to send?
-        if (laik_do_copyout(fromFlow)) {
+            // something to send?
             for(int task = 0; task < taskCount; task++) {
                 if (task == myid) continue;
                 for(int o1 = fromP->off[myid]; o1 < fromP->off[myid+1]; o1++) {
@@ -1221,40 +1203,6 @@ do_calc_transition(Laik_Space* space,
 
                         appendSendTOp(slc, o1 - fromP->off[myid],
                                       fromP->tslice[o1].mapNo, task);
-                    }
-                }
-            }
-        }
-
-        // something to receive not coming from a reduction?
-        if (!laik_is_reduction(fromRedOp) && laik_do_copyin(toFlow)) {
-            for(int task = 0; task < taskCount; task++) {
-                if (task == myid) continue;
-                for(int o1 = toP->off[myid]; o1 < toP->off[myid+1]; o1++) {
-
-                    // everything we have local will not have been sent
-                    // TODO: we only check for exact match to catch All
-                    // FIXME: should print out a Warning/Error as the App
-                    //        was requesting for overwriting of values!
-                    slc = &(toP->tslice[o1].s);
-                    for(int o2 = fromP->off[myid]; o2 < fromP->off[myid+1]; o2++) {
-                        if (laik_slice_isEqual(dims, slc,
-                                               &(fromP->tslice[o2].s))) {
-                            slc = 0;
-                            break;
-                        }
-                    }
-                    if (slc == 0) continue;
-
-                    for(int o2 = fromP->off[task]; o2 < fromP->off[task+1]; o2++) {
-
-                        slc = laik_slice_intersect(dims,
-                                                   &(fromP->tslice[o2].s),
-                                                   &(toP->tslice[o1].s));
-                        if (slc == 0) continue;
-
-                        appendRecvTOp(slc, o1 - toP->off[myid],
-                                      toP->tslice[o1].mapNo, task);
                     }
                 }
             }
@@ -1297,10 +1245,8 @@ do_calc_transition(Laik_Space* space,
     t->group = group;
     t->fromPartitioning = fromP;
     t->toPartitioning = toP;
-    t->fromFlow = fromFlow;
-    t->fromRedOp = fromRedOp;
-    t->toFlow = toFlow;
-    t->toRedOp = toRedOp;
+    t->flow = flow;
+    t->redOp = redOp;
 
     t->dims = dims;
     t->actionCount = localBufCount + initBufCount +
@@ -1341,11 +1287,11 @@ do_calc_transition(Laik_Space* space,
 // Calculate communication required for transitioning between partitionings
 Laik_Transition*
 laik_calc_transition(Laik_Space* space,
-                     Laik_Partitioning* fromP, Laik_DataFlow fromFlow, Laik_ReductionOperation fromRedOp,
-                     Laik_Partitioning* toP, Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp)
+                     Laik_Partitioning* fromP, Laik_Partitioning* toP,
+                     Laik_DataFlow flow, Laik_ReductionOperation redOp)
 {
     Laik_Transition* t;
-    t = do_calc_transition(space, fromP, fromFlow, fromRedOp, toP, toFlow, toRedOp);
+    t = do_calc_transition(space, fromP, toP, flow, redOp);
 
     if (laik_log_begin(1)) {
         laik_log_append("Calculated transition ");
