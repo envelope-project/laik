@@ -19,7 +19,7 @@
 #ifndef _LAIK_SPACE_INTERNAL_H_
 #define _LAIK_SPACE_INTERNAL_H_
 
-#include <laik.h>     // for Laik_AccessPhase, Laik_Index, Laik_Partitioning
+#include <laik.h>     // for Laik_Index, Laik_Partitioning
 #include <stdbool.h>  // for bool
 #include <stdint.h>   // for int64_t
 
@@ -37,14 +37,7 @@ struct _Laik_Space {
 
     Laik_Instance* inst;
     Laik_Space* nextSpaceForInstance; // for list of spaces used in instance
-
-    // linked list of access phases for this space
-    Laik_AccessPhase* firstAccessPhaseForSpace;
 };
-
-// add/remove access phase to/from space
-void laik_addAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p);
-void laik_removeAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p);
 
 struct _Laik_Partitioner {
     const char* name;
@@ -113,48 +106,6 @@ void laik_clear_partitioning(Laik_Partitioning* p);
 void laik_free_partitioning(Laik_Partitioning* p);
 void laik_updateMyMapOffsets(Laik_Partitioning* p);
 
-
-//
-// Laik_AccessPhase
-//
-
-struct _Laik_AccessPhase {
-    char* name; // for debugging
-    int id;     // for debugging
-
-    Laik_Group* group;
-    Laik_Space* space; // space to partition
-
-    Laik_Partitioner* partitioner;
-    Laik_AccessPhase* base;
-
-    // partitioning borders currently used (calculated lazy)
-    bool hasValidPartitioning;
-    Laik_Partitioning* partitioning;
-
-    // head of list of data containers with this access phase active
-    Laik_Data* firstDataForAccessPhase;
-    // head of list of access phases using this one as base
-    Laik_AccessPhase* firstAccessPhaseForBase;
-
-     // for list of access phases using same space
-    Laik_AccessPhase* nextAccessPhaseForSpace;
-    // for list of access phases using same group
-    Laik_AccessPhase* nextAccessPhaseForGroup;
-    // for list of access phases using this one as base
-    Laik_AccessPhase* nextAccessPhaseForBase;
-};
-
-// add/remove access phase to/from list using a given access phase as base
-void laik_addAccessPhaseForBase(Laik_AccessPhase* base,
-                                Laik_AccessPhase* ap);
-void laik_removeAccessPhaseForBase(Laik_AccessPhase* base,
-                                   Laik_AccessPhase* ap);
-
-
-// add/remove data container as user to/from access phase
-void laik_addDataForAccessPhase(Laik_AccessPhase* ap, Laik_Data* d);
-void laik_removeDataFromAccessPhase(Laik_AccessPhase* ap, Laik_Data* d);
 
 
 //

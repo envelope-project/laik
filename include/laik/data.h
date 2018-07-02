@@ -22,7 +22,7 @@
 #include <stdint.h>   // for int64_t, uint64_t
 #include <stdlib.h>   // for size_t
 #include "core.h"     // for Laik_Group, Laik_Instance
-#include "space.h"    // for Laik_DataFlow, Laik_AccessPhase, Laik_Partitioning
+#include "space.h"    // for Laik_DataFlow, Laik_Partitioning
 #include "action.h"
 
 /*********************************************************************/
@@ -91,9 +91,6 @@ Laik_Instance* laik_data_get_inst(Laik_Data* d);
 // get active partitioning of data container
 Laik_Partitioning* laik_data_get_partitioning(Laik_Data* d);
 
-// get active access phase of data container
-Laik_AccessPhase* laik_data_get_accessphase(Laik_Data* d);
-
 // free resources for a data container
 void laik_free(Laik_Data*);
 
@@ -136,16 +133,8 @@ void laik_switchto_partitioning(Laik_Data* d,
                                 Laik_Partitioning* toP,
                                 Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
 
-// switch from active to another access phase
-void laik_switchto_phase(Laik_Data* d, Laik_AccessPhase* toAp,
-                         Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
-
 // switch to use another data flow, keep access phase/partitioning
 void laik_switchto_flow(Laik_Data* d, Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
-
-// migrate data container to use another group
-// (only possible if data does not have to be preserved)
-void laik_migrate_data(Laik_Data* d, Laik_Group* g);
 
 // get slice number <n> in own partition of data container <d>
 // returns 0 if partitioning is not set or slice number <n> is invalid
@@ -158,11 +147,6 @@ Laik_Partitioning* laik_switchto_new_partitioning(Laik_Data*, Laik_Group* g,
                                                   Laik_Partitioner* pr,
                                                   Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
-// switch from active to a newly created access phase using a given
-// partitioner algorithm, and return it
-Laik_AccessPhase* laik_switchto_new_phase(Laik_Data*, Laik_Group* g,
-                                          Laik_Partitioner* pr,
-                                          Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
 void laik_fill_double(Laik_Data* data, double v);
 

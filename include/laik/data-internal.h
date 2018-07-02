@@ -94,11 +94,6 @@ struct _Laik_Data {
     Laik_DataFlow activeFlow;
     Laik_ReductionOperation activeRedOp;
 
-    // if access phase is set, it must be consistent with active partitioning
-    Laik_AccessPhase* activeAccessPhase;
-    // linked list of data objects with same active access phase
-    Laik_Data* nextAccessPhaseUser;
-
     // active mappings (multiple possible)
     Laik_MappingList* activeMappings;
 

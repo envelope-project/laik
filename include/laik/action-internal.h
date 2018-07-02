@@ -18,7 +18,7 @@
 #ifndef _LAIK_ACTION_INTERNAL_H_
 #define _LAIK_ACTION_INTERNAL_H_
 
-#include <laik.h>         // for Laik_Instance, Laik_Group, Laik_AccessPhase
+#include <laik.h>         // for Laik_Instance, Laik_Group
 
 // Action sequences are used in the public LAIK API as abstraction
 // for compound communication requests, e.g. consisting of multiple

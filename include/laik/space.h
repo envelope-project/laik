@@ -396,80 +396,6 @@ laik_new_reassign_partitioner(Laik_Group* newg,
                               const void* userData);
 
 
-//--------------------------------------------------------------------------
-// LAIK access phase
-//
-
-// Create a new access phase for a process group on an index space, using
-// a given partitioning. Optionally, a partitioner algorithm may be
-// specified as well as another access phase whose change triggers a
-// new partitioner run.
-//
-// The partitioner will be called to calculate a concrete partitioning
-// - if partitioning borders are needed but not set yet
-//   (on laik_my_slice or when a data container is switched to it)
-// - for repartitioning when access phase is migrated to another group
-//   (done e.g. when group is shrinked/enlarged from external)
-// - whenever a given base partitioning the paritioning of this access
-//   phase is linked to changes
-Laik_AccessPhase*
-laik_new_accessphase(Laik_Group* group, Laik_Space* space,
-                      Laik_Partitioner* pr, Laik_AccessPhase* base);
-
-// return partitioner set for a partitioning
-Laik_Partitioner* laik_get_partitioner(Laik_AccessPhase* ap);
-
-// set the partitioner to use (can be custom, application-specific)
-void laik_set_partitioner(Laik_AccessPhase* ap, Laik_Partitioner* pr);
-
-// get space the access phase is used for
-Laik_Space* laik_get_apspace(Laik_AccessPhase* ap);
-
-// get task group used in partitioning
-Laik_Group* laik_get_apgroup(Laik_AccessPhase* ap);
-
-// free a partitioning with related resources
-void laik_free_accessphase(Laik_AccessPhase* ap);
-
-// get number of slices assigned to calling process for currently active
-// paritioning in the given access phase
-int laik_phase_my_slicecount(Laik_AccessPhase* ap);
-
-// get number of mappings assigned to calling process for currently active
-// paritioning in the given access phase
-int laik_phase_my_mapcount(Laik_AccessPhase* ap);
-
-// get number of slices within same mapping with ID <mapNo>, where the
-// slices are assigned to the calling process for currently active
-// paritioning in the given access phase
-int laik_phase_my_mapslicecount(Laik_AccessPhase* ap, int mapNo);
-
-// get slice number <n> from the slices assigned to the calling process
-// for the currently active paritioning in the given access phase
-Laik_TaskSlice* laik_phase_my_slice(Laik_AccessPhase* ap, int n);
-
-// get slice number <n> within a given map with ID <mapNo> assigned to the
-// calling process for the currently active paritioning in the given access phase
-Laik_TaskSlice* laik_phase_my_mapslice(Laik_AccessPhase* ap, int mapNo, int n);
-
-// get from/to values for 1d slice with number <n> assigned to this task
-// if there is no slice, return 0 and set range to [0;0[ (ie. empty)
-Laik_TaskSlice* laik_phase_myslice_1d(Laik_AccessPhase* ap, int n,
-                                      int64_t* from, int64_t* to);
-
-// get boundaries [x1;x2[ x [y1;y2[ for 2d slice <n> of this task
-// if there is no slice, return 0 and set ranges to [0;0[ (ie. empty)
-Laik_TaskSlice* laik_phase_myslice_2d(Laik_AccessPhase* ap, int n,
-                                      int64_t* x1, int64_t* x2,
-                                      int64_t* y1, int64_t* y2);
-
-// get boundaries [x1;x2[ x [y1;y2[ x [z1;z2[ for 3d slice <n> of this task
-// if there is no slice, return 0 and set ranges to [0;0[ (ie. empty)
-Laik_TaskSlice* laik_phase_myslice_3d(Laik_AccessPhase* ap, int n,
-                                      int64_t* x1, int64_t* x2,
-                                      int64_t* y1, int64_t* y2,
-                                      int64_t* z1, int64_t* z2);
-
 // applications can attach arbitrary values to a TaskSlice, to be
 // passed from application-specific partitioners to slice processing
 void* laik_get_slice_data(Laik_TaskSlice*);
@@ -482,73 +408,16 @@ int laik_tslice_get_mapNo(Laik_TaskSlice*);
 // get slice of a task slice
 Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice*);
 
-// give an access phase a name, for debug output
-void laik_set_accessphase_name(Laik_AccessPhase* ap, char* n);
-
-
-// set new partitioning for given access phase
-void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p);
-
-// return currently used partitioning of given access phase
-Laik_Partitioning* laik_phase_get_partitioning(Laik_AccessPhase* p);
-
-// force re-run of the configured partitioner for given access phase
-Laik_Partitioning* laik_phase_run_partitioner(Laik_AccessPhase* ap);
-
 // get local index from global one. return false if not local
 bool laik_index_global2local(Laik_Partitioning*,
                              Laik_Index* global, Laik_Index* local);
 
 
-// couple an access phase to a program phase.
-// switching to a new program phase will result in simultanous switches to
-// coupled access phases.
-void laik_append_phase(Laik_PartGroup* g, Laik_AccessPhase* ap);
-
-// Calculate communication required for transitioning between
-// partitioning borders
+// Calculate communication required for transitioning between partitionings
 Laik_Transition*
 laik_calc_transition(Laik_Space* space,
                      Laik_Partitioning* fromP, Laik_DataFlow fromFlow, Laik_ReductionOperation fromRedOp,
                      Laik_Partitioning* toP, Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp);
 
-// Calculate communication for transitioning between partitioning groups
-Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
-                                       Laik_PartGroup* to);
-
-// enforce consistency for the partitioning group, depending on previous
-void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g);
-
-
-// couple different LAIK instances via spaces:
-// one partition of calling task in outer space is mapped to inner space
-void laik_couple_nested(Laik_Space* outer, Laik_Space* inner);
-
-
-// migrate a access phase defined on one task group to another group
-// if partitioning is set, this only is successful if partitions of
-// tasks which are not in the new group are empty.
-// return true if migration was successful.
-bool laik_migrate_phase(Laik_AccessPhase* p, Laik_Group* newg);
-
-// migrate a access phase defined on one task group to another group
-// for the required repartitioning, use the default partitioner
-void laik_migrate_and_repartition(Laik_AccessPhase* ap, Laik_Group* newg,
-                                  Laik_Partitioner* pr);
-
-
-//------------------------------------------
-// automatic repartitioning
-
-typedef enum _Laik_RepartitionHint {
-    LAIK_RH_None = 0,
-    LAIK_RH_Update      = 1,  // update by re-checking parameter
-    LAIK_RH_External    = 2,  // check external sources
-    LAIK_RH_Incremental = 4   // try to keep changes small
-} Laik_RepartitionHint;
-
-// allow LAIK to change a partitioning based on external means
-// returns true if partitioning was changed
-bool allowRepartitioning(Laik_AccessPhase* p);
 
 #endif // _LAIK_SPACE_H_

@@ -105,8 +105,6 @@ Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
     d->activePartitioning = 0;
     d->activeFlow = LAIK_DF_None;
     d->activeRedOp = LAIK_RO_None;
-    d->activeAccessPhase = 0;
-    d->nextAccessPhaseUser = 0;
     d->activeMappings = 0;
     d->allocator = 0; // default: malloc/free
     d->stat = laik_newSwitchStat();
@@ -169,12 +167,6 @@ Laik_Instance* laik_data_get_inst(Laik_Data* d)
 Laik_Partitioning* laik_data_get_partitioning(Laik_Data* d)
 {
     return d->activePartitioning;
-}
-
-// get active access phase of data container
-Laik_AccessPhase* laik_data_get_accessphase(Laik_Data* d)
-{
-    return d->activeAccessPhase;
 }
 
 static
@@ -1227,14 +1219,6 @@ void laik_switchto_partitioning(Laik_Data* d,
         }
     }
 
-    // if data is in an access phase, it must be consistent with partitioning
-    Laik_AccessPhase* ap = d->activeAccessPhase;
-    if (ap) {
-        // active partitioning must have borders set
-        assert(ap->hasValidPartitioning);
-        assert(d->activePartitioning == ap->partitioning);
-    }
-
     if (toFlow == LAIK_DF_Previous) {
         if (laik_do_copyout(d->activeFlow) || laik_is_reduction(d->activeRedOp)) {
             toFlow = LAIK_DF_CopyInOut;
@@ -1265,80 +1249,6 @@ void laik_switchto_partitioning(Laik_Data* d,
     d->activeMappings = toList;
 }
 
-// switch from active to another partitioning
-void laik_switchto_phase(Laik_Data* d, Laik_AccessPhase* toAP,
-                         Laik_DataFlow toFlow, Laik_ReductionOperation toRedOp)
-{
-    if (d->space->inst->profiling->do_profiling)
-        d->space->inst->profiling->timer_total = laik_wtime();
-
-    // calculate borders with configured partitioner if borders not set
-    if (toAP && (!toAP->hasValidPartitioning))
-        laik_phase_run_partitioner(toAP);
-
-    // calculate actions to be done for switching
-    Laik_Partitioning *fromP = 0, *toP = 0;
-    Laik_AccessPhase* fromAP = d->activeAccessPhase;
-    if (fromAP) {
-        // active partitioning must have borders set
-        assert(fromAP->hasValidPartitioning);
-        fromP = fromAP->partitioning;
-    }
-    if (toAP) {
-        // new partitioning needs to be defined over same LAIK task group
-        assert(toAP->hasValidPartitioning);
-        toP = toAP->partitioning;
-    }
-
-    Laik_MappingList* toList = prepareMaps(d, toP, 0);
-    Laik_Transition* t = do_calc_transition(d->space,
-                                            fromP, d->activeFlow, d->activeRedOp,
-                                            toP, toFlow, toRedOp);
-
-    if (laik_log_begin(1)) {
-        laik_log_append("switch access phase for data '%s':\n"
-                        "  %s/",
-                        d->name, fromAP ? fromAP->name : "(none)");
-        laik_log_DataFlow(d->activeFlow);
-        laik_log_append("/");
-        laik_log_Reduction(d->activeRedOp);
-        laik_log_append(" => %s/", toAP ? toAP->name : "(none)");
-        laik_log_DataFlow(toFlow);
-        laik_log_append("/");
-        laik_log_Reduction(toRedOp);
-        laik_log_append(":\n    ");
-        laik_log_Transition(t, true);
-        laik_log_flush(0);
-    }
-#if 0 // don't pollute log level 2, should introduce more...
-    else
-        laik_log(2, "switch to '%s' (data '%s'): "
-                 "%d local, %d init, %d send, %d recv, %d red",
-                 d->name, toP ? toP->name : "(none)",
-                 t->localCount, t->initCount,
-                 t->sendCount, t->recvCount, t->redCount);
-#endif
-
-    doTransition(d, t, 0, d->activeMappings, toList);
-
-    if (d->activeAccessPhase) {
-        laik_removeDataFromAccessPhase(d->activeAccessPhase, d);
-        laik_free_accessphase(d->activeAccessPhase);
-    }
-
-    // set new mapping/partitioning active
-    d->activeAccessPhase = toAP;
-    d->activePartitioning = toP;
-    d->activeFlow = toFlow;
-    d->activeRedOp = toRedOp;
-    d->activeMappings = toList;
-    if (toAP)
-        laik_addDataForAccessPhase(toAP, d);
-
-    if (d->space->inst->profiling->do_profiling)
-        d->space->inst->profiling->time_total += laik_wtime() -
-                                     d->space->inst->profiling->timer_total;
-}
 
 // switch to another data flow, keep partitioning
 void laik_switchto_flow(Laik_Data* d,
@@ -1376,37 +1286,6 @@ Laik_Partitioning* laik_switchto_new_partitioning(Laik_Data* d, Laik_Group* g,
     return p;
 }
 
-
-Laik_AccessPhase* laik_switchto_new_phase(Laik_Data* d, Laik_Group* g,
-                                          Laik_Partitioner* pr,
-                                          Laik_DataFlow flow,
-                                          Laik_ReductionOperation redOp)
-{
-    if (laik_myid(g) < 0) return 0;
-
-    Laik_AccessPhase* ap;
-    ap = laik_new_accessphase(g, d->space, pr, 0);
-
-    laik_log(1, "switch data '%s' to new access phase '%s'",
-             d->name, ap->name);
-
-    laik_switchto_phase(d, ap, flow, redOp);
-    return ap;
-}
-
-// migrate data container to use another group
-// (only possible if data does not have to be preserved)
-void laik_migrate_data(Laik_Data* d, Laik_Group* g)
-{
-    // we only support migration if data does not need to preserved
-    assert(!laik_do_copyout(d->activeFlow));
-
-    laik_log(1, "migrate data '%s' => group %d (size %d, myid %d)",
-             d->name, g->gid, g->size, g->myid);
-
-    // switch to invalid partitioning
-    laik_switchto_phase(d, 0, LAIK_DF_None, LAIK_RO_None);
-}
 
 void laik_fill_double(Laik_Data* d, double v)
 {

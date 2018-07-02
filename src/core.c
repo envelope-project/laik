@@ -284,7 +284,6 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     g->size = 0; // yet invalid
     g->backend_data = 0;
     g->parent = 0;
-    g->firstAccessPhaseForGroup = 0;
 
     // space after struct
     g->toParent   = (int*) (((char*)g) + sizeof(Laik_Group));
@@ -292,29 +291,6 @@ Laik_Group* laik_create_group(Laik_Instance* i)
 
     i->group_count++;
     return g;
-}
-
-void laik_addAcessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p)
-{
-    assert(p->nextAccessPhaseForGroup == 0);
-    p->nextAccessPhaseForGroup = g->firstAccessPhaseForGroup;
-    g->firstAccessPhaseForGroup = p;
-}
-
-void laik_removeAccessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p)
-{
-    if (g->firstAccessPhaseForGroup == p) {
-        g->firstAccessPhaseForGroup = p->nextAccessPhaseForGroup;
-    }
-    else {
-        // search for previous item
-        Laik_AccessPhase* pp = g->firstAccessPhaseForGroup;
-        while(pp->nextAccessPhaseForGroup != p)
-            pp = pp->nextAccessPhaseForGroup;
-        assert(pp != 0); // not found, should not happen
-        pp->nextAccessPhaseForGroup = p->nextAccessPhaseForGroup;
-    }
-    p->nextAccessPhaseForGroup = 0;
 }
 
 Laik_Instance* laik_inst(Laik_Group* g)
@@ -347,8 +323,6 @@ Laik_Group* laik_clone_group(Laik_Group* g)
         g2->toParent[i] = i;
         g2->fromParent[i] = i;
     }
-
-    assert(g2->firstAccessPhaseForGroup == 0); // still empty
 
     return g2;
 }

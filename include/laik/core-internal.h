@@ -18,7 +18,7 @@
 #ifndef _LAIK_CORE_INTERNAL_H_
 #define _LAIK_CORE_INTERNAL_H_
 
-#include <laik.h>         // for Laik_Instance, Laik_Group, Laik_AccessPhase
+#include <laik.h>         // for Laik_Instance, Laik_Group
 #include <stdbool.h>      // for bool
 #include <sys/time.h>     // for struct timeval
 #include "definitions.h"  // for MAX_DATAS, MAX_GROUPS, MAX_MAPPINGS
@@ -43,13 +43,8 @@ struct _Laik_Group {
     Laik_Group* parent;
     int* toParent;   // mapping local task IDs to parent task IDs
     int* fromParent; // mapping parent task IDs to local task IDs
-
-    Laik_AccessPhase* firstAccessPhaseForGroup; // linked list head
 };
 
-// add/remove access phase to/from group
-void laik_addAcessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p);
-void laik_removeAccessPhaseForGroup(Laik_Group* g, Laik_AccessPhase* p);
 
 struct _Laik_Instance {
     int size;
@@ -119,7 +114,7 @@ typedef enum _Laik_KVType {
 
     // LAIK objects
     LAIK_KV_Space, LAIK_KV_Data,
-    LAIK_KV_Partitioning, LAIK_KV_AccessPhase,
+    LAIK_KV_Partitioning,
 
     // Custom
     LAIK_KV_CUSTOM = 100

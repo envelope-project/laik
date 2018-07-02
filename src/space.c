@@ -25,11 +25,8 @@
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-// counter for space ID, just for debugging
+// counter for space ID, for logging
 static int space_id = 0;
-
-// counter for partitioning ID, just for debugging
-static int aphase_id = 0;
 
 // helpers
 
@@ -268,7 +265,6 @@ Laik_Space* laik_new_space(Laik_Instance* inst)
 
     space->inst = inst;
     space->dims = 0; // invalid
-    space->firstAccessPhaseForSpace = 0;
     space->nextSpaceForInstance = 0;
 
     // append this space to list of spaces used by LAIK instance
@@ -362,205 +358,9 @@ void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1)
 }
 
 
-
-void laik_addAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p)
-{
-    assert(p->nextAccessPhaseForSpace == 0);
-    p->nextAccessPhaseForSpace = s->firstAccessPhaseForSpace;
-    s->firstAccessPhaseForSpace = p;
-}
-
-void laik_removeAccessPhaseForSpace(Laik_Space* s, Laik_AccessPhase* p)
-{
-    if (s->firstAccessPhaseForSpace == p) {
-        s->firstAccessPhaseForSpace = p->nextAccessPhaseForSpace;
-    }
-    else {
-        // search for previous item
-        Laik_AccessPhase* pp = s->firstAccessPhaseForSpace;
-        while(pp->nextAccessPhaseForSpace != p)
-            pp = pp->nextAccessPhaseForSpace;
-        assert(pp != 0); // not found, should not happen
-        pp->nextAccessPhaseForSpace = p->nextAccessPhaseForSpace;
-    }
-    p->nextAccessPhaseForSpace = 0;
-}
-
-
-
-
-
-
 //-----------------------
-// Laik_AccessPhase
+// Laik_TaskSlice
 
-
-// create a new access phase on a space
-Laik_AccessPhase*
-laik_new_accessphase(Laik_Group* group, Laik_Space* space,
-                     Laik_Partitioner* pr, Laik_AccessPhase *base)
-{
-    Laik_AccessPhase* ap;
-    ap = malloc(sizeof(Laik_AccessPhase));
-    if (!ap) {
-        laik_panic("Out of memory allocating Laik_AccessPhase object");
-        exit(1); // not actually needed, laik_panic never returns
-    }
-
-    ap->id = aphase_id++;
-    ap->name = strdup("phase-0     ");
-    sprintf(ap->name, "phase-%d", ap->id);
-
-    assert(group->inst == space->inst);
-    ap->group = group;
-    ap->space = space;
-
-    ap->partitioner = pr;
-    ap->base = base;
-
-    ap->hasValidPartitioning = false;
-    ap->partitioning = 0;
-
-    ap->nextAccessPhaseForSpace = 0;
-    ap->nextAccessPhaseForGroup = 0;
-    ap->nextAccessPhaseForBase  = 0;
-    ap->firstDataForAccessPhase = 0;
-    ap->firstAccessPhaseForBase = 0;
-
-    laik_addAccessPhaseForSpace(space, ap);
-    laik_addAcessPhaseForGroup(ap->group, ap);
-
-    if (base) {
-        assert(base->group == group);
-        laik_addAccessPhaseForBase(base, ap);
-    }
-
-    if (laik_log_begin(1)) {
-        laik_log_append("new access phase '%s':\n  space '%s', "
-                        "group %d (size %d, myid %d), partitioner '%s'",
-                        ap->name, space->name,
-                        ap->group->gid, ap->group->size, ap->group->myid,
-                        pr->name);
-        if (base)
-            laik_log_append(", base '%s'", base->name);
-        laik_log_flush(0);
-    }
-
-    return ap;
-}
-
-void laik_addAccessPhaseForBase(Laik_AccessPhase* base,
-                                Laik_AccessPhase* ap)
-{
-    assert(ap->nextAccessPhaseForBase == 0);
-    ap->nextAccessPhaseForBase = base->firstAccessPhaseForBase;
-    base->firstAccessPhaseForBase = ap;
-}
-
-void laik_removeAccessPhaseForBase(Laik_AccessPhase* base,
-                                   Laik_AccessPhase* ap)
-{
-    if (base->firstAccessPhaseForBase == ap) {
-        base->firstAccessPhaseForBase = ap->nextAccessPhaseForBase;
-    }
-    else {
-        // search for previous item
-        Laik_AccessPhase* pp = base->firstAccessPhaseForBase;
-        while(pp->nextAccessPhaseForBase != ap)
-            pp = pp->nextAccessPhaseForBase;
-        assert(pp != 0); // not found, should not happen
-        pp->nextAccessPhaseForBase = ap->nextAccessPhaseForBase;
-    }
-    ap->nextAccessPhaseForBase = 0;
-}
-
-
-void laik_addDataForAccessPhase(Laik_AccessPhase* ap, Laik_Data* d)
-{
-    assert(d->nextAccessPhaseUser == 0);
-    d->nextAccessPhaseUser = ap->firstDataForAccessPhase;
-    ap->firstDataForAccessPhase = d;
-}
-
-void laik_removeDataFromAccessPhase(Laik_AccessPhase* ap, Laik_Data* d)
-{
-    if (ap->firstDataForAccessPhase == d) {
-        ap->firstDataForAccessPhase = d->nextAccessPhaseUser;
-    }
-    else {
-        // search for previous item
-        Laik_Data* dd = ap->firstDataForAccessPhase;
-        while(dd->nextAccessPhaseUser != d)
-            dd = dd->nextAccessPhaseUser;
-        assert(dd != 0); // not found, should not happen
-        dd->nextAccessPhaseUser = d->nextAccessPhaseUser;
-    }
-    d->nextAccessPhaseUser = 0;
-}
-
-
-void laik_set_partitioner(Laik_AccessPhase* ap, Laik_Partitioner* pr)
-{
-    assert(pr->run != 0);
-    ap->partitioner = pr;
-}
-
-Laik_Partitioner* laik_get_partitioner(Laik_AccessPhase* ap)
-{
-    return ap->partitioner;
-}
-
-Laik_Space* laik_get_apspace(Laik_AccessPhase* ap)
-{
-    return ap->space;
-}
-
-Laik_Group* laik_get_apgroup(Laik_AccessPhase* ap)
-{
-    return ap->group;
-}
-
-
-// free a partitioning with related resources
-void laik_free_accessphase(Laik_AccessPhase* ap)
-{
-    // FIXME: needs some kind of reference counting
-    return;
-    if (ap->firstDataForAccessPhase == 0) {
-        laik_removeAccessPhaseForGroup(ap->group, ap);
-        laik_removeAccessPhaseForSpace(ap->space, ap);
-        if (ap->base)
-            laik_removeAccessPhaseForBase(ap->base, ap);
-        free(ap->name);
-        free(ap->partitioning);
-    }
-}
-
-// get number of slices of this task
-int laik_phase_my_slicecount(Laik_AccessPhase* ap)
-{
-    if (!ap->hasValidPartitioning)
-        laik_phase_run_partitioner(ap);
-
-    return laik_my_slicecount(ap->partitioning);
-}
-
-// get number of mappings of this task
-int laik_phase_my_mapcount(Laik_AccessPhase* ap)
-{
-    if (!ap->hasValidPartitioning)
-        laik_phase_run_partitioner(ap);
-
-    return laik_my_mapcount(ap->partitioning);
-}
-
-int laik_phase_my_mapslicecount(Laik_AccessPhase* ap, int mapNo)
-{
-    if (!ap->hasValidPartitioning)
-        laik_phase_run_partitioner(ap);
-
-    return laik_my_mapslicecount(ap->partitioning, mapNo);
-}
 
 int laik_tslice_get_mapNo(Laik_TaskSlice* ts)
 {
@@ -588,54 +388,6 @@ Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice* ts)
     }
 }
 
-// get slice number <n> from the slices of this task
-Laik_TaskSlice* laik_phase_my_slice(Laik_AccessPhase* ap, int n)
-{
-    if (!ap->hasValidPartitioning)
-        laik_phase_run_partitioner(ap);
-
-    return laik_my_slice(ap->partitioning, n);
-}
-
-Laik_TaskSlice* laik_phase_my_mapslice(Laik_AccessPhase* ap, int mapNo, int n)
-{
-    if (!ap->hasValidPartitioning)
-        laik_phase_run_partitioner(ap);
-
-    return laik_my_mapslice(ap->partitioning, mapNo, n);
-}
-
-Laik_TaskSlice* laik_phase_myslice_1d(Laik_AccessPhase* ap, int n,
-                                      int64_t* from, int64_t* to)
-{
-    if (!ap->hasValidPartitioning)
-        laik_phase_run_partitioner(ap);
-
-    return laik_my_slice_1d(ap->partitioning, n, from, to);
-}
-
-Laik_TaskSlice* laik_phase_myslice_2d(Laik_AccessPhase* ap, int n,
-                                      int64_t* x1, int64_t* x2,
-                                      int64_t* y1, int64_t* y2)
-{
-    if (!ap->hasValidPartitioning)
-        laik_phase_run_partitioner(ap);
-
-    return laik_my_slice_2d(ap->partitioning, n, x1, x2, y1, y2);
-}
-
-Laik_TaskSlice* laik_phase_myslice_3d(Laik_AccessPhase* ap, int n,
-                                      int64_t* x1, int64_t* x2,
-                                      int64_t* y1, int64_t* y2,
-                                      int64_t* z1, int64_t* z2)
-{
-    if (!ap->hasValidPartitioning)
-        laik_phase_run_partitioner(ap);
-
-    return laik_my_slice_3d(ap->partitioning, n, x1, x2, y1, y2, z1, z2);
-}
-
-
 // applications can attach arbitrary values to a TaskSlice, to be
 // passed from application-specific partitioners to slice processing
 void* laik_get_slice_data(Laik_TaskSlice* ts)
@@ -653,98 +405,6 @@ void laik_set_slice_data(Laik_TaskSlice* ts, void* data)
 }
 
 
-// give an access phase a name, for debug output
-void laik_set_accessphase_name(Laik_AccessPhase* ap, char* n)
-{
-    ap->name = strdup(n);
-}
-
-
-
-// set new partitioning for a phase
-void laik_phase_set_partitioning(Laik_AccessPhase* ap, Laik_Partitioning* p)
-{
-    assert(ap->group == p->group);
-    assert(ap->space == p->space);
-
-    if (laik_log_begin(1)) {
-        laik_log_append("setting partitioning for access phase '%s' (group %d, myid %d):\n  ",
-                        ap->name, p->group->gid, p->group->myid);
-        laik_log_Partitioning(p);
-        laik_log_flush(0);
-    }
-
-    if (ap->hasValidPartitioning &&
-        laik_partitioning_isEqual(ap->partitioning, p)) {
-        laik_log(1, "partitioning equal to original, nothing to do");
-        return;
-    }
-
-    // visit all users of this phase:
-    // first, all phases coupled to this phase as base
-    Laik_AccessPhase* apdep = ap->firstAccessPhaseForBase;
-    while(apdep) {
-        assert(apdep->base == ap);
-        assert(apdep->partitioner);
-        Laik_Partitioning* pdep;
-        pdep = laik_new_partitioning(apdep->partitioner,
-                                     apdep->group, apdep->space, p);
-
-        laik_phase_set_partitioning(apdep, pdep);
-        apdep = apdep->nextAccessPhaseForBase;
-    }
-    // second, all data containers with this phase currently active
-    Laik_Data* d = ap->firstDataForAccessPhase;
-    while(d) {
-        laik_switchto_partitioning(d, p, LAIK_DF_Previous, LAIK_RO_None);
-        d = d->nextAccessPhaseUser;
-    }
-
-    if (ap->partitioning)
-        laik_free_partitioning(ap->partitioning);
-    ap->partitioning = p;
-    ap->hasValidPartitioning = true;
-}
-
-// Return currently used partitioning of given access phase.
-//
-// Return 0 if no partitioning is calculated yet (even if partitioner is set).
-Laik_Partitioning* laik_phase_get_partitioning(Laik_AccessPhase* p)
-{
-    if (p->hasValidPartitioning) {
-        assert(p->partitioning);
-        return p->partitioning;
-    }
-    return 0;
-}
-
-// Force re-run of the configured partitioner for given access phase.
-//
-// If the partitioning is configured to depend on the partitioning of
-// another access phase (ie. is derived from it), this base partitioning
-// must exist.
-// If you want to also trigger a new calculation of the base partitioning,
-// call this function for the base access phase, which automatically will
-// trigger a re-run for every derived partitioning.
-Laik_Partitioning* laik_phase_run_partitioner(Laik_AccessPhase* ap)
-{
-    Laik_Partitioning* p;
-
-    if (ap->base) {
-        assert(ap->base->hasValidPartitioning);
-    }
-
-    assert(ap->partitioner);
-    p = laik_new_partitioning(ap->partitioner,
-                             ap->group, ap->space,
-                             ap->base ? ap->base->partitioning : 0);
-
-    laik_phase_set_partitioning(ap, p);
-
-    return p;
-}
-
-
 // get local index from global one. return false if not local
 bool laik_index_global2local(Laik_Partitioning* p,
                              Laik_Index* global, Laik_Index* local)
@@ -758,16 +418,6 @@ bool laik_index_global2local(Laik_Partitioning* p,
     return true;
 }
 
-
-// append a partitioning to a partioning group whose consistency should
-// be enforced at the same point in time
-void laik_append_phase(Laik_PartGroup* g, Laik_AccessPhase* ap)
-{
-    (void) g; /* FIXME: Why have this parameter if it's never used */
-    (void) ap; /* FIXME: Why have this parameter if it's never used */
-
-    assert(0); // TODO
-}
 
 
 //-------------------------------------------------------------------------
@@ -1749,94 +1399,5 @@ bool laik_trans_isInGroup(Laik_Transition* t, int subgroup, int task)
         if (tg->task[i] == task) return true;
     return false;
 }
-
-
-// Calculate communication for transitioning between partitioning groups
-Laik_Transition* laik_calc_transitionG(Laik_PartGroup* from,
-                                       Laik_PartGroup* to)
-{
-    (void) from; /* FIXME: Why have this parameter if it's never used */
-    (void) to;   /* FIXME: Why have this parameter if it's never used */
-
-    // Laik_Transition* t;
-
-    assert(0); // TODO
-}
-
-// enforce consistency for the partitioning group, depending on previous
-void laik_enforce_consistency(Laik_Instance* i, Laik_PartGroup* g)
-{
-    (void) i; /* FIXME: Why have this parameter if it's never used */
-    (void) g; /* FIXME: Why have this parameter if it's never used */
-
-    assert(0); // TODO
-}
-
-
-// couple different LAIK instances via spaces:
-// one partition of calling task in outer space is mapped to inner space
-void laik_couple_nested(Laik_Space* outer, Laik_Space* inner)
-{
-    (void) outer; /* FIXME: Why have this parameter if it's never used */
-    (void) inner; /* FIXME: Why have this parameter if it's never used */
-
-    assert(0); // TODO
-}
-
-// migrate a phase defined on one task group to another group
-// (no repartitioning: only works if partitions of removed tasks are empty)
-bool laik_migrate_phase(Laik_AccessPhase* ap, Laik_Group* newg)
-{
-    Laik_Group* oldg = ap->group;
-    assert(oldg != newg);
-
-    if (ap->hasValidPartitioning) {
-        assert(ap->partitioning && (ap->partitioning->group == oldg));
-        laik_partitioning_migrate(ap->partitioning, newg);
-    }
-
-    laik_removeAccessPhaseForGroup(oldg, ap);
-    laik_addAcessPhaseForGroup(newg, ap);
-    ap->group = newg;
-
-    // make phase users (data containers) migrate to new group
-    Laik_Data* d = ap->firstDataForAccessPhase;
-    while(d) {
-        if (d->activePartitioning) {
-            if (d->activePartitioning->group == oldg)
-                laik_partitioning_migrate(d->activePartitioning, newg);
-        }
-        d = d->nextAccessPhaseUser;
-    }
-
-
-    return true;
-}
-
-// migrate a partitioning defined on one task group to another group
-// for the required repartitioning, either use the default partitioner
-// or the given one. In the latter case, the partitioner is run
-// on old group and is expected to produce no partitions for tasks
-// to be removed
-void laik_migrate_and_repartition(Laik_AccessPhase* ap, Laik_Group* newg,
-                                  Laik_Partitioner* pr)
-{
-    if (!ap) return;
-
-    Laik_Partitioning* p;
-    if (pr) {
-        p = laik_new_partitioning(pr, ap->group, ap->space,
-                                  ap->hasValidPartitioning ? ap->partitioning : 0);
-    }
-    else {
-        p = laik_new_partitioning(ap->partitioner, newg, ap->space, 0);
-        laik_partitioning_migrate(p, ap->group);
-    }
-    laik_phase_set_partitioning(ap, p);
-    bool res = laik_migrate_phase(ap, newg);
-    assert(res);
-}
-
-
 
 
