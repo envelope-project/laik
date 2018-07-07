@@ -23,7 +23,6 @@
 #include <stdbool.h>  // for bool
 #include <stdint.h>   // for int64_t
 
-void laik_set_index(Laik_Index* i, int64_t i1, int64_t i2, int64_t i3);
 void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
 void laik_sub_index(Laik_Index* res, const Laik_Index* src1, const Laik_Index* src2);
 

@@ -114,7 +114,7 @@ static void laik_tcp_backend_receive
     // Calculate some variables we are going to need later on
     const Laik_Group* group    = data->activePartitioning->group;
     const MPI_Comm    comm     = *((MPI_Comm*) group->backend_data);
-    const size_t      elements = laik_slice_size (data->space->dims, &slice);
+    const size_t      elements = laik_slice_size(&slice);
     const size_t      bytes    = elements * data->elemsize;
     g_autofree void*  buffer   = g_malloc (bytes);
     Laik_Index        start    = slice.from;
@@ -190,7 +190,7 @@ static void laik_tcp_backend_send
     // Calculate some variables we are going to need later on
     const Laik_Group* group    = data->activePartitioning->group;
     const MPI_Comm    comm     = *((MPI_Comm*) group->backend_data);
-    const size_t      elements = laik_slice_size (data->space->dims, &slice);
+    const size_t      elements = laik_slice_size(&slice);
     const size_t      bytes    = elements * data->elemsize;
     g_autofree void*  buffer   = g_malloc (bytes);
     Laik_Index        start    = slice.from;

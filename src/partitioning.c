@@ -547,8 +547,7 @@ bool laik_partitioning_isAll(Laik_Partitioning* p)
     if (p->count != p->group->size) return false;
     for(int i = 0; i < p->count; i++) {
         if (p->tslice[i].task != i) return false;
-        if (!laik_slice_isEqual(p->space->dims,
-                                &(p->tslice[i].s), &(p->space->s)))
+        if (!laik_slice_isEqual(&(p->tslice[i].s), &(p->space->s)))
             return false;
     }
     return true;
@@ -561,8 +560,7 @@ bool laik_partitioning_isAll(Laik_Partitioning* p)
 int laik_partitioning_isSingle(Laik_Partitioning* p)
 {
     if (p->count != 1) return -1;
-    if (!laik_slice_isEqual(p->space->dims,
-                            &(p->tslice[0].s), &(p->space->s)))
+    if (!laik_slice_isEqual(&(p->tslice[0].s), &(p->space->s)))
         return -1;
 
     return p->tslice[0].task;
@@ -659,7 +657,7 @@ bool laik_partitioning_coversSpace(Laik_Partitioning* p)
         for(int j = 0; j < count; j++) {
             Laik_Slice* orig = &(notcovered[j]);
 
-            if (laik_slice_intersect(dims, orig, toRemove) == 0) {
+            if (laik_slice_intersect(orig, toRemove) == 0) {
                 // slice to remove does not overlap with orig: keep original
                 appendToNotcovered(orig);
                 continue;
@@ -731,9 +729,8 @@ bool laik_partitioning_isEqual(Laik_Partitioning* p1, Laik_Partitioning* p2)
         // tasks must match, as offset array matched
         assert(p1->tslice[i].task == p2->tslice[i].task);
 
-        if (!laik_slice_isEqual(p1->space->dims,
-                                &(p1->tslice[i].s),
-                                &(p2->tslice[i].s))) return false;
+        if (!laik_slice_isEqual(&(p1->tslice[i].s), &(p2->tslice[i].s)))
+            return false;
     }
     return true;
 }

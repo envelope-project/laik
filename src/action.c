@@ -416,7 +416,7 @@ void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
     a->dims = dims;
     a->slc = slc;
     a->rank = to;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 
     as->sendCount += a->count;
@@ -437,7 +437,7 @@ void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
     a->slc = slc;
     a->bufID = toBufID;
     a->offset = toByteOffset;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -454,7 +454,7 @@ void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
     a->dims = dims;
     a->slc = slc;
     a->toBuf = toBuf;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -470,7 +470,7 @@ void laik_aseq_addMapPackAndSend(Laik_ActionSeq* as, int round,
     a->dims = dims;
     a->slc = slc;
     a->rank = to;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 
     as->sendCount += a->count;
@@ -491,7 +491,7 @@ void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
     a->slc = slc;
     a->bufID = toBufID;
     a->offset = toByteOffset;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -508,7 +508,7 @@ void laik_aseq_addMapPackToBuf(Laik_ActionSeq* as, int round,
     a->dims = dims;
     a->slc = slc;
     a->toBuf = toBuf;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -524,7 +524,7 @@ void laik_aseq_addRecvAndUnpack(Laik_ActionSeq* as, int round,
     a->dims = dims;
     a->slc = slc;
     a->rank = from;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 
     as->recvCount += a->count;
@@ -545,7 +545,7 @@ void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
     a->offset = fromByteOffset;
     a->map = toMap;
     a->slc = slc;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -562,7 +562,7 @@ void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
     a->fromBuf = fromBuf;
     a->map = toMap;
     a->slc = slc;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -578,7 +578,7 @@ void laik_aseq_addMapRecvAndUnpack(Laik_ActionSeq* as, int round,
     a->dims = dims;
     a->slc = slc;
     a->rank = from;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -597,7 +597,7 @@ void laik_aseq_addMapUnpackFromRBuf(Laik_ActionSeq* as, int round,
     a->offset = fromByteOffset;
     a->toMapNo = toMapNo;
     a->slc = slc;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -614,7 +614,7 @@ void laik_aseq_addMapUnpackFromBuf(Laik_ActionSeq* as, int round,
     a->fromBuf = fromBuf;
     a->toMapNo = toMapNo;
     a->slc = slc;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     assert(a->count > 0);
 }
 
@@ -670,7 +670,7 @@ void laik_aseq_addMapGroupReduce(Laik_ActionSeq* as, int round,
     a->toMapNo = myOutputMapNo;
     a->dims = dims;
     a->slc = slc;
-    a->count = laik_slice_size(dims, slc);
+    a->count = laik_slice_size(slc);
     a->redOp = redOp;
 
     assert(a->count > 0);

@@ -30,7 +30,7 @@ static int space_id = 0;
 
 // helpers
 
-void laik_set_index(Laik_Index* i, int64_t i1, int64_t i2, int64_t i3)
+void laik_index_init(Laik_Index* i, int64_t i1, int64_t i2, int64_t i3)
 {
     i->i[0] = i1;
     i->i[1] = i2;
@@ -118,12 +118,12 @@ void laik_slice_init_3d(Laik_Slice* slc, Laik_Space* space,
 
 
 // is the given slice empty?
-bool laik_slice_isEmpty(int dims, Laik_Slice* slc)
+bool laik_slice_isEmpty(Laik_Slice* slc)
 {
     // an invalid slice (no space set) is considered empty
     if (slc->space == 0) return true;
 
-    assert(slc->space->dims == dims);
+    int dims = slc->space->dims;
 
     if (slc->from.i[0] >= slc->to.i[0])
         return true;
@@ -154,19 +154,18 @@ bool intersectRange(int64_t from1, int64_t to1, int64_t from2, int64_t to2,
 }
 
 // get the intersection of 2 slices; return 0 if intersection is empty
-Laik_Slice* laik_slice_intersect(int dims,
-                                 const Laik_Slice* s1, const Laik_Slice* s2)
+Laik_Slice* laik_slice_intersect(const Laik_Slice* s1, const Laik_Slice* s2)
 {
     static Laik_Slice s;
 
+    // intersection with invalid slice gives invalid slice
     if ((s1->space == 0) || (s2->space == 0)) {
-        // intersection with invalid slice gives invalid slice
         s.space = 0;
         return &s;
     }
 
     assert(s1->space == s2->space);
-    assert(s1->space->dims == dims);
+    int dims = s1->space->dims;
     s.space = s1->space;
 
     if (!intersectRange(s1->from.i[0], s1->to.i[0],
@@ -186,10 +185,13 @@ Laik_Slice* laik_slice_intersect(int dims,
 }
 
 // expand slice <dst> such that it contains <src>
-void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src)
+void laik_slice_expand(Laik_Slice* dst, Laik_Slice* src)
 {
-    // expanding with invalid slice not allowed
+    // an invalid slice stays invalid
+    if (dst->space == 0) return;
+
     assert(src->space == dst->space);
+    int dims = src->space->dims;
 
     if (src->from.i[0] < dst->from.i[0]) dst->from.i[0] = src->from.i[0];
     if (src->to.i[0] > dst->to.i[0]) dst->to.i[0] = src->to.i[0];
@@ -204,8 +206,14 @@ void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src)
 }
 
 // is slice <slc1> contained in <slc2>?
-bool laik_slice_within_slice(int dims, const Laik_Slice* slc1, const Laik_Slice* slc2)
+bool laik_slice_within_slice(const Laik_Slice* slc1, const Laik_Slice* slc2)
 {
+    // an invalid slice never can be part of another
+    if ((slc1->space == 0) || (slc2->space == 0)) return false;
+
+    assert(slc1->space == slc2->space);
+
+    int dims = slc1->space->dims;
     if (slc1->from.i[0] < slc1->to.i[0]) {
         // not empty
         if (slc1->from.i[0] < slc2->from.i[0]) return false;
@@ -231,15 +239,17 @@ bool laik_slice_within_slice(int dims, const Laik_Slice* slc1, const Laik_Slice*
 // is slice within space borders?
 bool laik_slice_within_space(const Laik_Slice* slc, const Laik_Space* sp)
 {
-    return laik_slice_within_slice(sp->dims, slc, &(sp->s));
+    return laik_slice_within_slice(slc, &(sp->s));
 }
 
 // are the slices equal?
-bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
+bool laik_slice_isEqual(Laik_Slice* s1, Laik_Slice* s2)
 {
+    // an invalid slice never can be part of another
+    if ((s1->space == 0) || (s2->space == 0)) return false;
     if (s1->space != s2->space) return false;
 
-    assert(s1->space->dims == dims);
+    int dims = s1->space->dims;
     if (!laik_index_isEqual(dims, &(s1->from), &(s2->from))) return false;
     if (!laik_index_isEqual(dims, &(s1->to), &(s2->to))) return false;
     return true;
@@ -247,12 +257,12 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
 
 
 // number of indexes in the slice
-uint64_t laik_slice_size(int dims, const Laik_Slice* s)
+uint64_t laik_slice_size(const Laik_Slice* s)
 {
     // invalid slice?
     if (s->space == 0) return 0;
 
-    assert(s->space->dims == dims);
+    int dims = s->space->dims;
     uint64_t size = s->to.i[0] - s->from.i[0];
     if (dims > 1) {
         size *= s->to.i[1] - s->from.i[1];
@@ -271,7 +281,7 @@ const Laik_Slice* laik_space_asslice(Laik_Space* space)
 // number of indexes in the space
 uint64_t laik_space_size(const Laik_Space* s)
 {
-    return laik_slice_size(s->dims, &(s->s));
+    return laik_slice_size(&(s->s));
 }
 
 // get the number of dimensions if this is a regular space
@@ -1136,7 +1146,7 @@ do_calc_transition(Laik_Space* space,
     if ((toP != 0) && (flow == LAIK_DF_Init)) {
 
         for(int o = toP->off[myid]; o < toP->off[myid+1]; o++) {
-            if (laik_slice_isEmpty(dims, &(toP->tslice[o].s))) continue;
+            if (laik_slice_isEmpty(&(toP->tslice[o].s))) continue;
 
             assert(redOp != LAIK_RO_None);
             appendInitTOp( &(toP->tslice[o].s),
@@ -1160,8 +1170,7 @@ do_calc_transition(Laik_Space* space,
             // reductions are not handled here, but by backend
             for(int o1 = fromP->off[myid]; o1 < fromP->off[myid+1]; o1++) {
                 for(int o2 = toP->off[myid]; o2 < toP->off[myid+1]; o2++) {
-                    slc = laik_slice_intersect(dims,
-                                               &(fromP->tslice[o1].s),
+                    slc = laik_slice_intersect(&(fromP->tslice[o1].s),
                                                &(toP->tslice[o2].s));
                     if (slc == 0) continue;
 
@@ -1226,7 +1235,7 @@ do_calc_transition(Laik_Space* space,
                         //        was requesting for overwriting of values!
                         slc = &(toP->tslice[o1].s);
                         for(int o2 = fromP->off[myid]; o2 < fromP->off[myid+1]; o2++) {
-                            if (laik_slice_isEqual(dims, slc,
+                            if (laik_slice_isEqual(slc,
                                                    &(fromP->tslice[o2].s))) {
                                 slc = 0;
                                 break;
@@ -1236,8 +1245,7 @@ do_calc_transition(Laik_Space* space,
 
                         for(int o2 = fromP->off[task]; o2 < fromP->off[task+1]; o2++) {
 
-                            slc = laik_slice_intersect(dims,
-                                                       &(fromP->tslice[o2].s),
+                            slc = laik_slice_intersect(&(fromP->tslice[o2].s),
                                                        &(toP->tslice[o1].s));
                             if (slc == 0) continue;
 
@@ -1259,7 +1267,7 @@ do_calc_transition(Laik_Space* space,
                     //        requests overwriting of values!
                     slc = &(fromP->tslice[o1].s);
                     for(int o2 = fromP->off[task]; o2 < fromP->off[task+1]; o2++) {
-                        if (laik_slice_isEqual(dims, slc,
+                        if (laik_slice_isEqual(slc,
                                                &(fromP->tslice[o2].s))) {
                             slc = 0;
                             break;
@@ -1270,8 +1278,7 @@ do_calc_transition(Laik_Space* space,
                     // we may send multiple messages to same task
                     for(int o2 = toP->off[task]; o2 < toP->off[task+1]; o2++) {
 
-                        slc = laik_slice_intersect(dims,
-                                                   &(fromP->tslice[o1].s),
+                        slc = laik_slice_intersect(&(fromP->tslice[o1].s),
                                                    &(toP->tslice[o2].s));
                         if (slc == 0) continue;
 

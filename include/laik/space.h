@@ -103,58 +103,80 @@ bool laik_is_reduction(Laik_ReductionOperation redOp);
 /**
  * Laik_Index
  *
- * A point in an index space
+ * A point in an index space with at most 3 dimensions.
+ *
+ * The number of dimensions actually used needs to be maintained externally.
+ * The struct layout is part of the public LAIK API.
  */
 struct _Laik_Index {
     int64_t i[3]; // at most 3 dimensions
 };
 
-// are the indexes equal?
+
+// initialize an index struct
+void laik_index_init(Laik_Index* i, int64_t i1, int64_t i2, int64_t i3);
+
+// are the indexes equal? Needs number of dimensions as not stored with index
 bool laik_index_isEqual(int dims, const Laik_Index* i1, const Laik_Index* i2);
 
 
-//
-// Laik_Slice: a rectangle-shaped slice from an index space [from;to[
-//
+/**
+ * Laik_Slice
+ *
+ * A rectangle-shaped slice from an index space [from;to[.
+ *
+ * The number of dimensions actually used in from/to members is stored
+ * with in the space.
+ * The struct layout is part of the public LAIK API.
+ */
 
 struct _Laik_Slice {
     Laik_Space* space;
     Laik_Index  from, to;
 };
 
+// initialize a slice by providing space and from/to indexes
 void laik_slice_init(Laik_Slice* slc, Laik_Space* space,
                      Laik_Index* from, Laik_Index* to);
+
+// initialize a slice by copying parameters from another slice
 void laik_slice_init_copy(Laik_Slice* dst, Laik_Slice* src);
+
+// initialize a 1d slice by providing space and from/to values
 void laik_slice_init_1d(Laik_Slice* slc, Laik_Space* space,
                         int64_t from, int64_t to);
+
+// initialize a 2d slice by providing space and two from/to values
 void laik_slice_init_2d(Laik_Slice* slc, Laik_Space* space,
                         int64_t from1, int64_t to1,
                         int64_t from2, int64_t to2);
+
+// initialize a 3d slice by providing space and three from/to values
 void laik_slice_init_3d(Laik_Slice* slc, Laik_Space* space,
                         int64_t from1, int64_t to1,
                         int64_t from2, int64_t to2,
                         int64_t from3, int64_t to3);
 
 // is the given slice empty?
-bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
+bool laik_slice_isEmpty(Laik_Slice* slc);
 
 // get the intersection of 2 slices; return 0 if intersection is empty
-Laik_Slice* laik_slice_intersect(int dims, const Laik_Slice* s1, const Laik_Slice* s2);
+Laik_Slice* laik_slice_intersect(const Laik_Slice* s1, const Laik_Slice* s2);
 
 // expand slice <dst> such that it contains <src>
-void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src);
+void laik_slice_expand(Laik_Slice* dst, Laik_Slice* src);
 
 // is slice <slc1> contained in <slc2>?
-bool laik_slice_within_slice(int dims, const Laik_Slice* slc1, const Laik_Slice* slc2);
+bool laik_slice_within_slice(const Laik_Slice* slc1, const Laik_Slice* slc2);
 
 // is slice within space borders?
 bool laik_slice_within_space(const Laik_Slice* slc, const Laik_Space* sp);
 
 // are the slices equal?
-bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2);
+bool laik_slice_isEqual(Laik_Slice* s1, Laik_Slice* s2);
 
 // number of indexes in the slice
-uint64_t laik_slice_size(int dims, const Laik_Slice* s);
+uint64_t laik_slice_size(const Laik_Slice* s);
 
 
 /**

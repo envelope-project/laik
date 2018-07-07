@@ -252,18 +252,18 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         firstOff = o;
         while((o+1 < p->off[myid+1]) && (p->tslice[o+1].mapNo == mapNo)) {
             o++;
-            laik_slice_expand(dims, &slc, &(p->tslice[o].s));
+            laik_slice_expand(&slc, &(p->tslice[o].s));
         }
         lastOff = o;
         m->requiredSlice = slc;
-        m->count = laik_slice_size(dims, &slc);
+        m->count = laik_slice_size(&slc);
         m->size[0] = slc.to.i[0] - slc.from.i[0];
         m->size[1] = (dims > 1) ? (slc.to.i[1] - slc.from.i[1]) : 0;
         m->size[2] = (dims > 2) ? (slc.to.i[2] - slc.from.i[2]) : 0;
 
         if (laik_log_begin(1)) {
             laik_log_append("    mapNo %d: req.slice ", mapNo);
-            laik_log_Slice(dims, &slc);
+            laik_log_Slice(&slc);
             laik_log_flush(", tslices %d - %d, count %d, elemsize %d\n",
                            firstOff, lastOff, m->count, d->elemsize);
         }
@@ -560,10 +560,9 @@ static
 void initEmbeddedMapping(Laik_Mapping* toMap, Laik_Mapping* fromMap)
 {
     Laik_Data* data = toMap->data;
-    int dims = data->space->dims;
     assert(data == fromMap->data);
 
-    assert(laik_slice_within_slice(dims, &(toMap->requiredSlice),
+    assert(laik_slice_within_slice(&(toMap->requiredSlice),
                                    &(fromMap->allocatedSlice)));
 
     // take over allocation into new mapping descriptor
@@ -597,9 +596,6 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
     // (if we stay in same reservation, space is reused anyways)
     if ((fromList->res != 0) || (toList->res != 0)) return;
 
-    Laik_Data* d = toList->map[0].data;
-    int dims = d->space->dims;
-
     for(int i = 0; i < toList->count; i++) {
         Laik_Mapping* toMap = &(toList->map[i]);
         for(int sNo = 0; sNo < fromList->count; sNo++) {
@@ -608,7 +604,7 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
             if (fromMap->reusedFor >= 0) continue; // only reuse once
 
             // does index range fit into old?
-            if (!laik_slice_within_slice(dims, &(toMap->requiredSlice),
+            if (!laik_slice_within_slice(&(toMap->requiredSlice),
                                          &(fromMap->allocatedSlice))) {
                 // no, cannot reuse
                 continue;
@@ -622,9 +618,9 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
 
             if (laik_log_begin(1)) {
                 laik_log_append("map reuse for '%s'/%d ", toMap->data->name, i);
-                laik_log_Slice(dims, &(toMap->requiredSlice));
+                laik_log_Slice(&(toMap->requiredSlice));
                 laik_log_append(" (in ");
-                laik_log_Slice(dims, &(toMap->allocatedSlice));
+                laik_log_Slice(&(toMap->allocatedSlice));
                 laik_log_flush(" with byte-off %llu), %llu Bytes at %p)\n",
                                (unsigned long long) (toMap->base - toMap->start),
                                (unsigned long long) fromMap->capacity,
@@ -1008,19 +1004,19 @@ void laik_reservation_alloc(Laik_Reservation* res)
             assert(p->tslice[o].s.space != 0);
             assert(p->tslice[o].mapNo == partMapNo);
             assert(p->tslice[o].tag == glist[i].tag);
-            assert(laik_slice_size(dims, &(p->tslice[o].s)) > 0);
-            if (laik_slice_isEmpty(dims, &(pMap->requiredSlice)))
+            assert(laik_slice_size(&(p->tslice[o].s)) > 0);
+            if (laik_slice_isEmpty(&(pMap->requiredSlice)))
                 pMap->requiredSlice = p->tslice[o].s;
             else
-                laik_slice_expand(dims, &(pMap->requiredSlice), &(p->tslice[o].s));
+                laik_slice_expand(&(pMap->requiredSlice), &(p->tslice[o].s));
         }
 
         // extend combined mapping descriptor by required size
         assert(pMap->requiredSlice.space == data->space);
-        if (laik_slice_isEmpty(dims, &(rMap->requiredSlice)))
+        if (laik_slice_isEmpty(&(rMap->requiredSlice)))
             rMap->requiredSlice = pMap->requiredSlice;
         else
-            laik_slice_expand(dims, &(rMap->requiredSlice), &(pMap->requiredSlice));
+            laik_slice_expand(&(rMap->requiredSlice), &(pMap->requiredSlice));
     }
 
     free(glist);
@@ -1032,7 +1028,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
     for(int i = 0; i < mCount; i++) {
         Laik_Mapping* m = &(mList[i]);
         Laik_Slice* slc = &(m->requiredSlice);
-        int count = laik_slice_size(dims, slc);
+        int count = laik_slice_size(slc);
         assert(count > 0);
         total += count;
 
@@ -1045,7 +1041,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
         if (laik_log_begin(1)) {
             laik_log_append(" map [%d] ", m->mapNo);
-            laik_log_Slice(dims, &(m->allocatedSlice));
+            laik_log_Slice(&(m->allocatedSlice));
             laik_log_flush(0);
         }
     }
@@ -1064,7 +1060,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
             m->allocCount = m->baseMapping->count;
 
             Laik_Slice* slc = &(m->requiredSlice);
-            m->count = laik_slice_size(dims, slc);
+            m->count = laik_slice_size(slc);
             m->size[0] = slc->to.i[0] - slc->from.i[0];
             m->size[1] = (dims > 1) ? (slc->to.i[1] - slc->from.i[1]) : 0;
             m->size[2] = (dims > 2) ? (slc->to.i[2] - slc->from.i[2]) : 0;
@@ -1073,7 +1069,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
             if (laik_log_begin(1)) {
                 laik_log_append("  [%d] ", m->mapNo);
-                laik_log_Slice(dims, &(m->requiredSlice));
+                laik_log_Slice(&(m->requiredSlice));
                 laik_log_flush(" in map [%d] with byte-off %llu",
                                m->baseMapping->mapNo,
                                (unsigned long long) (m->base - m->start));
@@ -1352,7 +1348,7 @@ int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
     }
 
     // slice to pack must within local valid slice of mapping
-    assert(laik_slice_within_slice(dims, s, &(m->requiredSlice)));
+    assert(laik_slice_within_slice(s, &(m->requiredSlice)));
 
     // calculate address of starting index
     Laik_Index localIdx;
@@ -1439,7 +1435,7 @@ int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
 
     if (laik_log_begin(1)) {
         Laik_Index idx2;
-        laik_set_index(&idx2, i0, i1, i2);
+        laik_index_init(&idx2, i0, i1, i2);
 
         laik_log_append("        packed '%s': end (", m->data->name);
         laik_log_Index(dims, &idx2);
@@ -1473,7 +1469,7 @@ int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
     }
 
     // slice to unpack into must be within local valid slice of mapping
-    assert(laik_slice_within_slice(dims, s, &(m->requiredSlice)));
+    assert(laik_slice_within_slice(s, &(m->requiredSlice)));
 
     // calculate address of starting index
     Laik_Index localIdx;
@@ -1560,7 +1556,7 @@ int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
 
     if (laik_log_begin(1)) {
         Laik_Index idx2;
-        laik_set_index(&idx2, i0, i1, i2);
+        laik_index_init(&idx2, i0, i1, i2);
 
         laik_log_append("        unpacked '%s': end (", m->data->name);
         laik_log_Index(dims, &idx2);

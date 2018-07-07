@@ -466,7 +466,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
     if (data && data->getIdxW) {
         // element-wise weighting
         totalW = 0.0;
-        laik_set_index(&idx, 0, 0, 0);
+        laik_index_init(&idx, 0, 0, 0);
         for(uint64_t i = 0; i < size; i++) {
             idx.i[pdim] = i + s->s.from.i[pdim];
             totalW += (data->getIdxW)(&idx, data->userData);
@@ -644,7 +644,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
 
     // total weight sum of indexes to redistribute
     Laik_Index idx;
-    laik_set_index(&idx, 0, 0, 0);
+    laik_index_init(&idx, 0, 0, 0);
     double totalWeight = 0.0;
     for(int sliceNo = 0; sliceNo < oldP->count; sliceNo++) {
         int task = oldP->tslice[sliceNo].task;
