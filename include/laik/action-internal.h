@@ -124,7 +124,6 @@ typedef struct _Laik_BackendAction {
     Laik_CopyEntry* ce; // for CopyFromBuf, CopyToBuf
 
     // points to slice given in operation of transition
-    int dims;          // for Pack, Unpack, PackAndSend, RecvAndUnpack
     Laik_Slice* slc;   // for Pack, Unpack, PackAndSend, RecvAndUnpack
 
     // subgroup IDs defined in transition

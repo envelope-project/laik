@@ -218,17 +218,19 @@ static
 void laik_mpi_exec_pack(Laik_BackendAction* a, Laik_Mapping* map)
 {
     Laik_Index idx = a->slc->from;
+    int dims = a->slc->space->dims;
     int byteCount = a->count * map->data->elemsize;
     int packed = (map->layout->pack)(map, a->slc, &idx, a->toBuf, byteCount);
     assert(packed == a->count);
-    assert(laik_index_isEqual(a->dims, &idx, &(a->slc->to)));
+    assert(laik_index_isEqual(dims, &idx, &(a->slc->to)));
 }
 
 static
-void laik_mpi_exec_packAndSend(Laik_BackendAction* a, Laik_Mapping* map, int dims,
+void laik_mpi_exec_packAndSend(Laik_BackendAction* a, Laik_Mapping* map,
                                MPI_Datatype dataType, int tag, MPI_Comm comm)
 {
     Laik_Index idx = a->slc->from;
+    int dims = a->slc->space->dims;
     int packed;
     int count = 0;
     while(1) {
@@ -247,20 +249,22 @@ static
 void laik_mpi_exec_unpack(Laik_BackendAction* a, Laik_Mapping* map)
 {
     Laik_Index idx = a->slc->from;
+    int dims = a->slc->space->dims;
     int byteCount = a->count * map->data->elemsize;
     int unpacked = (map->layout->unpack)(map, a->slc, &idx,
                                          a->fromBuf, byteCount);
     assert(unpacked == a->count);
-    assert(laik_index_isEqual(a->dims, &idx, &(a->slc->to)));
+    assert(laik_index_isEqual(dims, &idx, &(a->slc->to)));
 }
 
 static
 void laik_mpi_exec_recvAndUnpack(Laik_BackendAction* a, Laik_Mapping* map,
-                                 int dims, int elemsize,
+                                 int elemsize,
                                  MPI_Datatype dataType, int tag, MPI_Comm comm)
 {
     MPI_Status st;
     Laik_Index idx = a->slc->from;
+    int dims = a->slc->space->dims;
     int recvCount, unpacked;
     int count = 0;
     while(1) {
@@ -445,7 +449,6 @@ void laik_mpi_exec(Laik_ActionSeq* as)
     Laik_SwitchStat* ss = tc->data->stat;
     Laik_MappingList* fromList = tc->fromList;
     Laik_MappingList* toList = tc->toList;
-    int dims = tc->data->space->dims;
     int elemsize = tc->data->elemsize;
 
     // common for all MPI calls: tag, comm, datatype
@@ -561,24 +564,24 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             assert(ba->fromMapNo < fromList->count);
             Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
             assert(fromMap->base != 0);
-            laik_mpi_exec_packAndSend(ba, fromMap, dims, dataType, tag, comm);
+            laik_mpi_exec_packAndSend(ba, fromMap, dataType, tag, comm);
             break;
         }
 
         case LAIK_AT_PackAndSend:
-            laik_mpi_exec_packAndSend(ba, ba->map, dims, dataType, tag, comm);
+            laik_mpi_exec_packAndSend(ba, ba->map, dataType, tag, comm);
             break;
 
         case LAIK_AT_MapRecvAndUnpack: {
             assert(ba->toMapNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
             assert(toMap->base);
-            laik_mpi_exec_recvAndUnpack(ba, toMap, dims, elemsize, dataType, tag, comm);
+            laik_mpi_exec_recvAndUnpack(ba, toMap, elemsize, dataType, tag, comm);
             break;
         }
 
         case LAIK_AT_RecvAndUnpack:
-            laik_mpi_exec_recvAndUnpack(ba, ba->map, dims, elemsize, dataType, tag, comm);
+            laik_mpi_exec_recvAndUnpack(ba, ba->map, elemsize, dataType, tag, comm);
             break;
 
         case LAIK_AT_Reduce:

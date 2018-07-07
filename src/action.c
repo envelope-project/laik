@@ -409,11 +409,8 @@ void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
     a->h.type = LAIK_AT_PackAndSend;
     a->map = fromMap;
-    a->dims = dims;
     a->slc = slc;
     a->rank = to;
     a->count = laik_slice_size(slc);
@@ -428,12 +425,8 @@ void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_PackToRBuf;
     a->map = fromMap;
-    a->dims = dims;
     a->slc = slc;
     a->bufID = toBufID;
     a->offset = toByteOffset;
@@ -446,12 +439,8 @@ void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_PackToBuf;
     a->map = fromMap;
-    a->dims = dims;
     a->slc = slc;
     a->toBuf = toBuf;
     a->count = laik_slice_size(slc);
@@ -463,11 +452,8 @@ void laik_aseq_addMapPackAndSend(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
     a->h.type = LAIK_AT_MapPackAndSend;
     a->fromMapNo = fromMapNo;
-    a->dims = dims;
     a->slc = slc;
     a->rank = to;
     a->count = laik_slice_size(slc);
@@ -482,12 +468,8 @@ void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_MapPackToRBuf;
     a->fromMapNo = fromMapNo;
-    a->dims = dims;
     a->slc = slc;
     a->bufID = toBufID;
     a->offset = toByteOffset;
@@ -500,12 +482,8 @@ void laik_aseq_addMapPackToBuf(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_MapPackToBuf;
     a->fromMapNo = fromMapNo;
-    a->dims = dims;
     a->slc = slc;
     a->toBuf = toBuf;
     a->count = laik_slice_size(slc);
@@ -517,11 +495,8 @@ void laik_aseq_addRecvAndUnpack(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
     a->h.type = LAIK_AT_RecvAndUnpack;
     a->map = toMap;
-    a->dims = dims;
     a->slc = slc;
     a->rank = from;
     a->count = laik_slice_size(slc);
@@ -536,11 +511,7 @@ void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_UnpackFromRBuf;
-    a->dims = dims;
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
     a->map = toMap;
@@ -554,11 +525,7 @@ void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_UnpackFromBuf;
-    a->dims = dims;
     a->fromBuf = fromBuf;
     a->map = toMap;
     a->slc = slc;
@@ -571,11 +538,8 @@ void laik_aseq_addMapRecvAndUnpack(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
     a->h.type = LAIK_AT_MapRecvAndUnpack;
     a->toMapNo = toMapNo;
-    a->dims = dims;
     a->slc = slc;
     a->rank = from;
     a->count = laik_slice_size(slc);
@@ -588,11 +552,7 @@ void laik_aseq_addMapUnpackFromRBuf(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_MapUnpackFromRBuf;
-    a->dims = dims;
     a->bufID = fromBufID;
     a->offset = fromByteOffset;
     a->toMapNo = toMapNo;
@@ -606,11 +566,7 @@ void laik_aseq_addMapUnpackFromBuf(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_MapUnpackFromBuf;
-    a->dims = dims;
     a->fromBuf = fromBuf;
     a->toMapNo = toMapNo;
     a->slc = slc;
@@ -660,15 +616,11 @@ void laik_aseq_addMapGroupReduce(Laik_ActionSeq* as, int round,
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
 
-    Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->transition->space->dims;
-
     a->h.type = LAIK_AT_MapGroupReduce;
     a->inputGroup = inputGroup;
     a->outputGroup = outputGroup;
     a->fromMapNo = myInputMapNo;
     a->toMapNo = myOutputMapNo;
-    a->dims = dims;
     a->slc = slc;
     a->count = laik_slice_size(slc);
     a->redOp = redOp;
@@ -1903,7 +1855,7 @@ bool laik_aseq_flattenPacking(Laik_ActionSeq* as)
                 assert(ba->fromMapNo < tc->fromList->count);
             fromMap = tc->fromList ? &(tc->fromList->map[ba->fromMapNo]) : 0;
 
-            if (fromMap && (ba->dims == 1)) {
+            if (fromMap && (ba->slc->space->dims == 1)) {
                 // mapping known and 1d: can use direct send/recv
 
                 // FIXME: this assumes lexicographical layout
@@ -1943,7 +1895,7 @@ bool laik_aseq_flattenPacking(Laik_ActionSeq* as)
                 assert(ba->toMapNo < tc->toList->count);
             toMap = tc->toList ? &(tc->toList->map[ba->toMapNo]) : 0;
 
-            if (toMap && (ba->dims == 1)) {
+            if (toMap && (ba->slc->space->dims == 1)) {
                 // mapping known and 1d: can use direct send/recv
 
                 // FIXME: this assumes lexicographical layout
@@ -1980,7 +1932,7 @@ bool laik_aseq_flattenPacking(Laik_ActionSeq* as)
         case LAIK_AT_MapGroupReduce:
 
             // TODO: for >1 dims, use pack/unpack with buffer
-            if (ba->dims == 1) {
+            if (ba->slc->space->dims == 1) {
                 char *fromBase, *toBase;
 
                 // if current task is input, fromBase should be allocated
