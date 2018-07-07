@@ -146,7 +146,6 @@ Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
     Laik_TaskSlice_Gen* ts = &(p->tslice[p->count]);
     p->count++;
 
-    ts->type = TS_Generic;
     ts->task = task;
     ts->s = *s;
     ts->tag = tag;
@@ -186,7 +185,6 @@ Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx
     Laik_TaskSlice_Single1d* ts = &(p->tss1d[p->count]);
     p->count++;
 
-    ts->type = TS_Single1d;
     ts->task = task;
     ts->idx = idx;
 
@@ -220,42 +218,15 @@ int laik_partitioning_slicecount(Laik_Partitioning* p)
 // a new, slightly changed version of a partitiong e.g. for load balancing)
 Laik_TaskSlice* laik_partitioning_get_tslice(Laik_Partitioning* p, int n)
 {
-    assert(n < p->count);
-    if (p->tslice)
-        return (Laik_TaskSlice*) &(p->tslice[n]);
-    if (p->tss1d)
-        return (Laik_TaskSlice*) &(p->tss1d[n]);
-    assert(0);
-    return 0;
+    static Laik_TaskSlice ts;
+
+    if (n >= p->count) return 0;
+
+    ts.p = p;
+    ts.no = n;
+    return &ts;
 }
 
-// partitioner API: get borders of a slice as returned by
-// "laik_partitioning_get_tslice"
-const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts)
-{
-    static Laik_Slice slc;
-
-    if (!ts) return 0;
-    switch(ts->type) {
-    case TS_Generic:
-        return &(((Laik_TaskSlice_Gen*)ts)->s);
-    case TS_Single1d:
-        slc.space = 0; // FIXME
-        slc.from.i[0] = ((Laik_TaskSlice_Single1d*)ts)->idx;
-        slc.to.i[0] = slc.from.i[0] + 1;
-        return &slc;
-    default:
-        assert(0);
-    }
-    return 0;
-}
-
-// partitioner API: get the process rank an slice is assigned to
-// for slices returned by "laik_partitioning_get_tslice"
-int laik_taskslice_get_task(Laik_TaskSlice* ts)
-{
-    return ts->task;
-}
 
 // public: get a custom data pointer from the partitioner
 void* laik_partitioner_data(Laik_Partitioner* partitioner)
@@ -435,7 +406,6 @@ void updatePartitioningOffsetsSI(Laik_Partitioning* p)
                  (long long) idx0, (long long) (idx + 1) );
 
         Laik_TaskSlice_Gen* ts = &(p->tslice[off]);
-        ts->type = TS_Generic;
         ts->task = task;
         ts->tag = 0;
         ts->mapNo = 0;
@@ -890,7 +860,7 @@ Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
         return 0;
     }
     assert(p->tslice[o].task == myid);
-    return (Laik_TaskSlice*) &(p->tslice[o]);
+    return laik_partitioning_get_tslice(p, o);
 }
 
 // get slice number <n> within mapping <mapNo> from the slices for this task
@@ -913,7 +883,7 @@ Laik_TaskSlice* laik_my_mapslice(Laik_Partitioning* p, int mapNo, int n)
     }
     assert(p->tslice[o].task == myid);
     assert(p->tslice[o].mapNo == mapNo);
-    return (Laik_TaskSlice*) &(p->tslice[o]);
+    return laik_partitioning_get_tslice(p, o);
 }
 
 // get borders of slice number <n> from the 1d slices for this task
@@ -922,29 +892,9 @@ Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
 {
     assert(p->space->dims == 1);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
-    if (ts == 0) {
-        if (from) *from = 0;
-        if (to) *to = 0;
-        return 0;
-    }
-
-    switch(ts->type) {
-    case TS_Generic: {
-        Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
-        if (from) *from = tsg->s.from.i[0];
-        if (to) *to = tsg->s.to.i[0];
-        break;
-    }
-    case TS_Single1d: {
-        Laik_TaskSlice_Single1d* tss = (Laik_TaskSlice_Single1d*) ts;
-        if (from) *from = tss->idx;
-        if (to) *to = tss->idx + 1;
-        break;
-    }
-    default:
-        assert(0);
-    }
-
+    const Laik_Slice* s = ts ? laik_taskslice_get_slice(ts) : 0;
+    if (from) *from = s ? s->from.i[0] : 0;
+    if (to)   *to   = s ? s->to.i[0] : 0;
     return ts;
 }
 
@@ -955,12 +905,11 @@ Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
 {
     assert(p->space->dims == 2);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
-    assert((ts == 0) || (ts->type == TS_Generic));
-    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
-    if (x1) *x1 = ts ? tsg->s.from.i[0] : 0;
-    if (x2) *x2 = ts ? tsg->s.to.i[0] : 0;
-    if (y1) *y1 = ts ? tsg->s.from.i[1] : 0;
-    if (y2) *y2 = ts ? tsg->s.to.i[1] : 0;
+    const Laik_Slice* s = ts ? laik_taskslice_get_slice(ts) : 0;
+    if (x1) *x1 = s ? s->from.i[0] : 0;
+    if (x2) *x2 = s ? s->to.i[0] : 0;
+    if (y1) *y1 = s ? s->from.i[1] : 0;
+    if (y2) *y2 = s ? s->to.i[1] : 0;
 
     return ts;
 }
@@ -973,14 +922,13 @@ Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
 {
     assert(p->space->dims == 3);
     Laik_TaskSlice* ts = laik_my_slice(p, n);
-    assert((ts == 0) || (ts->type == TS_Generic));
-    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
-    if (x1) *x1 = ts ? tsg->s.from.i[0] : 0;
-    if (x2) *x2 = ts ? tsg->s.to.i[0] : 0;
-    if (y1) *y1 = ts ? tsg->s.from.i[1] : 0;
-    if (y2) *y2 = ts ? tsg->s.to.i[1] : 0;
-    if (z1) *z1 = ts ? tsg->s.from.i[2] : 0;
-    if (z2) *z2 = ts ? tsg->s.to.i[2] : 0;
+    const Laik_Slice* s = ts ? laik_taskslice_get_slice(ts) : 0;
+    if (x1) *x1 = s ? s->from.i[0] : 0;
+    if (x2) *x2 = s ? s->to.i[0] : 0;
+    if (y1) *y1 = s ? s->from.i[1] : 0;
+    if (y2) *y2 = s ? s->to.i[1] : 0;
+    if (z1) *z1 = s ? s->from.i[2] : 0;
+    if (z2) *z2 = s ? s->to.i[2] : 0;
 
     return ts;
 }

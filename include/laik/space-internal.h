@@ -53,19 +53,10 @@ struct _Laik_Partitioner {
 
 // A TaskSlice is used in partitioning to map a slice to a task.
 
-// different internal types are used to save memory
-enum { TS_Generic = 1, TS_Single1d };
-
-struct _Laik_TaskSlice {
-    int type;
-    int task;
-};
-
 // generic task slice
 // the tag is a hint for the data layer: if >0, slices with same tag
 // go into same mapping
 typedef struct _Laik_TaskSlice_Gen {
-    int type;
     int task;
     Laik_Slice s;
 
@@ -78,10 +69,16 @@ typedef struct _Laik_TaskSlice_Gen {
 
 // for single-index slices in 1d
 typedef struct _Laik_TaskSlice_Single1d {
-    int type;
     int task;
     int64_t idx;
 } Laik_TaskSlice_Single1d;
+
+// generic reference to a task slice by slice index in a partitioning
+struct _Laik_TaskSlice {
+    Laik_Partitioning* p;
+    int no;
+};
+
 
 struct _Laik_Partitioning {
     int id;

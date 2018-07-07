@@ -342,8 +342,20 @@ Laik_Space* laik_partitioning_get_space(Laik_Partitioning* p);
 Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p);
 int laik_partitioning_slicecount(Laik_Partitioning* p);
 Laik_TaskSlice* laik_partitioning_get_tslice(Laik_Partitioning* p, int n);
+
 const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts);
 int laik_taskslice_get_task(Laik_TaskSlice* ts);
+// applications can attach arbitrary values to a TaskSlice, to be
+// passed from application-specific partitioners to slice processing
+void* laik_taskslice_get_data(Laik_TaskSlice*);
+void laik_taskslice_set_data(Laik_TaskSlice*, void* data);
+// return the mapping number of this task slice, calculated from tags
+// provided by the partitioner
+int laik_taskslice_get_mapNo(Laik_TaskSlice*);
+
+// get slice of a task slice
+Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice*);
+
 
 // get a custom data pointer from the partitioner
 void* laik_partitioner_data(Laik_Partitioner* partitioner);
@@ -414,18 +426,6 @@ laik_new_reassign_partitioner(Laik_Group* newg,
                               Laik_GetIdxWeight_t getIdxW,
                               const void* userData);
 
-
-// applications can attach arbitrary values to a TaskSlice, to be
-// passed from application-specific partitioners to slice processing
-void* laik_get_slice_data(Laik_TaskSlice*);
-void laik_set_slice_data(Laik_TaskSlice*, void* data);
-
-// return the mapping number of this task slice, calculated from tags
-// provided by the partitioner
-int laik_tslice_get_mapNo(Laik_TaskSlice*);
-
-// get slice of a task slice
-Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice*);
 
 // get local index from global one. return false if not local
 bool laik_index_global2local(Laik_Partitioning*,

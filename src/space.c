@@ -405,47 +405,71 @@ void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1)
 // Laik_TaskSlice
 
 
-int laik_tslice_get_mapNo(Laik_TaskSlice* ts)
+// get slice from a task slice
+const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts)
 {
-    switch(ts->type) {
-    case TS_Generic: {
-        Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
-        return tsg->mapNo;
+
+    if (!ts) return 0;
+
+    if (ts->p->tslice)
+        return &(ts->p->tslice[ts->no].s);
+
+    if (ts->p->tss1d) {
+        static Laik_Slice slc;
+        int64_t idx = ts->p->tss1d[ts->no].idx;
+        laik_slice_init_1d(&slc, ts->p->space, idx, idx + 1);
+        return &slc;
     }
-    case TS_Single1d:
-        return 0;
-    default:
-        assert(0);
-    }
+    return 0;
 }
 
-Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice* ts)
+// get the process rank of an task slice
+int laik_taskslice_get_task(Laik_TaskSlice* ts)
 {
-    switch(ts->type) {
-    case TS_Generic: {
-        Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
-        return &(tsg->s);
-    }
-    default:
-        assert(0);
-    }
+    assert(ts && ts->p);
+    if (ts->p->tslice)
+        return ts->p->tslice[ts->no].task;
+    if (ts->p->tss1d)
+        return ts->p->tss1d[ts->no].task;
+
+    return -1;
 }
+
+
+
+int laik_taskslice_get_mapNo(Laik_TaskSlice* ts)
+{
+    assert(ts && ts->p);
+    // does the partitioning store slices as single indexes? Only one map!
+    if (ts->p->tss1d) return 0;
+
+    Laik_TaskSlice_Gen* tsg = &(ts->p->tslice[ts->no]);
+    return tsg->mapNo;
+}
+
 
 // applications can attach arbitrary values to a TaskSlice, to be
 // passed from application-specific partitioners to slice processing
-void* laik_get_slice_data(Laik_TaskSlice* ts)
+void* laik_taskslice_get_data(Laik_TaskSlice* ts)
 {
-    assert(ts->type == TS_Generic);
-    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+    assert(ts && ts->p);
+    // does the partitioning store slices as single indexes? No data!
+    if (ts->p->tss1d) return 0;
+
+    Laik_TaskSlice_Gen* tsg = &(ts->p->tslice[ts->no]);
     return tsg->data;
 }
 
-void laik_set_slice_data(Laik_TaskSlice* ts, void* data)
+void laik_taskslice_set_data(Laik_TaskSlice* ts, void* data)
 {
-    assert(ts->type == TS_Generic);
-    Laik_TaskSlice_Gen* tsg = (Laik_TaskSlice_Gen*) ts;
+    assert(ts && ts->p);
+    // does the partitioning store slices as single indexes? No data to set!
+    assert(ts->p->tss1d == 0);
+
+    Laik_TaskSlice_Gen* tsg = &(ts->p->tslice[ts->no]);
     tsg->data = data;
 }
+
 
 
 // get local index from global one. return false if not local
