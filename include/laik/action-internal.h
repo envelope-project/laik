@@ -63,6 +63,9 @@ typedef struct {
     int offset;
 } Laik_A_BufReserve;
 
+
+// send actions
+
 // RBufSend action
 typedef struct {
     Laik_Action h;
@@ -71,6 +74,26 @@ typedef struct {
     int count;
     int to_rank;
 } Laik_A_RBufSend;
+
+// BufSend action
+typedef struct {
+    Laik_Action h;
+    int count;
+    int to_rank;
+    char* buf;
+} Laik_A_BufSend;
+
+// MapPackAndSend action
+typedef struct {
+    Laik_Action h;
+    int to_rank;
+    int fromMapNo;
+    Laik_Slice* slc;
+    uint64_t count;
+} Laik_A_MapPackAndSend;
+
+
+// receive actions
 
 // RBufRecv action
 typedef struct {
@@ -81,14 +104,6 @@ typedef struct {
     int from_rank;
 } Laik_A_RBufRecv;
 
-// BufSend action
-typedef struct {
-    Laik_Action h;
-    int count;
-    int to_rank;
-    char* buf;
-} Laik_A_BufSend;
-
 // BufRecv action
 typedef struct {
     Laik_Action h;
@@ -96,6 +111,18 @@ typedef struct {
     int from_rank;
     char* buf;
 } Laik_A_BufRecv;
+
+// MapRecvAndUnpack action
+typedef struct {
+    Laik_Action h;
+    int from_rank;
+    int toMapNo;
+    Laik_Slice* slc;
+    uint64_t count;
+} Laik_A_MapRecvAndUnpack;
+
+
+
 
 
 // helper struct for CopyFromBuf / CopyToBuf
@@ -334,10 +361,6 @@ void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
 // append action to unpack data from buffer into a slice of data
 void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
                                 char* fromBuf, Laik_Mapping* toMap, Laik_Slice* slc);
-
-// append action to receive data and unpack into a slice of data
-void laik_aseq_addMapRecvAndUnpack(Laik_ActionSeq* as, int round,
-                                   int toMapNo, Laik_Slice* slc, int from);
 
 // append action to unpack data from buffer into a slice of data
 void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,

@@ -565,12 +565,14 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
                         ba->fromMapNo, ba->count, (void*) ba->toBuf);
         break;
 
-    case LAIK_AT_MapPackAndSend:
+    case LAIK_AT_MapPackAndSend: {
+        Laik_A_MapPackAndSend* aa = (Laik_A_MapPackAndSend*) a;
         laik_log_append(": ");
-        laik_log_Slice(ba->slc);
-        laik_log_append(" mapNo %d, count %d ==> T%d",
-                        ba->fromMapNo, ba->count, ba->rank);
+        laik_log_Slice(aa->slc);
+        laik_log_append(" mapNo %d, count %llu ==> T%d",
+                        aa->fromMapNo, (unsigned long long) aa->count, aa->to_rank);
         break;
+    }
 
     case LAIK_AT_PackAndSend:
         laik_log_append(": ");
@@ -609,11 +611,14 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
         laik_log_append(", count %d", ba->count);
         break;
 
-    case LAIK_AT_MapRecvAndUnpack:
-        laik_log_append(": T%d ==> ", ba->rank);
-        laik_log_Slice(ba->slc);
-        laik_log_append(" mapNo %d, count %d", ba->toMapNo, ba->count);
+    case LAIK_AT_MapRecvAndUnpack: {
+        Laik_A_MapRecvAndUnpack* aa = (Laik_A_MapRecvAndUnpack*) a;
+        laik_log_append(": T%d ==> ", aa->from_rank);
+        laik_log_Slice(aa->slc);
+        laik_log_append(" mapNo %d, count %llu",
+                        aa->toMapNo, (unsigned long long) aa->count);
         break;
+    }
 
     default:
         laik_log(LAIK_LL_Panic,
