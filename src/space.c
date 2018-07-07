@@ -64,9 +64,67 @@ bool laik_index_isEqual(int dims, const Laik_Index* i1, const Laik_Index* i2)
     return true;
 }
 
+//----------------------------------------------------------
+// Slices
+
+void laik_slice_init(Laik_Slice* slc, Laik_Space* space,
+                     Laik_Index* from, Laik_Index* to)
+{
+    slc->space = space;
+    slc->from = *from;
+    slc->to = *to;
+}
+
+void laik_slice_init_copy(Laik_Slice* dst, Laik_Slice* src)
+{
+    *dst = *src;
+}
+
+void laik_slice_init_1d(Laik_Slice* slc, Laik_Space* space,
+                        int64_t from, int64_t to)
+{
+    assert(space && (space->dims == 1));
+    slc->space = space;
+    slc->from.i[0] = from;
+    slc->to.i[0] = to;
+}
+
+void laik_slice_init_2d(Laik_Slice* slc, Laik_Space* space,
+                        int64_t from1, int64_t to1,
+                        int64_t from2, int64_t to2)
+{
+    assert(space && (space->dims == 2));
+    slc->space = space;
+    slc->from.i[0] = from1;
+    slc->from.i[1] = from2;
+    slc->to.i[0] = to1;
+    slc->to.i[1] = to2;
+}
+
+void laik_slice_init_3d(Laik_Slice* slc, Laik_Space* space,
+                        int64_t from1, int64_t to1,
+                        int64_t from2, int64_t to2,
+                        int64_t from3, int64_t to3)
+{
+    assert(space && (space->dims == 3));
+    slc->space = space;
+    slc->from.i[0] = from1;
+    slc->from.i[1] = from2;
+    slc->from.i[2] = from3;
+    slc->to.i[0] = to1;
+    slc->to.i[1] = to2;
+    slc->to.i[2] = to3;
+}
+
+
 // is the given slice empty?
 bool laik_slice_isEmpty(int dims, Laik_Slice* slc)
 {
+    // an invalid slice (no space set) is considered empty
+    if (slc->space == 0) return true;
+
+    assert(slc->space->dims == dims);
+
     if (slc->from.i[0] >= slc->to.i[0])
         return true;
 
@@ -101,6 +159,16 @@ Laik_Slice* laik_slice_intersect(int dims,
 {
     static Laik_Slice s;
 
+    if ((s1->space == 0) || (s2->space == 0)) {
+        // intersection with invalid slice gives invalid slice
+        s.space = 0;
+        return &s;
+    }
+
+    assert(s1->space == s2->space);
+    assert(s1->space->dims == dims);
+    s.space = s1->space;
+
     if (!intersectRange(s1->from.i[0], s1->to.i[0],
                         s2->from.i[0], s2->to.i[0],
                         &(s.from.i[0]), &(s.to.i[0])) ) return 0;
@@ -120,6 +188,9 @@ Laik_Slice* laik_slice_intersect(int dims,
 // expand slice <dst> such that it contains <src>
 void laik_slice_expand(int dims, Laik_Slice* dst, Laik_Slice* src)
 {
+    // expanding with invalid slice not allowed
+    assert(src->space == dst->space);
+
     if (src->from.i[0] < dst->from.i[0]) dst->from.i[0] = src->from.i[0];
     if (src->to.i[0] > dst->to.i[0]) dst->to.i[0] = src->to.i[0];
     if (dims == 1) return;
@@ -166,6 +237,9 @@ bool laik_slice_within_space(const Laik_Slice* slc, const Laik_Space* sp)
 // are the slices equal?
 bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
 {
+    if (s1->space != s2->space) return false;
+
+    assert(s1->space->dims == dims);
     if (!laik_index_isEqual(dims, &(s1->from), &(s2->from))) return false;
     if (!laik_index_isEqual(dims, &(s1->to), &(s2->to))) return false;
     return true;
@@ -175,6 +249,10 @@ bool laik_slice_isEqual(int dims, Laik_Slice* s1, Laik_Slice* s2)
 // number of indexes in the slice
 uint64_t laik_slice_size(int dims, const Laik_Slice* s)
 {
+    // invalid slice?
+    if (s->space == 0) return 0;
+
+    assert(s->space->dims == dims);
     uint64_t size = s->to.i[0] - s->from.i[0];
     if (dims > 1) {
         size *= s->to.i[1] - s->from.i[1];
@@ -242,8 +320,7 @@ Laik_Space* laik_new_space_1d(Laik_Instance* i, int64_t s1)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 1;
-    space->s.from.i[0] = 0;
-    space->s.to.i[0] = s1;
+    laik_slice_init_1d(&(space->s), space, 0, s1);
 
     if (laik_log_begin(1)) {
         laik_log_append("new 1d space '%s': ", space->name);
@@ -258,10 +335,7 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i, int64_t s1, int64_t s2)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 2;
-    space->s.from.i[0] = 0;
-    space->s.to.i[0] = s1;
-    space->s.from.i[1] = 0;
-    space->s.to.i[1] = s2;
+    laik_slice_init_2d(&(space->s), space, 0, s1, 0, s2);
 
     if (laik_log_begin(1)) {
         laik_log_append("new 2d space '%s': ", space->name);
@@ -277,12 +351,7 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i,
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 3;
-    space->s.from.i[0] = 0;
-    space->s.to.i[0] = s1;
-    space->s.from.i[1] = 0;
-    space->s.to.i[1] = s2;
-    space->s.from.i[2] = 0;
-    space->s.to.i[2] = s3;
+    laik_slice_init_3d(&(space->s), space, 0, s1, 0, s2, 0, s3);
 
     if (laik_log_begin(1)) {
         laik_log_append("new 3d space '%s': ", space->name);
@@ -763,6 +832,7 @@ void calcAddReductions(int tflags,
 
     // TODO: only for 1d
     assert(fromP->space->dims == 1);
+    assert(fromP->space == toP->space);
 
     // add slice borders of all tasks
     cleanBorderList();
@@ -816,7 +886,11 @@ void calcAddReductions(int tflags,
     int myActivity = 0; // bit0: input, bit1: output
     int myInputSliceNo = -1, myOutputSliceNo = -1;
     int myInputMapNo = -1, myOutputMapNo = -1;
+
     Laik_Slice slc;
+    // all slices are from same space
+    slc.space = fromP->space;
+
     for(int i = 0; i < borderListCount; i++) {
         SliceBorder* sb = &(borderList[i]);
 

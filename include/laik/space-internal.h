@@ -28,6 +28,7 @@ void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
 void laik_sub_index(Laik_Index* res, const Laik_Index* src1, const Laik_Index* src2);
 
 
+
 struct _Laik_Space {
     char* name; // for debugging
     int id;     // for debugging

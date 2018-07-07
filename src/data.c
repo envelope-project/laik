@@ -174,9 +174,8 @@ void initMapping(Laik_Mapping* m, Laik_Data* d)
     m->mapNo = -1;
     m->reusedFor = -1;
 
-    // set requiredSlice to empty
-    m->requiredSlice.from.i[0] = 0;
-    m->requiredSlice.to.i[0] = 0;
+    // set requiredSlice to invalid
+    m->requiredSlice.space = 0;
 
     m->count = 0;
     m->size[0] = 0;
@@ -1006,6 +1005,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
         // go over all slices in this slice group (same tag) and extend
         Laik_Partitioning* p = res->entry[idx].p;
         for(int o = p->myMapOff[partMapNo]; o < p->myMapOff[partMapNo+1]; o++) {
+            assert(p->tslice[o].s.space != 0);
             assert(p->tslice[o].mapNo == partMapNo);
             assert(p->tslice[o].tag == glist[i].tag);
             assert(laik_slice_size(dims, &(p->tslice[o].s)) > 0);
@@ -1016,6 +1016,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
         }
 
         // extend combined mapping descriptor by required size
+        assert(pMap->requiredSlice.space == data->space);
         if (laik_slice_isEmpty(dims, &(rMap->requiredSlice)))
             rMap->requiredSlice = pMap->requiredSlice;
         else

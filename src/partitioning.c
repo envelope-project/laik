@@ -78,6 +78,9 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
 {
     Laik_Partitioning* p;
 
+    assert(s != 0);
+    assert(g != 0);
+
     p = malloc(sizeof(Laik_Partitioning));
     p->off = malloc(sizeof(int) * (g->size + 1));
     if ((p == 0) || (p->off == 0)) {
@@ -124,6 +127,8 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
 Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
                                   int tag, void* data)
 {
+    assert(s->space == p->space);
+
     if (p->count == p->capacity) {
         assert(p->tss1d == 0);
         p->capacity = p->capacity * 2;
@@ -160,8 +165,7 @@ Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx
     if (p->tslice) {
         // append as generic slice
         Laik_Slice slc;
-        slc.from.i[0] = idx;
-        slc.to.i[0] = idx + 1;
+        laik_slice_init_1d(&slc, p->space, idx, idx + 1);
         return laik_append_slice(p, task, &slc, 1, 0);
     }
 
@@ -236,6 +240,7 @@ const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts)
     case TS_Generic:
         return &(((Laik_TaskSlice_Gen*)ts)->s);
     case TS_Single1d:
+        slc.space = 0; // FIXME
         slc.from.i[0] = ((Laik_TaskSlice_Single1d*)ts)->idx;
         slc.to.i[0] = slc.from.i[0] + 1;
         return &slc;

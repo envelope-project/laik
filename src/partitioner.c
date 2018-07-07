@@ -368,6 +368,8 @@ void runGridPartitioner(Laik_Partitioner* pr,
 
     Laik_Slice slc;
     int64_t from, to;
+
+    slc.space = p->space;
     int task = 0;
     for(int z = 0; z < data->zblocks; z++) {
         from = ss->from.i[2] + z * zStep;
@@ -670,6 +672,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
              totalWeight, newg->size, weightPerTask);
 
     Laik_Slice slc;
+    slc.space = p->space;
     for(int sliceNo = 0; sliceNo < oldP->count; sliceNo++) {
         int origTask = oldP->tslice[sliceNo].task;
         if (newg->fromParent[origTask] >= 0) {

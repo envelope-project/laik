@@ -77,9 +77,8 @@ void run_element_partitioner(Laik_Partitioner* pr,
     for(int ix = 0; ix < N_tasks_x; ix++) {
         for(int iy = 0; iy < N_tasks_y; iy++) {
             for(int jy = 0; jy < N_local_y; jy++) {
-                slc.from.i[0] = ix * N_local_x + (iy * N_local_y + jy) * N_elems_x;
-                slc.to.i[0] = slc.from.i[0] + N_local_x;
-
+                int idx = ix * N_local_x + (iy * N_local_y + jy) * N_elems_x;
+                laik_slice_init_1d(&slc, space, idx, idx + N_local_x);
                 laik_append_slice(p, ix + iy * N_tasks_x, &slc, 0, 0);
             }
         }
@@ -118,12 +117,14 @@ void run_node_partitioner(Laik_Partitioner* pr,
         // as we merge slices afterwards, there is no problem eventually
         // adding the same nodes twice
         calculate_my_coordinate(laik_size(group), task, &rx, &ry);
-        slc.from.i[0] = neighbours[ 4 * s->from.i[0] + 0 ] + 0;
-        slc.to.i[0] = neighbours [ 4 * (s->to.i[0] - 1) + 1 ] + 1;
+        laik_slice_init_1d(&slc, space,
+                           neighbours[ 4 * s->from.i[0] + 0 ] + 0,
+                           neighbours[ 4 * (s->to.i[0] - 1) + 1 ] + 1);
         laik_append_slice(p, task, &slc, 0, 0);
 
-        slc.from.i[0] = neighbours[ 4 * s->from.i[0] + 2] + 0;
-        slc.to.i[0] = neighbours [ 4 * (s->to.i[0] - 1) + 3 ] + 1;
+        laik_slice_init_1d(&slc, space,
+                           neighbours[ 4 * s->from.i[0] + 2] + 0,
+                           neighbours [ 4 * (s->to.i[0] - 1) + 3 ] + 1);
         laik_append_slice(p, task, &slc, 0, 0);
     }
 }

@@ -113,15 +113,27 @@ struct _Laik_Index {
 bool laik_index_isEqual(int dims, const Laik_Index* i1, const Laik_Index* i2);
 
 
+//
+// Laik_Slice: a rectangle-shaped slice from an index space [from;to[
+//
 
-/**
- * Laik_Slice
- *
- * A rectangle-shaped slice from an index space [from;to[
- */
 struct _Laik_Slice {
-  Laik_Index from, to;
+    Laik_Space* space;
+    Laik_Index  from, to;
 };
+
+void laik_slice_init(Laik_Slice* slc, Laik_Space* space,
+                     Laik_Index* from, Laik_Index* to);
+void laik_slice_init_copy(Laik_Slice* dst, Laik_Slice* src);
+void laik_slice_init_1d(Laik_Slice* slc, Laik_Space* space,
+                        int64_t from, int64_t to);
+void laik_slice_init_2d(Laik_Slice* slc, Laik_Space* space,
+                        int64_t from1, int64_t to1,
+                        int64_t from2, int64_t to2);
+void laik_slice_init_3d(Laik_Slice* slc, Laik_Space* space,
+                        int64_t from1, int64_t to1,
+                        int64_t from2, int64_t to2,
+                        int64_t from3, int64_t to3);
 
 // is the given slice empty?
 bool laik_slice_isEmpty(int dims, Laik_Slice* slc);
