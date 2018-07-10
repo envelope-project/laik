@@ -132,10 +132,10 @@ void laik_partitiong_set_taskfilter(Laik_Partitioning* p, int task)
 // partitioner API: add a slice
 // - specify slice groups by giving slices the same tag
 // - arbitrary data can be attached to slices if no merge step is done
-Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
-                                  int tag, void* data)
+void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
+                       int tag, void* data)
 {
-    if ((p->tfilter >= 0) && (task != p->tfilter)) return 0;
+    if ((p->tfilter >= 0) && (task != p->tfilter)) return;
     assert(s->space == p->space);
 
     // TODO: convert previously added single indexes into slices
@@ -162,22 +162,21 @@ Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
     ts->tag = tag;
     ts->data = data;
     ts->mapNo = 0;
-
-    return (Laik_TaskSlice*) ts;
 }
 
 // partitioner API: add a single 1d index slice, optimized for fast merging
 // if a partitioner only uses this method, an optimized internal format is used
-Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx)
+void laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx)
 {
-    if ((p->tfilter >= 0) && (task != p->tfilter)) return 0;
+    if ((p->tfilter >= 0) && (task != p->tfilter)) return;
     assert(p->space->dims == 1);
 
     if (p->tslice) {
         // append as generic slice
         Laik_Slice slc;
         laik_slice_init_1d(&slc, p->space, idx, idx + 1);
-        return laik_append_slice(p, task, &slc, 1, 0);
+        laik_append_slice(p, task, &slc, 1, 0);
+        return;
     }
 
     if (p->count == p->capacity) {
@@ -199,8 +198,6 @@ Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx
 
     ts->task = task;
     ts->idx = idx;
-
-    return (Laik_TaskSlice*) ts;
 }
 
 

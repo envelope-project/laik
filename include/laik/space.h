@@ -343,10 +343,10 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 // the <data> pointer is an arbitrary value which can be passed from
 //  application-specific partitioners to the code processing slices.
 //  LAIK provided partitioners set <data> to 0.
-Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
-                                  int tag, void* data);
+void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
+                       int tag, void* data);
 // append 1d single-index slice
-Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* p,
+void laik_append_index_1d(Laik_Partitioning* p,
                                      int task, int64_t idx);
 
 Laik_Space* laik_partitioning_get_space(Laik_Partitioning* p);
