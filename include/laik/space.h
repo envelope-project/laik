@@ -214,9 +214,19 @@ uint64_t laik_space_size(const Laik_Space* s);
 int laik_space_getdimensions(Laik_Space* space);
 
 
-//--------------------------------------------------------------------------
-// LAIK partitionings and partitioner algorithms
-//
+/**
+ * Laik_Partitioning
+ */
+
+// create a new, yet invalid, partitioning
+Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s);
+
+// make partitioning valid after a partitioner run by freezing (immutable)
+void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge);
+
+// run a partitioner on a yet invalid, empty partitioning
+void laik_run_partitioner(Laik_Partitioner* pr,
+                          Laik_Partitioning* p, Laik_Partitioning *otherP);
 
 // create a new partitioning by running an offline partitioner algorithm.
 // the partitioner may be derived from another partitioning which is
@@ -267,7 +277,6 @@ Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
                                  int64_t* x1, int64_t* x2,
                                  int64_t* y1, int64_t* y2,
                                  int64_t* z1, int64_t* z2);
-
 
 
 // Partitioner API:

@@ -97,8 +97,6 @@ struct _Laik_Partitioning {
     Laik_TaskSlice_Single1d* tss1d;
 };
 
-Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
-                                               bool useSingle1d);
 void laik_clear_partitioning(Laik_Partitioning* p);
 void laik_free_partitioning(Laik_Partitioning* p);
 void laik_updateMyMapOffsets(Laik_Partitioning* p);

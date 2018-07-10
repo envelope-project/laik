@@ -67,14 +67,22 @@
 static int partitioning_id = 0;
 
 /**
- * Internal:
- * Create an empty partitioning using a given internal format,
- * to be filled by an offline partitioner algorithm. Different internal
- * formats are useful as they have different runtime complexity for merging.
- * e.g. the "single1d" format keeps only single indexes in an array
- * */
-Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
-                                               bool useSingle1d)
+ * Create an empty, invalid partitioning on a given space for a given
+ * process group.
+ *
+ * To make the partitioning valid, either a partitioning algorithm has to be
+ * run, filling the partitioning with slices, or a partitioner algorithm
+ * is set to be run whenever partitioning slices are to be consumed (online).
+ *
+ * Before running the partitioner, filters on tasks or indexes can be set
+ * such that not all slices get stored during the partitioner run.
+ * However, such filtered partitionings are not generally useful, e.g.
+ * for calculating transitions.
+ *
+ * Different internal formats are used depending on how a partitioner adds
+ * indexes. E.g. adding single indexes are managed differently than slices.
+ */
+Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s)
 {
     Laik_Partitioning* p;
 
@@ -82,8 +90,7 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
     assert(g != 0);
 
     p = malloc(sizeof(Laik_Partitioning));
-    p->off = malloc(sizeof(int) * (g->size + 1));
-    if ((p == 0) || (p->off == 0)) {
+    if (p == 0) {
         laik_panic("Out of memory allocating Laik_Partitioning object");
         exit(1); // not actually needed, laik_panic never returns
     }
@@ -102,21 +109,10 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
     p->group = g;
     p->space = s;
     p->count = 0;
-    p->capacity = 4;
+    p->capacity = 0;
 
-    void* tsp;
-    if (useSingle1d) {
-        p->tss1d = malloc(sizeof(Laik_TaskSlice_Single1d) * p->capacity);
-        tsp = p->tss1d;
-    }
-    else {
-        p->tslice = malloc(sizeof(Laik_TaskSlice_Gen) * p->capacity);
-        tsp = p->tslice;
-    }
-    if (!tsp) {
-        laik_panic("Out of memory allocating memory for Laik_Partitioning");
-        exit(1); // not actually needed, laik_panic never returns
-    }
+    // as long as no offset array is set, this partitioning is invalid
+    p->off = 0;
 
     return p;
 }
@@ -129,9 +125,11 @@ Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
 {
     assert(s->space == p->space);
 
+    // TODO: convert previously added single indexes into slices
+    assert(p->tss1d == 0);
+
     if (p->count == p->capacity) {
-        assert(p->tss1d == 0);
-        p->capacity = p->capacity * 2;
+        p->capacity = (p->capacity + 2) * 2;
         p->tslice = realloc(p->tslice,
                             sizeof(Laik_TaskSlice_Gen) * p->capacity);
         if (!p->tslice) {
@@ -170,7 +168,7 @@ Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx
 
     if (p->count == p->capacity) {
         assert(p->tslice == 0);
-        p->capacity = p->capacity *2;
+        p->capacity = (p->capacity + 2) * 2;
         p->tss1d = realloc(p->tss1d,
                            sizeof(Laik_TaskSlice_Single1d) * p->capacity);
         if (!p->tss1d) {
@@ -269,6 +267,9 @@ int tss1d_cmp(const void *p1, const void *p2)
 static
 void sortSlices(Laik_Partitioning* p)
 {
+    // nothing to sort?
+    if (p->count == 0) return;
+
     // slices get sorted into groups for each task,
     //  then per tag (to go into one mapping),
     //  then per start index (to enable merging)
@@ -687,8 +688,9 @@ bool laik_partitioning_coversSpace(Laik_Partitioning* p)
 // public: are the borders of two partitionings equal?
 bool laik_partitioning_isEqual(Laik_Partitioning* p1, Laik_Partitioning* p2)
 {
-    assert(p1);
-    assert(p2);
+    // partitionings needs to be valid
+    assert(p1 && p1->off);
+    assert(p2 && p2->off);
     if (p1->group != p2->group) return false;
     if (p1->space != p2->space) return false;
     if (p1->count != p2->count) return false;
@@ -706,27 +708,19 @@ bool laik_partitioning_isEqual(Laik_Partitioning* p1, Laik_Partitioning* p2)
     return true;
 }
 
-// public: create a new partitioning by running an offline partitioner
-// the partitioner may be derived from another partitioning which is
-// forwarded to the partitioner algorithm
-Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
-                                         Laik_Group* g, Laik_Space* space,
-                                         Laik_Partitioning* otherP)
+// make partitioning valid after a partitioner run by freezing (immutable)
+void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge)
 {
-    Laik_Partitioning* p;
-    bool useSingleIndex = (pr->flags & LAIK_PF_SingleIndex) > 0;
+    assert(p->off == 0);
 
-    p = laik_new_empty_partitioning(g, space, useSingleIndex);
-
-    if (otherP) {
-        assert(otherP->group == g);
-        // we do not check for same space, as there are use cases
-        // where you want to derive a partitioning of one space from
-        // the partitioning of another
+    // set partitioning valid by allocating/updating offsets
+    p->off = malloc(sizeof(int) * (p->group->size + 1));
+    if (p->off == 0) {
+        laik_panic("Out of memory allocating Laik_Partitioning object");
+        exit(1); // not actually needed, laik_panic never returns
     }
-    (pr->run)(pr, p, otherP);
 
-    if (useSingleIndex) {
+    if (p->tss1d) {
         // merge and convert to generic
         updatePartitioningOffsetsSI(p);
     }
@@ -734,15 +728,35 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
         sortSlices(p);
 
         // check for mergable slices if requested
-        if ((pr->flags & LAIK_PF_Merge) > 0)
+        if (doMerge)
             mergeSortedSlices(p);
 
         updatePartitioningOffsets(p);
     }
+}
+
+// run a partitioner on a yet invalid, empty partitioning
+void laik_run_partitioner(Laik_Partitioner* pr,
+                          Laik_Partitioning* p, Laik_Partitioning* otherP)
+{
+    // has to be invalid yet
+    assert(p->off == 0);
+
+    if (otherP) {
+        assert(otherP->group == p->group);
+        // we do not check for same space, as there are use cases
+        // where you want to derive a partitioning of one space from
+        // the partitioning of another
+    }
+    (pr->run)(pr, p, otherP);
+
+    bool doMerge = (pr->flags & LAIK_PF_Merge) > 0;
+    laik_freeze_partitioning(p, doMerge);
 
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
-                        pr->name, g->gid, g->myid, space->name);
+                        pr->name,
+                        p->group->gid, p->group->myid, p->space->name);
         laik_log_append("\n  other: ");
         laik_log_Partitioning(otherP);
         laik_log_append("\n  new  : ");
@@ -751,15 +765,29 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
     }
     else
         laik_log(2, "Run partitioner '%s' (group %d, space '%s'): %d slices",
-                 pr->name, g->gid, space->name, p->count);
+                 pr->name, p->group->gid, p->space->name, p->count);
 
 
-    if ((pr->flags & LAIK_PF_NoFullCoverage) == 0) {
+    bool doCoverageCheck = ((pr->flags & LAIK_PF_NoFullCoverage) == 0);
+    if (doCoverageCheck) {
         // by default, check if partitioning covers full space
         if (!laik_partitioning_coversSpace(p))
             laik_log(LAIK_LL_Panic, "partitioning borders do not cover space");
     }
+}
 
+
+// public: create a new partitioning by running an offline partitioner
+// the partitioner may be derived from another partitioning which is
+// forwarded to the partitioner algorithm
+Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
+                                         Laik_Group* g, Laik_Space* space,
+                                         Laik_Partitioning* otherP)
+{
+    Laik_Partitioning* p;
+    p = laik_new_empty_partitioning(g, space);
+
+    laik_run_partitioner(pr, p, otherP);
     return p;
 }
 
@@ -783,6 +811,9 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
         // other cases not supported
         assert(0);
     }
+
+    // partitioning needs to be valid
+    assert(p->off != 0);
 
     // check that partitions of tasks to be removed are empty
     for(int i = 0; i < oldg->size; i++) {
@@ -816,6 +847,9 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
 // get number of slices for this task
 int laik_my_slicecount(Laik_Partitioning* p)
 {
+    // partitioning needs to be valid
+    assert(p->off != 0);
+
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
     assert(myid < p->group->size);
@@ -825,6 +859,9 @@ int laik_my_slicecount(Laik_Partitioning* p)
 // get number of mappings for this task
 int laik_my_mapcount(Laik_Partitioning* p)
 {
+    // partitioning needs to be valid
+    assert(p->off != 0);
+
     int myid = p->group->myid;
     if (myid < 0) return 0; // this process is not part of the process group
     assert(myid < p->group->size);
@@ -838,6 +875,9 @@ int laik_my_mapcount(Laik_Partitioning* p)
 // get number of slices within a given mapping for this task
 int laik_my_mapslicecount(Laik_Partitioning* p, int mapNo)
 {
+    // partitioning needs to be valid
+    assert(p->off != 0);
+
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
 
@@ -852,6 +892,9 @@ int laik_my_mapslicecount(Laik_Partitioning* p, int mapNo)
 // get slice number <n> from the slices for this task
 Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
 {
+    // partitioning needs to be valid
+    assert(p->off != 0);
+
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
 
@@ -867,6 +910,9 @@ Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
 // get slice number <n> within mapping <mapNo> from the slices for this task
 Laik_TaskSlice* laik_my_mapslice(Laik_Partitioning* p, int mapNo, int n)
 {
+    // partitioning needs to be valid
+    assert(p->off != 0);
+
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
 
