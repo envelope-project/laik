@@ -410,6 +410,7 @@ void updatePartitioningOffsetsSI(Laik_Partitioning* p)
         ts->tag = 0;
         ts->mapNo = 0;
         ts->data = 0;
+        ts->s.space = p->space;
         ts->s.from.i[0] = idx0;
         ts->s.to.i[0] = idx + 1;
         off++;
