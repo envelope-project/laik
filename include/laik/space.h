@@ -238,6 +238,8 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 // free resources allocated for a partitioning object
 void laik_free_partitioning(Laik_Partitioning* p);
 
+// set filter to only keep slices for given task when later adding slices
+void laik_partitiong_set_taskfilter(Laik_Partitioning* p, int task);
 
 // give an access phase a name, for debug output
 void laik_partitioning_set_name(Laik_Partitioning* p, char* n);

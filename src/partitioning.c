@@ -103,6 +103,9 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s)
     p->myMapOff = 0;
     p->myMapCount = -1;
 
+    // no task filter set
+    p->tfilter = -1;
+
     p->tslice = 0;
     p->tss1d = 0;
 
@@ -117,12 +120,22 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s)
     return p;
 }
 
+// set filter to only keep slices for given task when later adding slices
+void laik_partitiong_set_taskfilter(Laik_Partitioning* p, int task)
+{
+    assert(p->off == 0);
+
+    p->tfilter = task;
+}
+
+
 // partitioner API: add a slice
 // - specify slice groups by giving slices the same tag
 // - arbitrary data can be attached to slices if no merge step is done
 Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
                                   int tag, void* data)
 {
+    if ((p->tfilter >= 0) && (task != p->tfilter)) return 0;
     assert(s->space == p->space);
 
     // TODO: convert previously added single indexes into slices
@@ -157,6 +170,7 @@ Laik_TaskSlice* laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
 // if a partitioner only uses this method, an optimized internal format is used
 Laik_TaskSlice* laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx)
 {
+    if ((p->tfilter >= 0) && (task != p->tfilter)) return 0;
     assert(p->space->dims == 1);
 
     if (p->tslice) {
@@ -516,6 +530,9 @@ void laik_free_partitioning(Laik_Partitioning* p)
 // (requires normalized order: task slices are sorted according to processes)
 bool laik_partitioning_isAll(Laik_Partitioning* p)
 {
+    // no filter allowed
+    assert(p->tfilter < 0);
+
     if (p->count != p->group->size) return false;
     for(int i = 0; i < p->count; i++) {
         if (p->tslice[i].task != i) return false;
@@ -531,6 +548,9 @@ bool laik_partitioning_isAll(Laik_Partitioning* p)
 // Return -1 if no, else process rank
 int laik_partitioning_isSingle(Laik_Partitioning* p)
 {
+    // no filter allowed
+    assert(p->tfilter < 0);
+
     if (p->count != 1) return -1;
     if (!laik_slice_isEqual(&(p->tslice[0].s), &(p->space->s)))
         return -1;
@@ -596,6 +616,9 @@ int tsgen_cmpfrom(const void *p1, const void *p2)
 // list (eg. in 3d, 6 smaller slices may be created).
 bool laik_partitioning_coversSpace(Laik_Partitioning* p)
 {
+    // no filter allowed
+    assert(p->tfilter < 0);
+
     int dims = p->space->dims;
     notcovered_count = 0;
 
@@ -688,6 +711,10 @@ bool laik_partitioning_coversSpace(Laik_Partitioning* p)
 // public: are the borders of two partitionings equal?
 bool laik_partitioning_isEqual(Laik_Partitioning* p1, Laik_Partitioning* p2)
 {
+    // no filters allowed
+    assert(p1->tfilter < 0);
+    assert(p2->tfilter < 0);
+
     // partitionings needs to be valid
     assert(p1 && p1->off);
     assert(p2 && p2->off);

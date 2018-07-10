@@ -90,6 +90,9 @@ struct _Laik_Partitioning {
     int count;     // slices used
     int* off;      // offsets from task IDs into slice array
 
+    // if >= 0, this is the only task for which slices are stored
+    int tfilter;
+
     int myMapCount; // number of maps in slices of this task
     int* myMapOff; // offsets from local map IDs into slice array
 
