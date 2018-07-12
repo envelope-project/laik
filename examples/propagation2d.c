@@ -9,22 +9,39 @@
 /**
  * Simple 2d finite element example
  *
- * Elements are regularly arranged in a 2d grid, bounded by nodes in corners.
- * Values are propagated from elemented to nodes, reduced and propagated back.
+ * Elements with square shape are regularly arranged in a 2d grid, with each
+ * element bound by 4 nodes in its square corners. Corners are shared by
+ * neighboring elements.
  *
- * Example with 4x4 elements and 5x5 nodes as element corners, such that
- * element 0 has the neighbor nodes are 0, 1, 5, 6:
+ * As example, 16 elements arranged in a 4x4 grid need 5x5 nodes as element
+ * corners. Using a x/y order for numbering elements and nodes, this results
+ * in element e0 with nodes n0, n1, n5, n6 as corners, and neighbor elements
+ * e1 (to the right) and e4 (to the bottom). e0 and e1 share nodes n1 and n6,
+ * while n6 is shared by elements e0, e1, e4, and e5.
  *
  *   n0    n1    n2    n3    n4
  *      e0    e1    e2    e3
  *   n5    n6    n7    n8    n9
+ *      e4    e5    e7    e8
  *   ...
- *      e12
+ *      e12 ...
  *   n20   n21 ...
  *
  * Distribution of work is done by splitting the elements into a 2d grid,
  * e.g. with 4 tasks into 2 x 2, with elements 0, 1, 4, 5 mapped to task 0.
  * With 1d indexing of elements, task 0 gets two slices: [0-1] and [4-5].
+ *
+ * We start with element values 1.0 and node values 0.0, and do
+ * multiple iterations. In each
+ *  (3) add 1/4 of node values to each element value the node is corner of
+ *  (1) propagate values from elements to nodes
+ *  (2) aggregate propagated values in nodes (we do a sum here)
+ *
+ * While elements are exclusively partitioned, nodes may directly lie on
+ * partition boundaries, shared by multiple processes with having private
+ * copies. In (1), such private copies will contain only partial sums.
+ * We can use a LAIK transition to sum up the partitial values of private
+ * copies corresponding to the same nodes, resulting in full sums.
  *
  * This example uses seperate data containers for elements and nodes.
  * The partitioning of nodes is derived from the partitoning of elements.
@@ -176,10 +193,11 @@ void print_data(Laik_Data* d, Laik_Partitioning* p)
     int nSlices = laik_my_slicecount(p);
     for (int s = 0; s < nSlices; s++) {
         laik_map_def(d, s, (void**) &base, &count);
+        laik_log_begin(1);
         for (uint64_t i = 0; i < count; i++) {
-            laik_log(1,"%f\n", base[i]);
+            laik_log_append(" %f", base[i]);
         }
-        laik_log(1,"\n");
+        laik_log_flush("");
     }
 }
 
@@ -212,6 +230,7 @@ double data_check_sum(Laik_Data* d, Laik_Partitioning* p, Laik_Group* world)
     return *base;
 }
 
+// this assumes the 2d grid partitioning
 void apply_boundary_condition(Laik_Data* data, Laik_Partitioning* p,
                               int Rx, int Ry, int rx, int ry, double value)
 {
@@ -270,12 +289,16 @@ int main(int argc, char* argv[])
 
     int id = laik_myid(world);
     int numRanks = laik_size(world);
-    int Rx, Ry, rx, ry;
+
+    int Rx, Ry; // processes are assigned to elements using a Rx * Ry grid
+    int rx, ry; // in this grid, this process is at coordinate (rx/ry)
     calculate_task_topology(numRanks,&Rx,&Ry);
     calculate_my_coordinate(numRanks,id,&rx,&ry);
+
+    // size is input: size * size elements are associated to this process
     int Nx = size;
-    int Ny = size;  //at the moment the partitioners only support Ny=Nx
-    int Lx = Nx*Rx;
+    int Ny = size;  // at the moment the partitioners only support Ny=Nx
+    int Lx = Nx*Rx; // total number of elements in X dimension
     int Ly = Ny*Ry;
 
     int size_nodes = (Lx+1)*(Ly+1);
@@ -292,7 +315,7 @@ int main(int argc, char* argv[])
     Laik_Space* node_space = laik_new_space_1d(inst, size_nodes);
     Laik_Data* node = laik_new_data(node_space, laik_Double);
 
-
+    // partitionings are defined by our own custom partitioner functions
     Laik_Partitioning *pNodes, *pElements;
 
     pElements = laik_new_partitioning(get_element_partitioner(&Nx),
@@ -303,16 +326,15 @@ int main(int argc, char* argv[])
     double *baseN, *baseE;
     uint64_t countN, countE;
 
-    // initialization phase
-    // distribution of the elements
+    // for initialization, assign partitionings to LAIK containers
+
+    // for elements
+    // note: we never change the partitioning again, ie. no allocation change
     laik_switchto_partitioning(element, pElements, LAIK_DF_None, LAIK_RO_None);
 
-    // map the partitioning to the memory
-    // first the number of slices in the
-    // partitioning is calculated and then
-    // for each slide we return the back-end
-    // memory address and count to sweep over
-    // the memory elements
+    // for the element partition assigned to me:
+    // go over all my slices and find out where they are allocated in memory.
+    // set the double value for each element to 1.0
     int nSlicesElem = laik_my_slicecount(pElements);
     for (int n = 0; n < nSlicesElem; ++n) {
         laik_map_def(element, n, (void**) &baseE, &countE);
@@ -320,10 +342,9 @@ int main(int argc, char* argv[])
             baseE[i] = 1.0;
         }
     }
-    laik_switchto_partitioning(element, pElements, LAIK_DF_Preserve, LAIK_RO_None);
 
-    // distribution of the nodes
-    laik_switchto_partitioning(node, pNodes, LAIK_DF_None, LAIK_RO_Sum);
+    // same for nodes, initialize node value to 0.0
+    laik_switchto_partitioning(node, pNodes, LAIK_DF_None, LAIK_RO_None);
     int nSlicesNodes = laik_my_slicecount(pNodes);
     for (int n = 0; n < nSlicesNodes; ++n) {
         laik_map_def(node, n, (void**) &baseN, &countN);
@@ -331,9 +352,9 @@ int main(int argc, char* argv[])
             baseN[i] = 0.0;
         }
     }
-    laik_switchto_partitioning(node, pNodes, LAIK_DF_Preserve, LAIK_RO_Sum);
+
     // set the boundary conditions on the nodes
-    apply_boundary_condition(node, pNodes, Rx, Ry, rx, ry, 0);
+    apply_boundary_condition(node, pNodes, Rx, Ry, rx, ry, 0.0);
 
     // for debug only
     laik_log(1,"print elements:");
@@ -355,7 +376,6 @@ int main(int argc, char* argv[])
         // - update the elements using their neighbours,
         // - go through all the elements and refer to their
         //   neighbouring nodes and update the elements
-        laik_switchto_partitioning(element, pElements, LAIK_DF_None, LAIK_RO_None);
         for (int m = 0; m < nMapsElements; m++) {
             laik_map_def(element, m, (void **)&baseE, &countE);
 
@@ -382,8 +402,6 @@ int main(int argc, char* argv[])
                 baseE[i] += baseN[j3] / 4;
             }
         }
-        laik_switchto_partitioning(element, pElements,
-                                   LAIK_DF_Preserve, LAIK_RO_None);
 
         // forward propagation:
         // - update the nodes using elements
@@ -424,13 +442,13 @@ int main(int argc, char* argv[])
         }
         laik_switchto_partitioning(node, pNodes, LAIK_DF_Preserve, LAIK_RO_Sum);
         apply_boundary_condition(node, pNodes, Rx, Ry, rx, ry, pow(2, it));
-    }
 
-    // for debug only
-    laik_log(1,"print elements:");
-    print_data(element, pElements);
-    laik_log(1,"print nodes:");
-    print_data(node,pNodes);
+        // for debug only
+        laik_log(1,"print elements (after iteration %d):", it);
+        print_data(element, pElements);
+        laik_log(1,"print nodes (after iteration %d):", it);
+        print_data(node,pNodes);
+    }
 
     // print check_sum for test
     double sum;
