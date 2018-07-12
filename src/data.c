@@ -1592,7 +1592,7 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
             return 0;
     }
 
-    if (n >= d->activeMappings->count)
+    if ((n<0) || (n >= d->activeMappings->count))
         return 0;
 
     Laik_Mapping* m = &(d->activeMappings->map[n]);
@@ -1731,6 +1731,8 @@ Laik_Mapping* laik_global2maplocal_1d(Laik_Data* d, int64_t gidx,
         if (mapNo) *mapNo = i;
         return m;
     }
+    // not found: set mapNo to invalid -1
+    if (mapNo) *mapNo = -1;
     return 0;
 }
 

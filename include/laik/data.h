@@ -240,6 +240,7 @@ Laik_Mapping* laik_global2local_1d(Laik_Data* d, int64_t gidx, uint64_t* lidx);
 
 // 1d global to 1d local within a given mapping
 // if global index <gidx> is locally mapped, return mapping and set local
+// otherwise, return 0 and set mapNo to -1
 Laik_Mapping* laik_global2maplocal_1d(Laik_Data* d, int64_t gidx,
                                       int* mapNo, uint64_t* lidx);
 
