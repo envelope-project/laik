@@ -121,7 +121,7 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s)
 }
 
 // set filter to only keep slices for given task when later adding slices
-void laik_partitiong_set_taskfilter(Laik_Partitioning* p, int task)
+void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task)
 {
     assert(p->off == 0);
 
@@ -792,9 +792,10 @@ void laik_run_partitioner(Laik_Partitioner* pr,
                  pr->name, p->group->gid, p->space->name, p->count);
 
 
+    // by default, check if partitioning covers full space
+    // unless partitioner has flag to not do it, or task filter is used
     bool doCoverageCheck = ((pr->flags & LAIK_PF_NoFullCoverage) == 0);
-    if (doCoverageCheck) {
-        // by default, check if partitioning covers full space
+    if (doCoverageCheck && (p->tfilter < 0)) {
         if (!laik_partitioning_coversSpace(p))
             laik_log(LAIK_LL_Panic, "partitioning borders do not cover space");
     }

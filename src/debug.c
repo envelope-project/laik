@@ -238,6 +238,8 @@ void laik_log_Partitioning(Laik_Partitioning* p)
     laik_log_append("partitioning '%s': %d slices in %d tasks on ",
                     p->name, p->count, p->group->size);
     laik_log_Space(p->space);
+    if (p->tfilter >= 0)
+        laik_log_append(" (just task %d)", p->tfilter);
     laik_log_append(": (task:slice:tag/mapNo)\n    ");
     for(int i = 0; i < p->count; i++) {
         Laik_TaskSlice_Gen* ts = &(p->tslice[i]);

@@ -600,6 +600,15 @@ void cleanBorderList()
 }
 
 static
+void freeBorderList()
+{
+    free(borderList);
+    borderList = 0;
+    borderListCount = 0;
+    borderListSize = 0;
+}
+
+static
 void appendBorder(int64_t b, int task, int sliceNo, int mapNo,
                   bool isStart, bool isInput)
 {
@@ -868,6 +877,10 @@ void calcAddReductions(int tflags,
     assert(fromP->space->dims == 1);
     assert(fromP->space == toP->space);
 
+    // only works if no task filters used
+    assert(fromP->tfilter < 0);
+    assert(toP->tfilter < 0);
+
     // add slice borders of all tasks
     cleanBorderList();
     int sliceNo, lastTask, lastMapNo;
@@ -1113,6 +1126,7 @@ void calcAddReductions(int tflags,
     // all tasks should be removed from input/output groups
     assert(inputGroup.count == 0);
     assert(outputGroup.count == 0);
+    freeBorderList();
 }
 
 
@@ -1181,6 +1195,7 @@ do_calc_transition(Laik_Space* space,
     }
 
     if ((fromP != 0) && (toP != 0) && (flow == LAIK_DF_Preserve)) {
+
         // check for 1d with preserving data between partitionings
         if (dims == 1) {
 
@@ -1189,6 +1204,10 @@ do_calc_transition(Laik_Space* space,
             calcAddReductions(tflags, group, redOp, fromP, toP);
         }
         else {
+            // only works if no task filters used
+            assert(fromP->tfilter < 0);
+            assert(toP->tfilter < 0);
+
             // determine local slices to keep
             // (may need local copy if from/to mappings are different).
             // reductions are not handled here, but by backend

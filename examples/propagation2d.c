@@ -287,13 +287,13 @@ int main(int argc, char* argv[])
     // number of elements per task should be
     // devisable by the number of tasks
 
-    int id = laik_myid(world);
+    int myid = laik_myid(world);
     int numRanks = laik_size(world);
 
     int Rx, Ry; // processes are assigned to elements using a Rx * Ry grid
     int rx, ry; // in this grid, this process is at coordinate (rx/ry)
-    calculate_task_topology(numRanks,&Rx,&Ry);
-    calculate_my_coordinate(numRanks,id,&rx,&ry);
+    calculate_task_topology(numRanks, &Rx, &Ry);
+    calculate_my_coordinate(numRanks, myid, &rx, &ry);
 
     // size is input: size * size elements are associated to this process
     int Nx = size;
@@ -320,8 +320,10 @@ int main(int argc, char* argv[])
 
     pElements = laik_new_partitioning(get_element_partitioner(&Nx),
                                       world, element_space, 0);
-    pNodes = laik_new_partitioning(get_node_partitioner(neighbours),
-                                  world, node_space, pElements);
+
+    pNodes = laik_new_empty_partitioning(world, node_space);
+    //laik_partitioning_set_taskfilter(pNodes, myid);
+    laik_run_partitioner(get_node_partitioner(neighbours), pNodes, pElements);
 
     double *baseN, *baseE;
     uint64_t countN, countE;
@@ -453,7 +455,7 @@ int main(int argc, char* argv[])
     // print check_sum for test
     double sum;
     sum = data_check_sum(element, pElements, world);
-    if (id==0) {
+    if (myid==0) {
         printf("expected : %f\n",1.0);
         printf("calculated: %f\n", sum / (Lx*Ly*pow(2,maxIt-1)) ); //(normalized summation)
         //printf("for elements: %f\n", sum/ (pow(2,maxIt-1)) ); //(normalized summation)
