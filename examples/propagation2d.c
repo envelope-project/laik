@@ -321,9 +321,10 @@ int main(int argc, char* argv[])
     pElements = laik_new_partitioning(get_element_partitioner(&Nx),
                                       world, element_space, 0);
 
-    pNodes = laik_new_empty_partitioning(world, node_space);
+    pNodes = laik_new_empty_partitioning(world, node_space,
+                                         get_node_partitioner(neighbours));
     //laik_partitioning_set_taskfilter(pNodes, myid);
-    laik_run_partitioner(get_node_partitioner(neighbours), pNodes, pElements);
+    laik_run_partitioner(pNodes, pElements);
 
     double *baseN, *baseE;
     uint64_t countN, countE;

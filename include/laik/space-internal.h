@@ -79,6 +79,11 @@ struct _Laik_TaskSlice {
     int no;
 };
 
+// if a slice filter is installed for a new created partitioning, for
+// each slice added by the partitioner, the filter is called to check
+// whether the slice actually should be stored
+typedef bool
+(*laik_pfilter_t)(Laik_Partitioning*, int task, Laik_Slice* s);
 
 struct _Laik_Partitioning {
     int id;
@@ -86,6 +91,11 @@ struct _Laik_Partitioning {
 
     Laik_Group* group; // process group used in this partitioning
     Laik_Space* space; // slices cover this space
+
+    Laik_Partitioner* partitioner; // if set: creating partitioner
+    laik_pfilter_t filter; // if set: call filter for each slice
+    void* fdata;
+
     int capacity;  // slices allocated
     int count;     // slices used
     int* off;      // offsets from task IDs into slice array
@@ -103,6 +113,10 @@ struct _Laik_Partitioning {
 void laik_clear_partitioning(Laik_Partitioning* p);
 void laik_free_partitioning(Laik_Partitioning* p);
 void laik_updateMyMapOffsets(Laik_Partitioning* p);
+
+// set a filter to decide which slices to store
+void laik_partitioning_set_filter(Laik_Partitioning* p,
+                                  laik_pfilter_t filter, void* fdata);
 
 
 

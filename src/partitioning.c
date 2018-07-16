@@ -82,7 +82,8 @@ static int partitioning_id = 0;
  * Different internal formats are used depending on how a partitioner adds
  * indexes. E.g. adding single indexes are managed differently than slices.
  */
-Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s)
+Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
+                                               Laik_Partitioner* pr)
 {
     Laik_Partitioning* p;
 
@@ -99,18 +100,22 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s)
     p->name = strdup("part-0     ");
     sprintf(p->name, "part-%d", p->id);
 
+    p->group = g;
+    p->space = s;
+    p->partitioner = pr;
+
     // number of maps still unknown
     p->myMapOff = 0;
     p->myMapCount = -1;
 
-    // no task filter set
+    // no filter set
     p->tfilter = -1;
+    p->filter = 0;
+    p->fdata = 0;
 
     p->tslice = 0;
     p->tss1d = 0;
 
-    p->group = g;
-    p->space = s;
     p->count = 0;
     p->capacity = 0;
 
@@ -120,12 +125,33 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s)
     return p;
 }
 
+// set a filter to decide which slices to store
+void laik_partitioning_set_filter(Laik_Partitioning* p,
+                                  laik_pfilter_t filter, void* fdata)
+{
+    // can only be called if still invalid
+    assert(p->off == 0);
+
+    p->filter = filter;
+    p->fdata = fdata;
+}
+
+// helper for laik_partitioning_set_taskfilter
+static
+bool tfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
+{
+    (void) s; // unused parameter of filter signature
+
+    return (p->tfilter == task);
+}
+
 // set filter to only keep slices for given task when later adding slices
 void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task)
 {
     assert(p->off == 0);
 
     p->tfilter = task;
+    laik_partitioning_set_filter(p, tfilter, 0);
 }
 
 
@@ -135,7 +161,9 @@ void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task)
 void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
                        int tag, void* data)
 {
-    if ((p->tfilter >= 0) && (task != p->tfilter)) return;
+    // if filter is installed, check if we should store the slice
+    if (p->filter && ((p->filter)(p, task, s) == false)) return;
+
     assert(s->space == p->space);
 
     // TODO: convert previously added single indexes into slices
@@ -168,7 +196,11 @@ void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
 // if a partitioner only uses this method, an optimized internal format is used
 void laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx)
 {
-    if ((p->tfilter >= 0) && (task != p->tfilter)) return;
+    if (p->filter) {
+        Laik_Slice slc;
+        laik_slice_init_1d(&slc, p->space, idx, idx + 1);
+        if ((p->filter)(p, task, &slc) == false) return;
+    }
     assert(p->space->dims == 1);
 
     if (p->tslice) {
@@ -760,11 +792,11 @@ void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge)
 }
 
 // run a partitioner on a yet invalid, empty partitioning
-void laik_run_partitioner(Laik_Partitioner* pr,
-                          Laik_Partitioning* p, Laik_Partitioning* otherP)
+void laik_run_partitioner(Laik_Partitioning* p, Laik_Partitioning* otherP)
 {
     // has to be invalid yet
     assert(p->off == 0);
+    Laik_Partitioner* pr = p->partitioner;
 
     if (otherP) {
         assert(otherP->group == p->group);
@@ -778,8 +810,8 @@ void laik_run_partitioner(Laik_Partitioner* pr,
     laik_freeze_partitioning(p, doMerge);
 
     if (laik_log_begin(1)) {
-        laik_log_append("run partitioner '%s' (group %d, myid %d, space '%s'):",
-                        pr->name,
+        laik_log_append("run partitioner '%s' for '%s' (group %d, myid %d, space '%s'):",
+                        pr->name, p->name,
                         p->group->gid, p->group->myid, p->space->name);
         laik_log_append("\n  other: ");
         laik_log_Partitioning(otherP);
@@ -810,9 +842,9 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
                                          Laik_Partitioning* otherP)
 {
     Laik_Partitioning* p;
-    p = laik_new_empty_partitioning(g, space);
+    p = laik_new_empty_partitioning(g, space, pr);
 
-    laik_run_partitioner(pr, p, otherP);
+    laik_run_partitioner(p, otherP);
     return p;
 }
 

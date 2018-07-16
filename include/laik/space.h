@@ -221,15 +221,15 @@ int laik_space_getdimensions(Laik_Space* space);
  * Laik_Partitioning
  */
 
-// create a new, yet invalid, partitioning
-Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s);
+// create a new invalid partitioning
+Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
+                                               Laik_Partitioner *pr);
 
-// make partitioning valid after a partitioner run by freezing (immutable)
+// make partitioning valid and immutable by freezing
 void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge);
 
-// run a partitioner on a yet invalid, empty partitioning
-void laik_run_partitioner(Laik_Partitioner* pr,
-                          Laik_Partitioning* p, Laik_Partitioning *otherP);
+// run the partitioner specified for the partitioning, and freeze afterwards
+void laik_run_partitioner(Laik_Partitioning* p, Laik_Partitioning *otherP);
 
 // create a new partitioning by running an offline partitioner algorithm.
 // the partitioner may be derived from another partitioning which is
@@ -317,15 +317,16 @@ typedef enum _Laik_PartitionerFlag {
 
 // Signature for a partitioner algorithm
 //
-// we are given a new partitioning object without any slices yet (2st par),
-// which has to be populated with slices (calling laik_append_slice).
-// The border object specifies the group and space to run the partitioner on.
+// We are given a new partitioning object without any slices yet (2st par),
+// which has to be populated with slices (calling laik_append_slice). The
+// partitioning object specifies the group and space to run the partitioner on.
 // If 3rd par is not null, it provides partitioning borders the generated
 // partitioning may be based on, e.g. for incremental partitioners (modifying
 // a previous one) or for derived partitionings (e.g. extending by halos)
 typedef void
 (*laik_run_partitioner_t)(Laik_Partitioner*,
                           Laik_Partitioning*, Laik_Partitioning*);
+
 
 // create application-specific partitioner
 Laik_Partitioner* laik_new_partitioner(const char* name,
