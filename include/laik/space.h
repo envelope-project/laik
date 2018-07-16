@@ -87,10 +87,13 @@ typedef enum _Laik_DataFlow {
  * The reduction operation to be executed in a transition
  */
 typedef enum _Laik_ReductionOperation {
-    LAIK_RO_None = 0,
+    LAIK_RO_None = 0, // Invalid reduction
     LAIK_RO_Sum, LAIK_RO_Prod,
     LAIK_RO_Min, LAIK_RO_Max,
-    LAIK_RO_And, LAIK_RO_Or
+    LAIK_RO_And, LAIK_RO_Or,
+    LAIK_RO_Any,    // can copy any of the inputs
+    LAIK_RO_Single, // only single input (= copy) allowed, error otherwise
+    LAIK_RO_Custom = 100 // user-provided reductions on user types
 } Laik_ReductionOperation;
 
 // is this a reduction?

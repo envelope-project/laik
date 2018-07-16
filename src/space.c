@@ -856,6 +856,15 @@ struct redTOp* appendRedTOp(Laik_Slice* slc,
     return op;
 }
 
+static
+bool oneInputIsCopy(Laik_ReductionOperation redOp)
+{
+    // currently all reduction types available in Laik simply copy
+    // the value to all outputs if there is only one input.
+    // however, this cannot be assumed for user-provided reductions
+    // TODO: allow to specify whether custom reductions have this property
+    return (int) redOp < LAIK_RO_Custom;
+}
 
 // find all slices where this task takes part in a reduction, and add
 // them to the reduction operation list.
@@ -1000,6 +1009,9 @@ void calcAddReductions(int tflags,
 
                 // check for special case: one input, ie. no reduction needed
                 if (inputGroup.count == 1) {
+                    // should not check for special cases if not true
+                    assert(oneInputIsCopy(redOp));
+
                     if (inputGroup.task[0] == myid) {
                         // only this task as input
 
@@ -1007,7 +1019,6 @@ void calcAddReductions(int tflags,
                             (outputGroup.task[0] == myid)) {
 
                             // local (copy) operation
-                            assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
                             appendLocalTOp(&slc,
                                            myInputSliceNo, myOutputSliceNo,
                                            myInputMapNo, myOutputMapNo);
@@ -1027,7 +1038,6 @@ void calcAddReductions(int tflags,
                             for(int out = 0; out < outputGroup.count; out++) {
                                 if (outputGroup.task[out] == myid) {
                                     // local (copy) operation
-                                    assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
                                     appendLocalTOp(&slc,
                                                    myInputSliceNo, myOutputSliceNo,
                                                    myInputMapNo, myOutputMapNo);
@@ -1043,7 +1053,6 @@ void calcAddReductions(int tflags,
                                 }
 
                                 // send operation
-                                assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
                                 appendSendTOp(&slc,
                                               myInputSliceNo, myInputMapNo,
                                               outputGroup.task[out]);
@@ -1066,7 +1075,6 @@ void calcAddReductions(int tflags,
                                 if (outputGroup.task[out] != myid) continue;
 
                                 // receive operation
-                                assert((redOp == LAIK_RO_Sum) || (redOp == LAIK_RO_None));
                                 appendRecvTOp(&slc,
                                               myOutputSliceNo, myOutputMapNo,
                                               inputGroup.task[0]);
@@ -1112,9 +1120,6 @@ void calcAddReductions(int tflags,
                 // convert to all-group if possible
                 if (groupList[in].count == group->size) in = -1;
                 if (groupList[out].count == group->size) out = -1;
-
-                // TODO: also specify reduction if it's just copy/send/recv
-                redOp = LAIK_RO_Sum;
 
                 assert(redOp != LAIK_RO_None); // must be a real reduction
                 appendRedTOp(&slc, redOp, in, out,

@@ -424,7 +424,7 @@ int main(int argc, char* argv[])
     laik_reset_profiling(inst);
     laik_set_phase(inst, 3, "Collect", 0);
 
-    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
+    laik_switchto_partitioning(dRes, pMaster, LAIK_DF_Preserve, LAIK_RO_Sum);
     laik_writeout_profile();
     laik_map_def1(dRes, (void**) &v, &count);
     laik_set_phase(inst, 4, "Out", 0);
