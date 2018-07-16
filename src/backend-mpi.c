@@ -192,7 +192,13 @@ MPI_Datatype getMPIDataType(Laik_Data* d)
 {
     MPI_Datatype mpiDataType;
     if      (d->type == laik_Double) mpiDataType = MPI_DOUBLE;
-    else if (d->type == laik_Float) mpiDataType = MPI_FLOAT;
+    else if (d->type == laik_Float)  mpiDataType = MPI_FLOAT;
+    else if (d->type == laik_Int64)  mpiDataType = MPI_INT64_T;
+    else if (d->type == laik_Int32)  mpiDataType = MPI_INT32_T;
+    else if (d->type == laik_Char)   mpiDataType = MPI_INT8_T;
+    else if (d->type == laik_UInt64) mpiDataType = MPI_UINT64_T;
+    else if (d->type == laik_UInt32) mpiDataType = MPI_UINT32_T;
+    else if (d->type == laik_UChar)  mpiDataType = MPI_UINT8_T;
     else assert(0);
 
     return mpiDataType;
