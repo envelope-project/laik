@@ -450,7 +450,11 @@ void laik_mpi_exec(Laik_ActionSeq* as)
         laik_log_ActionSeqIfChanged(changed, as, "After sorting");
     }
 
-    laik_log(1, "MPI backend exec: %d actions\n", as->actionCount);
+    if (laik_log_begin(1)) {
+        laik_log_append("MPI backend exec:\n");
+        laik_log_ActionSeq(as, false);
+        laik_log_flush(0);
+    }
 
     // TODO: use transition context given by each action
     Laik_TransitionContext* tc = as->context[0];
@@ -640,11 +644,11 @@ void laik_mpi_exec(Laik_ActionSeq* as)
 static
 void laik_mpi_prepare(Laik_ActionSeq* as)
 {
-    Laik_TransitionContext* tc = as->context[0];
-    laik_log(1, "MPI backend: prepare sequence for transition on data '%s'\n",
-             tc->data->name);
-
-    laik_log_ActionSeqIfChanged(true, as, "Original sequence");
+    if (laik_log_begin(1)) {
+        laik_log_append("MPI backend prepare:\n");
+        laik_log_ActionSeq(as, false);
+        laik_log_flush(0);
+    }
 
     bool changed = laik_aseq_splitTransitionExecs(as);
     laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
@@ -693,8 +697,12 @@ void laik_mpi_prepare(Laik_ActionSeq* as)
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)
 {
-    laik_log(1, "MPI backend: cleanup action sequence (%d actions)\n",
-             as->actionCount);
+    if (laik_log_begin(1)) {
+        laik_log_append("MPI backend cleanup:\n");
+        laik_log_ActionSeq(as, false);
+        laik_log_flush(0);
+    }
+
     assert(as->backend == &laik_backend_mpi);
 }
 
