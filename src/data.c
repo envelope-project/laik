@@ -698,6 +698,9 @@ Laik_ActionSeq* createTransASeq(Laik_Data* d, Laik_Transition* t,
                                 Laik_MappingList* fromList,
                                 Laik_MappingList* toList)
 {
+    // never create a sequence with an invalid transition
+    assert(t != 0);
+
     // create the action sequence for requested transition
     Laik_ActionSeq* as = laik_aseq_new(d->space->inst);
     int tid = laik_aseq_addTContext(as, d, t, fromList, toList);
@@ -1120,6 +1123,9 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
                                   Laik_Reservation* fromRes,
                                   Laik_Reservation* toRes)
 {
+    // never create a sequence with an invalid transition
+    assert(t != 0);
+
     Laik_MappingList* fromList = 0;
     Laik_MappingList* toList = 0;
     if (fromRes)

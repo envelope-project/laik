@@ -188,6 +188,9 @@ int laik_aseq_addTContext(Laik_ActionSeq* as,
                           Laik_MappingList* fromList,
                           Laik_MappingList* toList)
 {
+    // the transition must be valid
+    assert(transition != 0);
+
     Laik_TransitionContext* tc = malloc(sizeof(Laik_TransitionContext));
     tc->data = data;
     tc->transition = transition;
