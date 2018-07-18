@@ -151,6 +151,10 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
 
 void laik_log_Transition(Laik_Transition* t, bool showActions)
 {
+    if (t == 0) {
+        laik_log_append("(nil transition)");
+        return;
+    }
     if (t->fromPartitioning)
         laik_log_append("'%s'", t->fromPartitioning->name);
     else
