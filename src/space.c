@@ -1419,6 +1419,11 @@ laik_calc_transition(Laik_Space* space,
                      Laik_Partitioning* fromP, Laik_Partitioning* toP,
                      Laik_DataFlow flow, Laik_ReductionOperation redOp)
 {
+    if (fromP && toP) {
+        // a transition always needs to be between the same process group
+        assert(fromP->group == toP->group);
+    }
+
     Laik_Transition* t;
     t = do_calc_transition(space, fromP, toP, flow, redOp);
 
