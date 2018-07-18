@@ -821,7 +821,7 @@ Laik_Reservation* laik_reservation_new(Laik_Data* d)
 // this will include space required for this partitioning on allocation
 void laik_reservation_add(Laik_Reservation* r, Laik_Partitioning* p)
 {
-    if (p->group->myid <= -1) return;
+    if (p->group->myid < 0) return;
 
     if (r->count == r->capacity) {
         r->capacity = 10 + r->capacity * 2;
@@ -912,7 +912,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
         }
     }
     // if this process is not in the task group, just do not reserve anything
-    if (g->myid <= 0) return;
+    if (g->myid < 0) return;
 
     // (1) detect how many different mappings (= slice groups) are needed
     //     in this process over all partitionings in the reservation.
