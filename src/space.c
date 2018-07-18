@@ -499,7 +499,7 @@ bool laik_index_global2local(Laik_Partitioning* p,
 // - for 1d, does not cope with overlapping slices belonging to same task
 
 // print verbose debug output for creating slices for reductions?
-//#define DEBUG_REDUCTIONSLICES 1
+#define DEBUG_REDUCTIONSLICES 1
 
 
 static TaskGroup* groupList = 0;
@@ -886,9 +886,21 @@ void calcAddReductions(int tflags,
     assert(fromP->space->dims == 1);
     assert(fromP->space == toP->space);
 
+    Laik_Partitioning *toP2 = toP, *fromP2 = fromP;
+#if 0
     // only works if no task filters used
     assert(fromP->tfilter < 0);
     assert(toP->tfilter < 0);
+#else
+    if (fromP->tfilter == group->myid) {
+        toP2 = laik_new_empty_partitioning(group, toP->space, toP->partitioner);
+        laik_partitioning_set_pfilter(toP2, fromP);
+    }
+    if (toP->tfilter == group->myid) {
+        fromP2 = laik_new_empty_partitioning(group, fromP->space, fromP->partitioner);
+        laik_partitioning_set_pfilter(fromP2, toP);
+    }
+#endif
 
     // add slice borders of all tasks
     cleanBorderList();
@@ -896,8 +908,8 @@ void calcAddReductions(int tflags,
     sliceNo = 0;
     lastTask = -1;
     lastMapNo = -1;
-    for(int i = 0; i < fromP->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(fromP->tslice[i]);
+    for(int i = 0; i < fromP2->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(fromP2->tslice[i]);
         // reset sliceNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
@@ -910,8 +922,8 @@ void calcAddReductions(int tflags,
     }
     lastTask = -1;
     lastMapNo = -1;
-    for(int i = 0; i < toP->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(toP->tslice[i]);
+    for(int i = 0; i < toP2->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(toP2->tslice[i]);
         // reset sliceNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
@@ -1132,6 +1144,8 @@ void calcAddReductions(int tflags,
     assert(inputGroup.count == 0);
     assert(outputGroup.count == 0);
     freeBorderList();
+    if (fromP != fromP2) laik_free_partitioning(fromP2);
+    if (toP != toP2) laik_free_partitioning(toP2);
 }
 
 

@@ -243,6 +243,9 @@ void laik_free_partitioning(Laik_Partitioning* p);
 
 // set filter to only keep slices for given task when later adding slices
 void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task);
+// set filter to only keep slices intersecting with partitioning <filter>
+void laik_partitioning_set_pfilter(Laik_Partitioning* p,
+                                   Laik_Partitioning* filter);
 
 // give an access phase a name, for debug output
 void laik_partitioning_set_name(Laik_Partitioning* p, char* n);

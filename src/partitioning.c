@@ -155,6 +155,73 @@ void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task)
 }
 
 
+// helper for laik_partitioning_set_pfilter
+
+static Laik_Partitioning* pfilter_part = 0;
+static int64_t pfilter_from, pfilter_to;
+static Laik_TaskSlice_Gen* pfilter_ts;
+static int pfilter_len;
+
+static
+bool pfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
+{
+    (void) task; // unused parameter of filter signature
+    (void) p; // unused parameter of filter signature
+
+    int64_t from = s->from.i[0];
+    int64_t to = s->to.i[0];
+    if (from >= pfilter_to) return false;
+    if (to <= pfilter_from) return false;
+
+    // binary search
+    Laik_TaskSlice_Gen* ts = pfilter_ts;
+    int off1 = 0, off2 = pfilter_len;
+    while(off1 < off2) {
+        int mid = (off1 + off2) / 2;
+        laik_log(1,"  filter check at %d: [%ld;%ld[",
+                 mid, ts[mid].s.from.i[0], ts[mid].s.to.i[0]);
+
+        if (from >= ts[mid].s.to.i[0]) {
+            off1 = mid;
+            continue;
+        }
+        if (to <= ts[mid].s.from.i[0]) {
+            off2 = mid;
+            continue;
+        }
+        break;
+    }
+    return true;
+}
+
+// set filter to only keep slices for given task when later adding slices
+void laik_partitioning_set_pfilter(Laik_Partitioning* p,
+                                   Laik_Partitioning* filter)
+{
+    assert(p->off == 0);
+
+    // partitioning we intersect with should know partitions of this process
+    assert(filter->off != 0);
+    assert(filter->tfilter = p->group->myid);
+    assert(filter->space == p->space);
+
+    p->filter = pfilter;
+    pfilter_part = filter;
+
+    // TODO: only for 1d for now
+    assert(p->space->dims == 1);
+    int off1 = filter->off[p->group->myid];
+    int off2 = filter->off[p->group->myid + 1];
+    assert(off2 > off1);
+    pfilter_from = filter->tslice[off1].s.from.i[0];
+    pfilter_to   = filter->tslice[off2 - 1].s.to.i[0];
+    pfilter_ts   = filter->tslice + off1;
+    pfilter_len  = off2 - off1;
+    laik_log(1,"Set filter with %d slices between [%ld;%ld[",
+             pfilter_len, pfilter_from, pfilter_to);
+}
+
+
 // partitioner API: add a slice
 // - specify slice groups by giving slices the same tag
 // - arbitrary data can be attached to slices if no merge step is done
@@ -162,7 +229,14 @@ void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
                        int tag, void* data)
 {
     // if filter is installed, check if we should store the slice
-    if (p->filter && ((p->filter)(p, task, s) == false)) return;
+    if (p->filter) {
+        laik_log(1,"Adding slice %d:[%ld;%ld[: check filter",
+                 task, s->from.i[0], s->to.i[0]);
+        bool res = (p->filter)(p, task, s);
+        laik_log(1,"Adding slice %d:[%ld;%ld[: %s",
+                 task, s->from.i[0], s->to.i[0], res ? "keep":"skip");
+        if (res == false) return;
+    }
 
     assert(s->space == p->space);
 
