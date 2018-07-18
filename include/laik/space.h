@@ -223,13 +223,13 @@ int laik_space_getdimensions(Laik_Space* space);
 
 // create a new invalid partitioning
 Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
-                                               Laik_Partitioner *pr);
+                                               Laik_Partitioner *pr, Laik_Partitioning *other);
 
 // make partitioning valid and immutable by freezing
 void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge);
 
 // run the partitioner specified for the partitioning, and freeze afterwards
-void laik_run_partitioner(Laik_Partitioning* p, Laik_Partitioning *otherP);
+void laik_run_partitioner(Laik_Partitioning* p);
 
 // create a new partitioning by running an offline partitioner algorithm.
 // the partitioner may be derived from another partitioning which is

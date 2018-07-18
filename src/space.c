@@ -893,12 +893,16 @@ void calcAddReductions(int tflags,
     assert(toP->tfilter < 0);
 #else
     if (fromP->tfilter == group->myid) {
-        toP2 = laik_new_empty_partitioning(group, toP->space, toP->partitioner);
+        toP2 = laik_new_empty_partitioning(group, toP->space,
+                                           toP->partitioner, toP->other);
         laik_partitioning_set_pfilter(toP2, fromP);
+        laik_run_partitioner(toP2);
     }
     if (toP->tfilter == group->myid) {
-        fromP2 = laik_new_empty_partitioning(group, fromP->space, fromP->partitioner);
+        fromP2 = laik_new_empty_partitioning(group, fromP->space,
+                                             fromP->partitioner, fromP->other);
         laik_partitioning_set_pfilter(fromP2, toP);
+        laik_run_partitioner(fromP2);
     }
 #endif
 

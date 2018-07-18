@@ -93,8 +93,8 @@ struct _Laik_Partitioning {
     Laik_Space* space; // slices cover this space
 
     Laik_Partitioner* partitioner; // if set: creating partitioner
+    Laik_Partitioning* other; // if set: run partitioner with this as base
     laik_pfilter_t filter; // if set: call filter for each slice
-    void* fdata;
 
     int capacity;  // slices allocated
     int count;     // slices used
@@ -102,6 +102,8 @@ struct _Laik_Partitioning {
 
     // if >= 0, this is the only task for which slices are stored
     int tfilter;
+    // if set, only slices intersecting slices from this partitioning are stored
+    Laik_Partitioning* pfilter;
 
     int myMapCount; // number of maps in slices of this task
     int* myMapOff; // offsets from local map IDs into slice array
@@ -113,10 +115,6 @@ struct _Laik_Partitioning {
 void laik_clear_partitioning(Laik_Partitioning* p);
 void laik_free_partitioning(Laik_Partitioning* p);
 void laik_updateMyMapOffsets(Laik_Partitioning* p);
-
-// set a filter to decide which slices to store
-void laik_partitioning_set_filter(Laik_Partitioning* p,
-                                  laik_pfilter_t filter, void* fdata);
 
 
 
