@@ -121,8 +121,9 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
     sprintf(inst->guid, "%d", rank);
 
-    laik_log(2, "MPI backend initialized (%s:%d)\n",
-             inst->mylocation, (int) getpid());
+    laik_log(2, "MPI backend initialized (at %s:%d, rank %d/%d)\n",
+             inst->mylocation, (int) getpid(),
+             rank, size);
 
     // do own reduce algorithm?
     char* str = getenv("LAIK_MPI_REDUCE");

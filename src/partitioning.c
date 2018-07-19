@@ -887,8 +887,9 @@ void laik_run_partitioner(Laik_Partitioning* p)
         laik_log_flush(0);
     }
     else
-        laik_log(2, "Run partitioner '%s' (group %d, space '%s'): %d slices",
-                 pr->name, p->group->gid, p->space->name, p->count);
+        laik_log(2, "run partitioner '%s' for '%s' (group %d, space '%s'): %d slices",
+                 pr->name, p->name,
+                 p->group->gid, p->space->name, p->count);
 
 
     // by default, check if partitioning covers full space
