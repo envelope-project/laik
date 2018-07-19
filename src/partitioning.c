@@ -178,6 +178,8 @@ bool pfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
     (void) task; // unused parameter of filter signature
     (void) p; // unused parameter of filter signature
 
+    if (pfilter_len == 0) return false;
+
     int64_t from = s->from.i[0];
     int64_t to = s->to.i[0];
     if (from >= pfilter_to) return false;
@@ -206,7 +208,7 @@ bool pfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
     return true;
 }
 
-// set filter to only keep slices for given task when later adding slices
+// set filter to only keep slices intersecting with own slices in <filter>
 void laik_partitioning_set_pfilter(Laik_Partitioning* p,
                                    Laik_Partitioning* filter)
 {
@@ -224,12 +226,17 @@ void laik_partitioning_set_pfilter(Laik_Partitioning* p,
     assert(p->space->dims == 1);
     int off1 = filter->off[p->group->myid];
     int off2 = filter->off[p->group->myid + 1];
+    pfilter_len  = off2 - off1;
+    if (pfilter_len == 0) {
+        laik_log(1,"Set pfilter filtering everything");
+        return;
+    }
+
     assert(off2 > off1);
     pfilter_from = filter->tslice[off1].s.from.i[0];
     pfilter_to   = filter->tslice[off2 - 1].s.to.i[0];
     pfilter_ts   = filter->tslice + off1;
-    pfilter_len  = off2 - off1;
-    laik_log(1,"Set filter with %d slices between [%ld;%ld[",
+    laik_log(1,"Set pfilter for intersection with %d slices between [%ld;%ld[",
              pfilter_len, pfilter_from, pfilter_to);
 }
 
@@ -447,7 +454,8 @@ void mergeSortedSlices(Laik_Partitioning* p)
 static
 void updatePartitioningOffsets(Laik_Partitioning* p)
 {
-    assert(p->tslice);
+    if (p->count > 0)
+        assert(p->tslice);
 
     // we assume that the slices where sorted with sortSlices()
 
@@ -553,6 +561,7 @@ void updatePartitioningOffsetsSI(Laik_Partitioning* p)
     assert(count == off);
     p->count = count;
     free(p->tss1d);
+    p->tss1d = 0;
 
     // update offsets
     off = 0;
@@ -934,7 +943,11 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 {
     Laik_Partitioning* p;
     p = laik_new_empty_partitioning(g, space, pr, otherP);
-
+#if 0
+    // for 1d space, default to always calculate only own slices
+    if (space->dims == 1)
+        laik_partitioning_set_taskfilter(p, g->myid);
+#endif
     laik_run_partitioner(p);
     return p;
 }
@@ -963,6 +976,12 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
     // partitioning needs to be valid
     assert(p->off != 0);
 
+    // invalidate any cached version with intersections
+    if (p->intersecting) {
+        laik_free_partitioning(p->intersecting);
+        p->intersecting = 0;
+    }
+
     // check that partitions of tasks to be removed are empty
     for(int i = 0; i < oldg->size; i++) {
         if (fromOld[i] < 0)
@@ -976,6 +995,12 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
         int newT = fromOld[oldT];
         assert((newT >= 0) && (newT < newg->size));
         p->tslice[i].task = newT;
+    }
+
+    // update task filter if set
+    if (p->tfilter >= 0) {
+        assert(p->tfilter < oldg->size);
+        p->tfilter = fromOld[p->tfilter];
     }
 
     // resize offset array if needed
