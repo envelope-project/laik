@@ -653,6 +653,7 @@ void laik_mpi_prepare(Laik_ActionSeq* as)
 
     bool changed = laik_aseq_splitTransitionExecs(as);
     laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
+    if (as->actionCount == 0) return;
 
     changed = laik_aseq_flattenPacking(as);
     laik_log_ActionSeqIfChanged(changed, as, "After flattening actions");
