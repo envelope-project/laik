@@ -92,6 +92,8 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     p->partitioner = pr;
     p->other = other;
 
+    p->intersecting = 0;
+
     // number of maps still unknown
     p->myMapOff = 0;
     p->myMapCount = -1;
@@ -626,6 +628,9 @@ void laik_clear_partitioning(Laik_Partitioning* p)
 // free resources allocated for a partitioning object
 void laik_free_partitioning(Laik_Partitioning* p)
 {
+    if (p->intersecting)
+        laik_free_partitioning(p->intersecting);
+
     free(p->off);
     free(p->myMapOff);
     free(p->tslice);

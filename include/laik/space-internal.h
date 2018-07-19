@@ -105,6 +105,10 @@ struct _Laik_Partitioning {
     // if set, only slices intersecting slices from this partitioning are stored
     Laik_Partitioning* pfilter;
 
+    // allow to cache stored intersecting slices with another partitioning
+    // (used in laik_calc_transition)
+    Laik_Partitioning* intersecting;
+
     int myMapCount; // number of maps in slices of this task
     int* myMapOff; // offsets from local map IDs into slice array
 
