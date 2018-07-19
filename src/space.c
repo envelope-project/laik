@@ -886,25 +886,26 @@ void calcAddReductions(int tflags,
     assert(fromP->space->dims == 1);
     assert(fromP->space == toP->space);
 
+    // with task-filtered partitionings, we may calculate intersections first
     Laik_Partitioning *toP2 = toP, *fromP2 = fromP;
-#if 0
-    // only works if no task filters used
-    assert(fromP->tfilter < 0);
-    assert(toP->tfilter < 0);
-#else
-    if (fromP->tfilter == group->myid) {
-        toP2 = laik_new_empty_partitioning(group, toP->space,
-                                           toP->partitioner, toP->other);
-        laik_partitioning_set_pfilter(toP2, fromP);
-        laik_run_partitioner(toP2);
-    }
-    if (toP->tfilter == group->myid) {
-        fromP2 = laik_new_empty_partitioning(group, fromP->space,
-                                             fromP->partitioner, fromP->other);
+
+    if (fromP->tfilter >= 0) {
+        // calculate extended version of fromP with slices intersecting
+        // with own slices from toP. For this, we need own slices in toP
+        assert((toP->tfilter < 0) || (toP->tfilter == group->myid));
+        fromP2 = laik_clone_empty_partitioning(fromP);
         laik_partitioning_set_pfilter(fromP2, toP);
         laik_run_partitioner(fromP2);
     }
-#endif
+
+    if (toP->tfilter >= 0) {
+        // calculate extended version of toP with slices intersecting
+        // with own slices from fromP. For this, we need own slices in fromP
+        assert((fromP->tfilter < 0) || (fromP->tfilter == group->myid));
+        toP2 = laik_clone_empty_partitioning(toP);
+        laik_partitioning_set_pfilter(toP2, fromP);
+        laik_run_partitioner(toP2);
+    }
 
     // add slice borders of all tasks
     cleanBorderList();

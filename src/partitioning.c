@@ -66,25 +66,11 @@
 
 static int partitioning_id = 0;
 
-/**
- * Create an empty, invalid partitioning on a given space for a given
- * process group.
- *
- * To make the partitioning valid, either a partitioning algorithm has to be
- * run, filling the partitioning with slices, or a partitioner algorithm
- * is set to be run whenever partitioning slices are to be consumed (online).
- *
- * Before running the partitioner, filters on tasks or indexes can be set
- * such that not all slices get stored during the partitioner run.
- * However, such filtered partitionings are not generally useful, e.g.
- * for calculating transitions.
- *
- * Different internal formats are used depending on how a partitioner adds
- * indexes. E.g. adding single indexes are managed differently than slices.
- */
-Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
-                                               Laik_Partitioner* pr,
-                                               Laik_Partitioning* other)
+// internal helper
+Laik_Partitioning* laik_partitioning_new(char* name,
+                                         Laik_Group* g, Laik_Space* s,
+                                         Laik_Partitioner* pr,
+                                         Laik_Partitioning* other)
 {
     Laik_Partitioning* p;
 
@@ -98,8 +84,8 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
     }
 
     p->id = partitioning_id++;
-    p->name = strdup("part-0     ");
-    sprintf(p->name, "part-%d", p->id);
+    p->name = strdup("            ");
+    sprintf(p->name, "%.10s-%d", name ? name : "part", p->id);
 
     p->group = g;
     p->space = s;
@@ -125,6 +111,37 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
     p->off = 0;
 
     return p;
+}
+
+
+/**
+ * Create an empty, invalid partitioning on a given space for a given
+ * process group.
+ *
+ * To make the partitioning valid, either a partitioning algorithm has to be
+ * run, filling the partitioning with slices, or a partitioner algorithm
+ * is set to be run whenever partitioning slices are to be consumed (online).
+ *
+ * Before running the partitioner, filters on tasks or indexes can be set
+ * such that not all slices get stored during the partitioner run.
+ * However, such filtered partitionings are not generally useful, e.g.
+ * for calculating transitions.
+ *
+ * Different internal formats are used depending on how a partitioner adds
+ * indexes. E.g. adding single indexes are managed differently than slices.
+ */
+Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
+                                               Laik_Partitioner* pr,
+                                               Laik_Partitioning* other)
+{
+    return laik_partitioning_new(0, g, s, pr, other);
+}
+
+// create a new empty partitioning using same parameters as in given one
+Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p)
+{
+    return laik_partitioning_new(p->name, p->group, p->space,
+                                 p->partitioner, p->other);
 }
 
 
