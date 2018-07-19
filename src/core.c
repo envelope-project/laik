@@ -33,6 +33,7 @@
 // default log level
 static int laik_loglevel = LAIK_LL_Error;
 static FILE* laik_logfile = NULL;
+static int laik_logprefix = 2; // 0: none, 1: short, 2:long
 static Laik_Instance* laik_loginst = 0;
 static int laik_logctr = 0;
 // filter
@@ -191,9 +192,24 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     laik_loginst = instance;
     char* str = getenv("LAIK_LOG");
     if (str) {
+        if (*str == 'n') { laik_logprefix = 0; str++; }
+        if (*str == 's') { laik_logprefix = 1; str++; }
+
         int l = atoi(str);
         if (l > 0)
             laik_loglevel = l;
+        else {
+            // exit with some help text
+            fprintf(stderr, "Unknown LAIK_LOG syntax. Use\n\n"
+                    "    LAIK_LOG=[option]level[:rank[-torank]]\n\n"
+                    " option : logging option (characters, defaults to none)\n"
+                    "            n - no line prefix\n"
+                    "            s - use short prefix\n"
+                    " level  : minimum logging level (digit, defaults to 0: no logging)\n"
+                    " rank   : only log if process has given rank (number, default: no filter)\n"
+                    " torank : allow logging for range of ranks [rank;torank] (number)\n");
+            exit(1);
+        }
         char* p = index(str, ':');
         if (p) {
             p++;
@@ -391,7 +407,7 @@ bool laik_log_shown(int l)
 
 /* Log a message, similar to printf
  *
- * A prefix is added which allows sorting to get stable output
+ * By default, a prefix is added which allows sorting to get stable output
  * from the arbitrarily interleaved output of multiple MPI tasks:
  *
  * == LAIK-<logctr>-T<task> <itermsgctr>.<line> <wtime>
@@ -542,12 +558,15 @@ void log_flush()
         // prefix to allow sorting of log output
         // sorting makes chunks from output of each MPI task
         line_counter++;
-        off2 = sprintf(buf2,
-                       "%s LAIK-%04d-T%02d %04d.%02d %2d:%06.3f | ",
-                       (line_counter == 1) ? "==" : "..",
-                       laik_logctr, laik_loginst->myid,
-                       counter, line_counter,
-                       wtime_min, wtime_s);
+        off2 = sprintf(buf2, "%s ", (line_counter == 1) ? "==" : "..");
+        if (laik_logprefix == 1)
+            off2 += sprintf(buf2+off2, "T%02d | ", laik_loginst->myid);
+        else if (laik_logprefix == 2)
+            off2 += sprintf(buf2+off2,
+                            "LAIK-%04d-T%02d %04d.%02d %2d:%06.3f | ",
+                            laik_logctr, laik_loginst->myid,
+                            counter, line_counter,
+                            wtime_min, wtime_s);
         if (lstr)
                 off2 += sprintf(buf2+off2, "%-7s: ",
                                 (line_counter == 1) ? lstr : "");
