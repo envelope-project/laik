@@ -880,10 +880,12 @@ void calcAddReductions(int tflags,
     assert(fromP->space->dims == 1);
     assert(fromP->space == toP->space);
 
-    // with task-filtered partitionings, we may calculate intersections first
-    Laik_Partitioning *toP2 = toP, *fromP2 = fromP;
+    // with task-filtered partitionings, we need to include intersections,
+    // and calculate these before
+    Laik_Partitioning *toP2 = 0, *fromP2 = 0;
 
     if (fromP->tfilter >= 0) {
+        assert(fromP->tfilter == group->myid);
         // can cached version of intersecting slices be used?
         if (fromP->intersecting && (fromP->intersecting->pfilter == toP))
             fromP2 = fromP->intersecting;
@@ -903,6 +905,7 @@ void calcAddReductions(int tflags,
     }
 
     if (toP->tfilter >= 0) {
+        assert(toP->tfilter == group->myid);
         // can cached version of intersecting slices be used?
         if (toP->intersecting && (toP->intersecting->pfilter == fromP))
             toP2 = toP->intersecting;
@@ -924,8 +927,9 @@ void calcAddReductions(int tflags,
     if (laik_log_begin(1)) {
         laik_log_append("calc '");
         laik_log_Reduction(redOp);
-        laik_log_flush("' ops for '%s' (%d slices) => '%s' (%d slices):",
-                       fromP2->name, fromP2->count, toP2->name, toP2->count);
+        laik_log_flush("' ops for '%s' (%d + %d slices) => '%s' (%d + %d slices)",
+                       fromP->name, fromP->count, fromP2 ? fromP2->count : 0,
+                       toP->name, toP->count, toP2 ? toP2->count : 0);
     }
 
     // add slice borders of all tasks
@@ -934,8 +938,8 @@ void calcAddReductions(int tflags,
     sliceNo = 0;
     lastTask = -1;
     lastMapNo = -1;
-    for(int i = 0; i < fromP2->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(fromP2->tslice[i]);
+    for(int i = 0; i < fromP->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(fromP->tslice[i]);
         // reset sliceNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
@@ -948,8 +952,8 @@ void calcAddReductions(int tflags,
     }
     lastTask = -1;
     lastMapNo = -1;
-    for(int i = 0; i < toP2->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(toP2->tslice[i]);
+    for(int i = 0; i < toP->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(toP->tslice[i]);
         // reset sliceNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
@@ -960,6 +964,26 @@ void calcAddReductions(int tflags,
         appendBorder(ts->s.to.i[0], ts->task, sliceNo, ts->mapNo, false, false);
         sliceNo++;
     }
+
+    // further intersections: do not include slices of own task again
+    // also set sliceNo/mapNo to 0, as these are unreliable with intersections
+    if (fromP2) {
+        for(int i = 0; i < fromP2->count; i++) {
+            Laik_TaskSlice_Gen* ts = &(fromP2->tslice[i]);
+            if (ts->task == group->myid) continue;
+            appendBorder(ts->s.from.i[0], ts->task, 0, 0, true, true);
+            appendBorder(ts->s.to.i[0], ts->task, 0, 0, false, true);
+        }
+    }
+    if (toP2) {
+        for(int i = 0; i < toP2->count; i++) {
+            Laik_TaskSlice_Gen* ts = &(toP2->tslice[i]);
+            if (ts->task == group->myid) continue;
+            appendBorder(ts->s.from.i[0], ts->task, 0, 0, true, false);
+            appendBorder(ts->s.to.i[0], ts->task, 0, 0, false, false);
+        }
+    }
+
     if (borderListCount == 0) return;
 
     // order by border to travers in border order
