@@ -228,7 +228,8 @@ void laik_partitioning_set_pfilter(Laik_Partitioning* p,
     int off2 = filter->off[p->group->myid + 1];
     pfilter_len  = off2 - off1;
     if (pfilter_len == 0) {
-        laik_log(1,"Set pfilter filtering everything");
+        laik_log(1,"Set pfilter on '%s' for intersection with '%s': No own slices",
+                 p->name, filter->name);
         return;
     }
 
@@ -236,8 +237,8 @@ void laik_partitioning_set_pfilter(Laik_Partitioning* p,
     pfilter_from = filter->tslice[off1].s.from.i[0];
     pfilter_to   = filter->tslice[off2 - 1].s.to.i[0];
     pfilter_ts   = filter->tslice + off1;
-    laik_log(1,"Set pfilter for intersection with %d slices between [%ld;%ld[",
-             pfilter_len, pfilter_from, pfilter_to);
+    laik_log(1,"Set pfilter on '%s' for intersection with '%s': %d own slices, between [%ld;%ld[",
+             p->name, filter->name, pfilter_len, pfilter_from, pfilter_to);
 }
 
 
@@ -249,10 +250,8 @@ void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
 {
     // if filter is installed, check if we should store the slice
     if (p->filter) {
-        laik_log(1,"Adding slice %d:[%ld;%ld[: check filter",
-                 task, s->from.i[0], s->to.i[0]);
         bool res = (p->filter)(p, task, s);
-        laik_log(1,"Adding slice %d:[%ld;%ld[: %s",
+        laik_log(1,"filter added slice %d:[%ld;%ld[: %s",
                  task, s->from.i[0], s->to.i[0], res ? "keep":"skip");
         if (res == false) return;
     }
