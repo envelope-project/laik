@@ -242,11 +242,12 @@ void laik_log_Partitioning(Laik_Partitioning* p)
                     p->name, p->count, p->group->size);
     laik_log_Space(p->space);
     if (p->tfilter >= 0)
-        laik_log_append(" (just task %d)", p->tfilter);
+        laik_log_append(" (task filter: %d)", p->tfilter);
     if (p->intersecting) {
-        assert(p->intersecting->pfilter);
-        laik_log_append(" (cached intersections with '%s', %d slices)",
-                        p->intersecting->pfilter->name, p->intersecting->count);
+        laik_log_append(" (intersection filter with '%s'/'%s', %d slices)",
+                        p->intersecting->pfilter1 ? p->intersecting->pfilter1->name : "",
+                        p->intersecting->pfilter2 ? p->intersecting->pfilter2->name : "",
+                        p->intersecting->count);
     }
     if (p->count > 0) {
         assert(p->tslice); // only show generic slices

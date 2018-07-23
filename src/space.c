@@ -887,14 +887,19 @@ void calcAddReductions(int tflags,
     if (fromP->tfilter >= 0) {
         assert(fromP->tfilter == group->myid);
         // can cached version of intersecting slices be used?
-        if (fromP->intersecting && (fromP->intersecting->pfilter == toP))
+        if (fromP->intersecting &&
+                laik_partitioning_has_pfilter(fromP->intersecting, toP) &&
+                laik_partitioning_has_pfilter(fromP->intersecting, fromP)) {
             fromP2 = fromP->intersecting;
+        }
         else {
-            // no, calculate extended version of fromP with slices intersecting
+            // no: calculate extended version of fromP with slices intersecting
             // with own slices from toP. For this, we need own slices in toP
             assert((toP->tfilter < 0) || (toP->tfilter == group->myid));
             fromP2 = laik_clone_empty_partitioning(fromP);
-            laik_partitioning_set_pfilter(fromP2, toP);
+            // add both own slices of fromP/toP as intersection filter
+            laik_partitioning_add_pfilter(fromP2, fromP);
+            laik_partitioning_add_pfilter(fromP2, toP);
             laik_run_partitioner(fromP2);
 
             // cache calculated intersection, free previously cached one
@@ -907,14 +912,18 @@ void calcAddReductions(int tflags,
     if (toP->tfilter >= 0) {
         assert(toP->tfilter == group->myid);
         // can cached version of intersecting slices be used?
-        if (toP->intersecting && (toP->intersecting->pfilter == fromP))
+        if (toP->intersecting &&
+                laik_partitioning_has_pfilter(toP->intersecting, toP) &&
+                laik_partitioning_has_pfilter(toP->intersecting, fromP)) {
             toP2 = toP->intersecting;
+        }
         else {
-            // calculate extended version of toP with slices intersecting
+            // no: calculate extended version of toP with slices intersecting
             // with own slices from fromP. For this, we need own slices in fromP
             assert((fromP->tfilter < 0) || (fromP->tfilter == group->myid));
             toP2 = laik_clone_empty_partitioning(toP);
-            laik_partitioning_set_pfilter(toP2, fromP);
+            laik_partitioning_add_pfilter(toP2, fromP);
+            laik_partitioning_add_pfilter(toP2, toP);
             laik_run_partitioner(toP2);
 
             // cache calculated intersection, free previously cached one

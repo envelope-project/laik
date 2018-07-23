@@ -100,13 +100,20 @@ struct _Laik_Partitioning {
     int count;     // slices used
     int* off;      // offsets from task IDs into slice array
 
+    // task filter:
     // if >= 0, this is the only task for which slices are stored
     int tfilter;
-    // if set, only slices intersecting slices from this partitioning are stored
-    Laik_Partitioning* pfilter;
 
-    // allow to cache stored intersecting slices with another partitioning
-    // (used in laik_calc_transition)
+    // partition intersection filter:
+    // if set, only slices intersecting own slices from these partitionings
+    // are stored. max of 2 partitionings can be given
+    // (used in laik_calc_transition for reduced memory consumption)
+    Laik_Partitioning *pfilter1, *pfilter2;
+
+    // allow to cache a partitioning which stores slices which intersect with
+    // own slices of this partitioning and another one set as
+    // "intersecting->pfilter1/2"
+    // (used in laik_calc_transition for reduced memory consumption)
     Laik_Partitioning* intersecting;
 
     int myMapCount; // number of maps in slices of this task

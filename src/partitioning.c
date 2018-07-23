@@ -99,9 +99,10 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     p->myMapCount = -1;
 
     // no filter set
-    p->tfilter = -1;
-    p->pfilter = 0;
     p->filter = 0;
+    p->tfilter = -1;
+    p->pfilter1 = 0;
+    p->pfilter2 = 0;
 
     p->tslice = 0;
     p->tss1d = 0;
@@ -168,9 +169,62 @@ void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task)
 
 // helper for laik_partitioning_set_pfilter
 
-static int64_t pfilter_from, pfilter_to;
-static Laik_TaskSlice_Gen* pfilter_ts;
-static int pfilter_len;
+typedef struct {
+    int64_t from, to;
+    Laik_TaskSlice_Gen* ts;
+    Laik_Partitioning* p;
+    int len;
+} PFilterPar;
+
+static PFilterPar pfilter_par1, pfilter_par2;
+
+// check if [from;to[ intersects slices given in par
+static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
+{
+    assert(par->len > 0);
+
+    laik_log(1,"  filter [%ld;%ld[ check with '%s' in range [%ld;%ld[",
+             from, to, par->p->name, par->from, par->to);
+
+    if ((from >= par->to) || (to <= par->from)) {
+        laik_log(1,"    no intersection!");
+        return false;
+    }
+
+    // binary search
+    Laik_TaskSlice_Gen* ts = par->ts;
+    int off1 = 0, off2 = par->len;
+    while(off1 < off2) {
+        int mid = (off1 + off2) / 2;
+        laik_log(1,"  filter check with '%s' at %d: [%ld;%ld[",
+                 par->p->name, mid, ts[mid].s.from.i[0], ts[mid].s.to.i[0]);
+
+        if (from >= ts[mid].s.to.i[0]) {
+            laik_log(1,"    larger, check against %d: [%ld;%ld[",
+                     mid+1, ts[mid+1].s.from.i[0], ts[mid+1].s.to.i[0]);
+            if (to <= ts[mid+1].s.from.i[0]) {
+                laik_log(1,"    no intersection!");
+                return false;
+            }
+            off1 = mid;
+            continue;
+        }
+        if (to <= ts[mid].s.from.i[0]) {
+            laik_log(1,"    smaller, check against %d: [%ld;%ld[",
+                     mid-1, ts[mid-1].s.from.i[0], ts[mid-1].s.to.i[0]);
+            if (from >= ts[mid-1].s.to.i[0]) {
+                laik_log(1,"    no intersection!");
+                return false;
+            }
+            off2 = mid;
+            continue;
+        }
+        break;
+    }
+    laik_log(1,"    found intersection!");
+    return true;
+}
+
 
 static
 bool pfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
@@ -178,67 +232,86 @@ bool pfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
     (void) task; // unused parameter of filter signature
     (void) p; // unused parameter of filter signature
 
-    if (pfilter_len == 0) return false;
-
     int64_t from = s->from.i[0];
     int64_t to = s->to.i[0];
-    if (from >= pfilter_to) return false;
-    if (to <= pfilter_from) return false;
 
-    // binary search
-    Laik_TaskSlice_Gen* ts = pfilter_ts;
-    int off1 = 0, off2 = pfilter_len;
-    while(off1 < off2) {
-        int mid = (off1 + off2) / 2;
-        laik_log(1,"  filter check at %d: [%ld;%ld[",
-                 mid, ts[mid].s.from.i[0], ts[mid].s.to.i[0]);
-
-        if (from >= ts[mid].s.to.i[0]) {
-            if (to <= ts[mid+1].s.from.i[0]) return false;
-            off1 = mid;
-            continue;
-        }
-        if (to <= ts[mid].s.from.i[0]) {
-            if (from >= ts[mid-1].s.to.i[0]) return false;
-            off2 = mid;
-            continue;
-        }
-        break;
-    }
-    return true;
+    if ((pfilter_par1.len > 0) && pfilter_check(from, to, &pfilter_par1))
+        return true;
+    if ((pfilter_par2.len > 0) && pfilter_check(from, to, &pfilter_par2))
+        return true;
+    return false;
 }
 
-// set filter to only keep slices intersecting with own slices in <filter>
-void laik_partitioning_set_pfilter(Laik_Partitioning* p,
-                                   Laik_Partitioning* filter)
+// add filter to only keep slices intersecting with own slices in <filter>
+void laik_partitioning_add_pfilter(Laik_Partitioning* p, Laik_Partitioning* filter)
 {
-    assert(p->off == 0);
+    PFilterPar* par = 0;
+    assert(filter);
 
-    // partitioning we intersect with should know partitions of this process
+    assert(p->off == 0);
+    assert(p->space->dims == 1); // TODO: only for 1d for now
+
+    // already set?
+    if ((p->pfilter1 == filter) || (p->pfilter2 == filter)) return;
+
+    // check free slot to add pfilter
+    if (p->pfilter1 == 0)
+        par = &pfilter_par1;
+    else if (p->pfilter2 == 0)
+        par = &pfilter_par2;
+    else {
+        assert(0); // no space!
+        return;
+    }
+
+    // partitioning we intersect with should store own slices
     assert(filter->off != 0);
     assert(filter->tfilter == p->group->myid);
     assert(filter->space == p->space);
 
-    p->filter = pfilter;
-    p->pfilter = filter;
-
-    // TODO: only for 1d for now
-    assert(p->space->dims == 1);
     int off1 = filter->off[p->group->myid];
     int off2 = filter->off[p->group->myid + 1];
-    pfilter_len  = off2 - off1;
-    if (pfilter_len == 0) {
-        laik_log(1,"Set pfilter on '%s' for intersection with '%s': No own slices",
-                 p->name, filter->name);
+    if (off1 == off2) {
+        // no slices, no need to add filter
         return;
     }
 
-    assert(off2 > off1);
-    pfilter_from = filter->tslice[off1].s.from.i[0];
-    pfilter_to   = filter->tslice[off2 - 1].s.to.i[0];
-    pfilter_ts   = filter->tslice + off1;
-    laik_log(1,"Set pfilter on '%s' for intersection with '%s': %d own slices, between [%ld;%ld[",
-             p->name, filter->name, pfilter_len, pfilter_from, pfilter_to);
+    par->len = off2 - off1;
+    par->from = filter->tslice[off1].s.from.i[0];
+    par->to = filter->tslice[off2 - 1].s.to.i[0];
+    par->ts = filter->tslice + off1;
+    par->p = p;
+    laik_log(1,"Set pfilter for '%s' to intersection with '%s': %d own slices, between [%ld;%ld[",
+             p->name, filter->name, par->len, par->from, par->to);
+
+    if (par == &pfilter_par1)
+        p->pfilter1 = filter;
+    else
+        p->pfilter2 = filter;
+
+    // install filter function
+    p->filter = pfilter;
+}
+
+// remove any intersection filter
+void laik_partitioning_reset_pfilter(Laik_Partitioning* p)
+{
+    // reset both slots
+    p->pfilter1 = 0;
+    p->pfilter2 = 0;
+    pfilter_par1.len = 0;
+    pfilter_par2.len = 0;
+}
+
+
+// is the partitioning <filter> set to be a pfilter for <p> ?
+bool laik_partitioning_has_pfilter(Laik_Partitioning* p,
+                                   Laik_Partitioning* filter)
+{
+    assert(p);
+    assert(filter);
+
+    return (p->pfilter1 == filter) || (p->pfilter2 == filter);
 }
 
 
