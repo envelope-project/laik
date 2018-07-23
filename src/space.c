@@ -884,7 +884,7 @@ void calcAddReductions(int tflags,
     // and calculate these before
     Laik_Partitioning *toP2 = 0, *fromP2 = 0;
 
-    if (fromP->tfilter >= 0) {
+    if (fromP->tfilter > -2) {
         assert(fromP->tfilter == group->myid);
         // can cached version of intersecting slices be used?
         if (fromP->intersecting &&
@@ -895,7 +895,7 @@ void calcAddReductions(int tflags,
         else {
             // no: calculate extended version of fromP with slices intersecting
             // with own slices from toP. For this, we need own slices in toP
-            assert((toP->tfilter < 0) || (toP->tfilter == group->myid));
+            assert((toP->tfilter < -1) || (toP->tfilter == group->myid));
             fromP2 = laik_clone_empty_partitioning(fromP);
             // add both own slices of fromP/toP as intersection filter
             laik_partitioning_add_pfilter(fromP2, fromP);
@@ -909,7 +909,7 @@ void calcAddReductions(int tflags,
         }
     }
 
-    if (toP->tfilter >= 0) {
+    if (toP->tfilter > -2) {
         assert(toP->tfilter == group->myid);
         // can cached version of intersecting slices be used?
         if (toP->intersecting &&
@@ -920,7 +920,7 @@ void calcAddReductions(int tflags,
         else {
             // no: calculate extended version of toP with slices intersecting
             // with own slices from fromP. For this, we need own slices in fromP
-            assert((fromP->tfilter < 0) || (fromP->tfilter == group->myid));
+            assert((fromP->tfilter < -1) || (fromP->tfilter == group->myid));
             toP2 = laik_clone_empty_partitioning(toP);
             laik_partitioning_add_pfilter(toP2, fromP);
             laik_partitioning_add_pfilter(toP2, toP);
@@ -1281,8 +1281,8 @@ do_calc_transition(Laik_Space* space,
         }
         else {
             // only works if no task filters used
-            assert(fromP->tfilter < 0);
-            assert(toP->tfilter < 0);
+            assert(fromP->tfilter < -1);
+            assert(toP->tfilter < -1);
 
             // determine local slices to keep
             // (may need local copy if from/to mappings are different).

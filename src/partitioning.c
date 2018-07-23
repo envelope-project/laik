@@ -100,7 +100,7 @@ Laik_Partitioning* laik_partitioning_new(char* name,
 
     // no filter set
     p->filter = 0;
-    p->tfilter = -1;
+    p->tfilter = -2;
     p->pfilter1 = 0;
     p->pfilter2 = 0;
 
@@ -154,6 +154,7 @@ bool tfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
 {
     (void) s; // unused parameter of filter signature
 
+    assert(p->tfilter > -2); // only called if task filter is active
     return (p->tfilter == task);
 }
 
@@ -162,7 +163,9 @@ void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task)
 {
     assert(p->off == 0);
 
+    assert(task > -2);
     p->tfilter = task;
+    assert(p->filter == 0); // no filter set yet
     p->filter = tfilter;
 }
 
@@ -291,16 +294,6 @@ void laik_partitioning_add_pfilter(Laik_Partitioning* p, Laik_Partitioning* filt
 
     // install filter function
     p->filter = pfilter;
-}
-
-// remove any intersection filter
-void laik_partitioning_reset_pfilter(Laik_Partitioning* p)
-{
-    // reset both slots
-    p->pfilter1 = 0;
-    p->pfilter2 = 0;
-    pfilter_par1.len = 0;
-    pfilter_par2.len = 0;
 }
 
 
@@ -730,7 +723,7 @@ void laik_free_partitioning(Laik_Partitioning* p)
 bool laik_partitioning_isAll(Laik_Partitioning* p)
 {
     // no filter allowed
-    assert(p->tfilter < 0);
+    assert(p->filter == 0);
 
     if (p->count != p->group->size) return false;
     for(int i = 0; i < p->count; i++) {
@@ -748,7 +741,7 @@ bool laik_partitioning_isAll(Laik_Partitioning* p)
 int laik_partitioning_isSingle(Laik_Partitioning* p)
 {
     // no filter allowed
-    assert(p->tfilter < 0);
+    assert(p->filter == 0);
 
     if (p->count != 1) return -1;
     if (!laik_slice_isEqual(&(p->tslice[0].s), &(p->space->s)))
@@ -816,7 +809,7 @@ int tsgen_cmpfrom(const void *p1, const void *p2)
 bool laik_partitioning_coversSpace(Laik_Partitioning* p)
 {
     // no filter allowed
-    assert(p->tfilter < 0);
+    assert(p->filter == 0);
 
     int dims = p->space->dims;
     notcovered_count = 0;
@@ -911,8 +904,8 @@ bool laik_partitioning_coversSpace(Laik_Partitioning* p)
 bool laik_partitioning_isEqual(Laik_Partitioning* p1, Laik_Partitioning* p2)
 {
     // no filters allowed
-    assert(p1->tfilter < 0);
-    assert(p2->tfilter < 0);
+    assert(p1->filter == 0);
+    assert(p2->filter == 0);
 
     // partitionings needs to be valid
     assert(p1 && p1->off);
@@ -1069,7 +1062,7 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
         p->tslice[i].task = newT;
     }
 
-    // update task filter if set
+    // update task filter if set (no change for filter set to -1: filter all)
     if (p->tfilter >= 0) {
         assert(p->tfilter < oldg->size);
         p->tfilter = fromOld[p->tfilter];

@@ -100,8 +100,9 @@ struct _Laik_Partitioning {
     int count;     // slices used
     int* off;      // offsets from task IDs into slice array
 
-    // task filter:
-    // if >= 0, this is the only task for which slices are stored
+    // task filter: active if > -2: store slices of at most one task
+    //  >= 0, this is the task for which slices are stored
+    //  == -1, task filter is set to store no slice
     int tfilter;
 
     // partition intersection filter:
