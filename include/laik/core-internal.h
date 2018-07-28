@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_CORE_INTERNAL_H_
-#define _LAIK_CORE_INTERNAL_H_
+#ifndef LAIK_CORE_INTERNAL_H
+#define LAIK_CORE_INTERNAL_H
 
 #include <laik.h>         // for Laik_Instance, Laik_Group
 #include <stdbool.h>      // for bool
@@ -159,4 +159,4 @@ void laik_kv_sync(Laik_Instance* inst);
 
 
 
-#endif // _LAIK_CORE_INTERNAL_H_
+#endif // LAIK_CORE_INTERNAL_H

@@ -20,9 +20,9 @@
 #ifndef LAIK_PROGRAM_H
 #define LAIK_PROGRAM_H
 
-#include "core.h"  // for Laik_Instance
+#include "core.h" // for Laik_Instance
 
-// struct for storing program control information
+// opaque struct for storing program control information
 typedef struct tag_laik_program_control Laik_Program_Control;
 
 // create an empty structure
@@ -44,4 +44,4 @@ void laik_set_args(Laik_Instance*, int, char**);
 // reset iteration
 void laik_iter_reset(Laik_Instance*);
 
-#endif //LAIK_PROGRAM_H
+#endif // LAIK_PROGRAM_H

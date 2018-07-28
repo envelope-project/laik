@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_ACTION_INTERNAL_H_
-#define _LAIK_ACTION_INTERNAL_H_
+#ifndef LAIK_ACTION_INTERNAL_H
+#define LAIK_ACTION_INTERNAL_H
 
 #include <laik.h>         // for Laik_Instance, Laik_Group
 
@@ -479,4 +479,4 @@ bool laik_aseq_replaceWithAllReduce(Laik_ActionSeq* as);
 // replace transition exec actions with equivalent reduce/send/recv actions
 bool laik_aseq_splitTransitionExecs(Laik_ActionSeq* as);
 
-#endif // _LAIK_ACTION_INTERNAL_H_
+#endif // LAIK_ACTION_INTERNAL_H

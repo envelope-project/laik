@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_H_
-#define _LAIK_H_
+#ifndef LAIK_H
+#define LAIK_H
 
 // include headers of all Laik modules (without LAIK backends)
 #include "laik/core.h"
@@ -28,4 +28,4 @@
 #include "laik/profiling.h"
 #include "laik/ext.h"
 
-#endif // _LAIK_H_
+#endif // LAIK_H

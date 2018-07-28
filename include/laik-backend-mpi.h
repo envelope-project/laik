@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_BACKEND_MPI_H_
-#define _LAIK_BACKEND_MPI_H_
+#ifndef LAIK_BACKEND_MPI_H
+#define LAIK_BACKEND_MPI_H
 
 #include "laik.h"
 
@@ -27,4 +27,4 @@
 // returns the same object if called multiple times
 Laik_Instance* laik_init_mpi(int* argc, char*** argv);
 
-#endif // _LAIK_BACKEND_MPI_H_
+#endif // LAIK_BACKEND_MPI_H

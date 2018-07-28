@@ -15,10 +15,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_ACTIONS_H_
-#define _LAIK_ACTIONS_H_
+#ifndef LAIK_ACTIONS_H
+#define LAIK_ACTIONS_H
 
 #include <stdint.h>  // for uint64_t
+
+#include "core.h" // for Laik_Instance
 
 /**
  * LAIK Actions and Action Sequences
@@ -47,7 +49,6 @@
  * If an action sequence contains backend-specific actions, all such actions
  * have to refer to the same backend.
  */
-
 
 typedef enum _Laik_ActionType {
     LAIK_AT_Invalid = 0,
@@ -136,5 +137,4 @@ void laik_aseq_free(Laik_ActionSeq* as);
 int laik_aseq_bufsize(Laik_ActionSeq* as);
 
 
-
-#endif // _LAIK_ACTIONS_H_
+#endif // LAIK_ACTIONS_H

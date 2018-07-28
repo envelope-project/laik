@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_DATA_H_
-#define _LAIK_DATA_H_
+#ifndef LAIK_DATA_H
+#define LAIK_DATA_H
 
 #include <stdbool.h>  // for bool
 #include <stdint.h>   // for int64_t, uint64_t
@@ -304,8 +304,8 @@ struct _Laik_Allocator {
 };
 
 // returns an allocator with default policy LAIK_MP_NewAllocOnRepartition
-Laik_Allocator* laik_new_allocator();
+Laik_Allocator* laik_new_allocator(void);
 void laik_set_allocator(Laik_Data* d, Laik_Allocator* alloc);
 Laik_Allocator* laik_get_allocator(Laik_Data* d);
 
-#endif // _LAIK_DATA_H_
+#endif // LAIK_DATA_H

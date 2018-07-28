@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_BACKEND_SINGLE_H_
-#define _LAIK_BACKEND_SINGLE_H_
+#ifndef LAIK_BACKEND_SINGLE_H
+#define LAIK_BACKEND_SINGLE_H
 
 #include "laik.h"
 
@@ -25,9 +25,9 @@
 #define single_world laik_single_world()
 
 // create a LAIK instance for this backend
-Laik_Instance* laik_init_single();
+Laik_Instance* laik_init_single(void);
 
 // get the default task group: just this single task
-Laik_Group* laik_single_world();
+Laik_Group* laik_single_world(void);
 
-#endif // _LAIK_BACKEND_SINGLE_H_
+#endif // LAIK_BACKEND_SINGLE_H

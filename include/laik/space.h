@@ -16,8 +16,8 @@
  */
 
 
-#ifndef _LAIK_SPACE_H_
-#define _LAIK_SPACE_H_
+#ifndef LAIK_SPACE_H
+#define LAIK_SPACE_H
 
 #include <stdbool.h>  // for bool
 #include <stdint.h>   // for int64_t, uint64_t
@@ -406,12 +406,12 @@ extern Laik_Partitioner *laik_Master;
 extern Laik_Partitioner *laik_All;
 
 // factory methods to create built-in simple partitioners
-Laik_Partitioner* laik_new_all_partitioner();
-Laik_Partitioner* laik_new_master_partitioner();
+Laik_Partitioner* laik_new_all_partitioner(void);
+Laik_Partitioner* laik_new_master_partitioner(void);
 Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim);
 Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth);
 Laik_Partitioner* laik_new_halo_partitioner(int depth);
-Laik_Partitioner* laik_new_bisection_partitioner();
+Laik_Partitioner* laik_new_bisection_partitioner(void);
 Laik_Partitioner* laik_new_grid_partitioner(int xblocks, int yblocks,
                                             int zblocks);
 
@@ -424,7 +424,7 @@ Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
                                              const void* userData);
 
 // block partitioner for 1d space without weighting
-Laik_Partitioner* laik_new_block_partitioner1();
+Laik_Partitioner* laik_new_block_partitioner1(void);
 // block partitioner for 1d space with index-wise weighting
 Laik_Partitioner* laik_new_block_partitioner_iw1(Laik_GetIdxWeight_t f,
                                                  const void* userData);
@@ -469,4 +469,4 @@ laik_calc_transition(Laik_Space* space,
                      Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
 
-#endif // _LAIK_SPACE_H_
+#endif // LAIK_SPACE_H

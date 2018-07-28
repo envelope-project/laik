@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_DEFINITIONS_H_
-#define _LAIK_DEFINITIONS_H_
+#ifndef LAIK_DEFINITIONS_H
+#define LAIK_DEFINITIONS_H
 
 #define MAX_GROUPS        10
 #define MAX_SPACES        10
@@ -26,4 +26,4 @@
 #define MAX_AGENTS        10
 #define MAX_FILENAME_LENGTH 128
 
-#endif // _LAIK_DEFINITIONS_H_
+#endif // LAIK_DEFINITIONS_H

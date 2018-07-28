@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_BACKEND_H_
-#define _LAIK_BACKEND_H_
+#ifndef LAIK_BACKEND_H
+#define LAIK_BACKEND_H
 
 //
 // Header file defining the interface between LAIK and a LAIK backend
@@ -65,4 +65,4 @@ struct _Laik_Backend {
 
 
 
-#endif // _LAIK_BACKEND_H_
+#endif // LAIK_BACKEND_H

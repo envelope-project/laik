@@ -16,8 +16,8 @@
  */
 
 
-#ifndef _LAIK_PROFILING_INTERNAL_
-#define _LAIK_PROFILING_INTERNAL_
+#ifndef LAIK_PROFILING_INTERNAL
+#define LAIK_PROFILING_INTERNAL
 
 #include <stdbool.h>      // for bool
 #include "definitions.h"  // for MAX_FILENAME_LENGTH
@@ -36,4 +36,4 @@ struct _Laik_Profiling_Controller
     void* profile_file;
 };
 
-#endif // _LAIK_PROFILING_INTERNAL_
+#endif // LAIK_PROFILING_INTERNAL

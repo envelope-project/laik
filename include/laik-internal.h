@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_INTERNAL_H_
-#define _LAIK_INTERNAL_H_
+#ifndef LAIK_INTERNAL_H
+#define LAIK_INTERNAL_H
 
 #include "laik.h"
 
@@ -31,4 +31,4 @@
 #include "laik/program-internal.h"
 #include "laik/profiling-internal.h"
 
-#endif // _LAIK_INTERNAL_H_
+#endif // LAIK_INTERNAL_H

@@ -16,8 +16,8 @@
  */
 
 
-#ifndef _LAIK_SPACE_INTERNAL_H_
-#define _LAIK_SPACE_INTERNAL_H_
+#ifndef LAIK_SPACE_INTERNAL_H
+#define LAIK_SPACE_INTERNAL_H
 
 #include <laik.h>     // for Laik_Index, Laik_Partitioning
 #include <stdbool.h>  // for bool
@@ -241,6 +241,6 @@ bool laik_trans_isInGroup(Laik_Transition* t, int subgroup, int task);
 
 
 // initialize the LAIK space module, called from laik_new_instance
-void laik_space_init();
+void laik_space_init(void);
 
-#endif // _LAIK_SPACE_INTERNAL_H_
+#endif // LAIK_SPACE_INTERNAL_H

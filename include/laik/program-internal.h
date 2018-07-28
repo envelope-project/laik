@@ -32,4 +32,4 @@ struct tag_laik_program_control
     char** argv;
 };
 
-#endif //LAIK_PROGRAM_INTERNAL
+#endif // LAIK_PROGRAM_INTERNAL

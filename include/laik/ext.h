@@ -17,8 +17,8 @@
  */
 
 
-#ifndef _LAIK_EXT_H_
-#define _LAIK_EXT_H_
+#ifndef LAIK_EXT_H
+#define LAIK_EXT_H
 
 #include "agent.h"  // for Laik_Agent, laik_agent_init
 #include "core.h"   // for Laik_Instance
@@ -62,4 +62,4 @@ void laik_get_failed(Laik_Instance*, int*, int**, int);
 
 
 
-#endif // _LAIK_EXT_H_
+#endif // LAIK_EXT_H

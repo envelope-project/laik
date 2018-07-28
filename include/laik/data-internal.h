@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_DATA_INTERNAL_H_
-#define _LAIK_DATA_INTERNAL_H_
+#ifndef LAIK_DATA_INTERNAL_H
+#define LAIK_DATA_INTERNAL_H
 
 #include <laik.h>     // for Laik_Mapping, Laik_Slice, Laik_Data, Laik_Switc...
 #include <stdbool.h>  // for bool
@@ -59,7 +59,7 @@ struct _Laik_SwitchStat
     uint64_t sentBytes, receivedBytes, reducedBytes;
 };
 
-Laik_SwitchStat* laik_newSwitchStat();
+Laik_SwitchStat* laik_newSwitchStat(void);
 void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src);
 
 // information for a reservation
@@ -156,13 +156,13 @@ struct _Laik_MappingList {
 };
 
 // initialize the LAIK data module, called from laik_new_instance
-void laik_data_init();
+void laik_data_init(void);
 
 // create the types pre-provided by LAIK, to be called at data module init
-void laik_type_init();
+void laik_type_init(void);
 
 
 // ensure that the mapping is backed by memory (called by backends)
 void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat *ss);
 
-#endif // _LAIK_DATA_INTERNAL_H_
+#endif // LAIK_DATA_INTERNAL_H

@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _LAIK_CORE_H_
-#define _LAIK_CORE_H_
+#ifndef LAIK_CORE_H
+#define LAIK_CORE_H
 
 #include <stdbool.h>  // for bool
 
@@ -107,9 +107,9 @@ void laik_enable_profiling(Laik_Instance* i);
 void laik_reset_profiling(Laik_Instance* i);
 void laik_enable_profiling_file(Laik_Instance* i, const char* filename);
 void laik_close_profiling_file(Laik_Instance* i);
-double laik_get_total_time();
-double laik_get_backend_time();
-void laik_writeout_profile();
+double laik_get_total_time(void);
+double laik_get_backend_time(void);
+void laik_writeout_profile(void);
 void laik_profile_printf(const char* msg, ...);
 void laik_profile_user_start(Laik_Instance *i);
 void laik_profile_user_stop(Laik_Instance* i);
@@ -133,7 +133,7 @@ typedef enum _Laik_LogLevel {
 } Laik_LogLevel;
 
 // increment logging counter used in logging prefix
-void laik_log_inc();
+void laik_log_inc(void);
 
 // log a message, similar to printf
 void laik_log(int level, const char* msg, ...) __attribute__ ((format (printf, 2, 3)));
@@ -162,4 +162,4 @@ void laik_log_flush(const char* msg, ...);
 // which backend LAIK actually uses (e.g. the examples).
 Laik_Instance* laik_init (int* argc, char*** argv);
 
-#endif // _LAIK_CORE_H_
+#endif // LAIK_CORE_H
