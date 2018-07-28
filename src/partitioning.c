@@ -186,8 +186,9 @@ static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
 {
     assert(par->len > 0);
 
-    laik_log(1,"  filter [%ld;%ld[ check with '%s' in range [%ld;%ld[",
-             from, to, par->p->name, par->from, par->to);
+    laik_log(1,"  filter [%lld;%lld[ check with '%s' in range [%lld;%lld[",
+             (long long) from, (long long) to,
+             par->p->name, (long long) par->from, (long long) par->to);
 
     if ((from >= par->to) || (to <= par->from)) {
         laik_log(1,"    no intersection!");
@@ -199,12 +200,16 @@ static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
     int off1 = 0, off2 = par->len;
     while(off1 < off2) {
         int mid = (off1 + off2) / 2;
-        laik_log(1,"  filter check with '%s' at %d: [%ld;%ld[",
-                 par->p->name, mid, ts[mid].s.from.i[0], ts[mid].s.to.i[0]);
+        laik_log(1,"  filter check with '%s' at %d: [%lld;%lld[",
+                 par->p->name, mid,
+                 (long long) ts[mid].s.from.i[0],
+                 (long long) ts[mid].s.to.i[0]);
 
         if (from >= ts[mid].s.to.i[0]) {
-            laik_log(1,"    larger, check against %d: [%ld;%ld[",
-                     mid+1, ts[mid+1].s.from.i[0], ts[mid+1].s.to.i[0]);
+            laik_log(1,"    larger, check against %d: [%lld;%lld[",
+                     mid+1,
+                     (long long) ts[mid+1].s.from.i[0],
+                     (long long) ts[mid+1].s.to.i[0]);
             if (to <= ts[mid+1].s.from.i[0]) {
                 laik_log(1,"    no intersection!");
                 return false;
@@ -213,8 +218,10 @@ static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
             continue;
         }
         if (to <= ts[mid].s.from.i[0]) {
-            laik_log(1,"    smaller, check against %d: [%ld;%ld[",
-                     mid-1, ts[mid-1].s.from.i[0], ts[mid-1].s.to.i[0]);
+            laik_log(1,"    smaller, check against %d: [%lld;%lld[",
+                     mid-1,
+                     (long long) ts[mid-1].s.from.i[0],
+                     (long long) ts[mid-1].s.to.i[0]);
             if (from >= ts[mid-1].s.to.i[0]) {
                 laik_log(1,"    no intersection!");
                 return false;
@@ -284,8 +291,9 @@ void laik_partitioning_add_pfilter(Laik_Partitioning* p, Laik_Partitioning* filt
     par->to = filter->tslice[off2 - 1].s.to.i[0];
     par->ts = filter->tslice + off1;
     par->p = p;
-    laik_log(1,"Set pfilter for '%s' to intersection with '%s': %d own slices, between [%ld;%ld[",
-             p->name, filter->name, par->len, par->from, par->to);
+    laik_log(1,"Set pfilter for '%s' to intersection with '%s': %d own slices, between [%lld;%lld[",
+             p->name, filter->name, par->len,
+             (long long) par->from, (long long) par->to);
 
     if (par == &pfilter_par1)
         p->pfilter1 = filter;
@@ -317,8 +325,10 @@ void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
     // if filter is installed, check if we should store the slice
     if (p->filter) {
         bool res = (p->filter)(p, task, s);
-        laik_log(1,"filter added slice %d:[%ld;%ld[: %s",
-                 task, s->from.i[0], s->to.i[0], res ? "keep":"skip");
+        laik_log(1,"filter added slice %d:[%lld;%lld[: %s",
+                 task,
+                 (long long) s->from.i[0], (long long) s->to.i[0],
+                 res ? "keep":"skip");
         if (res == false) return;
     }
 
