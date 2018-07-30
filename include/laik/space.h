@@ -248,9 +248,8 @@ void laik_free_partitioning(Laik_Partitioning* p);
 
 // slice filters: do not store every slice when running a partitioner algorithm
 
-// set filter to only keep slices for given task when later adding slices
-// special case if task == -1: do not store any slice
-void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task);
+// set filter to only keep slices for own process when adding slices
+void laik_partitioning_set_myfilter(Laik_Partitioning* p);
 
 // add an intersection filter to only keep slices intersecting with partitioning <filter>
 void laik_partitioning_add_pfilter(Laik_Partitioning* p,

@@ -100,7 +100,7 @@ Laik_Partitioning* laik_partitioning_new(char* name,
 
     // no filter set
     p->filter = 0;
-    p->tfilter = -2;
+    p->myfilter = false;
     p->pfilter1 = 0;
     p->pfilter2 = 0;
 
@@ -148,25 +148,24 @@ Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p)
 }
 
 
-// helper for laik_partitioning_set_taskfilter
+// helper for laik_partitioning_set_myfilter
 static
-bool tfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
+bool myfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
 {
     (void) s; // unused parameter of filter signature
 
-    assert(p->tfilter > -2); // only called if task filter is active
-    return (p->tfilter == task);
+    assert(p->myfilter); // only to be called with "my" filter active
+    return p->group->myid == task;
 }
 
-// set filter to only keep slices for given task when later adding slices
-void laik_partitioning_set_taskfilter(Laik_Partitioning* p, int task)
+// set filter to only keep slices for own process when adding slices
+void laik_partitioning_set_myfilter(Laik_Partitioning* p)
 {
     assert(p->off == 0);
 
-    assert(task > -2);
-    p->tfilter = task;
     assert(p->filter == 0); // no filter set yet
-    p->filter = tfilter;
+    p->myfilter = true;
+    p->filter = myfilter;
 }
 
 
@@ -276,7 +275,7 @@ void laik_partitioning_add_pfilter(Laik_Partitioning* p, Laik_Partitioning* filt
 
     // partitioning we intersect with should store own slices
     assert(filter->off != 0);
-    assert(filter->tfilter == p->group->myid);
+    assert(filter->myfilter);
     assert(filter->space == p->space);
 
     int off1 = filter->off[p->group->myid];
@@ -1021,7 +1020,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 #if 0
     // for 1d space, default to always calculate only own slices
     if (space->dims == 1)
-        laik_partitioning_set_taskfilter(p, g->myid);
+        laik_partitioning_set_myfilter(p);
 #endif
     laik_run_partitioner(p);
     return p;
@@ -1070,12 +1069,6 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
         int newT = fromOld[oldT];
         assert((newT >= 0) && (newT < newg->size));
         p->tslice[i].task = newT;
-    }
-
-    // update task filter if set (no change for filter set to -1: filter all)
-    if (p->tfilter >= 0) {
-        assert(p->tfilter < oldg->size);
-        p->tfilter = fromOld[p->tfilter];
     }
 
     // resize offset array if needed
