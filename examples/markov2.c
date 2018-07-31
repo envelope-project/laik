@@ -141,12 +141,12 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         laik_switchto_partitioning(dRead,  pRead, LAIK_DF_Preserve, LAIK_RO_Sum);
         laik_map_def1(dRead, (void**) &src, &srcCount);
         laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
-        assert(srcFrom < srcTo);
+        assert(srcFrom <= srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_Init, LAIK_RO_Sum);
         laik_map_def1(dWrite, (void**) &dst, &dstCount);
-        dstFrom = laik_local2global_1d(dWrite, 0);
+        dstFrom = (srcCount > 0) ? laik_local2global_1d(dWrite, 0) : 0;
 
         if (doPrint) {
             laik_log_begin(2);
@@ -284,7 +284,7 @@ int main(int argc, char* argv[])
             printf("markov [options] [<states> [<fan-out> [<iterations> [<istate>]]]]\n"
                    "\nParameters:\n"
                    "  <states>     : number of states (def %d)\n"
-                   "  <fan-ou>     : number of outgoing edges per state (def %d)\n"
+                   "  <fan-out>    : number of outgoing edges per state (def %d)\n"
                    "  <iterations> : number of iterations to run\n"
                    "  <istate>     : if given: state with initial value 1, others 0\n"
                    "                 default: all states set to same value\n"
@@ -309,6 +309,18 @@ int main(int argc, char* argv[])
     if (out == 0) out = 10;
     if (doCompact) doIndirection = 1;
     if (onestate >= n) onestate = -1;
+
+    if (n < 6) {
+        if (laik_myid(world) == 0)
+            printf("State count too small, set to 5\n");
+        n = 5;
+    }
+    if (out >= n) {
+        if (laik_myid(world) == 0)
+            printf("Fan-out of %d too high (state count: %d), set to %d\n",
+               out, n, n / 2);
+        out = n / 2;
+    }
 
     if (laik_myid(world) == 0) {
         printf("Init Markov chain with %d states, max fan-out %d.\n", n, out);
