@@ -16,3 +16,11 @@ markov
 markov2
 propagation1d
 propagation2d
+/raytracer
+/raytracer.c
+/raytracer_omp.cpp
+/raytraceromp
+/sqrtcalc
+/sqrtcalc.c
+/test.txt
+/vsum3

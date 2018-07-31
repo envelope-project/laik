@@ -12,3 +12,4 @@ compile_commands.json
 log*
 /build/
 *.so.dSYM/
+/messungen/
