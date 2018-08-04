@@ -59,6 +59,12 @@
  * LAIK ensures a normalized ordering by optionally splitting/merging slices
  * to remove overlaps and sorting them, grouping the slices if requested.
  *
+ * A deterministic offline partitioner algorithm must ensure that it returns
+ * the same partitioning, given the same input (space, process group,
+ * base partitioning). LAIK may call such partitioners multiple times,
+ * especially in different processes to avoid communication, but also in
+ * the same process to only store slices currently needed.
+ *
  * General useful partitioner algorithms are provided by LAIK.
  * However, the API which needs to be used by a partitioner is specified
  * and applications can provide their own partitioner implementations.
