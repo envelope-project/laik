@@ -89,16 +89,38 @@ struct _Laik_Partitioning {
     int id;
     char* name;
 
-    Laik_Group* group; // process group used in this partitioning
-    Laik_Space* space; // slices cover this space
-
-    Laik_Partitioner* partitioner; // if set: creating partitioner
-    Laik_Partitioning* other; // if set: run partitioner with this as base
-    laik_pfilter_t filter; // if set: call filter for each slice
+    Laik_Group* group; // slices are assigned to processes in this group
+    Laik_Space* space; // slices are sub-ranges of this space
 
     int capacity;  // slices allocated
     int count;     // slices used
-    int* off;      // offsets from task IDs into slice array
+
+    Laik_TaskSlice_Gen* tslice; // slice array
+    Laik_TaskSlice_Single1d* tss1d; // specific array used during collection
+
+    // calculated on freezing
+    int* off;       // offsets into slices, ordered by rank
+    int myMapCount; // number of mappings needed for slices of own process
+    int* myMapOff;  // offsets into own slices for same mapping
+
+    // optional: partitioner to be called
+    Laik_Partitioner* partitioner; // if set: creating partitioner
+
+    // base partitioning, used with partitioner or chained partitionings
+    Laik_Partitioning* other;
+
+    // if set, this maps ranks from <other> to <group>
+    //   used by laik_new_migrated_partitioning()
+    int* fromOther;
+
+
+    // slice filters and consumers
+
+    // if set: call this function for each slice
+    laik_pfilter_t filter;
+
+    // a filter can forward slices to this partitioning
+    Laik_Partitioning* consumer;
 
     // my filter: if true, only store slices for own process
     bool myfilter;
@@ -114,12 +136,6 @@ struct _Laik_Partitioning {
     // "intersecting->pfilter1/2"
     // (used in laik_calc_transition for reduced memory consumption)
     Laik_Partitioning* intersecting;
-
-    int myMapCount; // number of maps in slices of this task
-    int* myMapOff; // offsets from local map IDs into slice array
-
-    Laik_TaskSlice_Gen* tslice; // slice borders, may be multiple per task
-    Laik_TaskSlice_Single1d* tss1d;
 };
 
 void laik_clear_partitioning(Laik_Partitioning* p);

@@ -90,19 +90,6 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     p->group = g;
     p->space = s;
     p->partitioner = pr;
-    p->other = other;
-
-    p->intersecting = 0;
-
-    // number of maps still unknown
-    p->myMapOff = 0;
-    p->myMapCount = -1;
-
-    // no filter set
-    p->filter = 0;
-    p->myfilter = false;
-    p->pfilter1 = 0;
-    p->pfilter2 = 0;
 
     p->tslice = 0;
     p->tss1d = 0;
@@ -112,6 +99,24 @@ Laik_Partitioning* laik_partitioning_new(char* name,
 
     // as long as no offset array is set, this partitioning is invalid
     p->off = 0;
+
+    p->other = other;
+    p->fromOther = 0;
+    p->intersecting = 0;
+
+    // number of maps still unknown
+    p->myMapOff = 0;
+    p->myMapCount = -1;
+
+    // no filter set
+    p->filter = 0;
+
+    p->consumer = 0;
+
+    p->myfilter = false;
+    p->pfilter1 = 0;
+    p->pfilter2 = 0;
+
 
     return p;
 }
@@ -970,20 +975,27 @@ void laik_run_partitioner(Laik_Partitioning* p)
     assert(p->off == 0);
     Laik_Partitioner* pr = p->partitioner;
 
-    if (p->other) {
-        assert(p->other->group == p->group);
-        // we do not check for same space, as there are use cases
-        // where you want to derive a partitioning of one space from
-        // the partitioning of another
+    if (pr) {
+        if (p->other) {
+            assert(p->other->group == p->group);
+            // we do not check for same space, as there are use cases
+            // where you want to derive a partitioning of one space from
+            // the partitioning of another
+        }
+        (pr->run)(pr, p, p->other);
     }
-    (pr->run)(pr, p, p->other);
+    else if (p->other && p->other->consumer == p) {
+        // we consume slices from <other>, so run its partitioner
+        laik_run_partitioner(p->other);
+    }
 
-    bool doMerge = (pr->flags & LAIK_PF_Merge) > 0;
+    bool doMerge = false;
+    if (pr) doMerge = (pr->flags & LAIK_PF_Merge) > 0;
     laik_freeze_partitioning(p, doMerge);
 
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' for '%s' (group %d, myid %d, space '%s'):",
-                        pr->name, p->name,
+                        pr ? pr->name : "(other)", p->name,
                         p->group->gid, p->group->myid, p->space->name);
         laik_log_append("\n  other: ");
         laik_log_Partitioning(p->other);
@@ -993,13 +1005,14 @@ void laik_run_partitioner(Laik_Partitioning* p)
     }
     else
         laik_log(2, "run partitioner '%s' for '%s' (group %d, space '%s'): %d slices",
-                 pr->name, p->name,
+                 pr ? pr->name : "(other)", p->name,
                  p->group->gid, p->space->name, p->count);
 
 
     // by default, check if partitioning covers full space
     // unless partitioner has flag to not do it, or task filter is used
-    bool doCoverageCheck = ((pr->flags & LAIK_PF_NoFullCoverage) == 0);
+    bool doCoverageCheck = false;
+    if (pr) doCoverageCheck = (pr->flags & LAIK_PF_NoFullCoverage) == 0;
     if (p->filter) doCoverageCheck = false;
     if (doCoverageCheck) {
         if (!laik_partitioning_coversSpace(p))
@@ -1025,6 +1038,61 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
     laik_run_partitioner(p);
     return p;
 }
+
+
+// helper for laik_new_migrated_partitioning
+static
+bool myforwardfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
+{
+    assert(p->consumer && p->consumer->fromOther);
+    assert((task >= 0) && (task < p->group->size));
+    laik_append_slice(p->consumer, p->consumer->fromOther[task], s, 0, 0);
+    return true;
+}
+
+// new partitioning taking slices from another, migrating to new group
+Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
+                                                  Laik_Group* newg)
+{
+    Laik_Partitioning* p;
+    p = laik_new_empty_partitioning(newg, other->space, 0, other);
+
+    // setup mapping
+    if (newg->parent == other->group) {
+        // new group is child of <other>
+        p->fromOther = newg->fromParent;
+    }
+    else if (other->group->parent == newg) {
+        // new group is parent of <other>
+        p->fromOther = other->group->toParent;
+    }
+    else {
+        // other cases not supported
+        assert(0);
+    }
+
+    if (other->off == 0) {
+        // other yet invalid: install consumer filter to forward slices
+        assert(other->consumer == 0);
+        other->consumer = p;
+        assert(other->filter == 0);
+        other->filter = myforwardfilter;
+    }
+    else {
+        // travers slices and append to this
+        for(int i = 0; i < other->count; i++) {
+            Laik_TaskSlice_Gen* ts = &(other->tslice[i]);
+            assert((ts->task >= 0) && (ts->task < other->group->size));
+            laik_append_slice(p, p->fromOther[ts->task],
+                              &(ts->s), ts->tag, ts->data);
+        }
+        laik_freeze_partitioning(p, false);
+    }
+
+    return p;
+}
+
+
 
 // migrate partitioning borders to new group without changing borders
 // - added tasks get empty partitions

@@ -242,6 +242,10 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
                                          Laik_Group* g, Laik_Space* space,
                                          Laik_Partitioning* otherP);
 
+// new partitioning taking slices from another, migrating to new group
+Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
+                                                  Laik_Group* newg);
+
 // free resources allocated for a partitioning object
 void laik_free_partitioning(Laik_Partitioning* p);
 
