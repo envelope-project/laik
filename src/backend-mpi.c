@@ -56,6 +56,13 @@ typedef struct _MPIData MPIData;
 struct _MPIData {
     MPI_Comm comm;
     bool didInit;
+    unsigned size;
+    //----------------------------------------------------------------
+    // storage for MPI_Internal Information about the location mapping of MPI
+    // ranks. This information is shared globally and accessed locally. 
+    // It is created at Init time and is important for External Control.
+    // It is backend Specific. 
+    char** mappinglist;
 };
 
 typedef struct _MPIGroupData MPIGroupData;
@@ -110,22 +117,40 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     MPI_Comm_size(d->comm, &size);
     MPI_Comm_rank(d->comm, &rank);
 
+    d->size = size;
+
     // Get the name of the processor
     char processor_name[MPI_MAX_PROCESSOR_NAME];
     int name_len;
     MPI_Get_processor_name(processor_name, &name_len);
-
+    
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_mpi, size, rank,
                              processor_name, d, gd);
 
     sprintf(inst->guid, "%d", rank);
 
+    d->mappinglist = (char**) malloc (sizeof(char*) * size);
+    
+    // Create The MPI Hostname - Rank Mapping
+    // Bcast Processor Name
+    char proc_buf[MPI_MAX_PROCESSOR_NAME];
+    for (int i= size-1; i >= 0; i--){
+        if(i==rank){
+            strcpy(proc_buf, processor_name);
+        }
+
+        MPI_Bcast(proc_buf, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, i, d->comm);
+        d->mappinglist[i] = strdup(proc_buf);
+        
+        laik_log(2, "Got Processor Name from ID: %d on %s \n", i, d->mappinglist[i]);
+    }
+
     laik_log(2, "MPI backend initialized (at %s:%d, rank %d/%d)\n",
              inst->mylocation, (int) getpid(),
              rank, size);
 
-    // do own reduce algorithm?
+     // do own reduce algorithm?
     char* str = getenv("LAIK_MPI_REDUCE");
     if (str) mpi_reduce = atoi(str);
 
@@ -148,8 +173,14 @@ MPIGroupData* mpiGroupData(Laik_Group* g)
 static
 void laik_mpi_finalize()
 {
-    if (mpiData(mpi_instance)->didInit)
+    MPIData* d = mpiData(mpi_instance);
+    if (d->didInit){
         MPI_Finalize();
+        for(unsigned i=0; i<d->size; i++){
+            free (d->mappinglist[i]);
+        }
+        free (d->mappinglist);
+    }
 }
 
 // update backend specific data for group if needed
