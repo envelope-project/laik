@@ -61,6 +61,8 @@ struct _Laik_Backend {
 
   // sync of key-value store
   void (*sync)(Laik_Instance*);
+
+  void (*mapHostname)(Laik_Instance*, const char*, int *, int);
 };
 
 

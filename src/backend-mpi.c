@@ -39,6 +39,7 @@ static void laik_mpi_prepare(Laik_ActionSeq*);
 static void laik_mpi_cleanup(Laik_ActionSeq*);
 static void laik_mpi_exec(Laik_ActionSeq* as);
 static void laik_mpi_updateGroup(Laik_Group*);
+static void laik_mpi_mapHostname(Laik_Instance*, const char*, int*, int);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
@@ -47,7 +48,8 @@ static Laik_Backend laik_backend_mpi = {
     .prepare     = laik_mpi_prepare,
     .cleanup     = laik_mpi_cleanup,
     .exec        = laik_mpi_exec,
-    .updateGroup = laik_mpi_updateGroup
+    .updateGroup = laik_mpi_updateGroup,
+    .mapHostname = laik_mpi_mapHostname
 };
 
 static Laik_Instance* mpi_instance = 0;
@@ -738,5 +740,28 @@ static void laik_mpi_cleanup(Laik_ActionSeq* as)
 
     assert(as->backend == &laik_backend_mpi);
 }
+
+static void laik_mpi_mapHostname(Laik_Instance* inst, const char* hostname, int* ranks, int maxSize)
+{
+    laik_log(LAIK_LL_Debug, "MPIBackend: Mapping Hostnames to MPI-Ranks\n");
+
+    MPIData* mpidata = (MPIData*) inst->backend_data;
+    char** mappinglist = mpidata->mappinglist;
+    unsigned size = mpidata->size;
+    int count = 0;
+
+    if(size>0 && mappinglist!= NULL){
+        for(unsigned i=0; i<size; i++){
+            if(strcmp(mappinglist[i], hostname)==0){
+                if(count<maxSize){
+                    ranks[count] = i;
+                }else{
+                    return; 
+                }
+            }
+        }
+    }
+}
+
 
 #endif // USE_MPI
