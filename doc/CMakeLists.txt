@@ -1,8 +1,15 @@
 if (documentation)
     find_program (pandoc "pandoc")
+    find_program (pandoc_pdf "pdflatex")
 
     if (pandoc)
         message (STATUS "Dependency check for option 'documentation' succeeded, building!")
+        if (pandoc_pdf)
+            message (STATUS "  Creating PDF doc (pdflatex found)")
+        else ()
+            message (STATUS "  Skip PDF doc creation (pdflatex not found)")
+        endif ()
+
         set (docs
             "index.md"
             "Debugging.md"
@@ -13,11 +20,15 @@ if (documentation)
             get_filename_component (name "${doc}" NAME_WE)
 
             add_pandoc_target ("${name}.html" "${doc}")
-            add_pandoc_target ("${name}.pdf"  "${doc}")
+            if (pandoc_pdf)
+                add_pandoc_target ("${name}.pdf" "${doc}")
+            endif ()
         endforeach ()
 
         add_pandoc_target ("all.html" ${docs})
-        add_pandoc_target ("all.pdf"  ${docs})
+        if (pandoc_pdf)
+            add_pandoc_target ("all.pdf" ${docs})
+        endif ()
     elseif (skip-missing)
         message (STATUS "Dependency check for option 'documentation' failed, skipping!")
     else ()
