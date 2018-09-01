@@ -1,3 +1,12 @@
+# target to re-create git-version.h on revision change
+add_custom_target(git-version
+    COMMAND "${CMAKE_SOURCE_DIR}/update-version.sh"
+)
+add_custom_command(
+    OUTPUT "git-version.h"
+    DEPENDS git-version
+)
+
 # Base library
 add_library ("laik" SHARED
     "action.c"
@@ -10,13 +19,19 @@ add_library ("laik" SHARED
     "partitioning.c"
     "profiling.c"
     "program.c"
+    "revinfo.c"
     "space.c"
     "type.c"
 )
 
+SET_SOURCE_FILES_PROPERTIES(revinfo.c
+    PROPERTIES OBJECT_DEPENDS
+    ${CMAKE_CURRENT_BINARY_DIR}/git-version.h)
+
 target_include_directories ("laik"
     PUBLIC "../include"
     PUBLIC "."
+    PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/."
 )
 
 target_link_libraries ("laik"
