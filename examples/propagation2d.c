@@ -87,7 +87,7 @@ void run_element_partitioner(Laik_Partitioner* pr,
     assert(N_tasks = N_tasks_x * N_tasks_y);
     int N_elems_x = N_local_x * N_tasks_x;
     int N_elems_y = N_local_y * N_tasks_y;
-    assert(laik_space_size(space) == N_elems_x * N_elems_y);
+    assert( (int) laik_space_size(space) == N_elems_x * N_elems_y);
 
     Laik_Slice slc;
 
