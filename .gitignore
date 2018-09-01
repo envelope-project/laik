@@ -1,5 +1,4 @@
-revinfo.c
-git-version
+git-version.h
 *.o
 *.a
 *.so
