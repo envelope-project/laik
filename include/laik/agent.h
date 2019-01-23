@@ -52,6 +52,7 @@ enum tag_laik_ext_agent_t{
 
 /* -------------- TYPES -------------- */
 typedef struct { char uid[MAX_UID_LENGTH]; } node_uid_t;
+//typedef char* node_uid_t;
 typedef enum tag_laik_agent_errno Laik_Ext_Errno;
 typedef struct tag_laik_ext_agent Laik_Agent;
 typedef struct tag_laik_ext_ft_agent Laik_Ft_Agent;
@@ -76,14 +77,17 @@ typedef void (*laik_agent_reset) (void);
             across entire application. 
  * @retval 
  */
+//TODO: Changed  !! needs to be propagated to other tools !!!!
 typedef void (*laik_agent_get_failed) (int*, node_uid_t**);
+//typedef void (*laik_agent_get_failed) (int*, node_uid_t* );
 
 /** 
  * @brief  Get Number of failed nodes.
  * @note   
  * @retval 
  */
-typedef int (*laik_agent_peek_failed) (void);
+//TODO: Changed  !! needs to be propagated to other tools !!!!
+typedef int (*laik_agent_peek_failed) (void );
 
 /** 
  * @brief  Prototpye for getting spare nodes. 
@@ -150,6 +154,8 @@ struct tag_laik_ext_agent{
     /* standard agent functionalities */
     laik_agent_detach detach;
     laik_agent_reset reset;
+
+    void* data; //data storage space for the tool
 };
 
 
@@ -174,6 +180,8 @@ struct tag_laik_ext_ft_agent{
 
     // testing only
     laik_agent_set_iter setiter;
+
+    void* ft_data; //data storage space for the tool
 };
 
 struct tag_laik_ext_profile_agent{

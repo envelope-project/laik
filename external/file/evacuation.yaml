@@ -1,0 +1,18 @@
+#Topic: fast/migfra/<hostname>/task
+Topic: fast/migfra/test/task
+Payload:
+task: evacuate node
+id: a910e3e4-881d-4e42-9d08-d816f931ccb8
+time-measurement: false
+Destinations:
+  - node04
+  - node04
+  - node02
+  - node03
+  - node04
+  - node07
+Parameter:
+  mode: auto
+  migration-type: warm
+  overbooking: true
+  pscom-hook-procs: auto

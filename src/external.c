@@ -41,7 +41,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "laik-internal.h"
+#include "../include/laik-internal.h"
 
 /** 
  * @brief  Test if a given function exists in dynamic library
@@ -91,11 +91,12 @@ static int laik_map_id(
     return atoi(uid->uid);
 }
 
+
 /** 
  * @brief  Load an external agent.
  * @note   
  * @param  inst: The LAIK instance
- * @param  name: Path of the agent
+ * @param  path: Path of the agent
  * @param  isDynamic: type of the agent
  * @param  argc: arguments to pass to the agent
  * @param  argv: arguments to pass to the agent
@@ -119,7 +120,7 @@ void laik_ext_load_agent_from_file (
     if(instance->repart_ctrl == NULL){
         laik_ext_init(instance);
     }
-
+    printf("blob1 \n");
     ctrl = instance->repart_ctrl;
 
     //ensure less than MAX_AGENT
@@ -133,13 +134,16 @@ void laik_ext_load_agent_from_file (
     init = probfunc(handle, "agent_init");
     assert(init);
 
-    agent = init(argc, argv);
+    printf("blob1 \n");
 
+    agent = init(argc, argv );
+    //argv = {"localhost","1883",top_name };
     assert(agent);
 
     ctrl->agents[ctrl->num_agents] = agent;
     ctrl->num_agents++;
     ctrl->handles[ctrl->num_agents] = handle;
+    printf("laik_ext_load_agent done ! L:2 \n");
 }
 
 /** 
@@ -197,8 +201,8 @@ void laik_ext_cleanup(
     assert(ctrl);
 
     for(int i=0; i<ctrl->num_agents; i++){
-        Laik_Agent* agent = ctrl->agents[i];
-        agent->detach();
+        //Laik_Agent* agent = ctrl->agents[i];
+        //agent->detach();
         if(ctrl->handles[i]){
             dlclose(ctrl->handles[i]);
         }
@@ -223,54 +227,62 @@ void laik_ext_cleanup(
 void laik_get_failed (
     Laik_Instance* instance, 
     int* num_failed,
-    int** failed_ranks,
+    node_uid_t* failed_ranks,
     int max_failed
 ){
 
+    (void) max_failed;
     Laik_RepartitionControl* ctrl;
-    int i, j, m, n, count;
+    int i, n, count;
     assert(instance);    
     ctrl = instance->repart_ctrl;
     assert(ctrl);
     
+
     count = 0;
-    for(i=0; i<ctrl->num_agents; i++){
+    for(i=0; i < ctrl -> num_agents; i++){
         Laik_Agent* agent = ctrl->agents[i];
 
         // Only Require these Fault Tolerance Agents
-        if(agent->type == LAIK_AGENT_FT){
+        if(agent->type == LAIK_AGENT_FT)
+        {
             Laik_Ft_Agent* fta = (Laik_Ft_Agent*) agent;
-            
             // Check if there is something to do
             n = fta->peekfail();
-            if(n==0){
+            laik_log(LAIK_LL_Debug, "peek return %d L:2 \n" , n);
+            if(!n){
                 continue;
             }
 
             // Yes: (1) Get uids; (2) Map; (3) Create List
-
             // (1) Get a list of node_uids
-            node_uid_t* buffer = (node_uid_t*) 
-                    calloc (n, sizeof(node_uid_t));
-            fta->getfail(&m, &buffer);
-            assert(m==n);
-            
-            for(j=0;j<n;j++){
-                
+
+
+            fta->getfail(num_failed, &failed_ranks);
+
+            //printf("fta-> getfail: %d \n", *num_failed);
+            for(int k = 0 ; k < *num_failed; k++ )
+			{
+				laik_log(LAIK_LL_Debug, " Buf: %s   - % d \n",(failed_ranks + k)->uid, k);
+				fflush(stdout);
+			}
+
+            // (2) Map the failed nodes to ranks
+            //for(j=0;j<n;j++){
                 // Prevent Segmentation Fault
-                assert(count < max_failed);
+                //assert(count < max_failed);
 
                 // Map node uid to laik id
-                int id = laik_map_id(instance, &buffer[i]);
+                //int id = laik_map_id(instance, &buffer[i]);
                 
                 // fill the whole list
-                *failed_ranks[count] = id;
-                count++;
-            }
+                //*failed_ranks[count] = id;
+             //   count++;
+           // }
         }
     }
 
-    *num_failed = count;
+
 }
 
 /** 
@@ -282,12 +294,13 @@ void laik_get_failed (
 void laik_ext_init (
     Laik_Instance* inst
 ){
+	printf("bloblobl");
+
     assert(inst);
 
     Laik_RepartitionControl* ctrl;
-    ctrl = (Laik_RepartitionControl*) 
-        calloc (1, sizeof(Laik_RepartitionControl));
-
+    ctrl = (Laik_RepartitionControl*) calloc (1, sizeof(Laik_RepartitionControl));
     ctrl->num_agents = 0;
     inst->repart_ctrl = ctrl;
+
 }
