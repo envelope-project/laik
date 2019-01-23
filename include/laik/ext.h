@@ -58,7 +58,8 @@ void laik_ext_load_agent_from_function (
 
 void laik_ext_cleanup(Laik_Instance*);
 void laik_ext_init(Laik_Instance*);
-void laik_get_failed(Laik_Instance*, int*, int**, int);
+//void laik_get_failed(Laik_Instance*, int*, int**, int);
+void laik_get_failed(Laik_Instance*, int*, node_uid_t*, int);
 
 
 
