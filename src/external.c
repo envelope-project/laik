@@ -120,7 +120,6 @@ void laik_ext_load_agent_from_file (
     if(instance->repart_ctrl == NULL){
         laik_ext_init(instance);
     }
-    printf("blob1 \n");
     ctrl = instance->repart_ctrl;
 
     //ensure less than MAX_AGENT
@@ -134,8 +133,6 @@ void laik_ext_load_agent_from_file (
     init = probfunc(handle, "agent_init");
     assert(init);
 
-    printf("blob1 \n");
-
     agent = init(argc, argv );
     //argv = {"localhost","1883",top_name };
     assert(agent);
@@ -143,7 +140,7 @@ void laik_ext_load_agent_from_file (
     ctrl->agents[ctrl->num_agents] = agent;
     ctrl->num_agents++;
     ctrl->handles[ctrl->num_agents] = handle;
-    printf("laik_ext_load_agent done ! L:2 \n");
+    laik_log(LAIK_LL_Debug, "laik_ext_load_agent done ! L:2 \n");
 }
 
 /** 
@@ -258,7 +255,7 @@ void laik_get_failed (
             // (1) Get a list of node_uids
 
 
-            fta->getfail(num_failed, &failed_ranks);
+            fta->getfail(num_failed, failed_ranks);
 
             //printf("fta-> getfail: %d \n", *num_failed);
             for(int k = 0 ; k < *num_failed; k++ )
@@ -294,8 +291,6 @@ void laik_get_failed (
 void laik_ext_init (
     Laik_Instance* inst
 ){
-	printf("bloblobl");
-
     assert(inst);
 
     Laik_RepartitionControl* ctrl;

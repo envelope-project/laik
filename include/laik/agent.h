@@ -78,7 +78,7 @@ typedef void (*laik_agent_reset) (void);
  * @retval 
  */
 //TODO: Changed  !! needs to be propagated to other tools !!!!
-typedef void (*laik_agent_get_failed) (int*, node_uid_t**);
+typedef void (*laik_agent_get_failed) (int*, node_uid_t*);
 //typedef void (*laik_agent_get_failed) (int*, node_uid_t* );
 
 /** 
