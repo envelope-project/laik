@@ -108,7 +108,9 @@ int parse_file(FILE * fh, int* n_f, node_uid_t* failed_node, node_uid_t** destin
 		i++;
 		node = yaml_document_get_node(&doc, i);
 	}
-	*n_f = num_failed;
+	*n_f = 1;
+
+	//FIXME: num_failed is the number of destinations
 
 	for(int k = 0 ; k < num_failed; k++ )
 	{
@@ -129,7 +131,7 @@ int parse_file(FILE * fh, int* n_f, node_uid_t* failed_node, node_uid_t** destin
 
 void mqtt_getfailed(
     int* n_failed,
-	node_uid_t** result
+	node_uid_t* result
 ){
 	//(1)chek if file exists
 	FILE *fh = fopen ("evacuation.yaml", "r");
@@ -141,16 +143,13 @@ void mqtt_getfailed(
 
 	 }else{
 		 // (3)if exists parse file  & (4)fill result and n_failed
-		 node_uid_t test;
-		 parse_file(fh, n_failed, &test ,result );
-		 printf("%s\n", test.uid);
+		 node_uid_t* targets;
+		 parse_file(fh, n_failed, result,&targets );
 		 DEBUG_PRINT("n_failed: % d \n",*n_failed);
-		 for(int k = 0 ; k < *n_failed; k++ )
-		{
-			DEBUG_PRINT(" Res: %s   - % dtar \n",((*result)+k)->uid, k);
-			fflush(stdout);
-		}
-
+		//for(int k = 0 ; k < *n_failed; k++ )
+		//{
+		//	DEBUG_PRINT(" Res: %s   - % dtar \n",((*result)+k)->uid, k);
+		//}
 	 }
 
 }
