@@ -51,16 +51,26 @@ struct _Laik_Action {
 #define nextAction(a) ((Laik_Action*) (((char*)a) + a->len))
 
 
+// helper struct for CopyFromBuf / CopyToBuf actions
+typedef struct _Laik_CopyEntry {
+    char* ptr;
+    unsigned int offset, bytes;
+} Laik_CopyEntry;
+
+
 // backend-independent action structs:
 // only requried if further parameters need to be stored, ie. not for
 //   Nop, Halt, TExec, ...
 
+// action structs are packed
+#pragma pack(push,1)
+
 // BufReserve action
 typedef struct {
     Laik_Action h;
-    int size;  // in bytes
+    unsigned int size;  // in bytes
     int bufID;
-    int offset;
+    unsigned int offset;
 } Laik_A_BufReserve;
 
 
@@ -70,15 +80,15 @@ typedef struct {
 typedef struct {
     Laik_Action h;
     int bufID;
-    int offset;
-    int count;
+    unsigned int offset;
+    unsigned int count;
     int to_rank;
 } Laik_A_RBufSend;
 
 // BufSend action
 typedef struct {
     Laik_Action h;
-    int count;
+    unsigned int count;
     int to_rank;
     char* buf;
 } Laik_A_BufSend;
@@ -89,7 +99,7 @@ typedef struct {
     int to_rank;
     int fromMapNo;
     Laik_Slice* slc;
-    uint64_t count;
+    unsigned int count;
 } Laik_A_MapPackAndSend;
 
 
@@ -99,15 +109,15 @@ typedef struct {
 typedef struct {
     Laik_Action h;
     int bufID;
-    int offset;
-    int count;
+    unsigned int offset;
+    unsigned int count;
     int from_rank;
 } Laik_A_RBufRecv;
 
 // BufRecv action
 typedef struct {
     Laik_Action h;
-    int count;
+    unsigned int count;
     int from_rank;
     char* buf;
 } Laik_A_BufRecv;
@@ -118,36 +128,27 @@ typedef struct {
     int from_rank;
     int toMapNo;
     Laik_Slice* slc;
-    uint64_t count;
+    unsigned int count;
 } Laik_A_MapRecvAndUnpack;
 
-
-
-
-
-// helper struct for CopyFromBuf / CopyToBuf
-typedef struct _Laik_CopyEntry {
-    char* ptr;
-    int offset, bytes;
-} Laik_CopyEntry;
 
 // TODO: split off into different action types with minimal space requirements
 typedef struct _Laik_BackendAction {
     // header
     Laik_Action h;
 
-    int count;         // for Send, Recv, Copy, Reduce
-    int bufID;         // for BufReserve, RBufSend, RBufRecv
-    Laik_Type* dtype;  // for RBufReduce, BufInit
+    unsigned int count;  // for Send, Recv, Copy, Reduce
+    unsigned int offset; // for MapSend, MapRecv, RBufSend, RBufRecv
+    int bufID;           // for BufReserve, RBufSend, RBufRecv
+    Laik_Type* dtype;    // for RBufReduce, BufInit
 
     Laik_Mapping* map; // for Pack, Unpack, PackAndSend, RecvAndUnpack
     int fromMapNo;     // for MapSend, MapGroupReduce
     int toMapNo;       // for MapRecv, MapGroupReduce
-    int offset;        // for MapSend, MapRecv, RBufSend, RBufRecv
 
     char* fromBuf;     // for SendBuf, Pack, Copy, Reduce
     char* toBuf;       // for RecvBuf, Unpack, Copy, Reduce
-    int rank;     // for Send, Recv, PackAndSend, RecvAndUnpack, Reduce
+    int rank;          // for Send, Recv, PackAndSend, RecvAndUnpack, Reduce
     Laik_CopyEntry* ce; // for CopyFromBuf, CopyToBuf
 
     // points to slice given in operation of transition
@@ -159,6 +160,7 @@ typedef struct _Laik_BackendAction {
 
 } Laik_BackendAction;
 
+#pragma pack(pop)
 
 // a transition context, referenced in an action sequence
 //
@@ -213,9 +215,9 @@ struct _Laik_ActionSeq {
     // each call to laik_aseq_allocBuffer() allocates another buffer
 #define ASEQ_BUFFER_MAX 5
     char* buf[ASEQ_BUFFER_MAX];
-    int bufSize[ASEQ_BUFFER_MAX];
+    size_t bufSize[ASEQ_BUFFER_MAX];
     int bufferCount;
-    int bufReserveCount; // current number of BufReserve actions
+    unsigned int bufReserveCount; // current number of BufReserve actions
 
     // for copy actions
 #define ASEQ_COPYENTRY_MAX 5
@@ -224,7 +226,8 @@ struct _Laik_ActionSeq {
     int ceRanges;
 
     // action sequence to trigger on execution
-    int actionCount, bytesUsed;
+    unsigned int actionCount;
+    size_t bytesUsed;
     Laik_Action* action;
     // how many rounds
     int roundCount;
@@ -232,10 +235,10 @@ struct _Laik_ActionSeq {
     // temporary action sequence storage used during generation by
     // laik_aseq_addAction(). Call laik_aseq_finish to make it active
     // (ie. set <action> array to this temporary seq)
-    int newActionCount, newBytesUsed, newBytesAlloc;
+    unsigned int newActionCount;
+    size_t newBytesUsed, newBytesAlloc;
     Laik_BackendAction* newAction;
     int newRoundCount;
-
 
     // summary to update statistics
     int sendCount, recvCount, reduceCount;
@@ -249,8 +252,11 @@ struct _Laik_ActionSeq {
 // an active sequence. Transformation typically travers the active sequence
 // and build up a new sequence within the same action sequence object.
 
+// for offsets into buffers allocated for an action sequence, we use
+// <unsigned int> as we expect such buffers to not get too large
+
 // append an invalid action of given size
-Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, int size,
+Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, unsigned int size,
                                  Laik_ActionType type, int round, int tid);
 
 // discard any new built actions (e.g. if there was no change to old seq)
@@ -279,57 +285,58 @@ void laik_aseq_addHalt(Laik_ActionSeq* as);
 void laik_aseq_addTExec(Laik_ActionSeq* as, int tid);
 
 // append action to reserve buffer space, return bufID
-int laik_aseq_addBufReserve(Laik_ActionSeq* as, int size, int bufID);
+int laik_aseq_addBufReserve(Laik_ActionSeq* as, unsigned int size, int bufID);
 
 // append send action to buffer referencing a previous reserve action
 void laik_aseq_addRBufSend(Laik_ActionSeq* as,
-                           int round, int bufID, int byteOffset,
-                           int count, int to);
+                           int round, int bufID, unsigned int byteOffset,
+                           unsigned int count, int to);
 
 // append recv action into buffer referencing a previous reserve action
 void laik_aseq_addRBufRecv(Laik_ActionSeq* as,
-                           int round, int bufID, int byteOffset,
-                           int count, int from);
+                           int round, int bufID, unsigned int byteOffset,
+                           unsigned int count, int from);
 
 // append send action from a mapping with offset
 void laik_aseq_addMapSend(Laik_ActionSeq* as, int round,
-                          int fromMapNo, uint64_t off,
-                          int count, int to);
+                          int fromMapNo, unsigned int off,
+                          unsigned int count, int to);
 
 // append send action from a buffer
 void laik_aseq_addBufSend(Laik_ActionSeq* as, int round,
-                          char* fromBuf, int count, int to);
+                          char* fromBuf, unsigned int count, int to);
 
 // append recv action into a mapping with offset
 void laik_aseq_addMapRecv(Laik_ActionSeq* as, int round,
-                          int toMapNo, uint64_t off,
-                          int count, int from);
+                          int toMapNo, unsigned int off,
+                          unsigned int count, int from);
 
 // append recv action into a buffer
 void laik_aseq_addBufRecv(Laik_ActionSeq* as, int round,
-                          char* toBuf, int count, int from);
+                          char* toBuf, unsigned int count, int from);
 
 // append action to call a local reduce operation
 void laik_aseq_addRBufLocalReduce(Laik_ActionSeq* as,
                                   int round, Laik_Type *dtype,
                                   Laik_ReductionOperation redOp,
-                                  int fromBufID, int fromByteOffset,
-                                  char* toBuf, int count);
+                                  int fromBufID, unsigned int fromByteOffset,
+                                  char* toBuf, unsigned int count);
 
 // append action to call a init operation
 void laik_aseq_addBufInit(Laik_ActionSeq* as,
                           int round, Laik_Type *dtype,
                           Laik_ReductionOperation redOp,
-                          char* toBuf, int count);
+                          char* toBuf, unsigned int count);
 
 // append action to call a copy operation from/to a buffer
 void laik_aseq_addBufCopy(Laik_ActionSeq* as,
-                          int round, char* fromBuf, char* toBuf, int count);
+                          int round, char* fromBuf,
+                          char* toBuf, unsigned int count);
 
 // append action to call a copy operation from/to a buffer
 void laik_aseq_addRBufCopy(Laik_ActionSeq* as, int round,
-                           int fromBufID, int fromByteOffset,
-                           char* toBuf, int count);
+                           int fromBufID, unsigned int fromByteOffset,
+                           char* toBuf, unsigned int count);
 
 // append action to pack a slice of data into a buffer
 void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
@@ -338,12 +345,12 @@ void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
 // append action to pack a slice of data into a buffer
 void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
                              Laik_Mapping* fromMap, Laik_Slice* slc,
-                             int toBufID, int toByteOffset);
+                             int toBufID, unsigned int toByteOffset);
 
 // append action to pack a slice of data into a temp buffer
 void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
                                 int fromMapNo, Laik_Slice* slc,
-                                int toBufID, int toByteOffset);
+                                int toBufID, unsigned int toByteOffset);
 
 // append action to pack a slice of data into a buffer
 void laik_aseq_addMapPackToBuf(Laik_ActionSeq* as, int round,
@@ -364,12 +371,12 @@ void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
 
 // append action to unpack data from buffer into a slice of data
 void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
-                                 int fromBufID, int fromByteOffset,
+                                 int fromBufID, unsigned int fromByteOffset,
                                  Laik_Mapping* toMap, Laik_Slice* slc);
 
 // append action to unpack data from temp buffer into a slice of data
 void laik_aseq_addMapUnpackFromRBuf(Laik_ActionSeq* as, int round,
-                                    int fromBufID, int fromByteOffset,
+                                    int fromBufID, unsigned int fromByteOffset,
                                     int toMapNo, Laik_Slice* slc);
 
 // append action to unpack data from buffer into a slice of data
@@ -387,46 +394,49 @@ void laik_aseq_addRecvAndUnpack(Laik_ActionSeq* as, int round,
 
 // append action to reduce data in buffer from all to buffer in rootTask
 void laik_aseq_addReduce(Laik_ActionSeq* as, int round,
-                         char* fromBuf, char* toBuf, int count,
+                         char* fromBuf, char* toBuf, unsigned int count,
                          int rootTask, Laik_ReductionOperation redOp);
 
 // append action to reduce data in temp buffer from all to buffer in rootTask
 void laik_aseq_addRBufReduce(Laik_ActionSeq* as, int round,
-                             int bufID, int byteOffset, int count,
+                             int bufID, unsigned int byteOffset, unsigned int count,
                              int rootTask, Laik_ReductionOperation redOp);
 
 // append action to reduce data in buffer from inputGroup to buffer in outputGroup
 void laik_aseq_addGroupReduce(Laik_ActionSeq* as, int round,
                               int inputGroup, int outputGroup,
-                              char* fromBuf, char* toBuf, int count,
+                              char* fromBuf, char* toBuf, unsigned int count,
                               Laik_ReductionOperation redOp);
 
 // append action to gather a sequence of arrays into one packed buffer
 void laik_aseq_addCopyToBuf(Laik_ActionSeq* as, int round,
-                            Laik_CopyEntry* ce, char* toBuf, int count);
+                            Laik_CopyEntry* ce, char* toBuf, unsigned int count);
 
 // append action to scather packed arrays in one buffer to multiple buffers
 void laik_aseq_addCopyFromBuf(Laik_ActionSeq* as, int round,
-                              Laik_CopyEntry* ce, char* fromBuf, int count);
+                              Laik_CopyEntry* ce, char* fromBuf, unsigned int count);
 
 // append action to reduce data in buffer from inputGroup to same buffer in outputGroup
 // the buffer is specified by a reserve buffer ID and an offset
 void laik_aseq_addRBufGroupReduce(Laik_ActionSeq* as, int round,
                                   int inputGroup, int outputGroup,
-                                  int bufID, int byteOffset, int count,
+                                  int bufID, unsigned int byteOffset,
+                                  unsigned int count,
                                   Laik_ReductionOperation redOp);
 
 // append action to gather a sequence of arrays into one packed buffer
 // the buffer is specified by a reserve buffer ID and an offset
 void laik_aseq_addCopyToRBuf(Laik_ActionSeq* as, int round,
                              Laik_CopyEntry* ce,
-                             int toBufID, int toByteOffset, int count);
+                             int toBufID, unsigned int toByteOffset,
+                             unsigned int count);
 
 // append action to scather packed arrays in one buffer to multiple buffers
 // the buffer is specified by a reserve buffer ID and an offset
 void laik_aseq_addCopyFromRBuf(Laik_ActionSeq* as, int round,
                                Laik_CopyEntry* ce,
-                               int fromBufID, int fromByteOffset, int count);
+                               int fromBufID, unsigned int fromByteOffset,
+                               unsigned int count);
 
 // add all reduce ops from a transition to an ActionSeq.
 void laik_aseq_addReds(Laik_ActionSeq* as, int round,

@@ -226,8 +226,8 @@ void laik_mpi_exec_pack(Laik_BackendAction* a, Laik_Mapping* map)
 {
     Laik_Index idx = a->slc->from;
     int dims = a->slc->space->dims;
-    int byteCount = a->count * map->data->elemsize;
-    int packed = (map->layout->pack)(map, a->slc, &idx, a->toBuf, byteCount);
+    unsigned int byteCount = a->count * map->data->elemsize;
+    unsigned int packed = (map->layout->pack)(map, a->slc, &idx, a->toBuf, byteCount);
     assert(packed == a->count);
     assert(laik_index_isEqual(dims, &idx, &(a->slc->to)));
 }
@@ -258,9 +258,9 @@ void laik_mpi_exec_unpack(Laik_BackendAction* a, Laik_Mapping* map)
 {
     Laik_Index idx = a->slc->from;
     int dims = a->slc->space->dims;
-    int byteCount = a->count * map->data->elemsize;
-    int unpacked = (map->layout->unpack)(map, a->slc, &idx,
-                                         a->fromBuf, byteCount);
+    unsigned int byteCount = a->count * map->data->elemsize;
+    unsigned int unpacked = (map->layout->unpack)(map, a->slc, &idx,
+                                                  a->fromBuf, byteCount);
     assert(unpacked == a->count);
     assert(laik_index_isEqual(dims, &idx, &(a->slc->to)));
 }
@@ -473,7 +473,7 @@ void laik_mpi_exec(Laik_ActionSeq* as)
     MPI_Status st;
 
     Laik_Action* a = as->action;
-    for(int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
         Laik_BackendAction* ba = (Laik_BackendAction*) a;
         if (laik_log_begin(1)) {
             laik_log_Action(a, as);
@@ -535,14 +535,14 @@ void laik_mpi_exec(Laik_ActionSeq* as)
         }
 
         case LAIK_AT_CopyFromBuf:
-            for(int i = 0; i < ba->count; i++)
+            for(unsigned int i = 0; i < ba->count; i++)
                 memcpy(ba->ce[i].ptr,
                        ba->fromBuf + ba->ce[i].offset,
                        ba->ce[i].bytes);
             break;
 
         case LAIK_AT_CopyToBuf:
-            for(int i = 0; i < ba->count; i++)
+            for(unsigned int i = 0; i < ba->count; i++)
                 memcpy(ba->toBuf + ba->ce[i].offset,
                        ba->ce[i].ptr,
                        ba->ce[i].bytes);

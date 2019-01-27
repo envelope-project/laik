@@ -263,11 +263,15 @@ uint64_t laik_slice_size(const Laik_Slice* s)
     if (s->space == 0) return 0;
 
     int dims = s->space->dims;
-    uint64_t size = s->to.i[0] - s->from.i[0];
+    assert(s->to.i[0] >= s->from.i[0]);
+    uint64_t size = (uint64_t) (s->to.i[0] - s->from.i[0]);
     if (dims > 1) {
-        size *= s->to.i[1] - s->from.i[1];
-        if (dims > 2)
-            size *= s->to.i[2] - s->from.i[2];
+        assert(s->to.i[1] >= s->from.i[1]);
+        size *= (uint64_t) (s->to.i[1] - s->from.i[1]);
+        if (dims > 2) {
+            assert(s->to.i[2] >= s->from.i[2]);
+            size *= (uint64_t) (s->to.i[2] - s->from.i[2]);
+        }
     }
     return size;
 }

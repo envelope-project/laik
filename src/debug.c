@@ -127,7 +127,6 @@ void laik_log_DataFlow(Laik_DataFlow flow)
     case LAIK_DF_None:     laik_log_append("-"); break;
     case LAIK_DF_Preserve: laik_log_append("preserve"); break;
     case LAIK_DF_Init:     laik_log_append("init"); break;
-    default: assert(0);
     }
 }
 
@@ -431,7 +430,7 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
         laik_log_append(": buf %p, ranges %d",
                         ba->fromBuf,
                         ba->count);
-        for(int i = 0; i < ba->count; i++)
+        for(unsigned int i = 0; i < ba->count; i++)
             laik_log_append("\n        off %d, bytes %d => to %p",
                             ba->ce[i].offset,
                             ba->ce[i].bytes,
@@ -442,7 +441,7 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
         laik_log_append(": buf %p, ranges %d",
                         ba->toBuf,
                         ba->count);
-        for(int i = 0; i < ba->count; i++)
+        for(unsigned int i = 0; i < ba->count; i++)
             laik_log_append("\n        %p => off %d, bytes %d",
                             ba->ce[i].ptr,
                             ba->ce[i].offset,
@@ -453,7 +452,7 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
         laik_log_append(": buf %d, off %lld, ranges %d",
                         ba->bufID, (long long int) ba->offset,
                         ba->count);
-        for(int i = 0; i < ba->count; i++)
+        for(unsigned int i = 0; i < ba->count; i++)
             laik_log_append("\n        off %d, bytes %d => to %p",
                             ba->ce[i].offset,
                             ba->ce[i].bytes,
@@ -464,7 +463,7 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
         laik_log_append(": buf %d, off %lld, ranges %d",
                         ba->bufID, (long long int) ba->offset,
                         ba->count);
-        for(int i = 0; i < ba->count; i++)
+        for(unsigned int i = 0; i < ba->count; i++)
             laik_log_append("\n        %p => off %d, bytes %d",
                             ba->ce[i].ptr,
                             ba->ce[i].offset,
@@ -669,11 +668,11 @@ void laik_log_ActionSeq(Laik_ActionSeq *as, bool showDetails)
     }
 
     Laik_Action* a = as->action;
-    for(int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
         laik_log_Action(a, as);
         laik_log_append("\n");
     }
-    assert(as->bytesUsed == ((char*)a) - ((char*)as->action));
+    assert(as->bytesUsed == (size_t) (((char*)a) - ((char*)as->action)));
 }
 
 

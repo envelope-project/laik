@@ -84,7 +84,7 @@ struct _Laik_Data {
     char* name;
     int id;
 
-    int elemsize;
+    unsigned int elemsize;
     Laik_Space* space; // index space of this container
     Laik_Type* type;
 
@@ -117,14 +117,14 @@ struct _Laik_Layout {
     // called iteratively by backends, using <idx> to remember position
     // accross multiple calls. <idx> must be set first to index at beginning.
     // returns the number of elements written (or 0 if finished)
-    int (*pack)(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
-                char* buf, int size);
+    unsigned int (*pack)(const Laik_Mapping* m, const Laik_Slice* s,
+                         Laik_Index* idx, char* buf, unsigned int size);
 
     // unpack data from <buf> with <size> bytes length into given slice of
     // memory space provided by mapping, incrementing index accordingly.
     // returns number of elements unpacked.
-    int (*unpack)(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
-                char* buf, int size);
+    unsigned int (*unpack)(const Laik_Mapping* m, const Laik_Slice* s,
+                           Laik_Index* idx, char* buf, unsigned int size);
 };
 
 // a mapping of data elements for global index range given by <validSlice>,

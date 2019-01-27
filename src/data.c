@@ -24,10 +24,10 @@
 #include <stdio.h>
 
 // forward decl
-int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
-                char* buf, int size);
-int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
-                  char* buf, int size);
+unsigned int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s,
+                           Laik_Index* idx, char* buf, unsigned int size);
+unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
+                             Laik_Index* idx, char* buf, unsigned int size);
 
 // initialize the LAIK data module, called from laik_new_instance
 void laik_data_init()
@@ -1348,10 +1348,10 @@ int64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
 }
 
 // pack/unpack routines for default layout
-int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
-                  char* buf, int size)
+unsigned int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s,
+                           Laik_Index* idx, char* buf, unsigned int size)
 {
-    int elemsize = m->data->elemsize;
+    unsigned int elemsize = m->data->elemsize;
     int dims = m->layout->dims;
 
     if (laik_index_isEqual(dims, idx, &(s->to))) {
@@ -1470,10 +1470,10 @@ int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
     return count;
 }
 
-int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s, Laik_Index* idx,
-                    char* buf, int size)
+unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
+                             Laik_Index* idx, char* buf, unsigned int size)
 {
-    int elemsize = m->data->elemsize;
+    unsigned int elemsize = m->data->elemsize;
     int dims = m->layout->dims;
 
     // there should be something to unpack
