@@ -166,7 +166,7 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const size_t ran
 
         // Fill the socket address variables
         socket_address_size = sizeof (sockaddr_un->sun_family) + bytes;
-        socket_address_data = g_steal_pointer (&sockaddr_un);
+        socket_address_data = (struct sockaddr*) g_steal_pointer (&sockaddr_un);
     }
 
     // Create a suitable socket
