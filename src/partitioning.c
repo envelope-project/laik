@@ -1089,6 +1089,8 @@ Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
         for(int i = 0; i < other->count; i++) {
             Laik_TaskSlice_Gen* ts = &(other->tslice[i]);
             assert((ts->task >= 0) && (ts->task < other->group->size));
+            // old tasks with slices should not be removed in <newg>
+            assert(p->fromOther[ts->task] >= 0);
             laik_append_slice(p, p->fromOther[ts->task],
                               &(ts->s), ts->tag, ts->data);
         }
@@ -1099,65 +1101,6 @@ Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
 }
 
 
-
-// migrate partitioning borders to new group without changing borders
-// - added tasks get empty partitions
-// - removed tasks must have empty partitiongs
-void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
-{
-    Laik_Group* oldg = p->group;
-    int* fromOld; // mapping of IDs from old group to new group
-
-    if (newg->parent == oldg) {
-        // new group is child of old
-        fromOld = newg->fromParent;
-    }
-    else if (oldg->parent == newg) {
-        // new group is parent of old
-        fromOld = oldg->toParent;
-    }
-    else {
-        // other cases not supported
-        assert(0);
-    }
-
-    // partitioning needs to be valid
-    assert(p->off != 0);
-
-    // invalidate any cached version with intersections
-    if (p->intersecting) {
-        laik_free_partitioning(p->intersecting);
-        p->intersecting = 0;
-    }
-
-    // check that partitions of tasks to be removed are empty
-    for(int i = 0; i < oldg->size; i++) {
-        if (fromOld[i] < 0)
-            assert(p->off[i] == p->off[i+1]);
-    }
-
-    // update slice task IDs
-    for(int i = 0; i < p->count; i++) {
-        int oldT = p->tslice[i].task;
-        assert((oldT >= 0) && (oldT < oldg->size));
-        int newT = fromOld[oldT];
-        assert((newT >= 0) && (newT < newg->size));
-        p->tslice[i].task = newT;
-    }
-
-    // resize offset array if needed
-    if (newg->size > oldg->size) {
-        free(p->off);
-        p->off = malloc((newg->size +1) * sizeof(int));
-        if (!p->off) {
-            laik_panic("Out of memory allocating memory for Laik_Partitioning");
-            exit(1); // not actually needed, laik_panic never returns
-        }
-    }
-    p->group = newg;
-    sortSlices(p);
-    updatePartitioningOffsets(p);
-}
 
 // get number of slices for this task
 int laik_my_slicecount(Laik_Partitioning* p)

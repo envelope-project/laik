@@ -336,10 +336,10 @@ int main(int argc, char* argv[])
 
             if (useIncremental) {
                 pr = laik_new_reassign_partitioner(g2, getEW, m);
-                // this still generates a partitioning on <g>, which...
-                p2 = laik_new_partitioning(pr, g, s, p);
-                // ... can be migrated to be valid for <g2>
-                laik_partitioning_migrate(p2, g2);
+                // run pr on temporary partitioning over <g>, then migrate to <g2>
+                Laik_Partitioning* pTmp = laik_new_partitioning(pr, g, s, p);
+                p2 = laik_new_migrated_partitioning(pTmp, g2);
+                laik_free_partitioning(pTmp);
             }
             else
                 p2 = laik_new_partitioning(pr, g2, s, 0);
