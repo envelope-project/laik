@@ -266,11 +266,6 @@ bool laik_partitioning_has_pfilter(Laik_Partitioning* p, Laik_Partitioning* filt
 // give an access phase a name, for debug output
 void laik_partitioning_set_name(Laik_Partitioning* p, char* n);
 
-// migrate partitioning to new group without changing borders
-// - added tasks get empty partitions
-// - removed tasks must have empty partitiongs
-void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
-
 // get number of slices for this task
 int laik_my_slicecount(Laik_Partitioning* p);
 
