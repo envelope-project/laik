@@ -1036,7 +1036,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 {
     Laik_Partitioning* p;
     p = laik_new_empty_partitioning(g, space, pr, otherP);
-#if 0
+#ifdef USE_OWNSLICES
     // for 1d space, default to always calculate only own slices
     if (space->dims == 1)
         laik_partitioning_set_myfilter(p);
