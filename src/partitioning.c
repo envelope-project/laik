@@ -1045,17 +1045,6 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
     return p;
 }
 
-
-// helper for laik_new_migrated_partitioning
-static
-bool myforwardfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
-{
-    assert(p->consumer && p->consumer->fromOther);
-    assert((task >= 0) && (task < p->group->size));
-    laik_append_slice(p->consumer, p->consumer->fromOther[task], s, 0, 0);
-    return true;
-}
-
 // new partitioning taking slices from another, migrating to new group
 Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
                                                   Laik_Group* newg)
@@ -1077,29 +1066,22 @@ Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
         assert(0);
     }
 
+    // we can clone from another partitioning only if its slices are freezed
+    assert(other->off != 0);
+
     // keep property stating that <other> only kept own slices
     p->myfilter = other->myfilter;
 
-    if (other->off == 0) {
-        // other yet invalid: install consumer filter to forward slices
-        assert(other->consumer == 0);
-        other->consumer = p;
-        assert(other->filter == 0);
-        other->filter = myforwardfilter;
+    // travers slices and translate task numbers
+    for(int i = 0; i < other->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(other->tslice[i]);
+        assert((ts->task >= 0) && (ts->task < other->group->size));
+        // old tasks with slices should not be removed in <newg>
+        assert(p->fromOther[ts->task] >= 0);
+        laik_append_slice(p, p->fromOther[ts->task],
+                          &(ts->s), ts->tag, ts->data);
     }
-    else {
-        // travers slices and append to this
-        for(int i = 0; i < other->count; i++) {
-            Laik_TaskSlice_Gen* ts = &(other->tslice[i]);
-            assert((ts->task >= 0) && (ts->task < other->group->size));
-            // old tasks with slices should not be removed in <newg>
-            assert(p->fromOther[ts->task] >= 0);
-            laik_append_slice(p, p->fromOther[ts->task],
-                              &(ts->s), ts->tag, ts->data);
-        }
-        laik_freeze_partitioning(p, false);
-    }
-
+    laik_freeze_partitioning(p, false);
     return p;
 }
 
