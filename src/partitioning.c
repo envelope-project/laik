@@ -1077,6 +1077,9 @@ Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
         assert(0);
     }
 
+    // keep property stating that <other> only kept own slices
+    p->myfilter = other->myfilter;
+
     if (other->off == 0) {
         // other yet invalid: install consumer filter to forward slices
         assert(other->consumer == 0);
