@@ -1204,28 +1204,29 @@ void laik_switchto_partitioning(Laik_Data* d,
     // calculate actions to be done for switching
 
     Laik_Group* toGroup = toP ? toP->group : 0;
-
-    // eventually switch to a clone of <toP>, migrated to original group
-    Laik_Partitioning* toP2 = toP;
     if (d->activePartitioning) {
         if (toP && (d->activePartitioning->group != toP->group)) {
-            // to a partitioning based on another group? Create clone using old group
-            toP2 = laik_new_migrated_partitioning(toP, d->activePartitioning->group);
+            // to a partitioning based on another group? migrate to old first
+            laik_partitioning_migrate(toP, d->activePartitioning->group);
+        }
+    }
+    else {
+        if (!toP) {
+            // nothing to switch from/to
+            return;
         }
     }
 
-    // if switching from/to empty partitioning: nothing to do
-    if (!d->activePartitioning && !toP) return;
-
-    Laik_MappingList* toList = prepareMaps(d, toP2, 0);
+    Laik_MappingList* toList = prepareMaps(d, toP, 0);
     Laik_Transition* t = do_calc_transition(d->space,
-                                            d->activePartitioning, toP2,
+                                            d->activePartitioning, toP,
                                             flow, redOp);
 
     doTransition(d, t, 0, d->activeMappings, toList);
 
-    if (toP != toP2)
-        laik_free_partitioning(toP2);
+    // if we migrated "toP" to old group before, migrate back to new
+    if (toGroup != toP->group)
+        laik_partitioning_migrate(toP, toGroup);
 
     // set new mapping/partitioning active
     d->activePartitioning = toP;

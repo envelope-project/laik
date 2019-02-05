@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
     Laik_Space* space;
     Laik_Data* array;
     Laik_Partitioner *parter2, *parter3, *parter4;
-    Laik_Partitioning *part1, *part2, *part3, *part4, *part5;
+    Laik_Partitioning *part1, *part2, *part3, *part4;
 
     // define global 1d double array with <size> entries (default: 1 mio)
     space = laik_new_space_1d(inst, size);
@@ -116,15 +116,13 @@ int main(int argc, char* argv[])
 
         int removeList[1] = {0};
         Laik_Group* g2 = laik_new_shrinked_group(world, 1, removeList);
-        printf("My world ID %d, in shrinked group: %d\n",
-               laik_myid(world), laik_myid(g2));
-        // we can create a partitioning migrated to a new group as long as added or
+        // we can migrate used partitionings to new groups as long as added or
         // removed processes do not matter (ie. have empty partitions).
         // this works here as process 0 got empty partition above, and is
         // removed in g2
-        part5 = laik_new_migrated_partitioning(part4, g2);
-        // switching actually is a no-op (apart from based on <g2> now)
-        laik_switchto_partitioning(array, part5, LAIK_DF_Preserve, LAIK_RO_None);
+        laik_partitioning_migrate(part4, g2);
+        printf("My world ID %d, in shrinked group: %d\n",
+               laik_myid(world), laik_myid(g2));
 
         mysum[3] = 0;
         if (laik_myid(g2) >= 0) {
