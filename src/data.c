@@ -1203,8 +1203,6 @@ void laik_switchto_partitioning(Laik_Data* d,
 {
     // calculate actions to be done for switching
 
-    Laik_Group* toGroup = toP ? toP->group : 0;
-
     // eventually switch to a clone of <toP>, migrated to original group
     Laik_Partitioning* toP2 = toP;
     if (d->activePartitioning) {
