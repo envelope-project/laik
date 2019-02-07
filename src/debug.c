@@ -241,7 +241,7 @@ void laik_log_Partitioning(Laik_Partitioning* p)
                     p->name, p->count, p->group->size);
     laik_log_Space(p->space);
     if (p->myfilter)
-        laik_log_append(" (filter own task only)");
+        laik_log_append(" (own task only)");
     if (p->intersecting) {
         laik_log_append(" (intersection filter with '%s'/'%s', %d slices)",
                         p->intersecting->pfilter1 ? p->intersecting->pfilter1->name : "",

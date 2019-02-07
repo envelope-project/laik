@@ -82,6 +82,7 @@ Laik_Partitioning* laik_partitioning_new(char* name,
 
     assert(s != 0);
     assert(g != 0);
+    assert(pr != 0);
 
     p = malloc(sizeof(Laik_Partitioning));
     if (p == 0) {
@@ -123,6 +124,9 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     p->pfilter1 = 0;
     p->pfilter2 = 0;
 
+    laik_log(1, "new partitioning '%s' (%d/%d in group %d, space '%s', partitioner '%s', other '%s')",
+            p->name, p->group->myid, p->group->size, p->group->gid, p->space->name,
+            pr->name ? pr->name : "(no name)", other ? other->name : "(nil)");
 
     return p;
 }
@@ -196,7 +200,7 @@ static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
 {
     assert(par->len > 0);
 
-    laik_log(1,"  filter [%lld;%lld[ check with '%s' in range [%lld;%lld[",
+    laik_log(1,"  check [%lld;%lld[ against slices in '%s', range [%lld;%lld[",
              (long long) from, (long long) to,
              par->p->name, (long long) par->from, (long long) par->to);
 
@@ -210,14 +214,14 @@ static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
     int off1 = 0, off2 = par->len;
     while(off1 < off2) {
         int mid = (off1 + off2) / 2;
-        laik_log(1,"  filter check with '%s' at %d: [%lld;%lld[",
-                 par->p->name, mid,
+        laik_log(1,"  check with slice %d of '%s': %d:[%lld;%lld[",
+                 mid, par->p->name, ts[mid].task,
                  (long long) ts[mid].s.from.i[0],
                  (long long) ts[mid].s.to.i[0]);
 
         if (from >= ts[mid].s.to.i[0]) {
-            laik_log(1,"    larger, check against %d: [%lld;%lld[",
-                     mid+1,
+            laik_log(1,"    larger, check against slice %d: %d:[%lld;%lld[",
+                     mid+1, ts[mid+1].task,
                      (long long) ts[mid+1].s.from.i[0],
                      (long long) ts[mid+1].s.to.i[0]);
             if (to <= ts[mid+1].s.from.i[0]) {
@@ -228,8 +232,8 @@ static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
             continue;
         }
         if (to <= ts[mid].s.from.i[0]) {
-            laik_log(1,"    smaller, check against %d: [%lld;%lld[",
-                     mid-1,
+            laik_log(1,"    smaller, check against slice %d: %d:[%lld;%lld[",
+                     mid-1, ts[mid-1].task,
                      (long long) ts[mid-1].s.from.i[0],
                      (long long) ts[mid-1].s.to.i[0]);
             if (from >= ts[mid-1].s.to.i[0]) {
@@ -335,10 +339,10 @@ void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
     // if filter is installed, check if we should store the slice
     if (p->filter) {
         bool res = (p->filter)(p, task, s);
-        laik_log(1,"filter added slice %d:[%lld;%lld[: %s",
+        laik_log(1,"%s slice %d:[%lld;%lld[",
+                 res ? "keep":"skip",
                  task,
-                 (long long) s->from.i[0], (long long) s->to.i[0],
-                 res ? "keep":"skip");
+                 (long long) s->from.i[0], (long long) s->to.i[0]);
         if (res == false) return;
     }
 
@@ -1046,20 +1050,22 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 }
 
 // new partitioning taking slices from another, migrating to new group
-Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
+Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* p,
                                                   Laik_Group* newg)
 {
-    Laik_Partitioning* p;
-    p = laik_new_empty_partitioning(newg, other->space, 0, other);
+    Laik_Partitioning* p2;
+    // TODO: if partitioner of <p> wants an original partitioning to derive from,
+    //       (ie. p->other is set), we may need to migrate that one, too.
+    p2 = laik_new_empty_partitioning(newg, p->space, p->partitioner, 0);
 
     // setup mapping
-    if (newg->parent == other->group) {
+    if (newg->parent == p->group) {
         // new group is child of <other>
-        p->fromOther = newg->fromParent;
+        p2->fromOther = newg->fromParent;
     }
-    else if (other->group->parent == newg) {
+    else if (p->group->parent == newg) {
         // new group is parent of <other>
-        p->fromOther = other->group->toParent;
+        p2->fromOther = p->group->toParent;
     }
     else {
         // other cases not supported
@@ -1067,22 +1073,32 @@ Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
     }
 
     // we can clone from another partitioning only if its slices are freezed
-    assert(other->off != 0);
+    assert(p->off != 0);
 
     // keep property stating that <other> only kept own slices
-    p->myfilter = other->myfilter;
+    p2->myfilter = p->myfilter;
 
     // travers slices and translate task numbers
-    for(int i = 0; i < other->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(other->tslice[i]);
-        assert((ts->task >= 0) && (ts->task < other->group->size));
+    for(int i = 0; i < p->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(p->tslice[i]);
+        assert((ts->task >= 0) && (ts->task < p->group->size));
         // old tasks with slices should not be removed in <newg>
-        assert(p->fromOther[ts->task] >= 0);
-        laik_append_slice(p, p->fromOther[ts->task],
+        assert(p2->fromOther[ts->task] >= 0);
+        laik_append_slice(p2, p2->fromOther[ts->task],
                           &(ts->s), ts->tag, ts->data);
     }
-    laik_freeze_partitioning(p, false);
-    return p;
+    laik_freeze_partitioning(p2, false);
+
+    if (laik_log_begin(1)) {
+        laik_log_append("migrated '%s' to '%s', from group %d (%d/%d) to %d (%d/%d):\n  ",
+                        p->name, p2->name,
+                        p->group->gid, p->group->myid, p->group->size,
+                        p2->group->gid, p2->group->myid, p2->group->size);
+        laik_log_Partitioning(p2);
+        laik_log_flush(0);
+    }
+
+    return p2;
 }
 
 
