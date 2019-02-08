@@ -70,13 +70,11 @@ void calculate_my_coordinate(int numRanks, int rank, int* rx, int* ry)
 }
 
 // partitioner algorithm for the 1d array of elements, using a 2d grid
-void run_element_partitioner(Laik_Partitioner* pr,
-                             Laik_Partitioning* p, Laik_Partitioning* o)
+void run_element_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr,
+                             Laik_Space* space, Laik_Group* group,
+                             Laik_Partitioning* other)
 {
-    (void) o; // unused, required due to interface signature
-
-    Laik_Group* group = laik_partitioning_get_group(p);
-    Laik_Space* space = laik_partitioning_get_space(p);
+    (void) other; // unused, required due to interface signature
 
     int N_local_x = *((int*) laik_partitioner_data(pr));
     int N_local_y = N_local_x; // only square subdomain are supported!
@@ -109,12 +107,10 @@ Laik_Partitioner* get_element_partitioner(int *size)
 }
 
 // partitioner for 1d array of nodes, derived from element partitioning
-void run_node_partitioner(Laik_Partitioner* pr,
-                          Laik_Partitioning* p, Laik_Partitioning* o)
+void run_node_partitioner(Laik_Partitioning* p, Laik_Partitioner* pr,
+                          Laik_Space* space, Laik_Group* group,
+                          Laik_Partitioning* other)
 {
-    Laik_Group* group = laik_partitioning_get_group(p);
-    Laik_Space* space = laik_partitioning_get_space(p);
-
     int* neighbours = (int*) laik_partitioner_data(pr);
     int Rx,Ry,rx,ry;
     calculate_task_topology(laik_size(group), &Rx, &Ry);
@@ -124,9 +120,9 @@ void run_node_partitioner(Laik_Partitioner* pr,
     // for all the slices in the element partitioner
     // we find the neighbouring nodes and add a slice
     // to the new partioning
-    int sliccountE = laik_partitioning_slicecount(o);
+    int sliccountE = laik_partitioning_slicecount(other);
     for(int i = 0; i < sliccountE; i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(o, i);
+        Laik_TaskSlice* ts = laik_partitioning_get_tslice(other, i);
         const Laik_Slice* s = laik_taskslice_get_slice(ts);
         int task = laik_taskslice_get_task(ts);
 

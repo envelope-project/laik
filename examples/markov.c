@@ -32,7 +32,7 @@ typedef struct _MGraph {
 } MGraph;
 
 // global options
-int doPrint = 0;
+static int doPrint = 0;
 
 // Produce a graph with <n> nodes and some arbitrary connectivity
 // with a fan-in <in>. The resulting graph will be stored in
@@ -48,7 +48,7 @@ void init(MGraph* mg, int fineGrained)
     double* pm = mg->pm;
 
     // for normalization of probabilites
-    double* sum = malloc(n * sizeof(double));
+    double* sum = malloc((unsigned)n * sizeof(double));
     for(int i=0; i < n; i++) sum[i] = 0.0;
 
     // some kind of ring structure
@@ -91,24 +91,28 @@ void print(MGraph* mg)
 }
 
 
-void run_markovPartitioner(Laik_Partitioner* pr,
-                           Laik_Partitioning* pa, Laik_Partitioning* otherPa)
+void run_markovPartitioner(Laik_Partitioning* p, Laik_Partitioner* pr,
+                           Laik_Space* space, Laik_Group* group,
+                           Laik_Partitioning* other)
 {
+    (void) space;
+    (void) group;
+
     MGraph* mg = laik_partitioner_data(pr);
     int in = mg->in;
     int* cm = mg->cm;
 
     // go over states and add itself and incoming states to new partitioning
-    int sliceCount = laik_partitioning_slicecount(otherPa);
+    int sliceCount = laik_partitioning_slicecount(other);
     for(int i = 0; i < sliceCount; i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(otherPa, i);
+        Laik_TaskSlice* ts = laik_partitioning_get_tslice(other, i);
         const Laik_Slice* s = laik_taskslice_get_slice(ts);
         int task = laik_taskslice_get_task(ts);
-        for(int st = s->from.i[0]; st < s->to.i[0]; st++) {
-            int off = st * (in + 1);
+        for(int64_t st = s->from.i[0]; st < s->to.i[0]; st++) {
+            int64_t off = st * (in + 1);
             // j=0: state itself
             for(int j = 0; j <= in; j++)
-                laik_append_index_1d(pa, task, cm[off + j]);
+                laik_append_index_1d(p, task, cm[off + j]);
         }
     }
 }

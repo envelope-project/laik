@@ -992,7 +992,7 @@ void laik_run_partitioner(Laik_Partitioning* p)
             // where you want to derive a partitioning of one space from
             // the partitioning of another
         }
-        (pr->run)(pr, p, p->other);
+        (pr->run)(p, pr, p->space, p->group, p->other);
     }
     else if (p->other && p->other->consumer == p) {
         // we consume slices from <other>, so run its partitioner

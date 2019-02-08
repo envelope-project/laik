@@ -91,24 +91,28 @@ void print(MGraph* mg)
 }
 
 
-void run_markovPartitioner(Laik_Partitioner* pr,
-                           Laik_Partitioning* ba, Laik_Partitioning* otherBA)
+void run_markovPartitioner(Laik_Partitioning* p, Laik_Partitioner* pr,
+                           Laik_Space* space, Laik_Group* group,
+                           Laik_Partitioning* other)
 {
+    (void) space;
+    (void) group;
+
     MGraph* mg = laik_partitioner_data(pr);
     int out = mg->out;
     int* cm = mg->cm;
 
     // go over states and add itself and incoming states to new partitioning
-    int sliceCount = laik_partitioning_slicecount(otherBA);
+    int sliceCount = laik_partitioning_slicecount(other);
     for(int i = 0; i < sliceCount; i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(otherBA, i);
+        Laik_TaskSlice* ts = laik_partitioning_get_tslice(other, i);
         const Laik_Slice* s = laik_taskslice_get_slice(ts);
         int task = laik_taskslice_get_task(ts);
-        for(int st = s->from.i[0]; st < s->to.i[0]; st++) {
-            int off = st * (out + 1);
+        for(int64_t st = s->from.i[0]; st < s->to.i[0]; st++) {
+            int64_t off = st * (out + 1);
             // j=0: state itself
             for(int j = 0; j <= out; j++)
-                laik_append_index_1d(ba, task, cm[off + j]);
+                laik_append_index_1d(p, task, cm[off + j]);
         }
     }
 }

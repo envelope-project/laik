@@ -125,7 +125,6 @@ Laik_Action* laik_aseq_addAction(Laik_ActionSeq* as, unsigned int size,
     as->newBytesUsed += size;
     as->newActionCount++;
 
-    assert(type < 256);
     assert(size < 256);
     assert(round < 256);
     assert(tid < 128);

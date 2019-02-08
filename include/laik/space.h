@@ -330,15 +330,24 @@ typedef enum _Laik_PartitionerFlag {
 
 // Signature for a partitioner algorithm
 //
-// We are given a new partitioning object without any slices yet (2st par),
-// which has to be populated with slices (calling laik_append_slice). The
-// partitioning object specifies the group and space to run the partitioner on.
-// If 3rd par is not null, it provides partitioning borders the generated
+// The partitioner is expected to populate the partitioning object <p> with
+// assignments of points or ranges in the index space <s> to tasks, calling
+// laik_append_slice(<p>,...) / laik_append_index(<p>,...) multiple times.
+//
+// Parameters:
+// - <pr>    : partitioner object, to access algorithm-specific parameters
+// - <space> : index space to distribute
+// - <group> : process group with processes to assign slices to
+// - <other> : another partitioning the one to create may be derived from
+//
+// If <other> is not null, it provides partitioning borders the generated
 // partitioning may be based on, e.g. for incremental partitioners (modifying
 // a previous one) or for derived partitionings (e.g. extending by halos)
 typedef void
-(*laik_run_partitioner_t)(Laik_Partitioner*,
-                          Laik_Partitioning*, Laik_Partitioning*);
+(*laik_run_partitioner_t)(Laik_Partitioning* p,
+                          Laik_Partitioner* pr,
+                          Laik_Space* space, Laik_Group* group,
+                          Laik_Partitioning* other);
 
 
 // create application-specific partitioner
@@ -363,8 +372,7 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
                        int tag, void* data);
 // append 1d single-index slice
-void laik_append_index_1d(Laik_Partitioning* p,
-                                     int task, int64_t idx);
+void laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx);
 
 Laik_Space* laik_partitioning_get_space(Laik_Partitioning* p);
 Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p);
