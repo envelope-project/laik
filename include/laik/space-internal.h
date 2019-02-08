@@ -109,10 +109,11 @@ struct _Laik_Partitioning {
     // base partitioning, used with partitioner or chained partitionings
     Laik_Partitioning* other;
 
-    // if set, this maps ranks from <other> to <group>
-    //   used by laik_new_migrated_partitioning()
-    int* fromOther;
-
+    // for clone of another partitioning migrated to a new process group,
+    // to allow calling original partitioner before freezing
+    // crated by laik_new_migrated_partitioning()
+    Laik_Partitioning* orig;
+    int* mapFromOrig;
 
     // slice filters and consumers
 
