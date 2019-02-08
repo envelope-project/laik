@@ -629,6 +629,11 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             memcpy(ba->toBuf, ba->fromBuf, ba->count * elemsize);
             break;
 
+        case LAIK_AT_BufInit:
+            assert(ba->dtype->init != 0);
+            (ba->dtype->init)(ba->toBuf, ba->count, ba->redOp);
+            break;
+
         default:
             laik_log(LAIK_LL_Panic, "mpi_exec: no idea how to exec action %d (%s)",
                      a->type, laik_at_str(a->type));
