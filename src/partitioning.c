@@ -1046,27 +1046,28 @@ Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* p,
 {
     Laik_Partitioning* pNew;
     pNew = laik_new_empty_partitioning(newg, p->space, p->partitioner, p->other);
-    pNew->origGroup = p->group;
-
-    // setup mapping
-    if (newg->parent == p->group) {
-        // new group is child of <other>
-        pNew->mapFromOrig = newg->fromParent;
-    }
-    else if (p->group->parent == newg) {
-        // new group is parent of <other>
-        pNew->mapFromOrig = p->group->toParent;
-    }
-    else {
-        // other cases not supported
-        assert(0);
-    }
 
     // we can clone from another partitioning only if its slices are freezed
     assert(p->off != 0);
 
     // keep property stating that <other> only kept own slices
     pNew->myfilter = p->myfilter;
+
+    // setup mapping for copying existing slices from <p>
+    if (newg->parent == p->group) {
+        // new group is child of <other>
+        pNew->mapFromOrig = newg->fromParent;
+        pNew->origGroup = p->group;
+    }
+    else if (p->group->parent == newg) {
+        // new group is parent of <other>
+        pNew->mapFromOrig = p->group->toParent;
+        pNew->origGroup = p->group;
+    }
+    else {
+        // other cases not supported
+        assert(0);
+    }
 
     // travers slices and translate task numbers
     for(int i = 0; i < p->count; i++) {
@@ -1076,8 +1077,22 @@ Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* p,
     }
     laik_freeze_partitioning(pNew, false);
 
+    // now make sure the mapping is correct for a run of the original partitioner
+    // if <p> itself is migrated, the correct group is p->origGroup
+    if (p->origGroup) {
+        if (newg == p->origGroup) {
+            // nothing to do: we can run the partitioner on the new group directly
+            pNew->origGroup = 0;
+            pNew->mapFromOrig = 0;
+        }
+        else {
+            // TODO: other cases not supported
+            assert(0);
+        }
+    }
+
     if (laik_log_begin(1)) {
-        laik_log_append("migrated '%s' to '%s', from group %d (%d/%d) to %d (%d/%d):\n  ",
+        laik_log_append("migrated '%s' to '%s', from orig group %d (%d/%d) to %d (%d/%d):\n  ",
                         p->name, pNew->name,
                         p->group->gid, p->group->myid, p->group->size,
                         pNew->group->gid, pNew->group->myid, pNew->group->size);

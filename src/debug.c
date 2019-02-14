@@ -242,6 +242,8 @@ void laik_log_Partitioning(Laik_Partitioning* p)
     laik_log_Space(p->space);
     if (p->myfilter)
         laik_log_append(" (own task only)");
+    if (p->origGroup)
+        laik_log_append(" (orig group %d)", p->origGroup->myid);
     if (p->count > 0) {
         assert(p->tslice); // only show generic slices
         laik_log_append(": (task:slice:tag/mapNo)\n    ");
