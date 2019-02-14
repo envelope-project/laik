@@ -85,6 +85,15 @@ struct _Laik_TaskSlice {
 typedef bool
 (*laik_pfilter_t)(Laik_Partitioning*, int task, Laik_Slice* s);
 
+// for intersection partitioning filter
+typedef struct {
+    int64_t from, to;
+    Laik_TaskSlice_Gen* ts;
+    Laik_Partitioning* p;
+    int len;
+} PFilterPar;
+
+
 struct _Laik_Partitioning {
     int id;
     char* name;
@@ -130,7 +139,7 @@ struct _Laik_Partitioning {
     // if set, only slices intersecting own slices from these partitionings
     // are stored. max of 2 partitionings can be given
     // (used in laik_calc_transition for reduced memory consumption)
-    Laik_Partitioning *pfilter1, *pfilter2;
+    PFilterPar *pfilter1, *pfilter2;
 };
 
 void laik_clear_partitioning(Laik_Partitioning* p);

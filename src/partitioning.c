@@ -197,15 +197,6 @@ void laik_partitioning_set_myfilter(Laik_Partitioning* p)
 
 // helper for laik_partitioning_set_pfilter
 
-typedef struct {
-    int64_t from, to;
-    Laik_TaskSlice_Gen* ts;
-    Laik_Partitioning* p;
-    int len;
-} PFilterPar;
-
-static PFilterPar pfilter_par1, pfilter_par2;
-
 // check if [from;to[ intersects slices given in par
 static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
 {
@@ -270,34 +261,17 @@ bool pfilter(Laik_Partitioning* p, int task, Laik_Slice* s)
     int64_t from = s->from.i[0];
     int64_t to = s->to.i[0];
 
-    if ((pfilter_par1.len > 0) && pfilter_check(from, to, &pfilter_par1))
-        return true;
-    if ((pfilter_par2.len > 0) && pfilter_check(from, to, &pfilter_par2))
-        return true;
+    if (p->pfilter1 && pfilter_check(from, to, p->pfilter1)) return true;
+    if (p->pfilter2 && pfilter_check(from, to, p->pfilter2)) return true;
     return false;
 }
 
 // add filter to only keep slices intersecting with own slices in <filter>
 void laik_partitioning_add_pfilter(Laik_Partitioning* p, Laik_Partitioning* filter)
 {
-    PFilterPar* par = 0;
     assert(filter);
-
     assert(p->off == 0);
     assert(p->space->dims == 1); // TODO: only for 1d for now
-
-    // already set?
-    if ((p->pfilter1 == filter) || (p->pfilter2 == filter)) return;
-
-    // check free slot to add pfilter
-    if (p->pfilter1 == 0)
-        par = &pfilter_par1;
-    else if (p->pfilter2 == 0)
-        par = &pfilter_par2;
-    else {
-        assert(0); // no space!
-        return;
-    }
 
     // partitioning we intersect with should store own slices
     assert(filter->off != 0);
@@ -311,35 +285,25 @@ void laik_partitioning_add_pfilter(Laik_Partitioning* p, Laik_Partitioning* filt
         return;
     }
 
+    PFilterPar* par = malloc(sizeof(PFilterPar));
     par->len = off2 - off1;
     par->from = filter->tslice[off1].s.from.i[0];
     par->to = filter->tslice[off2 - 1].s.to.i[0];
     par->ts = filter->tslice + off1;
     par->p = p;
+
+    if      (p->pfilter1 == 0) p->pfilter1 = par;
+    else if (p->pfilter2 == 0) p->pfilter2 = par;
+    else assert(0);
+
+
     laik_log(1,"Set pfilter for '%s' to intersection with '%s': %d own slices, between [%lld;%lld[",
              p->name, filter->name, par->len,
              (long long) par->from, (long long) par->to);
 
-    if (par == &pfilter_par1)
-        p->pfilter1 = filter;
-    else
-        p->pfilter2 = filter;
-
     // install filter function
     p->filter = pfilter;
 }
-
-
-// is the partitioning <filter> set to be a pfilter for <p> ?
-bool laik_partitioning_has_pfilter(Laik_Partitioning* p,
-                                   Laik_Partitioning* filter)
-{
-    assert(p);
-    assert(filter);
-
-    return (p->pfilter1 == filter) || (p->pfilter2 == filter);
-}
-
 
 // partitioner API: add a slice
 // - specify slice groups by giving slices the same tag
@@ -756,6 +720,10 @@ void laik_free_partitioning(Laik_Partitioning* p)
     free(p->myMapOff);
     free(p->tslice);
     free(p->tss1d);
+
+    free(p->pfilter1);
+    free(p->pfilter2);
+
     free(p);
 }
 
@@ -1052,14 +1020,6 @@ void laik_run_partitioner(Laik_Partitioning* p)
         if (!laik_partitioning_coversSpace(p))
             laik_log(LAIK_LL_Panic, "partitioning borders do not cover space");
     }
-
-    // invalidate global pfilter parameter
-    // FIXME: do not use global var for that!
-    if (p->filter == pfilter) {
-        pfilter_par1.len = 0;
-        pfilter_par2.len = 0;
-    }
-    assert(pfilter_par1.len == 0);
 }
 
 
