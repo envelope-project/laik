@@ -131,12 +131,6 @@ struct _Laik_Partitioning {
     // are stored. max of 2 partitionings can be given
     // (used in laik_calc_transition for reduced memory consumption)
     Laik_Partitioning *pfilter1, *pfilter2;
-
-    // allow to cache a partitioning which stores slices which intersect with
-    // own slices of this partitioning and another one set as
-    // "intersecting->pfilter1/2"
-    // (used in laik_calc_transition for reduced memory consumption)
-    Laik_Partitioning* intersecting;
 };
 
 void laik_clear_partitioning(Laik_Partitioning* p);

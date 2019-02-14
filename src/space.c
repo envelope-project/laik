@@ -889,54 +889,26 @@ void calcAddReductions(int tflags,
     Laik_Partitioning *toP2 = 0, *fromP2 = 0;
 
     if (fromP->myfilter) {
-        // can cached version of intersecting slices be used?
-        if (fromP->intersecting &&
-                laik_partitioning_has_pfilter(fromP->intersecting, toP) &&
-                laik_partitioning_has_pfilter(fromP->intersecting, fromP)) {
-            fromP2 = fromP->intersecting;
-        }
-        else {
-            // no: calculate extended version of fromP with slices intersecting
-            // with own slices from toP.
-            // we need own slices in toP: either no filter or myfilter used
-            assert(toP->myfilter || (toP->filter == 0));
-            fromP2 = laik_clone_empty_partitioning(fromP);
-            // add both own slices of fromP/toP as intersection filter
-            laik_partitioning_add_pfilter(fromP2, fromP);
-            laik_partitioning_add_pfilter(fromP2, toP);
-            laik_run_partitioner(fromP2);
-
-            // cache calculated intersection, free previously cached one
-            if (fromP->intersecting)
-                laik_free_partitioning(fromP->intersecting);
-            fromP->intersecting = fromP2;
-        }
+        // calculate extended version of fromP with slices intersecting
+        // with own slices from toP.
+        // we need own slices in toP: either no filter or myfilter used
+        assert(toP->myfilter || (toP->filter == 0));
+        fromP2 = laik_clone_empty_partitioning(fromP);
+        // add both own slices of fromP/toP as intersection filter
+        laik_partitioning_add_pfilter(fromP2, fromP);
+        laik_partitioning_add_pfilter(fromP2, toP);
+        laik_run_partitioner(fromP2);
     }
 
     if (toP->myfilter) {
-        // can cached version of intersecting slices be used?
-        if (toP->intersecting &&
-                laik_partitioning_has_pfilter(toP->intersecting, toP) &&
-                laik_partitioning_has_pfilter(toP->intersecting, fromP)) {
-            toP2 = toP->intersecting;
-        }
-        else {
-            // no: calculate extended version of toP with slices intersecting
-            // with own slices from fromP.
-            // we need own slices in fromP: either no filter or myfilter used
-            assert(fromP->myfilter || (fromP->filter == 0));
-            toP2 = laik_clone_empty_partitioning(toP);
-            laik_partitioning_add_pfilter(toP2, fromP);
-            laik_partitioning_add_pfilter(toP2, toP);
-            laik_run_partitioner(toP2);
-
-            // cache calculated intersection, free previously cached one
-            if (toP->intersecting) {
-                assert(toP->intersecting != fromP2); // must not free, is used
-                laik_free_partitioning(toP->intersecting);
-            }
-            toP->intersecting = toP2;
-        }
+        // calculate extended version of toP with slices intersecting
+        // with own slices from fromP.
+        // we need own slices in fromP: either no filter or myfilter used
+        assert(fromP->myfilter || (fromP->filter == 0));
+        toP2 = laik_clone_empty_partitioning(toP);
+        laik_partitioning_add_pfilter(toP2, fromP);
+        laik_partitioning_add_pfilter(toP2, toP);
+        laik_run_partitioner(toP2);
     }
 
     if (laik_log_begin(1)) {
@@ -998,6 +970,10 @@ void calcAddReductions(int tflags,
             appendBorder(ts->s.to.i[0], ts->task, 0, 0, false, false);
         }
     }
+
+    // free temporary partitionings with the intersections again
+    if (fromP2) laik_free_partitioning(fromP2);
+    if (toP2) laik_free_partitioning(toP2);
 
     if (borderListCount == 0) return;
 

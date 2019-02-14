@@ -242,12 +242,6 @@ void laik_log_Partitioning(Laik_Partitioning* p)
     laik_log_Space(p->space);
     if (p->myfilter)
         laik_log_append(" (own task only)");
-    if (p->intersecting) {
-        laik_log_append(" (intersection filter with '%s'/'%s', %d slices)",
-                        p->intersecting->pfilter1 ? p->intersecting->pfilter1->name : "",
-                        p->intersecting->pfilter2 ? p->intersecting->pfilter2->name : "",
-                        p->intersecting->count);
-    }
     if (p->count > 0) {
         assert(p->tslice); // only show generic slices
         laik_log_append(": (task:slice:tag/mapNo)\n    ");

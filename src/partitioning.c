@@ -111,8 +111,6 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     p->orig = 0;
     p->mapFromOrig = 0;
 
-    p->intersecting = 0;
-
     // number of maps still unknown
     p->myMapOff = 0;
     p->myMapCount = -1;
@@ -754,9 +752,6 @@ void laik_clear_partitioning(Laik_Partitioning* p)
 // free resources allocated for a partitioning object
 void laik_free_partitioning(Laik_Partitioning* p)
 {
-    if (p->intersecting)
-        laik_free_partitioning(p->intersecting);
-
     free(p->off);
     free(p->myMapOff);
     free(p->tslice);
@@ -1057,6 +1052,14 @@ void laik_run_partitioner(Laik_Partitioning* p)
         if (!laik_partitioning_coversSpace(p))
             laik_log(LAIK_LL_Panic, "partitioning borders do not cover space");
     }
+
+    // invalidate global pfilter parameter
+    // FIXME: do not use global var for that!
+    if (p->filter == pfilter) {
+        pfilter_par1.len = 0;
+        pfilter_par2.len = 0;
+    }
+    assert(pfilter_par1.len == 0);
 }
 
 
