@@ -1027,6 +1027,15 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
                                          Laik_Group* g, Laik_Space* space,
                                          Laik_Partitioning* otherP)
 {
+    if (otherP) {
+        // if a partitioner is based on another one, we usually need all slices
+        if (otherP->myfilter) {
+            otherP = laik_clone_empty_partitioning(otherP);
+            laik_run_partitioner(otherP);
+        }
+        assert(otherP->myfilter == false);
+    }
+
     Laik_Partitioning* p;
     p = laik_new_empty_partitioning(g, space, pr, otherP);
 #ifdef USE_OWNSLICES
