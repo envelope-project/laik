@@ -119,9 +119,9 @@ struct _Laik_Partitioning {
     Laik_Partitioning* other;
 
     // for clone of another partitioning migrated to a new process group,
-    // to allow calling original partitioner before freezing
-    // crated by laik_new_migrated_partitioning()
-    Laik_Partitioning* orig;
+    // remember enough information to allow calling original partitioner
+    // see laik_new_migrated_partitioning()
+    Laik_Group* origGroup;
     int* mapFromOrig;
 
     // slice filters and consumers

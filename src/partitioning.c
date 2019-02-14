@@ -107,8 +107,8 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     // with offsets set, this partitioning is frozen (no new slices can be added)
     p->off = 0;
 
-    // if migrated
-    p->orig = 0;
+    // set if migrated from another group
+    p->origGroup = 0;
     p->mapFromOrig = 0;
 
     // number of maps still unknown
@@ -159,18 +159,17 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
 // create a new empty partitioning using same parameters as in given one
 Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p)
 {
-    Laik_Partitioning* p2;
-    p2 = laik_partitioning_new(p->name, p->group, p->space,
-                               p->partitioner, p->other);
-    if (p->orig) {
-        // if migrated, no own partitioner must be set and mapping must exist
-        assert(p->partitioner == 0);
+    Laik_Partitioning* pNew;
+    pNew = laik_partitioning_new(p->name, p->group, p->space,
+                                 p->partitioner, p->other);
+    if (p->origGroup) {
+        // if migrated, process mapping must exist
         assert(p->mapFromOrig != 0);
-        p2->orig = p->orig;
-        p2->mapFromOrig = p->mapFromOrig;
+        pNew->origGroup   = p->origGroup;
+        pNew->mapFromOrig = p->mapFromOrig;
     }
 
-    return p2;
+    return pNew;
 }
 
 
@@ -322,8 +321,8 @@ void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
     }
 
     // migrated? If yes: need to map <task> from orig group
-    if (p->orig) {
-        assert((task >= 0) && (task < p->orig->group->size));
+    if (p->origGroup) {
+        assert((task >= 0) && (task < p->origGroup->size));
         task = p->mapFromOrig[task];
         assert((task >= 0) && (task < p->group->size));
     } 
@@ -377,8 +376,8 @@ void laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx)
     }
 
     // migrated? If yes: need to map <task> from orig group
-    if (p->orig) {
-        assert((task >= 0) && (task < p->orig->group->size));
+    if (p->origGroup) {
+        assert((task >= 0) && (task < p->origGroup->size));
         task = p->mapFromOrig[task];
         assert((task >= 0) && (task < p->group->size));
     } 
@@ -975,21 +974,21 @@ void laik_run_partitioner(Laik_Partitioning* p)
     // has to be invalid yet
     assert(p->off == 0);
 
-    // if migrated clone, run original partitioner, redirecting slices to us
-    Laik_Partitioning* p2 = p;
-    if (p->orig) p2 = p->orig;
+    Laik_Partitioner* pr = p->partitioner;
+    // must have a partitioner set
+    assert(pr != 0);
 
-    Laik_Partitioner* pr = p2->partitioner;
-    if (pr) {
-        if (p2->other) {
-            assert(p2->other->group == p2->group);
-            // we do not check for same space, as there are use cases
-            // where you want to derive a partitioning of one space from
-            // the partitioning of another
-        }
+    // if migrated clone, run partitioner with original group
+    Laik_Group* group = p->origGroup ? p->origGroup : p->group;
 
-        (pr->run)(p, pr, p2->space, p2->group, p2->other);
+    if (p->other) {
+        assert(p->other->group == group);
+        // we do not check for same space, as there are use cases
+        // where you want to derive a partitioning of one space from
+        // the partitioning of another
     }
+
+    (pr->run)(p, pr, p->space, group, p->other);
 
     bool doMerge = false;
     if (pr) doMerge = (pr->flags & LAIK_PF_Merge) > 0;
@@ -998,9 +997,9 @@ void laik_run_partitioner(Laik_Partitioning* p)
     if (laik_log_begin(1)) {
         laik_log_append("run partitioner '%s' for '%s' (group %d, myid %d, space '%s'):",
                         pr ? pr->name : "(other)", p->name,
-                        p->group->gid, p->group->myid, p->space->name);
+                        group->gid, group->myid, p->space->name);
         laik_log_append("\n  other: ");
-        laik_log_Partitioning(p2->other);
+        laik_log_Partitioning(p->other);
         laik_log_append("\n  new  : ");
         laik_log_Partitioning(p);
         laik_log_flush(0);
@@ -1008,7 +1007,7 @@ void laik_run_partitioner(Laik_Partitioning* p)
     else
         laik_log(2, "run partitioner '%s' for '%s' (group %d, space '%s'): %d slices",
                  pr ? pr->name : "(other)", p->name,
-                 p->group->gid, p->space->name, p->count);
+                 group->gid, p->space->name, p->count);
 
 
     // by default, check if partitioning covers full space
@@ -1045,18 +1044,18 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* p,
                                                   Laik_Group* newg)
 {
-    Laik_Partitioning* p2;
-    p2 = laik_new_empty_partitioning(newg, p->space, 0, 0);
-    p2->orig = p;
+    Laik_Partitioning* pNew;
+    pNew = laik_new_empty_partitioning(newg, p->space, p->partitioner, p->other);
+    pNew->origGroup = p->group;
 
     // setup mapping
     if (newg->parent == p->group) {
         // new group is child of <other>
-        p2->mapFromOrig = newg->fromParent;
+        pNew->mapFromOrig = newg->fromParent;
     }
     else if (p->group->parent == newg) {
         // new group is parent of <other>
-        p2->mapFromOrig = p->group->toParent;
+        pNew->mapFromOrig = p->group->toParent;
     }
     else {
         // other cases not supported
@@ -1067,26 +1066,26 @@ Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* p,
     assert(p->off != 0);
 
     // keep property stating that <other> only kept own slices
-    p2->myfilter = p->myfilter;
+    pNew->myfilter = p->myfilter;
 
     // travers slices and translate task numbers
     for(int i = 0; i < p->count; i++) {
         Laik_TaskSlice_Gen* ts = &(p->tslice[i]);
         // task conversion is done in laik_append_slice
-        laik_append_slice(p2, ts->task, &(ts->s), ts->tag, ts->data);
+        laik_append_slice(pNew, ts->task, &(ts->s), ts->tag, ts->data);
     }
-    laik_freeze_partitioning(p2, false);
+    laik_freeze_partitioning(pNew, false);
 
     if (laik_log_begin(1)) {
         laik_log_append("migrated '%s' to '%s', from group %d (%d/%d) to %d (%d/%d):\n  ",
-                        p->name, p2->name,
+                        p->name, pNew->name,
                         p->group->gid, p->group->myid, p->group->size,
-                        p2->group->gid, p2->group->myid, p2->group->size);
-        laik_log_Partitioning(p2);
+                        pNew->group->gid, pNew->group->myid, pNew->group->size);
+        laik_log_Partitioning(pNew);
         laik_log_flush(0);
     }
 
-    return p2;
+    return pNew;
 }
 
 
