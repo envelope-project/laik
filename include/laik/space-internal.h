@@ -124,13 +124,10 @@ struct _Laik_Partitioning {
     Laik_Group* origGroup;
     int* mapFromOrig;
 
-    // slice filters and consumers
+    // slice filters
 
     // if set: call this function for each slice
     laik_pfilter_t filter;
-
-    // a filter can forward slices to this partitioning
-    Laik_Partitioning* consumer;
 
     // my filter: if true, only store slices for own process
     bool myfilter;

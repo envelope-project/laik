@@ -118,8 +118,6 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     // no filter set
     p->filter = 0;
 
-    p->consumer = 0;
-
     p->myfilter = false;
     p->pfilter1 = 0;
     p->pfilter2 = 0;
