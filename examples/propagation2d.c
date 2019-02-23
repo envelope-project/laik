@@ -84,7 +84,7 @@ void run_element_partitioner(Laik_Partitioner* pr,
     int N_tasks_y;
     int N_tasks = laik_size(group);
     calculate_task_topology(N_tasks, &N_tasks_x, &N_tasks_y);
-    assert(N_tasks = N_tasks_x * N_tasks_y);
+    assert(N_tasks == N_tasks_x * N_tasks_y);
     int N_elems_x = N_local_x * N_tasks_x;
     int N_elems_y = N_local_y * N_tasks_y;
     assert( (int) laik_space_size(space) == N_elems_x * N_elems_y);
