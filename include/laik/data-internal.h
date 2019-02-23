@@ -69,6 +69,9 @@ typedef struct _Laik_ReservationEntry {
 } Laik_ReservationEntry;
 
 struct _Laik_Reservation {
+    int id;
+    char* name;
+
     Laik_Data* data;
 
     // for reservations

@@ -210,6 +210,8 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
             if ((r->entry[i].p == p) && (r->entry[i].mList != 0)) {
                 Laik_MappingList* ml = r->entry[i].mList;
                 assert(ml->res == r);
+                laik_log(1, "prepareMaps: use reservation for data '%s' (partitioning '%s')",
+                         d->name, p->name);
                 return ml;
             }
         }
@@ -232,7 +234,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
     ml->res = 0; // not part of a reservation
     ml->count = n;
 
-    laik_log(1, "prepare %d maps for data '%s' (partitioning '%s')",
+    laik_log(1, "prepareMaps: %d maps for data '%s' (partitioning '%s')",
              n, d->name, p->name);
 
     if (n == 0) return ml;
@@ -432,7 +434,7 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     default: assert(0);
     }
 
-    laik_log(1, "allocated memory for '%s'/%d: %llu x %d (%llu B) at %p"
+    laik_log(1, "allocateMap: for '%s'/%d: %llu x %d (%llu B) at %p"
              "\n  layout: %dd, strides (%llu/%llu/%llu)",
              d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
              (unsigned long long) m->capacity, (void*) m->base,
@@ -805,17 +807,29 @@ void laik_data_use_reservation(Laik_Data* d, Laik_Reservation* r)
 // Reservation
 //
 
+static int res_id = 0;
+
 // create a reservation object for <data>
 Laik_Reservation* laik_reservation_new(Laik_Data* d)
 {
     Laik_Reservation* r = malloc(sizeof(Laik_Reservation));
-    r->data = d;
+    if (!r) {
+        laik_panic("Out of memory allocating Laik_Reservation object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
+    r->id = res_id++;
+    r->name = strdup("res-0     ");
+    sprintf(r->name, "res-%d", r->id);
+
+    r->data = d;
     r->count = 0;
     r->capacity = 0;
     r->entry = 0;
     r->mappingCount = 0;
     r->mapping = 0;
+
+    laik_log(1, "new reservation '%s' for data '%s'", r->name, d->name);
 
     return r;
 }
@@ -840,6 +854,9 @@ void laik_reservation_add(Laik_Reservation* r, Laik_Partitioning* p)
 
     re->p = p;
     re->mList = 0;
+
+    laik_log(1, "reservation '%s' (data '%s'): added partition '%s'",
+             r->name, r->data->name, p->name);
 }
 
 // free the memory space allocated in this reservation
@@ -853,11 +870,18 @@ void laik_reservation_free(Laik_Reservation* r)
     r->count = 0;
 
     // free memory space
-    for(int i = 0; i < r->mappingCount; i++)
-        freeMap(&(r->mapping[i]), r->data, r->data->stat);
+    uint64_t bytesFreed = 0;
+    for(int i = 0; i < r->mappingCount; i++) {
+        Laik_Mapping* m = &(r->mapping[i]);
+        bytesFreed += m->capacity;
+        freeMap(m, r->data, r->data->stat);
+    }
     free(r->mapping);
     r->mappingCount = 0;
     r->mapping = 0;
+
+    laik_log(1, "reservation '%s' (data '%s'): freed %llu bytes\n",
+                 r->name, r->data->name, (unsigned long long) bytesFreed);
 }
 
 // get mapping list allocated in a reservation for a given partitioning
@@ -1038,7 +1062,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
     free(glist);
 
-    laik_log(1, "reservations for '%s'", data->name);
+    laik_log(1, "reservation '%s': do allocation for '%s'", res->name, data->name);
 
     // (4) set final sizes of base mappings, and do allocation
     uint64_t total = 0;
