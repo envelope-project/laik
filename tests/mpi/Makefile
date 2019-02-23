@@ -8,6 +8,7 @@ TESTS= \
     test-jac2d test-jac2d-noc \
     test-jac3d test-jac3dr test-jac3d-noc test-jac3dr-noc \
     test-jac3de test-jac3der test-jac3da test-jac3dar \
+    test-jac3dri test-jac3deri test-jac3dari \
     test-markov test-markov2 test-markov2-f \
     test-propagation2d
 
@@ -64,6 +65,9 @@ test-jac3dr:
 	$(SDIR)./test-jac3dr-100-mpi-1.sh
 	$(SDIR)./test-jac3dr-100-mpi-4.sh
 
+test-jac3dri:
+	$(SDIR)./test-jac3dri-100-mpi-4.sh
+
 test-jac3de:
 	$(SDIR)./test-jac3de-100-mpi-1.sh
 	$(SDIR)./test-jac3de-100-mpi-4.sh
@@ -72,6 +76,9 @@ test-jac3der:
 	$(SDIR)./test-jac3der-100-mpi-1.sh
 	$(SDIR)./test-jac3der-100-mpi-4.sh
 
+test-jac3deri:
+	$(SDIR)./test-jac3deri-100-mpi-4.sh
+
 test-jac3da:
 	$(SDIR)./test-jac3da-100-mpi-1.sh
 	$(SDIR)./test-jac3da-100-mpi-4.sh
@@ -79,6 +86,9 @@ test-jac3da:
 test-jac3dar:
 	$(SDIR)./test-jac3dar-100-mpi-1.sh
 	$(SDIR)./test-jac3dar-100-mpi-4.sh
+
+test-jac3dari:
+	$(SDIR)./test-jac3dari-100-mpi-4.sh
 
 test-jac3d-noc:
 	$(SDIR)./test-jac3dn-100-mpi-4.sh
