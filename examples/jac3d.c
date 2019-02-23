@@ -1,5 +1,5 @@
 /* This file is part of the LAIK parallel container library.
- * Copyright (c) 2017 Josef Weidendorfer
+ * Copyright (c) 2017-2019 Josef Weidendorfer
  *
  * LAIK is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -100,6 +100,7 @@ int main(int argc, char* argv[])
     bool do_actions = false;
     bool do_grid = false;
     int xblocks = 0, yblocks = 0, zblocks = 0; // for grid partitioner
+    int iter_shrink = 0; // number iterations between shrinks (0: disable)
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
@@ -110,17 +111,19 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'e') do_exec = true;
         if (argv[arg][1] == 'a') do_actions = true;
         if (argv[arg][1] == 'g') do_grid = true;
+        if (argv[arg][1] == 'i' && argc > arg+1) { iter_shrink = atoi(argv[++arg]); }
         if (argv[arg][1] == 'h') {
-            printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
+            printf("Usage: %s [options] <side width> <maxiter>\n\n"
                    "Options:\n"
-                   " -n : use partitioner which does not include corners\n"
-                   " -g : use regular grid instead of bisection partitioner\n"
-                   " -p : write profiling data to 'jac3d_profiling.txt'\n"
-                   " -s : print value sum at end (warning: sum done at master)\n"
-                   " -r : do space reservation before iteration loop\n"
-                   " -e : pre-calculate transitions to exec in iteration loop\n"
-                   " -a : pre-calculate action sequence to exec (includes -e)\n"
-                   " -h : print this help text and exit\n",
+                   " -n        : use partitioner which does not include corners\n"
+                   " -g        : use regular grid instead of bisection partitioner\n"
+                   " -p        : write profiling data to 'jac3d_profiling.txt'\n"
+                   " -s        : print value sum at end (warning: sum done at master)\n"
+                   " -r        : do space reservation before iteration loop\n"
+                   " -e        : pre-calculate transitions to exec in iteration loop\n"
+                   " -a        : pre-calculate action sequence to exec (includes -e)\n"
+                   " -i <iter> : remove master every <iter> iterations (0: disable)\n"
+                   " -h        : print this help text and exit\n",
                    argv[0]);
             exit(1);
         }
@@ -155,6 +158,8 @@ int main(int argc, char* argv[])
             printf(" (grid %d x %d x %d)", zblocks, yblocks, xblocks);
         if (!use_cornerhalo)
             printf(" (halo without corners)");
+        if (iter_shrink > 0)
+            printf(" (shrink every %d iterations)", iter_shrink);
         printf("\n");
     }
 
@@ -234,10 +239,10 @@ int main(int argc, char* argv[])
 
     // for global sum, used for residuum: 1 double accessible by all
     Laik_Space* sp1 = laik_new_space_1d(inst, 1);
-    Laik_Partitioning* sumP = laik_new_partitioning(laik_All, world, sp1, 0);
-    Laik_Data* sumD = laik_new_data(sp1, laik_Double);
-    laik_data_set_name(sumD, "sum");
-    laik_switchto_partitioning(sumD, sumP, LAIK_DF_None, LAIK_RO_None);
+    Laik_Partitioning* pSum = laik_new_partitioning(laik_All, world, sp1, 0);
+    Laik_Data* dSum = laik_new_data(sp1, laik_Double);
+    laik_data_set_name(dSum, "sum");
+    laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
     // start with writing (= initialization) data1
     Laik_Data* dWrite = data1;
@@ -270,6 +275,7 @@ int main(int argc, char* argv[])
     int last_iter = 0;
     int res_iters = 0; // iterations done with residuum calculation
 
+    int next_shrink = iter_shrink;
     int iter = 0;
     for(; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
@@ -288,28 +294,25 @@ int main(int argc, char* argv[])
         // with (3), it is especially beneficial to use a reservation, as
         // the actions usually directly refer to e.g. MPI calls
 
-        if (do_exec || do_actions) {
-            // we did pre-calculation to speed up switches
-            if (do_actions) {
-                // we pre-calculated the communication action sequences
-                if (dRead == data1) {
-                    // switch data 1 to halo partitioning
-                    laik_exec_actions(data1_toHaloActions);
-                    laik_exec_actions(data2_toExclActions);
-                }
-                else {
-                    laik_exec_actions(data2_toHaloActions);
-                    laik_exec_actions(data1_toExclActions);
-                }
+        if (do_actions) {
+            // case (3): pre-calculated action sequences
+            if (dRead == data1) {
+                // switch data 1 to halo partitioning
+                laik_exec_actions(data1_toHaloActions);
+                laik_exec_actions(data2_toExclActions);
             }
             else {
-                // pre-calculation of transitions
-                laik_exec_transition(dRead, toHaloTransition);
-                laik_exec_transition(dWrite, toExclTransition);
+                laik_exec_actions(data2_toHaloActions);
+                laik_exec_actions(data1_toExclActions);
             }
         }
+        else if (do_exec) {
+            // case (2): pre-calculated transitions
+            laik_exec_transition(dRead, toHaloTransition);
+            laik_exec_transition(dWrite, toExclTransition);
+        }
         else {
-            // no pre-calculation: switch to partitionings
+            // case (1): no pre-calculation: switch to partitionings
             laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
             laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
         }
@@ -345,7 +348,7 @@ int main(int argc, char* argv[])
         }
 
         // do jacobi
-        
+
         // check for residuum every 10 iterations (3 Flops more per update)
         if ((iter % 10) == 0) {
 
@@ -371,11 +374,11 @@ int main(int argc, char* argv[])
             res_iters++;
 
             // calculate global residuum
-            laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
+            laik_switchto_flow(dSum, LAIK_DF_None, LAIK_RO_None);
+            laik_map_def1(dSum, (void**) &sumPtr, 0);
             *sumPtr = res;
-            laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
+            laik_switchto_flow(dSum, LAIK_DF_Preserve, LAIK_RO_Sum);
+            laik_map_def1(dSum, (void**) &sumPtr, 0);
             res = *sumPtr;
 
             if (iter > 0) {
@@ -394,7 +397,7 @@ int main(int argc, char* argv[])
                 t2 = t;
             }
 
-            if (laik_myid(laik_data_get_group(sumD)) == 0) {
+            if (laik_myid(world) == 0) {
                 printf("Residuum after %2d iters: %f\n", iter+1, res);
             }
 
@@ -422,7 +425,86 @@ int main(int argc, char* argv[])
         laik_profile_user_stop(inst);
         laik_writeout_profile();
 
-        // TODO: allow repartitioning
+        // shrink? TODO: allow repartitioning via external control
+        if ((iter_shrink > 0) && (iter == next_shrink) && (laik_size(world) > 1)) {
+            next_shrink += iter_shrink;
+
+            Laik_Group* newWorld = laik_new_shrinked_group(world, 1, & (int) {0});
+            laik_log(2, "shrinking to size %d (id %d)", laik_size(newWorld), laik_myid(newWorld));
+
+            // run partitioners for shrinked group
+            Laik_Partitioning *newpWrite, *newpRead, *newpSum;
+            newpWrite = laik_new_partitioning(prWrite, newWorld, space, 0);
+            newpRead  = laik_new_partitioning(prRead, newWorld, space, newpWrite);
+            newpSum   = laik_new_partitioning(laik_All, newWorld, sp1, 0);
+            char name[20];
+            sprintf(name, "pWrite-Gr%d", laik_size(newWorld));
+            laik_partitioning_set_name(newpWrite, name);
+            sprintf(name, "pRead-Gr%d", laik_size(newWorld));
+            laik_partitioning_set_name(newpRead, name);
+
+            // reserve memory for new partitionings on shrinked group
+            Laik_Reservation* newr1 = 0;
+            Laik_Reservation* newr2 = 0;
+            if (do_reservation) {
+                newr1 = laik_reservation_new(data1);
+                laik_reservation_add(newr1, newpRead);
+                laik_reservation_add(newr1, newpWrite);
+                laik_reservation_alloc(newr1);
+                laik_data_use_reservation(data1, newr1);
+
+                newr2 = laik_reservation_new(data2);
+                laik_reservation_add(newr2, newpRead);
+                laik_reservation_add(newr2, newpWrite);
+                laik_reservation_alloc(newr2);
+                laik_data_use_reservation(data2, newr2);
+            }
+
+            // do pre-calculations for transitions and action sequences on new partitions
+            if (do_exec || do_actions) {
+                if (do_actions) {
+                    // need to free before transitions, as action sequences refer to them
+                    laik_aseq_free(data1_toHaloActions);
+                    laik_aseq_free(data1_toExclActions);
+                    laik_aseq_free(data2_toHaloActions);
+                    laik_aseq_free(data2_toExclActions);
+                }
+                laik_free_transition(toHaloTransition);
+                laik_free_transition(toExclTransition);
+
+                toHaloTransition = laik_calc_transition(space, newpWrite, newpRead,
+                                                        LAIK_DF_Preserve, LAIK_RO_None);
+                toExclTransition = laik_calc_transition(space, newpRead, newpWrite,
+                                                        LAIK_DF_None, LAIK_RO_None);
+                if (do_actions) {
+                    data1_toHaloActions = laik_calc_actions(data1, toHaloTransition, newr1, newr1);
+                    data1_toExclActions = laik_calc_actions(data1, toExclTransition, newr1, newr1);
+                    data2_toHaloActions = laik_calc_actions(data2, toHaloTransition, newr2, newr2);
+                    data2_toExclActions = laik_calc_actions(data2, toExclTransition, newr2, newr2);
+                }
+            }
+
+            // need to preserve data in dWrite
+            laik_switchto_partitioning(dWrite, newpWrite, LAIK_DF_Preserve, LAIK_RO_None);
+            laik_switchto_partitioning(dRead,  newpRead,  LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(dSum,   newpSum,   LAIK_DF_None, LAIK_RO_None);
+
+            if (do_reservation) {
+                // free memory of old reservation after switching
+                laik_reservation_free(r1);
+                laik_reservation_free(r2);
+                r1 = newr1;
+                r2 = newr2;
+            }
+
+            // TODO: release old world and partitiongs
+            world  = newWorld;
+            pWrite = newpWrite;
+            pRead  = newpRead;
+            pSum   = newpSum;
+        }
+
+        if (laik_myid(world) == -1) break;
     }
 
     // statistics for all iterations and reductions
@@ -432,7 +514,7 @@ int main(int argc, char* argv[])
         int diter = iter;
         double dt = t - t1;
         double gUpdates = 0.000000001 * size * size * size; // per iteration
-        laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
+        laik_log(2, "final for %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
                  diter, dt,
                  // 6 Flops per update in reg iters, with res 4
                  gUpdates * (9 * res_iters + 6 * (diter - res_iters)) / dt,
@@ -441,14 +523,12 @@ int main(int argc, char* argv[])
     }
 
     if (do_sum) {
-        Laik_Group* activeGroup = laik_data_get_group(dWrite);
-
         // for check at end: sum up all just written values
         Laik_Partitioning* pMaster;
-        pMaster = laik_new_partitioning(laik_Master, activeGroup, space, 0);
+        pMaster = laik_new_partitioning(laik_Master, world, space, 0);
         laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
 
-        if (laik_myid(activeGroup) == 0) {
+        if (laik_myid(world) == 0) {
             double sum = 0.0;
             laik_map_def1_3d(dWrite, (void**) &baseW,
                              &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
@@ -459,6 +539,25 @@ int main(int argc, char* argv[])
             printf("Global value sum after %d iterations: %f\n",
                    iter, sum);
         }
+    }
+
+    // free memory of reservations
+    if (do_reservation) {
+        laik_reservation_free(r1);
+        laik_reservation_free(r2);
+    }
+
+    // free transitions and action sequences
+    if (do_exec || do_actions) {
+        if (do_actions) {
+            // need to free before transitions, as action sequences refer to them
+            laik_aseq_free(data1_toHaloActions);
+            laik_aseq_free(data1_toExclActions);
+            laik_aseq_free(data2_toHaloActions);
+            laik_aseq_free(data2_toExclActions);
+        }
+        laik_free_transition(toHaloTransition);
+        laik_free_transition(toExclTransition);
     }
 
     laik_finalize(inst);
