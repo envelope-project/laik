@@ -151,7 +151,7 @@ void laik_log_TransitionGroup(Laik_Transition* t, int group)
 void laik_log_Transition(Laik_Transition* t, bool showActions)
 {
     if (t == 0) {
-        laik_log_append("(nil transition)");
+        laik_log_append("(nil)");
         return;
     }
     if (t->fromPartitioning)
@@ -643,9 +643,10 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
 
 void laik_log_ActionSeq(Laik_ActionSeq *as, bool showDetails)
 {
-    laik_log_append("action seq for %d transition(s), backend cleanup: %s\n"
+    laik_log_append("action seq '%s' for %d transition(s), backend cleanup: %s\n"
                     "  %d rounds, %d buffers (%.3f MB),"
                     " %d actions (%d B), %d ranges (%d B)\n",
+                    as->name,
                     as->contextCount, as->backend ? as->backend->name : "none",
                     as->roundCount,
                     as->bufferCount, 0.000001 * laik_aseq_bufsize(as),

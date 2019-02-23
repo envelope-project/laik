@@ -201,6 +201,9 @@ struct _Laik_TransitionContext {
 // before execution, and clean them up when the action sequence is deleted.
 
 struct _Laik_ActionSeq {
+    int id;
+    char* name;
+
     Laik_Instance* inst;
 
     // if non-null, only this backend can execute the sequence, and

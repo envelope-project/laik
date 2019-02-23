@@ -471,5 +471,8 @@ laik_calc_transition(Laik_Space* space,
                      Laik_Partitioning* fromP, Laik_Partitioning* toP,
                      Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
+// free a transition
+void laik_free_transition(Laik_Transition* t);
+
 
 #endif // LAIK_SPACE_H

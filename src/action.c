@@ -20,11 +20,22 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
+static int aseq_id = 0;
 
 // create a new action sequence object, usable for the given LAIK instance
 Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
 {
     Laik_ActionSeq* as = malloc(sizeof(Laik_ActionSeq));
+    if (!as) {
+        laik_panic("Out of memory allocating Laik_ActionSeq object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    as->id = aseq_id++;
+    as->name = strdup("aseq-0     ");
+    sprintf(as->name, "aseq-%d", as->id);
+
     as->inst = inst;
     as->backend = 0;
 
@@ -59,6 +70,8 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
     as->recvCount = 0;
     as->reduceCount = 0;
 
+    laik_log(1, "new action seq '%s'", as->name);
+
     return as;
 }
 
@@ -66,6 +79,11 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
 // this may include backend-specific resources
 void laik_aseq_free(Laik_ActionSeq* as)
 {
+    if (!as) return;
+
+    laik_log(1, "free action seq '%s' (%d actions, %d buffers)",
+             as->name, as->actionCount, as->bufferCount);
+
     if (as->backend) {
         // ask backend to do its own cleanup for this action sequence
         (as->backend->cleanup)(as);
@@ -209,6 +227,9 @@ int laik_aseq_addTContext(Laik_ActionSeq* as,
 
     assert(as->context[contextID] == 0);
     as->context[contextID] = tc;
+
+    laik_log(1, "action seq '%s': added context for trans '%s' on data '%s'",
+             as->name, transition->name, data->name);
 
     return contextID;
 }

@@ -201,6 +201,9 @@ struct redTOp {
 #define LAIK_TF_KEEP_REDUCTIONS 1
 
 struct _Laik_Transition {
+    int id;
+    char* name;
+
     // data identifying this transition
     int flags;
     Laik_Space* space;

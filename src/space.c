@@ -1211,6 +1211,7 @@ void calcAddReductions(int tflags,
     freeBorderList();
 }
 
+static int trans_id = 0;
 
 // Calculate communication required for transitioning between partitionings
 Laik_Transition*
@@ -1446,6 +1447,10 @@ do_calc_transition(Laik_Space* space,
         exit(1); // not actually needed, laik_panic never returns
     }
 
+    t->id = trans_id++;
+    t->name = strdup("trans-0     ");
+    sprintf(t->name, "trans-%d", t->id);
+
     t->flags = tflags;
     t->space = space;
     t->group = group;
@@ -1511,16 +1516,27 @@ laik_calc_transition(Laik_Space* space,
     t = do_calc_transition(space, fromP, toP, flow, redOp);
 
     if (laik_log_begin(2)) {
-        laik_log_append("Calc transition ");
-        laik_log_Transition(t, false);
-        laik_log_flush(": %d init, %d loc, %d red, %d send, %d recv",
+        if (!t)
+            laik_log_flush("calc transition: invalid");
+        else {
+            laik_log_append("calc transition '%s' (", t->name);
+            laik_log_Transition(t, false);
+            laik_log_flush("): %d init, %d loc, %d red, %d send, %d recv",
                        t->initCount, t->localCount, t->redCount,
                        t->sendCount, t->recvCount);
+        }
     }
 
     return t;
 }
 
+void laik_free_transition(Laik_Transition* t)
+{
+    if (!t) return;
+
+    laik_log(1, "free transition '%s'", t->name);
+    free(t);
+}
 
 // return size of task group with ID <subgroup> in transition <t>
 int laik_trans_groupCount(Laik_Transition* t, int subgroup)

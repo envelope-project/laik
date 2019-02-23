@@ -1148,7 +1148,7 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
                                   Laik_Reservation* toRes)
 {
     // never create a sequence with an invalid transition
-    assert(t != 0);
+    if (t == 0) return 0;
 
     Laik_MappingList* fromList = 0;
     Laik_MappingList* toList = 0;
@@ -1170,7 +1170,7 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
     }
 
     if (laik_log_begin(2)) {
-        laik_log_append("Calculated actions:\n");
+        laik_log_append("calculated ");
         laik_log_ActionSeq(as, laik_log_shown(1));
         laik_log_flush(0);
     }
@@ -1186,7 +1186,7 @@ void laik_exec_actions(Laik_ActionSeq* as)
     Laik_Data* d = tc->data;
 
     if (laik_log_begin(1)) {
-        laik_log_append("exec actions for transition ");
+        laik_log_append("exec action seq '%s' for transition ", as->name);
         laik_log_Transition(t, false);
         laik_log_flush(" on data '%s'", d->name);
     }
