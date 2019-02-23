@@ -173,6 +173,9 @@ int main(int argc, char* argv[])
     int64_t gx1, gx2, gy1, gy2, gz1, gz2;
     int64_t x1, x2, y1, y2, z1, z2;
 
+    // for reservation API test
+    double *data1BaseW = 0, *data2BaseW = 0;
+
     // two 3d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_3d(inst, size, size, size);
     Laik_Data* data1 = laik_new_data(space, laik_Double);
@@ -264,6 +267,9 @@ int main(int argc, char* argv[])
                 baseW[z * zstrideW + y * ystrideW + x] =
                         (double) ((gx1 + x + gy1 + y + gz1 + z) & 6);
 
+    // for reservation API test
+    data1BaseW = baseW;
+
     setBoundary(size, pWrite, dWrite);
     laik_log(2, "Init done\n");
 
@@ -345,6 +351,17 @@ int main(int argc, char* argv[])
         if (gz1 > 0) {
             // ghost cells from back neighbor at z=0, move that to -1
             baseR += zstrideR;
+        }
+
+        // for reservation API test: check that write pointer stay the same
+        if (do_reservation) {
+            if (dWrite == data2) {
+                if (data2BaseW == 0) data2BaseW = baseW;
+                assert(data2BaseW == baseW);
+            } else {
+                if (data1BaseW == 0) data1BaseW = baseW;
+                assert(data1BaseW == baseW);
+            }
         }
 
         // do jacobi
@@ -495,6 +512,13 @@ int main(int argc, char* argv[])
                 laik_reservation_free(r2);
                 r1 = newr1;
                 r2 = newr2;
+
+                // for reservation API test: update saved pointer
+                data1BaseW = data2BaseW = 0;
+                if (laik_myid(newWorld) >=0) {
+                    laik_map_def1_3d(dWrite, (void**) &baseW, 0,0,0,0,0);
+                    if (dWrite == data1) data1BaseW = baseW; else data2BaseW = baseW;
+                }
             }
 
             // TODO: release old world and partitiongs
