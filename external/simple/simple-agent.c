@@ -114,7 +114,8 @@ Laik_Agent* agent_init(
     myBase->detach = sa_detach;
     myBase->reset = sa_reset;
 
-    me->getfail = sa_getfailed;
+    // FIXME: the cast suppresses a warning: wrong types! (JW)
+    me->getfail = (laik_agent_get_failed) sa_getfailed;
     me->peekfail = sa_peekfailed;
     me->setiter = sa_set_iter;
 #ifdef __DEBUG__

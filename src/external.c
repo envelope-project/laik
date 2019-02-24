@@ -77,19 +77,16 @@ static laik_agent_init probfunc(
  * @param  uid: A given node uid. 
  * @retval the LAIK Task number
  */
-static int laik_map_id(
-    Laik_Instance* inst,
-    node_uid_t* uid
-){
-    assert(inst);
-    assert(uid);
-
-    
-    //FIXME: Do something plausible
-    (void) inst;
-
-    return atoi(uid->uid);
-}
+//static int laik_map_id(
+//    Laik_Instance* inst,
+//    node_uid_t* uid
+//){
+//    assert(inst);
+//    assert(uid);
+//    //FIXME: Do something plausible
+//    (void) inst;
+//    return atoi(uid->uid);
+//}
 
 
 /** 
@@ -230,13 +227,13 @@ void laik_get_failed (
 
     (void) max_failed;
     Laik_RepartitionControl* ctrl;
-    int i, n, count;
+    int i, n; //, count;
     assert(instance);    
     ctrl = instance->repart_ctrl;
     assert(ctrl);
     
 
-    count = 0;
+    //count = 0;
     for(i=0; i < ctrl -> num_agents; i++){
         Laik_Agent* agent = ctrl->agents[i];
 

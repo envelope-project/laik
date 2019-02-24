@@ -122,7 +122,8 @@ Laik_Agent* agent_init(
     myBase->detach = mqtt_detach;
     myBase->reset = mqtt_reset;
 
-    me->getfail = mqtt_getfailed; 
+    // FIXME: the cast suppresses a warning: wrong types! (JW)
+    me->getfail = (laik_agent_get_failed) mqtt_getfailed;
     me->peekfail = mqtt_peekfailed;
 
     num_failed = 0;
