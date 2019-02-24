@@ -39,15 +39,17 @@ static void laik_mpi_prepare(Laik_ActionSeq*);
 static void laik_mpi_cleanup(Laik_ActionSeq*);
 static void laik_mpi_exec(Laik_ActionSeq* as);
 static void laik_mpi_updateGroup(Laik_Group*);
+static bool laik_mpi_log_action(Laik_Action* a);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
-    .name        = "MPI Backend Driver (synchronous)",
+    .name        = "MPI (two-sided)",
     .finalize    = laik_mpi_finalize,
     .prepare     = laik_mpi_prepare,
     .cleanup     = laik_mpi_cleanup,
     .exec        = laik_mpi_exec,
-    .updateGroup = laik_mpi_updateGroup
+    .updateGroup = laik_mpi_updateGroup,
+    .log_action  = laik_mpi_log_action
 };
 
 static Laik_Instance* mpi_instance = 0;
@@ -77,6 +79,146 @@ static int mpi_reduce = 1;
 #define PACKBUFSIZE (10*1024*1024)
 //#define PACKBUFSIZE (10*800)
 static char packbuf[PACKBUFSIZE];
+
+
+//----------------------------------------------------------------------------
+// MPI-specific actions + transformation
+
+#define LAIK_AT_MpiReq   (LAIK_AT_Backend + 0)
+#define LAIK_AT_MpiIrecv (LAIK_AT_Backend + 1)
+#define LAIK_AT_MpiWait  (LAIK_AT_Backend + 2)
+
+// ReqBuf action: provide base address for MPI_Request array
+// referenced in following IRecv/Wait actions via req_it operands
+typedef struct {
+    Laik_Action h;
+    unsigned int count;
+    MPI_Request* req;
+} Laik_A_MpiReq;
+
+static
+void laik_mpi_addMpiReq(Laik_ActionSeq* as, int round, int count, MPI_Request* buf)
+{
+    Laik_A_MpiReq* a;
+    a = (Laik_A_MpiReq*) laik_aseq_addAction(as, sizeof(*a),
+                                             LAIK_AT_MpiReq, round, 0);
+    a->count = count;
+    a->req = buf;
+}
+
+// IRecv action
+typedef struct {
+    Laik_Action h;
+    unsigned int count;
+    int from_rank;
+    char* buf;
+    int req_id;
+} Laik_A_MpiIrecv;
+
+static
+void laik_mpi_addMpiIrecv(Laik_ActionSeq* as, int round,
+                          char* toBuf, unsigned int count, int from, int req_id)
+{
+    Laik_A_MpiIrecv* a;
+    a = (Laik_A_MpiIrecv*) laik_aseq_addAction(as, sizeof(*a),
+                                               LAIK_AT_MpiIrecv, round, 0);
+    a->buf = toBuf;
+    a->count = count;
+    a->from_rank = from;
+    a->req_id = req_id;
+}
+
+// Wait action
+typedef struct {
+    Laik_Action h;
+    int req_id;
+} Laik_A_MpiWait;
+
+static
+void laik_mpi_addMpiWait(Laik_ActionSeq* as, int round, int req_id)
+{
+    Laik_A_MpiWait* a;
+    a = (Laik_A_MpiWait*) laik_aseq_addAction(as, sizeof(*a),
+                                              LAIK_AT_MpiWait, round, 0);
+    a->req_id = req_id;
+}
+
+static
+bool laik_mpi_log_action(Laik_Action* a)
+{
+    switch(a->type) {
+    case LAIK_AT_MpiReq: {
+        Laik_A_MpiReq* aa = (Laik_A_MpiReq*) a;
+        laik_log_append("MPI-Req: count %d, req %p", aa->count, aa->req);
+        break;
+    }
+
+    case LAIK_AT_MpiIrecv: {
+        Laik_A_MpiIrecv* aa = (Laik_A_MpiIrecv*) a;
+        laik_log_append("MPI-IRecv: T%d ==> to %p, count %d, reqid %d",
+                        aa->from_rank, aa->buf, aa->count, aa->req_id);
+        break;
+    }
+
+    case LAIK_AT_MpiWait: {
+        Laik_A_MpiWait* aa = (Laik_A_MpiWait*) a;
+        laik_log_append("MPI-Wait: reqid %d", aa->req_id);
+        break;
+    }
+
+    default:
+        return false;
+    }
+    return true;
+}
+
+// transformation: split recv actions into irecv + wait
+bool laik_mpi_splitRecv(Laik_ActionSeq* as)
+{
+    // must not have new actions, we want to start a new build
+    assert(as->newActionCount == 0);
+
+    int recv_count = 0;
+    Laik_Action* a = as->action;
+    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
+        if (a->type == LAIK_AT_BufRecv)
+            recv_count++;
+
+    if (recv_count == 0) return false;
+
+    // add new round 0 with MpiReq and all MpiIrecv actions
+
+    MPI_Request* buf = malloc(recv_count * sizeof(MPI_Request));
+    laik_mpi_addMpiReq(as, 0, recv_count, buf);
+
+    int req_id = 0;
+    a = as->action;
+    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+        switch(a->type) {
+        case LAIK_AT_BufRecv: {
+            Laik_A_BufRecv* aa = (Laik_A_BufRecv*) a;
+            laik_mpi_addMpiIrecv(as, 0,
+                                 aa->buf, aa->count, aa->from_rank, req_id);
+            laik_mpi_addMpiWait(as, a->round + 1, req_id);
+            req_id++;
+            break;
+        }
+
+        default:
+            // all rounds up by one due to new round 0
+            laik_aseq_add(a, as, a->round + 1);
+            break;
+        }
+    }
+    assert(recv_count == req_id);
+
+    laik_aseq_activateNewActions(as);
+    return true;
+}
+
+
+//----------------------------------------------------------------------------
+// backend interface implementation: initialization
 
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
@@ -472,6 +614,10 @@ void laik_mpi_exec(Laik_ActionSeq* as)
     MPI_Datatype dataType = getMPIDataType(tc->data);
     MPI_Status st;
 
+    // MPI_Request array: not set yet
+    int req_count = 0;
+    MPI_Request* req = 0;
+
     Laik_Action* a = as->action;
     for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
         Laik_BackendAction* ba = (Laik_BackendAction*) a;
@@ -485,6 +631,33 @@ void laik_mpi_exec(Laik_ActionSeq* as)
         case LAIK_AT_Nop:
             // no need to do anything
             break;
+
+        case LAIK_AT_MpiReq: {
+            // MPI-specific action: setup MPI_Request array
+            Laik_A_MpiReq* aa = (Laik_A_MpiReq*) a;
+            assert(aa->req != 0);
+            assert(aa->count > 0);
+            req_count = aa->count;
+            req = aa->req;
+            break;
+        }
+
+        case LAIK_AT_MpiIrecv: {
+            // MPI-specific action: exec MPI_IRecv
+            Laik_A_MpiIrecv* aa = (Laik_A_MpiIrecv*) a;
+            assert(aa->req_id < req_count);
+            MPI_Irecv(aa->buf, aa->count,
+                      dataType, aa->from_rank, tag, comm, req + aa->req_id);
+            break;
+        }
+
+        case LAIK_AT_MpiWait: {
+            // MPI-specific action: wait for request
+            Laik_A_MpiWait* aa = (Laik_A_MpiWait*) a;
+            assert(aa->req_id < req_count);
+            MPI_Wait(req + aa->req_id, &st);
+            break;
+        }
 
         case LAIK_AT_MapSend: {
             assert(ba->fromMapNo < fromList->count);
@@ -647,6 +820,8 @@ void laik_mpi_exec(Laik_ActionSeq* as)
     ss->reducedBytes  += as->reduceCount * tc->data->elemsize;
 }
 
+
+
 static
 void laik_mpi_prepare(Laik_ActionSeq* as)
 {
@@ -655,6 +830,9 @@ void laik_mpi_prepare(Laik_ActionSeq* as)
         laik_log_ActionSeq(as, false);
         laik_log_flush(0);
     }
+
+    // mark as prepared by MPI backend: for MPI-specific cleanup + action logging
+    as->backend = &laik_backend_mpi;
 
     bool changed = laik_aseq_splitTransitionExecs(as);
     laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
@@ -695,11 +873,13 @@ void laik_mpi_prepare(Laik_ActionSeq* as)
     //changed = laik_aseq_sort_rankdigits(as);
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
 
-    laik_aseq_freeTempSpace(as);
+    changed = laik_mpi_splitRecv(as);
+    laik_log_ActionSeqIfChanged(changed, as, "After splitting recv into irecv/wait");
 
-    // request for cleanup function to be called
-    // (not really needed at the moment)
-    as->backend = &laik_backend_mpi;
+    changed = laik_aseq_sort_rounds(as);
+    laik_log_ActionSeqIfChanged(changed, as, "After sorting rounds 2");
+
+    laik_aseq_freeTempSpace(as);
 }
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)
@@ -711,6 +891,12 @@ static void laik_mpi_cleanup(Laik_ActionSeq* as)
     }
 
     assert(as->backend == &laik_backend_mpi);
+
+    if (as->action->type == LAIK_AT_MpiReq) {
+        Laik_A_MpiReq* aa = (Laik_A_MpiReq*) as->action;
+        free(aa->req);
+        laik_log(1, "  freed MPI_Request array with %d entries", aa->count);
+    }
 }
 
 #endif // USE_MPI

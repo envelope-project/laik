@@ -352,15 +352,15 @@ char* laik_at_str(Laik_ActionType t)
     case LAIK_AT_MapRecvAndUnpack:  return "MapRecvAndUnpack";
     default: break;
     }
-    return "???";
+    return "";
 }
 
 void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
 {
     Laik_TransitionContext* tc = as->context[a->tid];
-    laik_log_append("  %4d %s (R %d, tid %d)",
+    laik_log_append("  %4d [R %d, tid %d] %s",
                     ((char*)a) - ((char*)(as->action)),
-                    laik_at_str(a->type), a->round, a->tid);
+                    a->round, a->tid, laik_at_str(a->type));
 
     Laik_BackendAction* ba = (Laik_BackendAction*) a;
     switch(a->type) {
@@ -634,16 +634,18 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
     }
 
     default:
+        if (as->backend && as->backend->log_action)
+            if ((*as->backend->log_action)(a)) return;
+
         laik_log(LAIK_LL_Panic,
-                 "laik_log_Action: unknown action %d (%s)",
-                 a->type, laik_at_str(a->type));
+                 "laik_log_Action: unknown action %d", a->type);
         assert(0);
     }
 }
 
 void laik_log_ActionSeq(Laik_ActionSeq *as, bool showDetails)
 {
-    laik_log_append("action seq '%s' for %d transition(s), backend cleanup: %s\n"
+    laik_log_append("action seq '%s' for %d transition(s), backend '%s'\n"
                     "  %d rounds, %d buffers (%.3f MB),"
                     " %d actions (%d B), %d ranges (%d B)\n",
                     as->name,

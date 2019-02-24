@@ -61,6 +61,9 @@ struct _Laik_Backend {
 
   // sync of key-value store
   void (*sync)(Laik_Instance*);
+
+  // log backend-specific action, return true if handled (see laik_log_Action)
+  bool (*log_action)(Laik_Action* a);
 };
 
 
