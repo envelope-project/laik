@@ -72,6 +72,9 @@ struct _MPIGroupData {
 // If not, we do own algorithm with send/recv.
 static int mpi_reduce = 1;
 
+// LAIK_MPI_ASYNC: convert send/recv to isend/irecv? Default: Yes
+static int mpi_async = 1;
+
 
 //----------------------------------------------------------------
 // buffer space for messages if packing/unpacking from/to not-1d layout
@@ -317,6 +320,10 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     // do own reduce algorithm?
     char* str = getenv("LAIK_MPI_REDUCE");
     if (str) mpi_reduce = atoi(str);
+
+    // do async convertion?
+    str = getenv("LAIK_MPI_ASYNC");
+    if (str) mpi_async = atoi(str);
 
     mpi_instance = inst;
     return inst;
@@ -931,11 +938,13 @@ void laik_mpi_prepare(Laik_ActionSeq* as)
     //changed = laik_aseq_sort_rankdigits(as);
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
 
-    changed = laik_mpi_asyncSendRecv(as);
-    laik_log_ActionSeqIfChanged(changed, as, "After makeing send/recv async");
+    if (mpi_async) {
+        changed = laik_mpi_asyncSendRecv(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After makeing send/recv async");
 
-    changed = laik_aseq_sort_rounds(as);
-    laik_log_ActionSeqIfChanged(changed, as, "After sorting rounds 2");
+        changed = laik_aseq_sort_rounds(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After sorting rounds 2");
+    }
 
     laik_aseq_freeTempSpace(as);
 }
