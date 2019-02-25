@@ -2,6 +2,7 @@
 ../include/laik
 ../src
 /usr/include/mpi
+/usr/lib/x86_64-linux-gnu/openmpi/include
 /usr/include/glib-2.0
 ../examples
 ../
