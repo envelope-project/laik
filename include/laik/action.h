@@ -102,8 +102,8 @@ typedef enum _Laik_ActionType {
     // copy between buffers
     LAIK_AT_BufCopy, LAIK_AT_RBufCopy,
 
-    // low-level, backend-specific
-    LAIK_AT_Backend = 50
+    // low-level, backend-specific (50 unique actions should be enough)
+    LAIK_AT_Backend = 50, LAIK_AT_Backend_Max = 99
 
 } Laik_ActionType;
 
