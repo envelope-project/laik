@@ -34,7 +34,7 @@
 
 // forward decls, types/structs , global variables
 
-static void laik_mpi_finalize();
+static void laik_mpi_finalize(Laik_Instance*);
 static void laik_mpi_prepare(Laik_ActionSeq*);
 static void laik_mpi_cleanup(Laik_ActionSeq*);
 static void laik_mpi_exec(Laik_ActionSeq* as);
@@ -335,8 +335,10 @@ MPIGroupData* mpiGroupData(Laik_Group* g)
 }
 
 static
-void laik_mpi_finalize()
+void laik_mpi_finalize(Laik_Instance* inst)
 {
+    assert(inst == mpi_instance);
+
     if (mpiData(mpi_instance)->didInit)
         MPI_Finalize();
 }
