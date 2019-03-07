@@ -23,6 +23,7 @@
 ../src/partitioning.c
 ../src/profiling.c
 ../src/program.c
+../src/slicearray.c
 ../src/space.c
 ../src/type.c
 

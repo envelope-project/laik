@@ -73,17 +73,40 @@ typedef struct _Laik_TaskSlice_Single1d {
     int64_t idx;
 } Laik_TaskSlice_Single1d;
 
-// generic reference to a task slice by slice index in a partitioning
+// generic reference to a task slice by slice index in a slice array
 struct _Laik_TaskSlice {
-    Laik_Partitioning* p;
+    Laik_SliceArray* sa;
     int no;
 };
+
+
+// a slice array is an sequence of slices assigned to task ids, ordered
+// by task id, then mapping id, then an index ordering
+struct _Laik_SliceArray {
+    Laik_Space* space;
+    unsigned int tid_count; // size of <off> array
+
+    unsigned int capacity;   // slices allocated
+    unsigned int count;      // slices used
+
+    Laik_TaskSlice_Gen* tslice; // slice array
+    Laik_TaskSlice_Single1d* tss1d; // specific array used during collection
+
+    // calculated on freezing
+    unsigned int* off;       // offsets into slices, ordered by task id
+
+    // for fast access to slices within mappings from a task with given id
+    int map_tid;  // typically used for "own" task id
+    unsigned int map_count; // number of mappings needed for slices of <maptask>
+    unsigned int* map_off;  // offsets into own slices for same mapping
+};
+
 
 // if a slice filter is installed for a new created partitioning, for
 // each slice added by the partitioner, the filter is called to check
 // whether the slice actually should be stored
 typedef bool
-(*laik_pfilter_t)(Laik_Partitioning*, int task, Laik_Slice* s);
+(*laik_pfilter_t)(Laik_Partitioning*, int task, const Laik_Slice* s);
 
 struct _Laik_Partitioning {
     int id;
@@ -92,16 +115,7 @@ struct _Laik_Partitioning {
     Laik_Group* group; // slices are assigned to processes in this group
     Laik_Space* space; // slices are sub-ranges of this space
 
-    int capacity;  // slices allocated
-    int count;     // slices used
-
-    Laik_TaskSlice_Gen* tslice; // slice array
-    Laik_TaskSlice_Single1d* tss1d; // specific array used during collection
-
-    // calculated on freezing
-    int* off;       // offsets into slices, ordered by rank
-    int myMapCount; // number of mappings needed for slices of own process
-    int* myMapOff;  // offsets into own slices for same mapping
+    Laik_SliceArray* slices;
 
     // optional: partitioner to be called
     Laik_Partitioner* partitioner; // if set: creating partitioner
@@ -138,9 +152,8 @@ struct _Laik_Partitioning {
     Laik_Partitioning* intersecting;
 };
 
-void laik_clear_partitioning(Laik_Partitioning* p);
 void laik_free_partitioning(Laik_Partitioning* p);
-void laik_updateMyMapOffsets(Laik_Partitioning* p);
+void laik_updateMapOffsets(Laik_SliceArray* sa, int tid);
 
 
 

@@ -415,13 +415,13 @@ const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts)
 
     if (!ts) return 0;
 
-    if (ts->p->tslice)
-        return &(ts->p->tslice[ts->no].s);
+    if (ts->sa->tslice)
+        return &(ts->sa->tslice[ts->no].s);
 
-    if (ts->p->tss1d) {
+    if (ts->sa->tss1d) {
         static Laik_Slice slc;
-        int64_t idx = ts->p->tss1d[ts->no].idx;
-        laik_slice_init_1d(&slc, ts->p->space, idx, idx + 1);
+        int64_t idx = ts->sa->tss1d[ts->no].idx;
+        laik_slice_init_1d(&slc, ts->sa->space, idx, idx + 1);
         return &slc;
     }
     return 0;
@@ -430,11 +430,11 @@ const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts)
 // get the process rank of an task slice
 int laik_taskslice_get_task(Laik_TaskSlice* ts)
 {
-    assert(ts && ts->p);
-    if (ts->p->tslice)
-        return ts->p->tslice[ts->no].task;
-    if (ts->p->tss1d)
-        return ts->p->tss1d[ts->no].task;
+    assert(ts && ts->sa);
+    if (ts->sa->tslice)
+        return ts->sa->tslice[ts->no].task;
+    if (ts->sa->tss1d)
+        return ts->sa->tss1d[ts->no].task;
 
     return -1;
 }
@@ -443,12 +443,22 @@ int laik_taskslice_get_task(Laik_TaskSlice* ts)
 
 int laik_taskslice_get_mapNo(Laik_TaskSlice* ts)
 {
-    assert(ts && ts->p);
+    assert(ts && ts->sa);
     // does the partitioning store slices as single indexes? Only one map!
-    if (ts->p->tss1d) return 0;
+    if (ts->sa->tss1d) return 0;
 
-    Laik_TaskSlice_Gen* tsg = &(ts->p->tslice[ts->no]);
+    Laik_TaskSlice_Gen* tsg = &(ts->sa->tslice[ts->no]);
     return tsg->mapNo;
+}
+
+int laik_taskslice_get_tag(Laik_TaskSlice* ts)
+{
+    assert(ts && ts->sa);
+    // does the partitioning store slices as single indexes? Always tag 1
+    if (ts->sa->tss1d) return 1;
+
+    Laik_TaskSlice_Gen* tsg = &(ts->sa->tslice[ts->no]);
+    return tsg->tag;
 }
 
 
@@ -456,21 +466,21 @@ int laik_taskslice_get_mapNo(Laik_TaskSlice* ts)
 // passed from application-specific partitioners to slice processing
 void* laik_taskslice_get_data(Laik_TaskSlice* ts)
 {
-    assert(ts && ts->p);
+    assert(ts && ts->sa);
     // does the partitioning store slices as single indexes? No data!
-    if (ts->p->tss1d) return 0;
+    if (ts->sa->tss1d) return 0;
 
-    Laik_TaskSlice_Gen* tsg = &(ts->p->tslice[ts->no]);
+    Laik_TaskSlice_Gen* tsg = &(ts->sa->tslice[ts->no]);
     return tsg->data;
 }
 
 void laik_taskslice_set_data(Laik_TaskSlice* ts, void* data)
 {
-    assert(ts && ts->p);
+    assert(ts && ts->sa);
     // does the partitioning store slices as single indexes? No data to set!
-    assert(ts->p->tss1d == 0);
+    assert(ts->sa->tss1d == 0);
 
-    Laik_TaskSlice_Gen* tsg = &(ts->p->tslice[ts->no]);
+    Laik_TaskSlice_Gen* tsg = &(ts->sa->tslice[ts->no]);
     tsg->data = data;
 }
 
@@ -943,18 +953,20 @@ void calcAddReductions(int tflags,
         laik_log_append("calc '");
         laik_log_Reduction(redOp);
         laik_log_flush("' ops for '%s' (%d + %d slices) => '%s' (%d + %d slices)",
-                       fromP->name, fromP->count, fromP2 ? fromP2->count : 0,
-                       toP->name, toP->count, toP2 ? toP2->count : 0);
+                       fromP->name, fromP->slices->count, fromP2 ? fromP2->slices->count : 0,
+                       toP->name, toP->slices->count, toP2 ? toP2->slices->count : 0);
     }
 
     // add slice borders of all tasks
     cleanBorderList();
     int sliceNo, lastTask, lastMapNo;
+    Laik_SliceArray* sa;
     sliceNo = 0;
     lastTask = -1;
     lastMapNo = -1;
-    for(int i = 0; i < fromP->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(fromP->tslice[i]);
+    sa = fromP->slices;
+    for(unsigned int i = 0; i < sa->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
         // reset sliceNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
@@ -967,8 +979,9 @@ void calcAddReductions(int tflags,
     }
     lastTask = -1;
     lastMapNo = -1;
-    for(int i = 0; i < toP->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(toP->tslice[i]);
+    sa = toP->slices;
+    for(unsigned int i = 0; i < sa->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
         // reset sliceNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
@@ -983,16 +996,18 @@ void calcAddReductions(int tflags,
     // further intersections: do not include slices of own task again
     // also set sliceNo/mapNo to 0, as these are unreliable with intersections
     if (fromP2) {
-        for(int i = 0; i < fromP2->count; i++) {
-            Laik_TaskSlice_Gen* ts = &(fromP2->tslice[i]);
+        sa = fromP2->slices;
+        for(unsigned int i = 0; i < sa->count; i++) {
+            Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
             if (ts->task == group->myid) continue;
             appendBorder(ts->s.from.i[0], ts->task, 0, 0, true, true);
             appendBorder(ts->s.to.i[0], ts->task, 0, 0, false, true);
         }
     }
     if (toP2) {
-        for(int i = 0; i < toP2->count; i++) {
-            Laik_TaskSlice_Gen* ts = &(toP2->tslice[i]);
+        sa = toP2->slices;
+        for(unsigned int i = 0; i < sa->count; i++) {
+            Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
             if (ts->task == group->myid) continue;
             appendBorder(ts->s.from.i[0], ts->task, 0, 0, true, false);
             appendBorder(ts->s.to.i[0], ts->task, 0, 0, false, false);
@@ -1262,17 +1277,20 @@ do_calc_transition(Laik_Space* space,
 
     int dims = space->dims;
     int taskCount = group->size;
+    Laik_SliceArray* toSA   = toP ? toP->slices : 0;
+    Laik_SliceArray* fromSA = fromP ? fromP->slices : 0;
+    unsigned int o, o1, o2;
 
     // request to initialize values?
     if ((toP != 0) && (flow == LAIK_DF_Init)) {
 
-        for(int o = toP->off[myid]; o < toP->off[myid+1]; o++) {
-            if (laik_slice_isEmpty(&(toP->tslice[o].s))) continue;
+        for(o = toSA->off[myid]; o < toSA->off[myid+1]; o++) {
+            if (laik_slice_isEmpty(&(toSA->tslice[o].s))) continue;
 
             assert(redOp != LAIK_RO_None);
-            appendInitTOp( &(toP->tslice[o].s),
-                           o - toP->off[myid],
-                           toP->tslice[o].mapNo,
+            appendInitTOp( &(toSA->tslice[o].s),
+                           o - toSA->off[myid],
+                           toSA->tslice[o].mapNo,
                            redOp);
         }
     }
@@ -1294,17 +1312,17 @@ do_calc_transition(Laik_Space* space,
             // determine local slices to keep
             // (may need local copy if from/to mappings are different).
             // reductions are not handled here, but by backend
-            for(int o1 = fromP->off[myid]; o1 < fromP->off[myid+1]; o1++) {
-                for(int o2 = toP->off[myid]; o2 < toP->off[myid+1]; o2++) {
-                    slc = laik_slice_intersect(&(fromP->tslice[o1].s),
-                                               &(toP->tslice[o2].s));
+            for(o1 = fromSA->off[myid]; o1 < fromSA->off[myid+1]; o1++) {
+                for(o2 = toSA->off[myid]; o2 < toSA->off[myid+1]; o2++) {
+                    slc = laik_slice_intersect(&(fromSA->tslice[o1].s),
+                                               &(toSA->tslice[o2].s));
                     if (slc == 0) continue;
 
                     appendLocalTOp(slc,
-                                   o1 - fromP->off[myid],
-                                   o2 - toP->off[myid],
-                                   fromP->tslice[o1].mapNo,
-                                   toP->tslice[o2].mapNo);
+                                   o1 - fromSA->off[myid],
+                                   o2 - toSA->off[myid],
+                                   fromSA->tslice[o1].mapNo,
+                                   toSA->tslice[o2].mapNo);
                 }
             }
 
@@ -1353,30 +1371,30 @@ do_calc_transition(Laik_Space* space,
                 // something to receive not coming from a reduction?
                 for(int task = 0; task < taskCount; task++) {
                     if (task == myid) continue;
-                    for(int o1 = toP->off[myid]; o1 < toP->off[myid+1]; o1++) {
+                    for(o1 = toSA->off[myid]; o1 < toSA->off[myid+1]; o1++) {
 
                         // everything we have local will not have been sent
                         // TODO: we only check for exact match to catch All
                         // FIXME: should print out a Warning/Error as the App
                         //        was requesting for overwriting of values!
-                        slc = &(toP->tslice[o1].s);
-                        for(int o2 = fromP->off[myid]; o2 < fromP->off[myid+1]; o2++) {
+                        slc = &(toSA->tslice[o1].s);
+                        for(o2 = fromSA->off[myid]; o2 < fromSA->off[myid+1]; o2++) {
                             if (laik_slice_isEqual(slc,
-                                                   &(fromP->tslice[o2].s))) {
+                                                   &(fromSA->tslice[o2].s))) {
                                 slc = 0;
                                 break;
                             }
                         }
                         if (slc == 0) continue;
 
-                        for(int o2 = fromP->off[task]; o2 < fromP->off[task+1]; o2++) {
+                        for(o2 = fromSA->off[task]; o2 < fromSA->off[task+1]; o2++) {
 
-                            slc = laik_slice_intersect(&(fromP->tslice[o2].s),
-                                                       &(toP->tslice[o1].s));
+                            slc = laik_slice_intersect(&(fromSA->tslice[o2].s),
+                                                       &(toSA->tslice[o1].s));
                             if (slc == 0) continue;
 
-                            appendRecvTOp(slc, o1 - toP->off[myid],
-                                          toP->tslice[o1].mapNo, task);
+                            appendRecvTOp(slc, o1 - toSA->off[myid],
+                                          toSA->tslice[o1].mapNo, task);
                         }
                     }
                 }
@@ -1385,16 +1403,16 @@ do_calc_transition(Laik_Space* space,
             // something to send?
             for(int task = 0; task < taskCount; task++) {
                 if (task == myid) continue;
-                for(int o1 = fromP->off[myid]; o1 < fromP->off[myid+1]; o1++) {
+                for(o1 = fromSA->off[myid]; o1 < fromSA->off[myid+1]; o1++) {
 
                     // everything the receiver has local, no need to send
                     // TODO: we only check for exact match to catch All
                     // FIXME: should print out a Warning/Error as the App
                     //        requests overwriting of values!
-                    slc = &(fromP->tslice[o1].s);
-                    for(int o2 = fromP->off[task]; o2 < fromP->off[task+1]; o2++) {
+                    slc = &(fromSA->tslice[o1].s);
+                    for(o2 = fromSA->off[task]; o2 < fromSA->off[task+1]; o2++) {
                         if (laik_slice_isEqual(slc,
-                                               &(fromP->tslice[o2].s))) {
+                                               &(fromSA->tslice[o2].s))) {
                             slc = 0;
                             break;
                         }
@@ -1402,14 +1420,14 @@ do_calc_transition(Laik_Space* space,
                     if (slc == 0) continue;
 
                     // we may send multiple messages to same task
-                    for(int o2 = toP->off[task]; o2 < toP->off[task+1]; o2++) {
+                    for(o2 = toSA->off[task]; o2 < toSA->off[task+1]; o2++) {
 
-                        slc = laik_slice_intersect(&(fromP->tslice[o1].s),
-                                                   &(toP->tslice[o2].s));
+                        slc = laik_slice_intersect(&(fromSA->tslice[o1].s),
+                                                   &(toSA->tslice[o2].s));
                         if (slc == 0) continue;
 
-                        appendSendTOp(slc, o1 - fromP->off[myid],
-                                      fromP->tslice[o1].mapNo, task);
+                        appendSendTOp(slc, o1 - fromSA->off[myid],
+                                      fromSA->tslice[o1].mapNo, task);
                     }
                 }
             }

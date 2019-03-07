@@ -110,7 +110,7 @@ Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
     d->activeReservation = 0;
 
     laik_log(1, "new data '%s':\n"
-             " type '%s' (elemsize %d), space '%s' (%lu elems, %.3f MB)\n",
+             "  type '%s' (elemsize %d), space '%s' (%lu elems, %.3f MB)\n",
              d->name, type->name, d->elemsize, space->name,
              (unsigned long) laik_space_size(space),
              0.000001 * laik_space_size(space) * d->elemsize);
@@ -217,13 +217,15 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         }
     }
 
+    Laik_SliceArray* sa = p->slices;
+
     // number of local slices
-    int sn = p->off[myid+1] - p->off[myid];
+    int sn = sa->off[myid+1] - sa->off[myid];
 
     // number of maps
     int n = 0;
     if (sn > 0)
-        n = p->tslice[p->off[myid+1] - 1].mapNo + 1;
+        n = sa->tslice[sa->off[myid+1] - 1].mapNo + 1;
 
     Laik_MappingList* ml;
     ml = malloc(sizeof(Laik_MappingList) + n * sizeof(Laik_Mapping));
@@ -239,10 +241,10 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
 
     if (n == 0) return ml;
 
-    int firstOff, lastOff;
+    unsigned int firstOff, lastOff;
     int mapNo = 0;
-    for(int o = p->off[myid]; o < p->off[myid+1]; o++, mapNo++) {
-        assert(mapNo == p->tslice[o].mapNo);
+    for(unsigned int o = sa->off[myid]; o < sa->off[myid+1]; o++, mapNo++) {
+        assert(mapNo == sa->tslice[o].mapNo);
         Laik_Mapping* m = &(ml->map[mapNo]);
         initMapping(m, d);
         m->mapNo = mapNo;
@@ -250,11 +252,11 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         m->layout = l;
 
         // required space
-        Laik_Slice slc = p->tslice[o].s;
+        Laik_Slice slc = sa->tslice[o].s;
         firstOff = o;
-        while((o+1 < p->off[myid+1]) && (p->tslice[o+1].mapNo == mapNo)) {
+        while((o+1 < sa->off[myid+1]) && (sa->tslice[o+1].mapNo == mapNo)) {
             o++;
-            laik_slice_expand(&slc, &(p->tslice[o].s));
+            laik_slice_expand(&slc, &(sa->tslice[o].s));
         }
         lastOff = o;
         m->requiredSlice = slc;
@@ -949,29 +951,31 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
     // (1a) calculate list length needed:
     //      number of my slice groups in all partitionings
-    int groupCount = 0;
+    unsigned int groupCount = 0;
     for(int i = 0; i < res->count; i++) {
         Laik_Partitioning* p = res->entry[i].p;
         // this process must be part of all partitionings to reserve for
         assert(p->group->myid >= 0);
-        laik_updateMyMapOffsets(p); // could be done always, not just lazy
-        assert(p->myMapCount >= 0);
-        assert(p->myMapOff != 0);
-        groupCount += p->myMapCount;
+        Laik_SliceArray* sa = p->slices;
+        laik_updateMapOffsets(sa, p->group->myid); // could be done always, not just lazy
+        assert(sa->map_tid == p->group->myid);
+        assert(sa->map_off != 0);
+        groupCount += sa->map_count;
     }
 
     // (1b) allocate list and add entries for slice groups to list
     struct mygroup *glist = malloc(groupCount * sizeof(struct mygroup));
-    int gOff = 0;
+    unsigned int gOff = 0;
     for(int i = 0; i < res->count; i++) {
         Laik_Partitioning* p = res->entry[i].p;
-        for(int mapNo = 0; mapNo < p->myMapCount; mapNo++) {
-            int off = p->myMapOff[mapNo];
-            int tag = p->tslice[off].tag;
+        Laik_SliceArray* sa = p->slices;
+        for(int mapNo = 0; mapNo < (int) sa->map_count; mapNo++) {
+            unsigned int off = sa->map_off[mapNo];
+            int tag = sa->tslice[off].tag;
             // for reservation, tag >0 to specify partitioning relations
             // TODO: tag == 0 means to use heuristic, but not implemented yet
             //       but we are fine with just one slice group and tag 0
-            if (p->myMapCount > 1)
+            if (sa->map_count > 1)
                 assert(tag > 0);
             glist[gOff].partIndex = i;
             glist[gOff].partMapNo = mapNo;
@@ -986,7 +990,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
     qsort(glist, groupCount, sizeof(struct mygroup), mygroup_cmp);
     int resMapNo = -1;
     int lastTag = -1;
-    for(int i = 0; i < groupCount; i++) {
+    for(unsigned int i = 0; i < groupCount; i++) {
         if (glist[i].tag != lastTag) {
             lastTag = glist[i].tag;
             resMapNo++;
@@ -1010,14 +1014,15 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
     for(int i = 0; i < res->count; i++) {
         Laik_Partitioning* p = res->entry[i].p;
+        Laik_SliceArray* sa = p->slices;
         Laik_MappingList* mList = malloc(sizeof(Laik_MappingList) +
-                                      p->myMapCount * sizeof(Laik_Mapping));
-        mList->count = p->myMapCount;
+                                         sa->map_count * sizeof(Laik_Mapping));
+        mList->count = (int) sa->map_count;
         mList->res = res;
         res->entry[i].mList = mList;
-        for(int i = 0; i < p->myMapCount; i++) {
+        for(unsigned int i = 0; i < sa->map_count; i++) {
             initMapping(&(mList->map[i]), res->data);
-            mList->map[i].mapNo = i;
+            mList->map[i].mapNo = (int) i;
         }
     }
 
@@ -1025,7 +1030,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
     //     and determine required space for each mapping
 
     int dims = data->space->dims;
-    for(int i = 0; i < groupCount; i++) {
+    for(unsigned int i = 0; i < groupCount; i++) {
         int idx = glist[i].partIndex;
 
         int partMapNo = glist[i].partMapNo;
@@ -1041,15 +1046,16 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
         // go over all slices in this slice group (same tag) and extend
         Laik_Partitioning* p = res->entry[idx].p;
-        for(int o = p->myMapOff[partMapNo]; o < p->myMapOff[partMapNo+1]; o++) {
-            assert(p->tslice[o].s.space != 0);
-            assert(p->tslice[o].mapNo == partMapNo);
-            assert(p->tslice[o].tag == glist[i].tag);
-            assert(laik_slice_size(&(p->tslice[o].s)) > 0);
+        Laik_SliceArray* sa = p->slices;
+        for(unsigned int o = sa->map_off[partMapNo]; o < sa->map_off[partMapNo+1]; o++) {
+            assert(sa->tslice[o].s.space != 0);
+            assert(sa->tslice[o].mapNo == partMapNo);
+            assert(sa->tslice[o].tag == glist[i].tag);
+            assert(laik_slice_size(&(sa->tslice[o].s)) > 0);
             if (laik_slice_isEmpty(&(pMap->requiredSlice)))
-                pMap->requiredSlice = p->tslice[o].s;
+                pMap->requiredSlice = sa->tslice[o].s;
             else
-                laik_slice_expand(&(pMap->requiredSlice), &(p->tslice[o].s));
+                laik_slice_expand(&(pMap->requiredSlice), &(sa->tslice[o].s));
         }
 
         // extend combined mapping descriptor by required size
@@ -1069,7 +1075,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
     for(int i = 0; i < mCount; i++) {
         Laik_Mapping* m = &(mList[i]);
         Laik_Slice* slc = &(m->requiredSlice);
-        int count = laik_slice_size(slc);
+        uint64_t count = laik_slice_size(slc);
         assert(count > 0);
         total += count;
 
@@ -1093,8 +1099,9 @@ void laik_reservation_alloc(Laik_Reservation* res)
     // (5) set parameters for embedded mappings
     for(int r = 0; r < res->count; r++) {
         Laik_Partitioning* p = res->entry[r].p;
+        Laik_SliceArray* sa = p->slices;
         laik_log(1, " part '%s':", p->name);
-        for(int mapNo = 0; mapNo < p->myMapCount; mapNo++) {
+        for(unsigned int mapNo = 0; mapNo < sa->map_count; mapNo++) {
             Laik_Mapping* m = &(res->entry[r].mList->map[mapNo]);
 
             m->allocatedSlice = m->baseMapping->requiredSlice;
@@ -1569,7 +1576,7 @@ unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
                     break;
                 }
 
-#if DEBUG_UNPACK
+#ifdef DEBUG_UNPACK
                 laik_log(1, "unpacking (%lu/%lu/%lu) off %lu: %.3f, left %d",
                          i0, i1, i2,
                          (idxPtr - m->base)/elemsize, *(double*)buf,

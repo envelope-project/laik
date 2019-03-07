@@ -16,8 +16,8 @@
  */
 
 
-#ifndef _LAIK_DEBUG_H_
-#define _LAIK_DEBUG_H_
+#ifndef LAIK_DEBUG_H
+#define LAIK_DEBUG_H
 
 #include <stdint.h>  // for uint64_t
 #include "data.h"    // for Laik_SwitchStat
@@ -34,6 +34,7 @@ void laik_log_Slice(Laik_Slice* slc);
 void laik_log_Reduction(Laik_ReductionOperation op);
 void laik_log_DataFlow(Laik_DataFlow flow);
 void laik_log_Transition(Laik_Transition* t, bool showActions);
+void laik_log_SliceArray(Laik_SliceArray* sa);
 void laik_log_Partitioning(Laik_Partitioning* p);
 void laik_log_SwitchStat(Laik_SwitchStat* ss);
 void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as);
@@ -44,4 +45,4 @@ void laik_log_Checksum(char* buf, int count, Laik_Type* t);
 void laik_log_ActionSeqIfChanged(bool changed, Laik_ActionSeq* as, char* title);
 
 
-#endif // _LAIK_DEBUG_H_
+#endif // LAIK_DEBUG_H

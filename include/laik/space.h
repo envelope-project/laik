@@ -62,6 +62,10 @@ typedef struct _Laik_Transition Laik_Transition;
 // a partitioner is an algorithm mapping slices of an index space to tasks
 typedef struct _Laik_Partitioner Laik_Partitioner;
 
+// an ordered sequence of slices assigned to tasks
+typedef struct _Laik_SliceArray Laik_SliceArray;
+
+
 
 //---------------------------------------------------------------------
 // enums for space module
@@ -218,6 +222,46 @@ int laik_space_getdimensions(Laik_Space* space);
 
 
 /**
+ * Laik_SliceArray
+ *
+ * A sequence of slices assigned to task ids.
+ * After adding slices, the array must be freezed before accessing slices.
+ */
+
+// create an array to hold slices for a given space with max task id
+Laik_SliceArray* laik_slicearray_new(Laik_Space* space, unsigned int max_tid);
+void laik_slicearray_free(Laik_SliceArray* sa);
+
+// add a slice with tag and arbitrary data to a slice array
+void laik_slicearray_append(Laik_SliceArray* sa, int tid, const Laik_Slice *s,
+                            int tag, void* data);
+// add a slice with a single 1d index to a slice array (space optimized)
+void laik_slicearray_append_single1d(Laik_SliceArray* sa, int tid, int64_t idx);
+// freeze slice array
+void laik_slicearray_freeze(Laik_SliceArray* sa, bool doMerge);
+// translate task ids using <idmap> array
+void laik_slicearray_migrate(Laik_SliceArray* sa, int* idmap, unsigned int new_count);
+
+// does this cover the full space with one slice for each process?
+bool laik_slicearray_isAll(Laik_SliceArray* sa);
+// does this cover the full space with one slice in exactly one task?
+int laik_slicearray_isSingle(Laik_SliceArray* sa);
+// are the slices of two slice arrays equal?
+bool laik_slicearray_isEqual(Laik_SliceArray* sa1, Laik_SliceArray* sa2);
+// do the slices of this partitioning cover the full space?
+bool laik_slicearray_coversSpace(Laik_SliceArray* sa);
+// get number of slices
+int laik_slicearray_slicecount(Laik_SliceArray* sa);
+int laik_slicearray_tidslicecount(Laik_SliceArray* sa, int tid);
+int laik_slicearray_tidmapcount(Laik_SliceArray* sa, int tid);
+unsigned int laik_slicearray_tidmapslicecount(Laik_SliceArray* sa, int tid, int mapNo);
+// get a given slice from the slice array
+Laik_TaskSlice* laik_slicearray_tslice(Laik_SliceArray* sa, int n);
+Laik_TaskSlice* laik_slicearray_tidslice(Laik_SliceArray* sa, int tid, int n);
+Laik_TaskSlice* laik_slicearray_tidmapslice(Laik_SliceArray* sa, int tid, int mapNo, int n);
+
+
+/**
  * Laik_Partitioning
  */
 
@@ -365,7 +409,7 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 // the <data> pointer is an arbitrary value which can be passed from
 //  application-specific partitioners to the code processing slices.
 //  LAIK provided partitioners set <data> to 0.
-void laik_append_slice(Laik_Partitioning* p, int task, Laik_Slice* s,
+void laik_append_slice(Laik_Partitioning* p, int task, const Laik_Slice* s,
                        int tag, void* data);
 // append 1d single-index slice
 void laik_append_index_1d(Laik_Partitioning* p,
@@ -375,7 +419,9 @@ Laik_Space* laik_partitioning_get_space(Laik_Partitioning* p);
 Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p);
 int laik_partitioning_slicecount(Laik_Partitioning* p);
 Laik_TaskSlice* laik_partitioning_get_tslice(Laik_Partitioning* p, int n);
+Laik_SliceArray* laik_partitioning_slices(Laik_Partitioning*);
 
+// get slice of a task slice
 const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts);
 int laik_taskslice_get_task(Laik_TaskSlice* ts);
 // applications can attach arbitrary values to a TaskSlice, to be
@@ -385,10 +431,7 @@ void laik_taskslice_set_data(Laik_TaskSlice*, void* data);
 // return the mapping number of this task slice, calculated from tags
 // provided by the partitioner
 int laik_taskslice_get_mapNo(Laik_TaskSlice*);
-
-// get slice of a task slice
-Laik_Slice* laik_tslice_get_slice(Laik_TaskSlice*);
-
+int laik_taskslice_get_tag(Laik_TaskSlice* ts);
 
 // get a custom data pointer from the partitioner
 void* laik_partitioner_data(Laik_Partitioner* partitioner);

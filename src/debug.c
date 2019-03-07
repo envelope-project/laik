@@ -230,6 +230,25 @@ void laik_log_Transition(Laik_Transition* t, bool showActions)
     }
 }
 
+void laik_log_SliceArray(Laik_SliceArray* sa)
+{
+    laik_log_append("%d slice(s) assigned to %d task ids on ",
+                    sa->count, sa->tid_count);
+    laik_log_Space(sa->space);
+    if (sa->count > 0) {
+        assert(sa->tslice); // only show generic slices
+        laik_log_append(": (tid:slice-tag/mapNo)\n    ");
+        for(unsigned int i = 0; i < sa->count; i++) {
+            Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
+            if (i>0)
+                laik_log_append(", ");
+            laik_log_append("%d:", ts->task);
+            laik_log_Slice(&(ts->s));
+            laik_log_append("-%d/%d", ts->tag, ts->mapNo);
+        }
+    }
+}
+
 void laik_log_Partitioning(Laik_Partitioning* p)
 {
     if (!p) {
@@ -237,29 +256,17 @@ void laik_log_Partitioning(Laik_Partitioning* p)
         return;
     }
 
-    laik_log_append("partitioning '%s': %d slices in %d tasks on ",
-                    p->name, p->count, p->group->size);
-    laik_log_Space(p->space);
+    laik_log_append("partitioning '%s'", p->name);
     if (p->myfilter)
         laik_log_append(" (filter own task only)");
     if (p->intersecting) {
         laik_log_append(" (intersection filter with '%s'/'%s', %d slices)",
                         p->intersecting->pfilter1 ? p->intersecting->pfilter1->name : "",
                         p->intersecting->pfilter2 ? p->intersecting->pfilter2->name : "",
-                        p->intersecting->count);
+                        p->intersecting->slices->count);
     }
-    if (p->count > 0) {
-        assert(p->tslice); // only show generic slices
-        laik_log_append(": (task:slice:tag/mapNo)\n    ");
-        for(int i = 0; i < p->count; i++) {
-            Laik_TaskSlice_Gen* ts = &(p->tslice[i]);
-            if (i>0)
-                laik_log_append(", ");
-            laik_log_append("%d:", ts->task);
-            laik_log_Slice(&(ts->s));
-            laik_log_append(":%d/%d", ts->tag, ts->mapNo);
-        }
-    }
+    laik_log_append(": ");
+    laik_log_SliceArray(p->slices);
 }
 
 void laik_log_PrettyInt(uint64_t v)
