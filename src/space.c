@@ -25,6 +25,23 @@
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
+// Space module initialization
+
+static bool space_init_done = false;
+Laik_Partitioner* laik_All = 0;
+Laik_Partitioner* laik_Master = 0;
+
+void laik_space_init()
+{
+    if (space_init_done) return;
+
+    laik_All    = laik_new_all_partitioner();
+    laik_Master = laik_new_master_partitioner();
+
+    space_init_done = true;
+}
+
+
 // counter for space ID, for logging
 static int space_id = 0;
 
