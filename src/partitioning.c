@@ -32,6 +32,153 @@
 #include <stdio.h>
 
 
+/// SliceFilter
+
+Laik_SliceFilter* laik_slicefilter_new()
+{
+    Laik_SliceFilter* sf;
+
+    sf = malloc(sizeof(Laik_SliceFilter));
+    if (sf == 0) {
+        laik_panic("Out of memory allocating Laik_SliceFilter object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
+    // no filter set in the beginning
+    sf->filter_func = 0;
+
+    sf->filter_tid = -1;
+    sf->pfilter1 = 0;
+    sf->pfilter2 = 0;
+
+    return sf;
+}
+
+void laik_slicefilter_free(Laik_SliceFilter* sf)
+{
+    free(sf->pfilter1);
+    free(sf->pfilter2);
+    free(sf);
+}
+
+// helper for laik_slicefilter_set_myfilter
+static
+bool tidfilter(Laik_SliceFilter* sf, int task, const Laik_Slice* s)
+{
+    (void) s; // unused parameter of filter signature
+
+    assert(sf->filter_tid >= 0); // only to be called with "my" filter active
+    return (sf->filter_tid == task);
+}
+
+// set filter to only keep slices for own process when adding slices
+void laik_slicefilter_set_myfilter(Laik_SliceFilter* sf, Laik_Group* g)
+{
+    assert(sf->filter_func == 0); // no filter set yet
+    sf->filter_tid = g->myid;
+    sf->filter_func = tidfilter;
+}
+
+
+// helper for laik_slicefilter_set_idxfilter
+
+// check if [from;to[ intersects slices given in par
+static bool idxfilter_check(int64_t from, int64_t to, PFilterPar* par)
+{
+    assert(par->len > 0);
+
+    laik_log(1,"  filter [%lld;%lld[ check with range [%lld;%lld[",
+             (long long) from, (long long) to,
+             (long long) par->from, (long long) par->to);
+
+    if ((from >= par->to) || (to <= par->from)) {
+        laik_log(1,"    no intersection!");
+        return false;
+    }
+
+    // binary search
+    Laik_TaskSlice_Gen* ts = par->ts;
+    unsigned int off1 = 0, off2 = par->len;
+    while(off1 < off2) {
+        unsigned int mid = (off1 + off2) / 2;
+        laik_log(1,"  filter check at %d: [%lld;%lld[",
+                 mid,
+                 (long long) ts[mid].s.from.i[0],
+                 (long long) ts[mid].s.to.i[0]);
+
+        if (from >= ts[mid].s.to.i[0]) {
+            laik_log(1,"    larger, check against %d: [%lld;%lld[",
+                     mid+1,
+                     (long long) ts[mid+1].s.from.i[0],
+                     (long long) ts[mid+1].s.to.i[0]);
+            if (to <= ts[mid+1].s.from.i[0]) {
+                laik_log(1,"    no intersection!");
+                return false;
+            }
+            off1 = mid;
+            continue;
+        }
+        if (to <= ts[mid].s.from.i[0]) {
+            laik_log(1,"    smaller, check against %d: [%lld;%lld[",
+                     mid-1,
+                     (long long) ts[mid-1].s.from.i[0],
+                     (long long) ts[mid-1].s.to.i[0]);
+            if (from >= ts[mid-1].s.to.i[0]) {
+                laik_log(1,"    no intersection!");
+                return false;
+            }
+            off2 = mid;
+            continue;
+        }
+        break;
+    }
+    laik_log(1,"    found intersection!");
+    return true;
+}
+
+
+static
+bool idxfilter(Laik_SliceFilter* sf, int task, const Laik_Slice* s)
+{
+    (void) task; // unused parameter of filter signature
+
+    int64_t from = s->from.i[0];
+    int64_t to = s->to.i[0];
+
+    if (sf->pfilter1 && idxfilter_check(from, to, sf->pfilter1)) return true;
+    if (sf->pfilter2 && idxfilter_check(from, to, sf->pfilter2)) return true;
+    return false;
+}
+
+// add filter to only keep slices intersecting with slices in <sa>
+void laik_slicefilter_add_idxfilter(Laik_SliceFilter* sf, Laik_SliceArray* sa)
+{
+    assert(sa);
+    assert(sa->off != 0);
+    assert(sa->space->dims == 1); // TODO: only for 1d for now
+
+    if (sa->count == 0) return;
+
+    PFilterPar* par = malloc(sizeof(PFilterPar));
+    par->len = sa->count;
+    par->from = sa->tslice[0].s.from.i[0];
+    par->to   = sa->tslice[sa->count - 1].s.to.i[0];
+    par->ts = sa->tslice;
+
+    if      (sf->pfilter1 == 0) sf->pfilter1 = par;
+    else if (sf->pfilter2 == 0) sf->pfilter2 = par;
+    else assert(0);
+
+    laik_log(1,"Set pfilter to intersection with %d slices between [%lld;%lld[",
+             par->len,
+             (long long) par->from, (long long) par->to);
+
+    // install filter function
+    sf->filter_func = idxfilter;
+}
+
+
+
 
 /**
  * A partitioning is a set of slices (= consecutive ranges) into a space,
@@ -100,23 +247,13 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     p->partitioner = pr;
 
     p->slices = laik_slicearray_new(s, (unsigned int) g->size);
-
-    p->other = other;
-    p->fromOther = 0;
-    p->intersecting = 0;
-
-    // no filter set
     p->filter = 0;
 
-    p->consumer = 0;
-
-    p->myfilter = false;
-    p->pfilter1 = 0;
-    p->pfilter2 = 0;
-
+    p->other = other;
 
     return p;
 }
+
 
 
 
@@ -151,169 +288,6 @@ Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p)
 }
 
 
-// helper for laik_partitioning_set_myfilter
-static
-bool myfilter(Laik_Partitioning* p, int task, const Laik_Slice* s)
-{
-    (void) s; // unused parameter of filter signature
-
-    assert(p->myfilter); // only to be called with "my" filter active
-    return p->group->myid == task;
-}
-
-// set filter to only keep slices for own process when adding slices
-void laik_partitioning_set_myfilter(Laik_Partitioning* p)
-{
-    assert(p->slices->off == 0);
-    assert(p->filter == 0); // no filter set yet
-    p->myfilter = true;
-    p->filter = myfilter;
-}
-
-
-// helper for laik_partitioning_set_pfilter
-
-typedef struct {
-    int64_t from, to;
-    Laik_TaskSlice_Gen* ts;
-    int len;
-} PFilterPar;
-
-static PFilterPar pfilter_par1, pfilter_par2;
-
-// check if [from;to[ intersects slices given in par
-static bool pfilter_check(int64_t from, int64_t to, PFilterPar* par)
-{
-    assert(par->len > 0);
-
-    laik_log(1,"  filter [%lld;%lld[ check with range [%lld;%lld[",
-             (long long) from, (long long) to,
-             (long long) par->from, (long long) par->to);
-
-    if ((from >= par->to) || (to <= par->from)) {
-        laik_log(1,"    no intersection!");
-        return false;
-    }
-
-    // binary search
-    Laik_TaskSlice_Gen* ts = par->ts;
-    int off1 = 0, off2 = par->len;
-    while(off1 < off2) {
-        int mid = (off1 + off2) / 2;
-        laik_log(1,"  filter check at %d: [%lld;%lld[",
-                 mid,
-                 (long long) ts[mid].s.from.i[0],
-                 (long long) ts[mid].s.to.i[0]);
-
-        if (from >= ts[mid].s.to.i[0]) {
-            laik_log(1,"    larger, check against %d: [%lld;%lld[",
-                     mid+1,
-                     (long long) ts[mid+1].s.from.i[0],
-                     (long long) ts[mid+1].s.to.i[0]);
-            if (to <= ts[mid+1].s.from.i[0]) {
-                laik_log(1,"    no intersection!");
-                return false;
-            }
-            off1 = mid;
-            continue;
-        }
-        if (to <= ts[mid].s.from.i[0]) {
-            laik_log(1,"    smaller, check against %d: [%lld;%lld[",
-                     mid-1,
-                     (long long) ts[mid-1].s.from.i[0],
-                     (long long) ts[mid-1].s.to.i[0]);
-            if (from >= ts[mid-1].s.to.i[0]) {
-                laik_log(1,"    no intersection!");
-                return false;
-            }
-            off2 = mid;
-            continue;
-        }
-        break;
-    }
-    laik_log(1,"    found intersection!");
-    return true;
-}
-
-
-static
-bool pfilter(Laik_Partitioning* p, int task, const Laik_Slice* s)
-{
-    (void) task; // unused parameter of filter signature
-    (void) p; // unused parameter of filter signature
-
-    int64_t from = s->from.i[0];
-    int64_t to = s->to.i[0];
-
-    if ((pfilter_par1.len > 0) && pfilter_check(from, to, &pfilter_par1))
-        return true;
-    if ((pfilter_par2.len > 0) && pfilter_check(from, to, &pfilter_par2))
-        return true;
-    return false;
-}
-
-// add filter to only keep slices intersecting with own slices in <filter>
-void laik_partitioning_add_pfilter(Laik_Partitioning* p, Laik_Partitioning* filter)
-{
-    PFilterPar* par = 0;
-    assert(filter);
-
-    assert(p->slices->off == 0);
-    assert(p->space->dims == 1); // TODO: only for 1d for now
-
-    // already set?
-    if ((p->pfilter1 == filter) || (p->pfilter2 == filter)) return;
-
-    // check free slot to add pfilter
-    if (p->pfilter1 == 0)
-        par = &pfilter_par1;
-    else if (p->pfilter2 == 0)
-        par = &pfilter_par2;
-    else {
-        assert(0); // no space!
-        return;
-    }
-
-    // partitioning we intersect with should store own slices
-    assert(filter->myfilter);
-    assert(filter->space == p->space);
-
-    Laik_SliceArray* sa = filter->slices;
-    assert(sa);
-    unsigned int off1 = sa->off[p->group->myid];
-    unsigned int off2 = sa->off[p->group->myid + 1];
-    if (off1 == off2) {
-        // no slices, no need to add filter
-        return;
-    }
-
-    par->len = (int)(off2 - off1);
-    par->from = sa->tslice[off1].s.from.i[0];
-    par->to = sa->tslice[off2 - 1].s.to.i[0];
-    par->ts = sa->tslice + off1;
-    laik_log(1,"Set pfilter for '%s' to intersection with '%s': %d own slices, between [%lld;%lld[",
-             p->name, filter->name, par->len,
-             (long long) par->from, (long long) par->to);
-
-    if (par == &pfilter_par1)
-        p->pfilter1 = filter;
-    else
-        p->pfilter2 = filter;
-
-    // install filter function
-    p->filter = pfilter;
-}
-
-
-// is the partitioning <filter> set to be a pfilter for <p> ?
-bool laik_partitioning_has_pfilter(Laik_Partitioning* p,
-                                   Laik_Partitioning* filter)
-{
-    assert(p);
-    assert(filter);
-
-    return (p->pfilter1 == filter) || (p->pfilter2 == filter);
-}
 
 
 // partitioner API: add a slice
@@ -323,9 +297,10 @@ void laik_append_slice(Laik_Partitioning* p, int task, const Laik_Slice *s,
                        int tag, void* data)
 {
     // if filter is installed, check if we should store the slice
-    if (p->filter) {
-        bool res = (p->filter)(p, task, s);
-        laik_log(1,"filter added slice %d:[%lld;%lld[: %s",
+    Laik_SliceFilter* sf = p->filter;
+    if (sf) {
+        bool res = (sf->filter_func)(sf, task, s);
+        laik_log(1,"appending slice %d:[%lld;%lld[: %s",
                  task,
                  (long long) s->from.i[0], (long long) s->to.i[0],
                  res ? "keep":"skip");
@@ -339,12 +314,17 @@ void laik_append_slice(Laik_Partitioning* p, int task, const Laik_Slice *s,
 // if a partitioner only uses this method, an optimized internal format is used
 void laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx)
 {
-    if (p->filter) {
+    Laik_SliceFilter* sf = p->filter;
+    if (sf) {
         Laik_Slice slc;
         laik_slice_init_1d(&slc, p->space, idx, idx + 1);
-        if ((p->filter)(p, task, &slc) == false) return;
+        bool res = (sf->filter_func)(sf, task, &slc);
+        laik_log(1,"appending slice %d:[%lld;%lld[: %s",
+                 task,
+                 (long long) slc.from.i[0], (long long) slc.to.i[0],
+                 res ? "keep":"skip");
+        if (res == false) return;
     }
-    assert(p->space->dims == 1);
 
     if (p->slices->tslice) {
         // append as generic slice
@@ -408,10 +388,10 @@ void* laik_partitioner_data(Laik_Partitioner* partitioner)
 // free resources allocated for a partitioning object
 void laik_free_partitioning(Laik_Partitioning* p)
 {
-    if (p->intersecting)
-        laik_free_partitioning(p->intersecting);
-
-    laik_slicearray_free(p->slices);
+    if (p->slices)
+        laik_slicearray_free(p->slices);
+    if (p->filter)
+        laik_slicefilter_free(p->filter);
     free(p);
 }
 
@@ -468,6 +448,22 @@ void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge)
     laik_slicearray_freeze(p->slices, doMerge);
 }
 
+void laik_partitioning_set_myfilter(Laik_Partitioning* p)
+{
+    assert(p->filter == 0);
+    p->filter = laik_slicefilter_new();
+    laik_slicefilter_set_myfilter(p->filter, p->group);
+}
+
+void laik_partitioning_add_idxfilter(Laik_Partitioning* p,
+                                     Laik_Partitioning* filter)
+{
+    assert(filter->slices->off != 0);
+    if (p->filter == 0)
+        p->filter = laik_slicefilter_new();
+    laik_slicefilter_add_idxfilter(p->filter, filter->slices);
+}
+
 
 // run a partitioner on a yet invalid, empty partitioning
 void laik_run_partitioner(Laik_Partitioning* p)
@@ -475,20 +471,17 @@ void laik_run_partitioner(Laik_Partitioning* p)
     // has to be invalid yet
     assert(p->slices->off == 0);
     Laik_Partitioner* pr = p->partitioner;
+    // must have a partitioner set
+    assert(pr != 0);
 
-    if (pr) {
-        if (p->other) {
-            assert(p->other->group == p->group);
-            // we do not check for same space, as there are use cases
-            // where you want to derive a partitioning of one space from
-            // the partitioning of another
-        }
-        (pr->run)(pr, p, p->other);
+    if (p->other) {
+        assert(p->other->group == p->group);
+        // we do not check for same space, as there are use cases
+        // where you want to derive a partitioning of one space from
+        // the partitioning of another
     }
-    else if (p->other && p->other->consumer == p) {
-        // we consume slices from <other>, so run its partitioner
-        laik_run_partitioner(p->other);
-    }
+
+    (pr->run)(pr, p, p->other);
 
     bool doMerge = false;
     if (pr) doMerge = (pr->flags & LAIK_PF_Merge) > 0;
@@ -543,60 +536,6 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 }
 
 
-// helper for laik_new_migrated_partitioning
-static
-bool myforwardfilter(Laik_Partitioning* p, int task, const Laik_Slice* s)
-{
-    assert(p->consumer && p->consumer->fromOther);
-    assert((task >= 0) && (task < p->group->size));
-    laik_append_slice(p->consumer, p->consumer->fromOther[task], s, 0, 0);
-    return true;
-}
-
-// new partitioning taking slices from another, migrating to new group
-Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
-                                                  Laik_Group* newg)
-{
-    Laik_Partitioning* p;
-    p = laik_new_empty_partitioning(newg, other->space, 0, other);
-
-    // setup mapping
-    if (newg->parent == other->group) {
-        // new group is child of <other>
-        p->fromOther = newg->fromParent;
-    }
-    else if (other->group->parent == newg) {
-        // new group is parent of <other>
-        p->fromOther = other->group->toParent;
-    }
-    else {
-        // other cases not supported
-        assert(0);
-    }
-
-    if (other->slices->off == 0) {
-        // other yet invalid: install consumer filter to forward slices
-        assert(other->consumer == 0);
-        other->consumer = p;
-        assert(other->filter == 0);
-        other->filter = myforwardfilter;
-    }
-    else {
-        // travers slices and append to this
-        Laik_SliceArray* osa = other->slices;
-        for(unsigned int i = 0; i < osa->count; i++) {
-            Laik_TaskSlice_Gen* ts = &(osa->tslice[i]);
-            assert((ts->task >= 0) && (ts->task < other->group->size));
-            laik_append_slice(p, p->fromOther[ts->task],
-                              &(ts->s), ts->tag, ts->data);
-        }
-        laik_freeze_partitioning(p, false);
-    }
-
-    return p;
-}
-
-
 
 // migrate partitioning borders to new group without changing borders
 // - added tasks get empty partitions
@@ -617,13 +556,6 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
     else {
         // other cases not supported
         assert(0);
-    }
-
-
-    // invalidate any cached version with intersections
-    if (p->intersecting) {
-        laik_free_partitioning(p->intersecting);
-        p->intersecting = 0;
     }
 
     laik_slicearray_migrate(p->slices, fromOld, (unsigned int) newg->size);

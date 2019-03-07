@@ -106,7 +106,30 @@ struct _Laik_SliceArray {
 // each slice added by the partitioner, the filter is called to check
 // whether the slice actually should be stored
 typedef bool
-(*laik_pfilter_t)(Laik_Partitioning*, int task, const Laik_Slice* s);
+    (*laik_filterFunc_t)(Laik_SliceFilter*, int task, const Laik_Slice* s);
+
+// for intersection partitioning filter
+typedef struct {
+    int64_t from, to;
+    Laik_TaskSlice_Gen* ts;
+    unsigned int len;
+} PFilterPar;
+
+// parameters for filtering slices on a partitioner run
+struct _Laik_SliceFilter {
+    // if set: call this function for each slice
+    laik_filterFunc_t filter_func;
+
+    // for task id filter: only store slices for this task id (if >=0)
+    int filter_tid;
+
+    // partition intersection filter:
+    // if set, only slices intersecting own slices from these partitionings
+    // are stored. max of 2 partitionings can be given
+    // (used in laik_calc_transition for reduced memory consumption)
+    PFilterPar *pfilter1, *pfilter2;
+};
+
 
 struct _Laik_Partitioning {
     int id;
@@ -123,33 +146,8 @@ struct _Laik_Partitioning {
     // base partitioning, used with partitioner or chained partitionings
     Laik_Partitioning* other;
 
-    // if set, this maps ranks from <other> to <group>
-    //   used by laik_new_migrated_partitioning()
-    int* fromOther;
-
-
-    // slice filters and consumers
-
-    // if set: call this function for each slice
-    laik_pfilter_t filter;
-
-    // a filter can forward slices to this partitioning
-    Laik_Partitioning* consumer;
-
-    // my filter: if true, only store slices for own process
-    bool myfilter;
-
-    // partition intersection filter:
-    // if set, only slices intersecting own slices from these partitionings
-    // are stored. max of 2 partitionings can be given
-    // (used in laik_calc_transition for reduced memory consumption)
-    Laik_Partitioning *pfilter1, *pfilter2;
-
-    // allow to cache a partitioning which stores slices which intersect with
-    // own slices of this partitioning and another one set as
-    // "intersecting->pfilter1/2"
-    // (used in laik_calc_transition for reduced memory consumption)
-    Laik_Partitioning* intersecting;
+    // optional: a filter to use when running the partitioner
+    Laik_SliceFilter* filter;
 };
 
 void laik_free_partitioning(Laik_Partitioning* p);

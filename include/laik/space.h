@@ -65,6 +65,8 @@ typedef struct _Laik_Partitioner Laik_Partitioner;
 // an ordered sequence of slices assigned to tasks
 typedef struct _Laik_SliceArray Laik_SliceArray;
 
+// parameters for filtering slices on a partitioner run
+typedef struct _Laik_SliceFilter Laik_SliceFilter;
 
 
 //---------------------------------------------------------------------
@@ -300,12 +302,8 @@ void laik_free_partitioning(Laik_Partitioning* p);
 void laik_partitioning_set_myfilter(Laik_Partitioning* p);
 
 // add an intersection filter to only keep slices intersecting with partitioning <filter>
-void laik_partitioning_add_pfilter(Laik_Partitioning* p,
-                                   Laik_Partitioning* filter);
-
-// is the partitioning <filter> set to be a pfilter for <p> ?
-bool laik_partitioning_has_pfilter(Laik_Partitioning* p, Laik_Partitioning* filter);
-
+void laik_partitioning_add_idxfilter(Laik_Partitioning* p,
+                                     Laik_Partitioning* filter);
 
 // give an access phase a name, for debug output
 void laik_partitioning_set_name(Laik_Partitioning* p, char* n);

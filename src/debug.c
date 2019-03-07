@@ -257,13 +257,11 @@ void laik_log_Partitioning(Laik_Partitioning* p)
     }
 
     laik_log_append("partitioning '%s'", p->name);
-    if (p->myfilter)
-        laik_log_append(" (filter own task only)");
-    if (p->intersecting) {
-        laik_log_append(" (intersection filter with '%s'/'%s', %d slices)",
-                        p->intersecting->pfilter1 ? p->intersecting->pfilter1->name : "",
-                        p->intersecting->pfilter2 ? p->intersecting->pfilter2->name : "",
-                        p->intersecting->slices->count);
+    if (p->filter) {
+        if (p->filter->filter_tid >=0)
+            laik_log_append(" (filter own task)");
+        if (p->filter->pfilter1 || p->filter->pfilter2)
+            laik_log_append(" (filter index intersection)");
     }
     laik_log_append(": ");
     laik_log_SliceArray(p->slices);
