@@ -62,11 +62,17 @@ typedef struct _Laik_Transition Laik_Transition;
 // a partitioner is an algorithm mapping slices of an index space to tasks
 typedef struct _Laik_Partitioner Laik_Partitioner;
 
+// input parameters for a partitioner run
+typedef struct _Laik_PartitionerParams Laik_PartitionerParams;
+
 // an ordered sequence of slices assigned to tasks
 typedef struct _Laik_SliceArray Laik_SliceArray;
 
-// parameters for filtering slices on a partitioner run
+// parameters for filtering slices during a partitioner run
 typedef struct _Laik_SliceFilter Laik_SliceFilter;
+
+// context during a partitioner run
+typedef struct _Laik_SliceReceiver Laik_SliceReceiver;
 
 
 //---------------------------------------------------------------------
@@ -279,7 +285,7 @@ Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p);
 void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge);
 
 // run the partitioner specified for the partitioning, and freeze afterwards
-void laik_run_partitioner(Laik_Partitioning* p);
+void laik_partitioning_gen(Laik_Partitioning* p);
 
 // create a new partitioning by running an offline partitioner algorithm.
 // the partitioner may be derived from another partitioning which is
@@ -375,6 +381,14 @@ typedef enum _Laik_PartitionerFlag {
 
 } Laik_PartitionerFlag;
 
+// input parameters for a specific run of a partitioner algorithm
+struct _Laik_PartitionerParams {
+    Laik_Space* space;
+    Laik_Group* group;
+    Laik_Partitioner* partitioner;
+    Laik_Partitioning* other;
+};
+
 // Signature for a partitioner algorithm
 //
 // We are given a new partitioning object without any slices yet (2st par),
@@ -384,14 +398,17 @@ typedef enum _Laik_PartitionerFlag {
 // partitioning may be based on, e.g. for incremental partitioners (modifying
 // a previous one) or for derived partitionings (e.g. extending by halos)
 typedef void
-(*laik_run_partitioner_t)(Laik_Partitioner*,
-                          Laik_Partitioning*, Laik_Partitioning*);
+    (*laik_run_partitioner_t)(Laik_SliceReceiver*, Laik_PartitionerParams*);
 
 
 // create application-specific partitioner
 Laik_Partitioner* laik_new_partitioner(const char* name,
                                        laik_run_partitioner_t run, void* d,
                                        Laik_PartitionerFlag flags);
+
+// run a partitioner with given input parameters and filter
+Laik_SliceArray* laik_run_partitioner(Laik_PartitionerParams* params,
+                                      Laik_SliceFilter* filter);
 
 // functions to be used in own implementation of a partitioner algorithm
 
@@ -407,11 +424,10 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 // the <data> pointer is an arbitrary value which can be passed from
 //  application-specific partitioners to the code processing slices.
 //  LAIK provided partitioners set <data> to 0.
-void laik_append_slice(Laik_Partitioning* p, int task, const Laik_Slice* s,
+void laik_append_slice(Laik_SliceReceiver* r, int task, const Laik_Slice* s,
                        int tag, void* data);
 // append 1d single-index slice
-void laik_append_index_1d(Laik_Partitioning* p,
-                                     int task, int64_t idx);
+void laik_append_index_1d(Laik_SliceReceiver* r, int task, int64_t idx);
 
 Laik_Space* laik_partitioning_get_space(Laik_Partitioning* p);
 Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p);

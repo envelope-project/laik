@@ -246,7 +246,7 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     p->space = s;
     p->partitioner = pr;
 
-    p->slices = laik_slicearray_new(s, (unsigned int) g->size);
+    p->slices = 0;
     p->filter = 0;
 
     p->other = other;
@@ -290,52 +290,6 @@ Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p)
 
 
 
-// partitioner API: add a slice
-// - specify slice groups by giving slices the same tag
-// - arbitrary data can be attached to slices if no merge step is done
-void laik_append_slice(Laik_Partitioning* p, int task, const Laik_Slice *s,
-                       int tag, void* data)
-{
-    // if filter is installed, check if we should store the slice
-    Laik_SliceFilter* sf = p->filter;
-    if (sf) {
-        bool res = (sf->filter_func)(sf, task, s);
-        laik_log(1,"appending slice %d:[%lld;%lld[: %s",
-                 task,
-                 (long long) s->from.i[0], (long long) s->to.i[0],
-                 res ? "keep":"skip");
-        if (res == false) return;
-    }
-
-    laik_slicearray_append(p->slices, task, s, tag, data);
-}
-
-// partitioner API: add a single 1d index slice, optimized for fast merging
-// if a partitioner only uses this method, an optimized internal format is used
-void laik_append_index_1d(Laik_Partitioning* p, int task, int64_t idx)
-{
-    Laik_SliceFilter* sf = p->filter;
-    if (sf) {
-        Laik_Slice slc;
-        laik_slice_init_1d(&slc, p->space, idx, idx + 1);
-        bool res = (sf->filter_func)(sf, task, &slc);
-        laik_log(1,"appending slice %d:[%lld;%lld[: %s",
-                 task,
-                 (long long) slc.from.i[0], (long long) slc.to.i[0],
-                 res ? "keep":"skip");
-        if (res == false) return;
-    }
-
-    if (p->slices->tslice) {
-        // append as generic slice
-        Laik_Slice slc;
-        laik_slice_init_1d(&slc, p->space, idx, idx + 1);
-        laik_slicearray_append(p->slices, task, &slc, 1, 0);
-        return;
-    }
-
-    laik_slicearray_append_single1d(p->slices, task, idx);
-}
 
 
 // public: return the space a partitioning is used for
@@ -465,55 +419,23 @@ void laik_partitioning_add_idxfilter(Laik_Partitioning* p,
 }
 
 
-// run a partitioner on a yet invalid, empty partitioning
-void laik_run_partitioner(Laik_Partitioning* p)
+// generate the partitioning by running the partitioner
+void laik_partitioning_gen(Laik_Partitioning* p)
 {
-    // has to be invalid yet
-    assert(p->slices->off == 0);
-    Laik_Partitioner* pr = p->partitioner;
-    // must have a partitioner set
-    assert(pr != 0);
+    // not generated yet
+    assert(p->slices == 0);
 
-    if (p->other) {
-        assert(p->other->group == p->group);
-        // we do not check for same space, as there are use cases
-        // where you want to derive a partitioning of one space from
-        // the partitioning of another
-    }
+    Laik_PartitionerParams params;
+    params.space       = p->space;
+    params.group       = p->group;
+    params.partitioner = p->partitioner;
+    params.other       = p->other;
 
-    (pr->run)(pr, p, p->other);
+    p->slices = laik_run_partitioner(&params, p->filter);
 
-    bool doMerge = false;
-    if (pr) doMerge = (pr->flags & LAIK_PF_Merge) > 0;
-    laik_freeze_partitioning(p, doMerge);
-
-    if (laik_log_begin(1)) {
-        laik_log_append("run partitioner '%s' for '%s' (group %d, myid %d, space '%s'):",
-                        pr ? pr->name : "(other)", p->name,
-                        p->group->gid, p->group->myid, p->space->name);
-        if (p->other) {
-            laik_log_append("\n  other: ");
-            laik_log_Partitioning(p->other);
-        }
-        laik_log_append("\n  ");
-        laik_log_SliceArray(p->slices);
-        laik_log_flush(0);
-    }
-    else
-        laik_log(2, "run partitioner '%s' for '%s' (group %d, space '%s'): %d slices",
-                 pr ? pr->name : "(other)", p->name,
-                 p->group->gid, p->space->name, p->slices->count);
-
-
-    // by default, check if partitioning covers full space
-    // unless partitioner has flag to not do it, or task filter is used
-    bool doCoverageCheck = false;
-    if (pr) doCoverageCheck = (pr->flags & LAIK_PF_NoFullCoverage) == 0;
-    if (p->filter) doCoverageCheck = false;
-    if (doCoverageCheck) {
-        if (!laik_partitioning_coversSpace(p))
-            laik_log(LAIK_LL_Panic, "partitioning borders do not cover space");
-    }
+    laik_log(2, "run partitioner '%s' for '%s' (group %d, space '%s'): %d slices",
+             p->partitioner->name, p->name,
+             p->group->gid, p->space->name, p->slices->count);
 }
 
 
@@ -531,7 +453,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
     if (space->dims == 1)
         laik_partitioning_set_myfilter(p);
 #endif
-    laik_run_partitioner(p);
+    laik_partitioning_gen(p);
     return p;
 }
 

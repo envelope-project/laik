@@ -70,15 +70,12 @@ void calculate_my_coordinate(int numRanks, int rank, int* rx, int* ry)
 }
 
 // partitioner algorithm for the 1d array of elements, using a 2d grid
-void run_element_partitioner(Laik_Partitioner* pr,
-                             Laik_Partitioning* p, Laik_Partitioning* o)
+void run_element_partitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    (void) o; // unused, required due to interface signature
+    Laik_Group* group = p->group;
+    Laik_Space* space = p->space;
 
-    Laik_Group* group = laik_partitioning_get_group(p);
-    Laik_Space* space = laik_partitioning_get_space(p);
-
-    int N_local_x = *((int*) laik_partitioner_data(pr));
+    int N_local_x = *((int*) laik_partitioner_data(p->partitioner));
     int N_local_y = N_local_x; // only square subdomain are supported!
     int N_tasks_x;
     int N_tasks_y;
@@ -96,7 +93,7 @@ void run_element_partitioner(Laik_Partitioner* pr,
             for(int jy = 0; jy < N_local_y; jy++) {
                 int idx = ix * N_local_x + (iy * N_local_y + jy) * N_elems_x;
                 laik_slice_init_1d(&slc, space, idx, idx + N_local_x);
-                laik_append_slice(p, ix + iy * N_tasks_x, &slc, 0, 0);
+                laik_append_slice(r, ix + iy * N_tasks_x, &slc, 0, 0);
             }
         }
     }
@@ -109,13 +106,12 @@ Laik_Partitioner* get_element_partitioner(int *size)
 }
 
 // partitioner for 1d array of nodes, derived from element partitioning
-void run_node_partitioner(Laik_Partitioner* pr,
-                          Laik_Partitioning* p, Laik_Partitioning* o)
+void run_node_partitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    Laik_Group* group = laik_partitioning_get_group(p);
-    Laik_Space* space = laik_partitioning_get_space(p);
+    Laik_Group* group = p->group;
+    Laik_Space* space = p->space;
 
-    int* neighbours = (int*) laik_partitioner_data(pr);
+    int* neighbours = (int*) laik_partitioner_data(p->partitioner);
     int Rx,Ry,rx,ry;
     calculate_task_topology(laik_size(group), &Rx, &Ry);
 
@@ -124,9 +120,9 @@ void run_node_partitioner(Laik_Partitioner* pr,
     // for all the slices in the element partitioner
     // we find the neighbouring nodes and add a slice
     // to the new partioning
-    int sliccountE = laik_partitioning_slicecount(o);
+    int sliccountE = laik_partitioning_slicecount(p->other);
     for(int i = 0; i < sliccountE; i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(o, i);
+        Laik_TaskSlice* ts = laik_partitioning_get_tslice(p->other, i);
         const Laik_Slice* s = laik_taskslice_get_slice(ts);
         int task = laik_taskslice_get_task(ts);
 
@@ -137,12 +133,12 @@ void run_node_partitioner(Laik_Partitioner* pr,
         laik_slice_init_1d(&slc, space,
                            neighbours[ 4 * s->from.i[0] + 0 ] + 0,
                            neighbours[ 4 * (s->to.i[0] - 1) + 1 ] + 1);
-        laik_append_slice(p, task, &slc, 0, 0);
+        laik_append_slice(r, task, &slc, 0, 0);
 
         laik_slice_init_1d(&slc, space,
                            neighbours[ 4 * s->from.i[0] + 2] + 0,
                            neighbours [ 4 * (s->to.i[0] - 1) + 3 ] + 1);
-        laik_append_slice(p, task, &slc, 0, 0);
+        laik_append_slice(r, task, &slc, 0, 0);
     }
 }
 
@@ -325,7 +321,7 @@ int main(int argc, char* argv[])
                                          get_node_partitioner(neighbours),
                                          pElements);
     laik_partitioning_set_myfilter(pNodes);
-    laik_run_partitioner(pNodes);
+    laik_partitioning_gen(pNodes);
 
     double *baseN, *baseE;
     uint64_t countN, countE;

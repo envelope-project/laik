@@ -46,12 +46,15 @@ struct _Laik_Partitioner {
     void* data; // partitioner specific data
 };
 
+// context during a partitioner run, to filter and forward slices
+struct _Laik_SliceReceiver {
+    Laik_SliceArray* array;
+    Laik_SliceFilter* filter;
+    Laik_PartitionerParams* params;
+};
 
 
-
-// the output of a partitioner is a Laik_Partitioning
-
-// A TaskSlice is used in partitioning to map a slice to a task.
+// a TaskSlice is used in partitioning to map a slice to a task.
 
 // generic task slice
 // the tag is a hint for the data layer: if >0, slices with same tag

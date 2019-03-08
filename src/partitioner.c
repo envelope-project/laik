@@ -21,11 +21,9 @@
 #include <stdint.h>
 
 
-
-
-//----------------------------------
-// Built-in partitioners
-
+//
+// Laik_Partitioner
+//
 
 Laik_Partitioner* laik_new_partitioner(const char* name,
                                        laik_run_partitioner_t run,
@@ -48,21 +46,111 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
 }
 
 
+// running a partitioner
+
+Laik_SliceArray* laik_run_partitioner(Laik_PartitionerParams* params,
+                                      Laik_SliceFilter* filter)
+{
+    if (params->other) {
+        assert(params->other->group == params->group);
+        // we do not check for same space, as there are use cases
+        // where you want to derive a partitioning of one space from
+        // the partitioning of another
+    }
+
+    Laik_SliceArray* array;
+    array = laik_slicearray_new(params->space, params->group->size);
+
+    Laik_SliceReceiver r;
+    r.params = params;
+    r.array = array;
+    r.filter = filter;
+
+    Laik_Partitioner* pr = params->partitioner;
+
+    (pr->run)(&r, params);
+
+    bool doMerge = (pr->flags & LAIK_PF_Merge) > 0;
+    laik_slicearray_freeze(array, doMerge);
+
+    if (laik_log_begin(1)) {
+        laik_log_append("run partitioner '%s' (group %d, space '%s'):",
+                        pr->name, params->group->gid, params->space->name);
+        if (params->other) {
+            laik_log_append("\n  other: ");
+            laik_log_Partitioning(params->other);
+        }
+        laik_log_append("\n  ");
+        laik_log_SliceArray(array);
+        laik_log_flush(0);
+    }
+
+    // by default, check if partitioning covers full space
+    // unless partitioner has flag to not do it, or task filter is used
+    bool doCoverageCheck = false;
+    if (pr) doCoverageCheck = (pr->flags & LAIK_PF_NoFullCoverage) == 0;
+    if (filter) doCoverageCheck = false;
+    if (doCoverageCheck) {
+        if (!laik_slicearray_coversSpace(array))
+            laik_log(LAIK_LL_Panic, "slice array does not cover space");
+    }
+
+    return array;
+}
+
+// partitioner API: add a slice
+// - specify slice groups by giving slices the same tag
+// - arbitrary data can be attached to slices if no merge step is done
+void laik_append_slice(Laik_SliceReceiver* r,
+                       int task, const Laik_Slice *s, int tag, void* data)
+{
+    // if filter is installed, check if we should store the slice
+    Laik_SliceFilter* sf = r->filter;
+    if (sf) {
+        bool res = (sf->filter_func)(sf, task, s);
+        laik_log(1,"appending slice %d:[%lld;%lld[: %s",
+                 task,
+                 (long long) s->from.i[0], (long long) s->to.i[0],
+                 res ? "keep":"skip");
+        if (res == false) return;
+    }
+
+    laik_slicearray_append(r->array, task, s, tag, data);
+}
+
+// partitioner API: add a single 1d index slice, optimized for fast merging
+// if a partitioner only uses this method, an optimized internal format is used
+void laik_append_index_1d(Laik_SliceReceiver* r, int task, int64_t idx)
+{
+    Laik_SliceFilter* sf = r->filter;
+    if (sf) {
+        Laik_Slice slc;
+        laik_slice_init_1d(&slc, r->array->space, idx, idx + 1);
+        bool res = (sf->filter_func)(sf, task, &slc);
+        laik_log(1,"appending slice %d:[%lld;%lld[: %s",
+                 task,
+                 (long long) slc.from.i[0], (long long) slc.to.i[0],
+                 res ? "keep":"skip");
+        if (res == false) return;
+    }
+
+    laik_slicearray_append_single1d(r->array, task, idx);
+}
+
+
+
+
 // Simple partitioners
 
 // all-partitioner: all tasks have access to all indexes
 
-void runAllPartitioner(Laik_Partitioner* pr,
-                       Laik_Partitioning* p, Laik_Partitioning* oldP)
+void runAllPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    (void) pr;   /* unused parameter of interface signature */
-    (void) oldP; /* unused parameter of interface signature */
-
     Laik_Space* space = p->space;
     Laik_Group* g = p->group;
 
     for(int task = 0; task < g->size; task++) {
-        laik_append_slice(p, task, &(space->s), 0, 0);
+        laik_append_slice(r, task, &(space->s), 0, 0);
     }
 }
 
@@ -73,14 +161,10 @@ Laik_Partitioner* laik_new_all_partitioner()
 
 // master-partitioner: only task 0 has access to all indexes
 
-void runMasterPartitioner(Laik_Partitioner* pr,
-                          Laik_Partitioning* p, Laik_Partitioning* oldP)
+void runMasterPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    (void) pr;   /* unused parameter of interface signature */
-    (void) oldP; /* unused parameter of interface signature */
-
     // only full slice for master
-    laik_append_slice(p, 0, &(p->space->s), 0, 0);
+    laik_append_slice(r, 0, &(p->space->s), 0, 0);
 }
 
 Laik_Partitioner* laik_new_master_partitioner()
@@ -99,14 +183,15 @@ struct _Laik_CopyPartitionerData {
     int fromDim, toDim; // only supports 1d partitionings
 };
 
-void runCopyPartitioner(Laik_Partitioner* pr,
-                        Laik_Partitioning* p, Laik_Partitioning* other)
+void runCopyPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    Laik_CopyPartitionerData* data = (Laik_CopyPartitionerData*) pr->data;
+    Laik_CopyPartitionerData* data;
+    data = (Laik_CopyPartitionerData*) p->partitioner->data;
     assert(data);
     int fromDim = data->fromDim;
     int toDim = data->toDim;
 
+    Laik_Partitioning* other = p->other;
     assert(other->group == p->group); // must use same task group
     assert((fromDim >= 0) && (fromDim < other->space->dims));
     assert((toDim >= 0) && (toDim < p->space->dims));
@@ -118,7 +203,7 @@ void runCopyPartitioner(Laik_Partitioner* pr,
         Laik_Slice slc = p->space->s;
         slc.from.i[toDim] = s->from.i[fromDim];
         slc.to.i[toDim] = s->to.i[fromDim];
-        laik_append_slice(p, laik_taskslice_get_task(ts), &slc,
+        laik_append_slice(r, laik_taskslice_get_task(ts), &slc,
                           laik_taskslice_get_tag(ts), 0);
     }
 }
@@ -126,13 +211,11 @@ void runCopyPartitioner(Laik_Partitioner* pr,
 Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
 {
     Laik_CopyPartitionerData* data;
-    int dsize = sizeof(Laik_CopyPartitionerData);
-    data = malloc(dsize);
+    data = malloc(sizeof(Laik_CopyPartitionerData));
     if (!data) {
         laik_panic("Out of memory allocating Laik_CopyPartitionerData object");
         exit(1); // not actually needed, laik_panic never returns
     }
-
 
     data->fromDim = fromDim;
     data->toDim = toDim;
@@ -143,14 +226,14 @@ Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim)
 
 // corner-halo partitioner: extend borders of other partitioning
 //  including corners - e.g. for 9-point 2d stencil
-void runCornerHaloPartitioner(Laik_Partitioner* pr,
-                              Laik_Partitioning* p, Laik_Partitioning* other)
+void runCornerHaloPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
+    Laik_Partitioning* other = p->other;
     assert(other->group == p->group); // must use same task group
     assert(other->space == p->space);
 
     int dims = p->space->dims;
-    int d = *((int*) pr->data);
+    int d = *((int*) p->partitioner->data);
 
     // take all slices and extend them if possible
     int count = laik_partitioning_slicecount(other);
@@ -179,7 +262,7 @@ void runCornerHaloPartitioner(Laik_Partitioner* pr,
                     slc.to.i[2] = to->i[2] + d;
             }
         }
-        laik_append_slice(p, laik_taskslice_get_task(ts), &slc,
+        laik_append_slice(r, laik_taskslice_get_task(ts), &slc,
                           laik_taskslice_get_tag(ts), 0);
     }
 }
@@ -201,14 +284,14 @@ Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth)
 // to mark the halos of a slice to go into same mapping. For this, the
 // tags of original slices is used, which are expected >0 to allow for
 // specification of slice groups (tag 0 is special, produces a group per slice)
-void runHaloPartitioner(Laik_Partitioner* pr,
-                        Laik_Partitioning* p, Laik_Partitioning* other)
+void runHaloPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
+    Laik_Partitioning* other = p->other;
     assert(other->group == p->group); // must use same task group
     assert(other->space == p->space);
 
     int dims = p->space->dims;
-    int depth = *((int*) pr->data);
+    int depth = *((int*) p->partitioner->data);
     Laik_Slice sp = p->space->s;
 
     // take all slices and extend them if possible
@@ -221,18 +304,18 @@ void runHaloPartitioner(Laik_Partitioner* pr,
         assert(tag > 0); // tag must be >0 to specify slice groups
 
         Laik_Slice slc = *s;
-        laik_append_slice(p, task, &slc, tag, 0);
+        laik_append_slice(r, task, &slc, tag, 0);
 
         if (slc.from.i[0] > sp.from.i[0] + depth) {
             slc.to.i[0] = slc.from.i[0];
             slc.from.i[0] -= depth;
-            laik_append_slice(p, task, &slc, tag, 0);
+            laik_append_slice(r, task, &slc, tag, 0);
         }
         slc = *s;
         if (slc.to.i[0] < sp.to.i[0] - depth) {
             slc.from.i[0] = slc.to.i[0];
             slc.to.i[0] += depth;
-            laik_append_slice(p, task, &slc, tag, 0);
+            laik_append_slice(r, task, &slc, tag, 0);
         }
 
         if (dims > 1) {
@@ -240,13 +323,13 @@ void runHaloPartitioner(Laik_Partitioner* pr,
             if (slc.from.i[1] > sp.from.i[1] + depth) {
                 slc.to.i[1] = slc.from.i[1];
                 slc.from.i[1] -= depth;
-                laik_append_slice(p, task, &slc, tag, 0);
+                laik_append_slice(r, task, &slc, tag, 0);
             }
             slc = *s;
             if (slc.to.i[1] < sp.to.i[1] - depth) {
                 slc.from.i[1] = slc.to.i[1];
                 slc.to.i[1] += depth;
-                laik_append_slice(p, task, &slc, tag, 0);
+                laik_append_slice(r, task, &slc, tag, 0);
             }
 
             if (dims > 2) {
@@ -254,13 +337,13 @@ void runHaloPartitioner(Laik_Partitioner* pr,
                 if (slc.from.i[2] > sp.from.i[2] + depth) {
                     slc.to.i[2] = slc.from.i[2];
                     slc.from.i[2] -= depth;
-                    laik_append_slice(p, task, &slc, tag, 0);
+                    laik_append_slice(r, task, &slc, tag, 0);
                 }
                 slc = *s;
                 if (slc.to.i[2] < sp.to.i[2] - depth) {
                     slc.from.i[2] = slc.to.i[2];
                     slc.to.i[2] += depth;
-                    laik_append_slice(p, task, &slc, tag, 0);
+                    laik_append_slice(r, task, &slc, tag, 0);
                 }
             }
         }
@@ -280,14 +363,14 @@ Laik_Partitioner* laik_new_halo_partitioner(int depth)
 // bisection partitioner
 
 // recursive helper: distribute slice <s> to tasks in range [fromTask;toTask[
-static void doBisection(Laik_Partitioning* p,
+static void doBisection(Laik_SliceReceiver* r, Laik_PartitionerParams* p,
                         Laik_Slice* s, int fromTask, int toTask)
 {
     int tag = 1; // TODO: make it a parameter
 
     assert(toTask > fromTask);
     if (toTask - fromTask == 1) {
-        laik_append_slice(p, fromTask, s, tag, 0);
+        laik_append_slice(r, fromTask, s, tag, 0);
         return;
     }
 
@@ -311,7 +394,7 @@ static void doBisection(Laik_Partitioning* p,
     }
     assert(width > 0);
     if (width == 1) {
-        laik_append_slice(p, fromTask, s, tag, 0);
+        laik_append_slice(r, fromTask, s, tag, 0);
         return;
     }
 
@@ -321,17 +404,13 @@ static void doBisection(Laik_Partitioning* p,
     Laik_Slice s1 = *s, s2 = *s;
     s1.to.i[splitDim] = s->from.i[splitDim] + w;
     s2.from.i[splitDim] = s->from.i[splitDim] + w;
-    doBisection(p, &s1, fromTask, midTask);
-    doBisection(p, &s2, midTask, toTask);
+    doBisection(r, p, &s1, fromTask, midTask);
+    doBisection(r, p, &s2, midTask, toTask);
 }
 
-void runBisectionPartitioner(Laik_Partitioner* pr,
-                             Laik_Partitioning* p, Laik_Partitioning* otherP)
+void runBisectionPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    (void) pr;     /* not used: no parameters for this partitioner */
-    (void) otherP; /* not used: not derived from another partitioning */
-
-    doBisection(p, &(p->space->s), 0, p->group->size);
+    doBisection(r, p, &(p->space->s), 0, p->group->size);
 }
 
 Laik_Partitioner* laik_new_bisection_partitioner()
@@ -348,13 +427,11 @@ typedef struct _Laik_GridPartitionerData {
 } Laik_GridPartitionerData;
 
 
-void runGridPartitioner(Laik_Partitioner* pr,
-                        Laik_Partitioning* p, Laik_Partitioning* otherP)
+void runGridPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    (void) otherP; /* not used: not derived from another partitioning */
     Laik_GridPartitionerData* data;
-    data = (Laik_GridPartitionerData*) pr->data;
-
+    data = (Laik_GridPartitionerData*) p->partitioner->data;
+    assert(data);
     int tag = 1;
 
     assert(p->space->dims == 3);
@@ -395,7 +472,7 @@ void runGridPartitioner(Laik_Partitioner* pr,
                 slc.from.i[0] = from;
                 slc.to.i[0]   = to;
 
-                laik_append_slice(p, task, &slc, tag, 0);
+                laik_append_slice(r, task, &slc, tag, 0);
                 task++;
                 if (task == p->group->size) return;
             }
@@ -446,20 +523,18 @@ struct _Laik_BlockPartitionerData {
     const void* userData;
 };
 
-void runBlockPartitioner(Laik_Partitioner* pr,
-                         Laik_Partitioning* p, Laik_Partitioning* oldP)
+void runBlockPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    (void) oldP; /* FIXME: Why have this parameter if it's never used */
-
     Laik_BlockPartitionerData* data;
-    data = (Laik_BlockPartitionerData*) pr->data;
-
+    data = (Laik_BlockPartitionerData*) p->partitioner->data;
+    assert(data);
     Laik_Space* s = p->space;
     Laik_Slice slc = s->s;
 
     int count = p->group->size;
     int pdim = data->pdim;
-    uint64_t size = s->s.to.i[pdim] - s->s.from.i[pdim];
+    int64_t size = s->s.to.i[pdim] - s->s.from.i[pdim];
+    assert(size > 0);
 
     Laik_Index idx;
     double totalW;
@@ -467,7 +542,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
         // element-wise weighting
         totalW = 0.0;
         laik_index_init(&idx, 0, 0, 0);
-        for(uint64_t i = 0; i < size; i++) {
+        for(int64_t i = 0; i < size; i++) {
             idx.i[pdim] = i + s->s.from.i[pdim];
             totalW += (data->getIdxW)(&idx, data->userData);
         }
@@ -504,7 +579,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
         taskW = 1.0;
 
     slc.from.i[pdim] = s->s.from.i[pdim];
-    for(uint64_t i = 0; i < size; i++) {
+    for(int64_t i = 0; i < size; i++) {
         if (data && data->getIdxW) {
             idx.i[pdim] = i + s->s.from.i[pdim];
             w += (data->getIdxW)(&idx, data->userData);
@@ -517,7 +592,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
             if ((task+1 == count) && (cycle+1 == cycles)) break;
             slc.to.i[pdim] = i + s->s.from.i[pdim];
             if (slc.from.i[pdim] < slc.to.i[pdim])
-                laik_append_slice(p, task, &slc, 0, 0);
+                laik_append_slice(r, task, &slc, 0, 0);
             task++;
             if (task == count) {
                 task = 0;
@@ -537,7 +612,7 @@ void runBlockPartitioner(Laik_Partitioner* pr,
     }
     assert((task+1 == count) && (cycle+1 == cycles));
     slc.to.i[pdim] = s->s.to.i[pdim];
-    laik_append_slice(p, task, &slc, 0, 0);
+    laik_append_slice(r, task, &slc, 0, 0);
 }
 
 
@@ -547,8 +622,7 @@ Laik_Partitioner* laik_new_block_partitioner(int pdim, int cycles,
                                              const void* userData)
 {
     Laik_BlockPartitionerData* data;
-    int dsize = sizeof(Laik_BlockPartitionerData);
-    data = malloc(dsize);
+    data = malloc(sizeof(Laik_BlockPartitionerData));
     if (!data) {
         laik_panic("Out of memory allocating Laik_BlockPartitionerData object");
         exit(1); // not actually needed, laik_panic never returns
@@ -629,13 +703,13 @@ typedef struct {
 
 
 
-void runReassignPartitioner(Laik_Partitioner* pr,
-                            Laik_Partitioning* p, Laik_Partitioning* oldP)
+void runReassignPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    ReassignData* data = (ReassignData*) pr->data;
+    ReassignData* data = (ReassignData*) p->partitioner->data;
     Laik_Group* newg = data->newg;
 
     // there must be old borders
+    Laik_Partitioning* oldP = p->other;
     assert(oldP);
     // TODO: only works if parent of new group is used in oldP
     assert(newg->parent == oldP->group);
@@ -688,7 +762,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
                      (long long int) s->from.i[0],
                      (long long int) s->to.i[0]);
 
-            laik_append_slice(p, origTask, s, 0, 0);
+            laik_append_slice(r, origTask, s, 0, 0);
             continue;
         }
 
@@ -708,7 +782,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
             if ((weight >= weightPerTask) && (curTask < newg->size)) {
                 weight -= weightPerTask;
                 slc.to.i[0] = i + 1;
-                laik_append_slice(p, newg->toParent[curTask], &slc, 0, 0);
+                laik_append_slice(r, newg->toParent[curTask], &slc, 0, 0);
 
                 laik_log(1, "reassign: re-distribute [%lld;%lld[ "
                          "of slice %d to task %d (new task %d)",
@@ -728,7 +802,7 @@ void runReassignPartitioner(Laik_Partitioner* pr,
         }
         if (slc.from.i[0] < to) {
             slc.to.i[0] = to;
-            laik_append_slice(p, newg->toParent[curTask], &slc, 0, 0);
+            laik_append_slice(r, newg->toParent[curTask], &slc, 0, 0);
 
             laik_log(1, "reassign: re-distribute remaining [%lld;%lld[ "
                      "of slice %d to task %d (new task %d)",

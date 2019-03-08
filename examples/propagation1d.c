@@ -19,19 +19,16 @@
 **/
 
 // provide partitioning for nodes from partitioning of elements (<o>)
-void runMyParter(Laik_Partitioner* pr,
-                 Laik_Partitioning* p, Laik_Partitioning* o)
+void runMyParter(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
 {
-    (void) pr; /* unused parameter in partitioner interface */
-
     // iterate over all element partitions used as basis
-    for(int i = 0; i < laik_partitioning_slicecount(o); i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(o, i);
+    for(int i = 0; i < laik_partitioning_slicecount(p->other); i++) {
+        Laik_TaskSlice* ts = laik_partitioning_get_tslice(p->other, i);
         // does a private copy of original slice which can be modified
         Laik_Slice slc = *laik_taskslice_get_slice(ts);
         // extend 1d slice of elements by 1 at end for corresponding node partition
         slc.to.i[0]++;
-        laik_append_slice(p, laik_taskslice_get_task(ts), &slc, 0, 0);
+        laik_append_slice(r, laik_taskslice_get_task(ts), &slc, 0, 0);
     }
 }
 

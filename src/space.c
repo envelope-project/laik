@@ -924,7 +924,7 @@ void calcAddReductions(int tflags,
         // add both own slices of fromP/toP as intersection filter
         laik_partitioning_add_idxfilter(fromP2, fromP);
         laik_partitioning_add_idxfilter(fromP2, toP);
-        laik_run_partitioner(fromP2);
+        laik_partitioning_gen(fromP2);
     }
 
     if (toP->filter) {
@@ -935,7 +935,7 @@ void calcAddReductions(int tflags,
         toP2 = laik_clone_empty_partitioning(toP);
         laik_partitioning_add_idxfilter(toP2, fromP);
         laik_partitioning_add_idxfilter(toP2, toP);
-        laik_run_partitioner(toP2);
+        laik_partitioning_gen(toP2);
     }
 
     if (laik_log_begin(1)) {
