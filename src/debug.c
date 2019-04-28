@@ -249,22 +249,38 @@ void laik_log_SliceArray(Laik_SliceArray* sa)
     }
 }
 
+void laik_log_SliceFilter(Laik_SliceFilter* sf)
+{
+    if (!sf)
+        laik_log_append("no filter");
+    else if (sf->filter_tid >=0)
+        laik_log_append("own-task (%d) filter", sf->filter_tid);
+    else if (sf->pfilter1 || sf->pfilter2)
+        laik_log_append("intersection filter with '%s' and '%s'",
+                        sf->pfilter1->p ? sf->pfilter1->p->name : "",
+                        sf->pfilter2->p ? sf->pfilter2->p->name : "");
+}
+
 void laik_log_Partitioning(Laik_Partitioning* p)
 {
     if (!p) {
         laik_log_append("(no partitioning)");
         return;
     }
-
-    laik_log_append("partitioning '%s'", p->name);
-    if (p->filter) {
-        if (p->filter->filter_tid >=0)
-            laik_log_append(" (filter own task)");
-        if (p->filter->pfilter1 || p->filter->pfilter2)
-            laik_log_append(" (filter index intersection)");
+    laik_log_append("partitioning '%s' on space '%s', group %d",
+                    p->name, p->space, p->group->gid);
+    if (!p->saList) {
+        laik_log_append(" - no slices stored");
+        return;
     }
-    laik_log_append(": ");
-    laik_log_SliceArray(p->slices);
+    SliceArray_Entry* e = p->saList;
+    while(e) {
+        laik_log_append("\n  ");
+        laik_log_SliceFilter(e->filter);
+        laik_log_append(": ");
+        laik_log_SliceArray(e->slices);
+        e = e->next;
+    }
 }
 
 void laik_log_PrettyInt(uint64_t v)

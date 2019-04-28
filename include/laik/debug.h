@@ -35,6 +35,7 @@ void laik_log_Reduction(Laik_ReductionOperation op);
 void laik_log_DataFlow(Laik_DataFlow flow);
 void laik_log_Transition(Laik_Transition* t, bool showActions);
 void laik_log_SliceArray(Laik_SliceArray* sa);
+void laik_log_SliceFilter(Laik_SliceFilter* sf);
 void laik_log_Partitioning(Laik_Partitioning* p);
 void laik_log_SwitchStat(Laik_SwitchStat* ss);
 void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as);

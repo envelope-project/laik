@@ -911,51 +911,35 @@ void calcAddReductions(int tflags,
     assert(fromP->space->dims == 1);
     assert(fromP->space == toP->space);
 
-    // with task-filtered partitionings, we need to include intersections,
-    // and calculate these before
-    Laik_Partitioning *toP2 = 0, *fromP2 = 0;
-
-    if (fromP->filter) {
-        // calculate extended version of fromP with slices intersecting
-        // with own slices from toP.
-        // we need own slices in toP: either no filter or myfilter used
-        assert(toP->filter != 0);
-        fromP2 = laik_clone_empty_partitioning(fromP);
-        // add both own slices of fromP/toP as intersection filter
-        laik_partitioning_add_idxfilter(fromP2, fromP);
-        laik_partitioning_add_idxfilter(fromP2, toP);
-        laik_partitioning_gen(fromP2);
+    Laik_SliceArray *fromSA = 0, *toSA = 0;
+    fromSA = laik_partitioning_allslices(fromP);
+    if (fromSA == 0) {
+        // there must be at least an intersection of own slices in fromP/toP
+        fromSA = laik_partitioning_interslices(fromP, toP);
+        assert(fromSA != 0); // TODO: user API error
     }
-
-    if (toP->filter) {
-        // calculate extended version of toP with slices intersecting
-        // with own slices from fromP.
-        // we need own slices in fromP: either no filter or myfilter used
-        assert(fromP->filter != 0);
-        toP2 = laik_clone_empty_partitioning(toP);
-        laik_partitioning_add_idxfilter(toP2, fromP);
-        laik_partitioning_add_idxfilter(toP2, toP);
-        laik_partitioning_gen(toP2);
+    toSA = laik_partitioning_allslices(toP);
+    if (toSA == 0) {
+        // there must be at least an intersection of own slices in fromP/toP
+        toSA = laik_partitioning_interslices(toP, fromP);
+        assert(toSA != 0); // TODO: user API error
     }
 
     if (laik_log_begin(1)) {
         laik_log_append("calc '");
         laik_log_Reduction(redOp);
-        laik_log_flush("' ops for '%s' (%d + %d slices) => '%s' (%d + %d slices)",
-                       fromP->name, fromP->slices->count, fromP2 ? fromP2->slices->count : 0,
-                       toP->name, toP->slices->count, toP2 ? toP2->slices->count : 0);
+        laik_log_flush("' ops for '%s' (%d slices) => '%s' (%d slices)",
+                       fromP->name, fromSA->count, toP->name, toSA->count);
     }
 
     // add slice borders of all tasks
     cleanBorderList();
     int sliceNo, lastTask, lastMapNo;
-    Laik_SliceArray* sa;
     sliceNo = 0;
     lastTask = -1;
     lastMapNo = -1;
-    sa = fromP->slices;
-    for(unsigned int i = 0; i < sa->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
+    for(unsigned int i = 0; i < fromSA->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(fromSA->tslice[i]);
         // reset sliceNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
@@ -968,9 +952,8 @@ void calcAddReductions(int tflags,
     }
     lastTask = -1;
     lastMapNo = -1;
-    sa = toP->slices;
-    for(unsigned int i = 0; i < sa->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
+    for(unsigned int i = 0; i < toSA->count; i++) {
+        Laik_TaskSlice_Gen* ts = &(toSA->tslice[i]);
         // reset sliceNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
             sliceNo = 0;
@@ -981,31 +964,6 @@ void calcAddReductions(int tflags,
         appendBorder(ts->s.to.i[0], ts->task, sliceNo, ts->mapNo, false, false);
         sliceNo++;
     }
-
-    // further intersections: do not include slices of own task again
-    // also set sliceNo/mapNo to 0, as these are unreliable with intersections
-    if (fromP2) {
-        sa = fromP2->slices;
-        for(unsigned int i = 0; i < sa->count; i++) {
-            Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
-            if (ts->task == group->myid) continue;
-            appendBorder(ts->s.from.i[0], ts->task, 0, 0, true, true);
-            appendBorder(ts->s.to.i[0], ts->task, 0, 0, false, true);
-        }
-    }
-    if (toP2) {
-        sa = toP2->slices;
-        for(unsigned int i = 0; i < sa->count; i++) {
-            Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
-            if (ts->task == group->myid) continue;
-            appendBorder(ts->s.from.i[0], ts->task, 0, 0, true, false);
-            appendBorder(ts->s.to.i[0], ts->task, 0, 0, false, false);
-        }
-    }
-
-    // free temporary partitionings with the intersections again
-    if (fromP2) laik_free_partitioning(fromP2);
-    if (toP2) laik_free_partitioning(toP2);
 
     if (borderListCount == 0) return;
 
@@ -1270,8 +1228,24 @@ do_calc_transition(Laik_Space* space,
 
     int dims = space->dims;
     int taskCount = group->size;
-    Laik_SliceArray* toSA   = toP ? toP->slices : 0;
-    Laik_SliceArray* fromSA = fromP ? fromP->slices : 0;
+    Laik_SliceArray *fromSA = 0, *toSA = 0;
+    if (fromP) {
+        fromSA = laik_partitioning_allslices(fromP);
+        if ((fromSA == 0) && toP) {
+            // there must be at least an intersection of own slices in fromP/toP
+            fromSA = laik_partitioning_interslices(fromP, toP);
+            assert(fromSA != 0);
+        }
+    }
+    if (toP) {
+        toSA = laik_partitioning_allslices(toP);
+        if ((toSA == 0) && fromP) {
+            // there must be at least an intersection of own slices in fromP/toP
+            toSA = laik_partitioning_interslices(toP, fromP);
+            assert(toSA != 0);
+        }
+    }
+
     unsigned int o, o1, o2;
 
     // request to initialize values?
@@ -1298,10 +1272,6 @@ do_calc_transition(Laik_Space* space,
             calcAddReductions(tflags, group, redOp, fromP, toP);
         }
         else {
-            // only works if no filters used
-            assert(fromP->filter == 0);
-            assert(toP->filter == 0);
-
             // determine local slices to keep
             // (may need local copy if from/to mappings are different).
             // reductions are not handled here, but by backend

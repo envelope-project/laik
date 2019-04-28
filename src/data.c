@@ -217,7 +217,9 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         }
     }
 
-    Laik_SliceArray* sa = p->slices;
+    // we need a slice array with own slices
+    Laik_SliceArray* sa = laik_partitioning_myslices(p);
+    assert(sa != 0); // TODO: API user error
 
     // number of local slices
     int sn = sa->off[myid+1] - sa->off[myid];
@@ -956,7 +958,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
         Laik_Partitioning* p = res->entry[i].p;
         // this process must be part of all partitionings to reserve for
         assert(p->group->myid >= 0);
-        Laik_SliceArray* sa = p->slices;
+        Laik_SliceArray* sa = laik_partitioning_myslices(p);
         laik_updateMapOffsets(sa, p->group->myid); // could be done always, not just lazy
         assert(sa->map_tid == p->group->myid);
         assert(sa->map_off != 0);
@@ -968,7 +970,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
     unsigned int gOff = 0;
     for(int i = 0; i < res->count; i++) {
         Laik_Partitioning* p = res->entry[i].p;
-        Laik_SliceArray* sa = p->slices;
+        Laik_SliceArray* sa = laik_partitioning_myslices(p);
         for(int mapNo = 0; mapNo < (int) sa->map_count; mapNo++) {
             unsigned int off = sa->map_off[mapNo];
             int tag = sa->tslice[off].tag;
@@ -1014,7 +1016,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
     for(int i = 0; i < res->count; i++) {
         Laik_Partitioning* p = res->entry[i].p;
-        Laik_SliceArray* sa = p->slices;
+        Laik_SliceArray* sa = laik_partitioning_myslices(p);
         Laik_MappingList* mList = malloc(sizeof(Laik_MappingList) +
                                          sa->map_count * sizeof(Laik_Mapping));
         mList->count = (int) sa->map_count;
@@ -1046,7 +1048,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
         // go over all slices in this slice group (same tag) and extend
         Laik_Partitioning* p = res->entry[idx].p;
-        Laik_SliceArray* sa = p->slices;
+        Laik_SliceArray* sa = laik_partitioning_myslices(p);
         for(unsigned int o = sa->map_off[partMapNo]; o < sa->map_off[partMapNo+1]; o++) {
             assert(sa->tslice[o].s.space != 0);
             assert(sa->tslice[o].mapNo == partMapNo);
@@ -1099,7 +1101,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
     // (5) set parameters for embedded mappings
     for(int r = 0; r < res->count; r++) {
         Laik_Partitioning* p = res->entry[r].p;
-        Laik_SliceArray* sa = p->slices;
+        Laik_SliceArray* sa = laik_partitioning_myslices(p);
         laik_log(1, " part '%s':", p->name);
         for(unsigned int mapNo = 0; mapNo < sa->map_count; mapNo++) {
             Laik_Mapping* m = &(res->entry[r].mList->map[mapNo]);

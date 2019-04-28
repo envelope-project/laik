@@ -116,6 +116,8 @@ typedef struct {
     int64_t from, to;
     Laik_TaskSlice_Gen* ts;
     unsigned int len;
+    // originating partitioning
+    Laik_Partitioning* p;
 } PFilterPar;
 
 // parameters for filtering slices on a partitioner run
@@ -133,6 +135,13 @@ struct _Laik_SliceFilter {
     PFilterPar *pfilter1, *pfilter2;
 };
 
+// a partitioning can store multiple slice arrays created from partitioner
+// runs with different filters
+typedef struct _SliceArray_Entry {
+    Laik_SliceFilter* filter;
+    Laik_SliceArray* slices;
+    struct _SliceArray_Entry* next;
+} SliceArray_Entry;
 
 struct _Laik_Partitioning {
     int id;
@@ -141,16 +150,13 @@ struct _Laik_Partitioning {
     Laik_Group* group; // slices are assigned to processes in this group
     Laik_Space* space; // slices are sub-ranges of this space
 
-    Laik_SliceArray* slices;
+    SliceArray_Entry* saList;
 
     // optional: partitioner to be called
     Laik_Partitioner* partitioner; // if set: creating partitioner
 
     // base partitioning, used with partitioner or chained partitionings
     Laik_Partitioning* other;
-
-    // optional: a filter to use when running the partitioner
-    Laik_SliceFilter* filter;
 };
 
 void laik_free_partitioning(Laik_Partitioning* p);

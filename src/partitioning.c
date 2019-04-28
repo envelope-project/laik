@@ -151,19 +151,28 @@ bool idxfilter(Laik_SliceFilter* sf, int task, const Laik_Slice* s)
 }
 
 // add filter to only keep slices intersecting with slices in <sa>
-void laik_slicefilter_add_idxfilter(Laik_SliceFilter* sf, Laik_SliceArray* sa)
+void laik_slicefilter_add_idxfilter(Laik_SliceFilter* sf, Laik_SliceArray* sa,
+                                    Laik_Partitioning* p)
 {
     assert(sa);
     assert(sa->off != 0);
     assert(sa->space->dims == 1); // TODO: only for 1d for now
 
-    if (sa->count == 0) return;
+    int myid = p->group->myid;
+    assert((myid >= 0) && (myid < (int) sa->tid_count));
+    // no own slices?
+    unsigned mycount = sa->off[myid+1] - sa->off[myid];
+    if (mycount == 0) return;
+
+    Laik_TaskSlice_Gen* ts1 = sa->tslice + sa->off[myid];
+    Laik_TaskSlice_Gen* ts2 = sa->tslice + sa->off[myid+1]-1;
 
     PFilterPar* par = malloc(sizeof(PFilterPar));
-    par->len = sa->count;
-    par->from = sa->tslice[0].s.from.i[0];
-    par->to   = sa->tslice[sa->count - 1].s.to.i[0];
-    par->ts = sa->tslice;
+    par->len = mycount;
+    par->from = ts1->s.from.i[0];
+    par->to   = ts2->s.to.i[0];
+    par->ts = ts1;
+    par->p = p;
 
     if      (sf->pfilter1 == 0) sf->pfilter1 = par;
     else if (sf->pfilter2 == 0) sf->pfilter2 = par;
@@ -246,8 +255,8 @@ Laik_Partitioning* laik_partitioning_new(char* name,
     p->space = s;
     p->partitioner = pr;
 
-    p->slices = 0;
-    p->filter = 0;
+    // no slices stored yet
+    p->saList = 0;
 
     p->other = other;
 
@@ -264,11 +273,6 @@ Laik_Partitioning* laik_partitioning_new(char* name,
  * To make the partitioning valid, either a partitioning algorithm has to be
  * run, filling the partitioning with slices, or a partitioner algorithm
  * is set to be run whenever partitioning slices are to be consumed (online).
- *
- * Before running the partitioner, filters on tasks or indexes can be set
- * such that not all slices get stored during the partitioner run.
- * However, such filtered partitionings are not generally useful, e.g.
- * for calculating transitions.
  *
  * Different internal formats are used depending on how a partitioner adds
  * indexes. E.g. adding single indexes are managed differently than slices.
@@ -287,9 +291,145 @@ Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p)
                                  p->partitioner, p->other);
 }
 
+// free resources allocated for a partitioning object
+void laik_free_partitioning(Laik_Partitioning* p)
+{
+    SliceArray_Entry* e = p->saList;
+    while(e) {
+        if (e->filter)
+            laik_slicefilter_free(e->filter);
+        laik_slicearray_free(e->slices);
+        e = e->next;
+    }
+    free(p);
+}
 
 
+// slices from a partitioner run without filter
+Laik_SliceArray* laik_partitioning_allslices(Laik_Partitioning* p)
+{
+    SliceArray_Entry* e = p->saList;
+    while(e) {
+        if (e->filter == 0) return e->slices;
+        e = e->next;
+    }
+    return 0;
+}
 
+// slices from a partitioner run keeping only slices of this task
+Laik_SliceArray* laik_partitioning_myslices(Laik_Partitioning* p)
+{
+    SliceArray_Entry* e = p->saList;
+    while(e) {
+        if (e->filter && e->filter->filter_tid == p->group->myid) {
+            // found array with own slices
+            return e->slices;
+        }
+        if (!e->filter) {
+            // it is ok to return array with all slices, as users
+            // always use the right subarray
+            return e->slices;
+        }
+        e = e->next;
+    }
+    return 0;
+}
+
+// slices from run intersecting with own slices of <p1> and <p2>
+Laik_SliceArray* laik_partitioning_interslices(Laik_Partitioning* p1,
+                                               Laik_Partitioning* p2)
+{
+    SliceArray_Entry* e = p1->saList;
+    while(e) {
+        if (e->filter && e->filter->pfilter1) {
+            Laik_Partitioning* p = e->filter->pfilter1->p;
+            if (p != p1) continue;
+            if (p1 == p2)
+                return e->slices;
+
+            p = e->filter->pfilter2 ? e->filter->pfilter2->p : 0;
+            if (p == p2)
+                return e->slices;
+        }
+        e = e->next;
+    }
+    return 0;
+}
+
+
+// store a slice array in partitioning, together with filter used (may be 0)
+void laik_partitioning_add_slices(Laik_Partitioning* p,
+                                  Laik_SliceArray* sa, Laik_SliceFilter* sf)
+{
+    assert(p != 0);
+    assert(sa != 0);
+
+    SliceArray_Entry* e = malloc(sizeof(SliceArray_Entry));
+    if (e == 0) {
+        laik_panic("Out of memory allocating Laik_Partitioning object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
+    e->slices = sa;
+    e->filter = sf;
+    e->next = p->saList;
+
+    p->saList = e;
+}
+
+// internal: run partitioner given for partitioning, using given filter
+// and add resulting slice array to partitioning
+void laik_partitioning_run(Laik_Partitioning* p, Laik_SliceFilter* sf)
+{
+    assert(p->partitioner != 0);
+
+    Laik_PartitionerParams params;
+    params.space       = p->space;
+    params.group       = p->group;
+    params.partitioner = p->partitioner;
+    params.other       = p->other;
+
+    Laik_SliceArray* sa;
+    sa = laik_run_partitioner(&params, sf);
+    laik_partitioning_add_slices(p, sa, sf);
+
+    // TODO: print filter
+    laik_log(2, "run partitioner '%s' for '%s' (group %d, space '%s'): %d slices",
+             p->partitioner->name, p->name,
+             p->group->gid, p->space->name, sa->count);
+}
+
+
+// run the partitioner specified for the partitioning, keeping all slices
+void laik_partitioning_store_allslices(Laik_Partitioning* p)
+{
+    laik_partitioning_run(p, 0);
+}
+
+
+// run the partitioner specified for the partitioning, keeping only slices of this task
+void laik_partitioning_store_myslices(Laik_Partitioning* p)
+{
+    Laik_SliceFilter* sf = laik_slicefilter_new();
+    laik_slicefilter_set_myfilter(sf, p->group);
+
+    laik_partitioning_run(p, sf);
+}
+
+// run the partitioner specified for the partitioning, keeping intersecting slices
+void laik_partitioning_store_intersectslices(Laik_Partitioning* p,
+                                             Laik_Partitioning* p2)
+{
+    Laik_SliceFilter* sf;
+    Laik_SliceArray* sa;
+    sf = laik_slicefilter_new();
+    sa = laik_partitioning_myslices(p);
+    laik_slicefilter_add_idxfilter(sf, sa, p);
+    sa = laik_partitioning_myslices(p2);
+    laik_slicefilter_add_idxfilter(sf, sa, p2);
+
+    laik_partitioning_run(p, sf);
+}
 
 
 // public: return the space a partitioning is used for
@@ -309,7 +449,9 @@ Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p)
 // only allowed for offline partitioners, may be expensive
 int laik_partitioning_slicecount(Laik_Partitioning* p)
 {
-    return laik_slicearray_slicecount(p->slices);
+    Laik_SliceArray* sa = laik_partitioning_allslices(p);
+    assert(sa != 0); // TODO: API user error
+    return laik_slicearray_slicecount(sa);
 }
 
 // partitioner API: return a slice from an existing partitioning
@@ -320,34 +462,15 @@ Laik_TaskSlice* laik_partitioning_get_tslice(Laik_Partitioning* p, int n)
 {
     static Laik_TaskSlice ts;
 
-    if (n >= (int) p->slices->count) return 0;
+    Laik_SliceArray* sa = laik_partitioning_allslices(p);
+    assert(sa != 0); // TODO: API user error
 
-    ts.sa = p->slices;
+    if (n >= (int) sa->count) return 0;
+    ts.sa = sa;
     ts.no = n;
     return &ts;
 }
 
-Laik_SliceArray* laik_partitioning_slices(Laik_Partitioning* p)
-{
-    return p->slices;
-}
-
-// public: get a custom data pointer from the partitioner
-void* laik_partitioner_data(Laik_Partitioner* partitioner)
-{
-    return partitioner->data;
-}
-
-
-// free resources allocated for a partitioning object
-void laik_free_partitioning(Laik_Partitioning* p)
-{
-    if (p->slices)
-        laik_slicearray_free(p->slices);
-    if (p->filter)
-        laik_slicefilter_free(p->filter);
-    free(p);
-}
 
 
 // public functions to check for assumptions an application may have
@@ -360,9 +483,10 @@ void laik_free_partitioning(Laik_Partitioning* p)
 bool laik_partitioning_isAll(Laik_Partitioning* p)
 {
     // no filter allowed
-    assert(p->filter == 0);
+    Laik_SliceArray* sa = laik_partitioning_allslices(p);
+    assert(sa != 0); // TODO: API user error
 
-    return laik_slicearray_isAll(p->slices);
+    return laik_slicearray_isAll(sa);
 }
 
 // public:
@@ -372,71 +496,34 @@ bool laik_partitioning_isAll(Laik_Partitioning* p)
 int laik_partitioning_isSingle(Laik_Partitioning* p)
 {
     // no filter allowed
-    assert(p->filter == 0);
+    Laik_SliceArray* sa = laik_partitioning_allslices(p);
+    assert(sa != 0); // TODO: API user error
 
-    return laik_slicearray_isSingle(p->slices);
+    return laik_slicearray_isSingle(sa);
 }
 
 // do the slices of this partitioning cover the full space?
 bool laik_partitioning_coversSpace(Laik_Partitioning* p)
 {
     // no filter allowed
-    assert(p->filter == 0);
+    Laik_SliceArray* sa = laik_partitioning_allslices(p);
+    assert(sa != 0); // TODO: API user error
 
-    return laik_slicearray_coversSpace(p->slices);
+    return laik_slicearray_coversSpace(sa);
 }
 
 // public: are the borders of two partitionings equal?
 bool laik_partitioning_isEqual(Laik_Partitioning* p1, Laik_Partitioning* p2)
 {
     // no filters allowed
-    assert(p1->filter == 0);
-    assert(p2->filter == 0);
+    Laik_SliceArray* sa1 = laik_partitioning_allslices(p1);
+    assert(sa1 != 0); // TODO: API user error
+    Laik_SliceArray* sa2 = laik_partitioning_allslices(p2);
+    assert(sa2 != 0); // TODO: API user error
 
-    return laik_slicearray_isEqual(p1->slices, p2->slices);
+    return laik_slicearray_isEqual(sa1, sa2);
 }
 
-// make partitioning valid after a partitioner run by freezing (immutable)
-void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge)
-{
-    laik_slicearray_freeze(p->slices, doMerge);
-}
-
-void laik_partitioning_set_myfilter(Laik_Partitioning* p)
-{
-    assert(p->filter == 0);
-    p->filter = laik_slicefilter_new();
-    laik_slicefilter_set_myfilter(p->filter, p->group);
-}
-
-void laik_partitioning_add_idxfilter(Laik_Partitioning* p,
-                                     Laik_Partitioning* filter)
-{
-    assert(filter->slices->off != 0);
-    if (p->filter == 0)
-        p->filter = laik_slicefilter_new();
-    laik_slicefilter_add_idxfilter(p->filter, filter->slices);
-}
-
-
-// generate the partitioning by running the partitioner
-void laik_partitioning_gen(Laik_Partitioning* p)
-{
-    // not generated yet
-    assert(p->slices == 0);
-
-    Laik_PartitionerParams params;
-    params.space       = p->space;
-    params.group       = p->group;
-    params.partitioner = p->partitioner;
-    params.other       = p->other;
-
-    p->slices = laik_run_partitioner(&params, p->filter);
-
-    laik_log(2, "run partitioner '%s' for '%s' (group %d, space '%s'): %d slices",
-             p->partitioner->name, p->name,
-             p->group->gid, p->space->name, p->slices->count);
-}
 
 
 // public: create a new partitioning by running an offline partitioner
@@ -448,12 +535,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 {
     Laik_Partitioning* p;
     p = laik_new_empty_partitioning(g, space, pr, otherP);
-#if 0
-    // for 1d space, default to always calculate only own slices
-    if (space->dims == 1)
-        laik_partitioning_set_myfilter(p);
-#endif
-    laik_partitioning_gen(p);
+    laik_partitioning_store_allslices(p);
     return p;
 }
 
@@ -480,7 +562,16 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
         assert(0);
     }
 
-    laik_slicearray_migrate(p->slices, fromOld, (unsigned int) newg->size);
+    SliceArray_Entry* e = p->saList;
+    while(e) {
+        if (e->filter && (e->filter->filter_tid >= 0)) {
+            assert(e->filter->filter_tid < oldg->size);
+            e->filter->filter_tid = fromOld[e->filter->filter_tid];
+        }
+        laik_slicearray_migrate(e->slices, fromOld, (unsigned int) newg->size);
+        e = e->next;
+    }
+
     p->group = newg;
 }
 
@@ -491,7 +582,10 @@ int laik_my_slicecount(Laik_Partitioning* p)
     if (myid < 0) return 0; // this task is not part of task group
     assert(myid < p->group->size);
 
-    return laik_slicearray_tidslicecount(p->slices, myid);
+    Laik_SliceArray* sa = laik_partitioning_myslices(p);
+    assert(sa != 0); // TODO: API user error
+
+    return laik_slicearray_tidslicecount(sa, myid);
 }
 
 // get number of mappings for this task
@@ -501,7 +595,10 @@ int laik_my_mapcount(Laik_Partitioning* p)
     if (myid < 0) return 0; // this process is not part of the process group
     assert(myid < p->group->size);
 
-    return laik_slicearray_tidmapcount(p->slices, myid);
+    Laik_SliceArray* sa = laik_partitioning_myslices(p);
+    assert(sa != 0); // TODO: API user error
+
+    return laik_slicearray_tidmapcount(sa, myid);
 }
 
 // get number of slices within a given mapping for this task
@@ -510,7 +607,10 @@ int laik_my_mapslicecount(Laik_Partitioning* p, int mapNo)
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
 
-    return laik_slicearray_tidmapslicecount(p->slices, myid, mapNo);
+    Laik_SliceArray* sa = laik_partitioning_myslices(p);
+    assert(sa != 0); // TODO: API user error
+
+    return laik_slicearray_tidmapslicecount(sa, myid, mapNo);
 }
 
 // get slice number <n> from the slices for this task
@@ -519,7 +619,10 @@ Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n)
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
 
-    return laik_slicearray_tidslice(p->slices, myid, n);
+    Laik_SliceArray* sa = laik_partitioning_myslices(p);
+    assert(sa != 0); // TODO: API user error
+
+    return laik_slicearray_tidslice(sa, myid, n);
 }
 
 // get slice number <n> within mapping <mapNo> from the slices for this task
@@ -528,7 +631,12 @@ Laik_TaskSlice* laik_my_mapslice(Laik_Partitioning* p, int mapNo, int n)
     int myid = p->group->myid;
     if (myid < 0) return 0; // this task is not part of task group
 
-    return laik_slicearray_tidmapslice(p->slices, myid, mapNo, n);
+    Laik_SliceArray* sa = laik_partitioning_allslices(p);
+    if (sa == 0)
+        sa = laik_partitioning_myslices(p);
+    assert(sa != 0); // TODO: API user error
+
+    return laik_slicearray_tidmapslice(sa, myid, mapNo, n);
 }
 
 // get borders of slice number <n> from the 1d slices for this task

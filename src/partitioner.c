@@ -45,6 +45,12 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
     return pr;
 }
 
+// public: get a custom data pointer from the partitioner
+void* laik_partitioner_data(Laik_Partitioner* partitioner)
+{
+    return partitioner->data;
+}
+
 
 // running a partitioner
 

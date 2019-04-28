@@ -270,84 +270,18 @@ Laik_TaskSlice* laik_slicearray_tidmapslice(Laik_SliceArray* sa, int tid, int ma
 
 
 /**
- * Laik_Partitioning
+ * Laik_SliceFilter
+ *
+ * Allows to filter slices in a partitioner run, storing only a subset
+ * The filter is passed in laik_run_partitioner().
  */
-
-// create a new invalid partitioning
-Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
-                                               Laik_Partitioner *pr, Laik_Partitioning *other);
-
-// create a new empty, invalid partitioning using same parameters as in given one
-Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p);
-
-
-// make partitioning valid and immutable by freezing
-void laik_freeze_partitioning(Laik_Partitioning* p, bool doMerge);
-
-// run the partitioner specified for the partitioning, and freeze afterwards
-void laik_partitioning_gen(Laik_Partitioning* p);
-
-// create a new partitioning by running an offline partitioner algorithm.
-// the partitioner may be derived from another partitioning which is
-// forwarded to the partitioner algorithm
-Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
-                                         Laik_Group* g, Laik_Space* space,
-                                         Laik_Partitioning* otherP);
-
-// new partitioning taking slices from another, migrating to new group
-Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
-                                                  Laik_Group* newg);
-
-// free resources allocated for a partitioning object
-void laik_free_partitioning(Laik_Partitioning* p);
-
-
-// slice filters: do not store every slice when running a partitioner algorithm
-
+Laik_SliceFilter* laik_slicefilter_new(void);
+void laik_slicefilter_free(Laik_SliceFilter*);
 // set filter to only keep slices for own process when adding slices
-void laik_partitioning_set_myfilter(Laik_Partitioning* p);
-
-// add an intersection filter to only keep slices intersecting with partitioning <filter>
-void laik_partitioning_add_idxfilter(Laik_Partitioning* p,
-                                     Laik_Partitioning* filter);
-
-// give an access phase a name, for debug output
-void laik_partitioning_set_name(Laik_Partitioning* p, char* n);
-
-// migrate partitioning to new group without changing borders
-// - added tasks get empty partitions
-// - removed tasks must have empty partitiongs
-void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
-
-// get number of slices for this task
-int laik_my_slicecount(Laik_Partitioning* p);
-
-// how many mappings does the partitioning for this process ask for?
-int laik_my_mapcount(Laik_Partitioning* p);
-
-// get number of slices within a given mapping for this task
-int laik_my_mapslicecount(Laik_Partitioning* p, int mapNo);
-
-// get slice number <n> from the slices for this task
-Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n);
-
-// get slice number <n> within mapping <mapNo> from the slices for this task
-Laik_TaskSlice* laik_my_mapslice(Laik_Partitioning* p, int mapNo, int n);
-
-// get borders of slice number <n> from the 1d slices for this task
-Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
-                                 int64_t* from, int64_t* to);
-
-// get borders of slice number <n> from the 2d slices for this task
-Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
-                                 int64_t* x1, int64_t* x2,
-                                 int64_t* y1, int64_t* y2);
-
-// get borders of slice number <n> from the 3d slices for this task
-Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
-                                 int64_t* x1, int64_t* x2,
-                                 int64_t* y1, int64_t* y2,
-                                 int64_t* z1, int64_t* z2);
+void laik_slicefilter_set_myfilter(Laik_SliceFilter* sf, Laik_Group* g);
+// add filter to only keep slices intersecting with slices in <sa>
+void laik_slicefilter_add_idxfilter(Laik_SliceFilter* sf, Laik_SliceArray* sa,
+                                    Laik_Partitioning* p);
 
 
 // Partitioner API:
@@ -429,11 +363,96 @@ void laik_append_slice(Laik_SliceReceiver* r, int task, const Laik_Slice* s,
 // append 1d single-index slice
 void laik_append_index_1d(Laik_SliceReceiver* r, int task, int64_t idx);
 
+
+/**
+ * Laik_Partitioning
+ */
+
+// create a new invalid partitioning
+Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
+                                               Laik_Partitioner *pr, Laik_Partitioning *other);
+
+// create a new empty, invalid partitioning using same parameters as in given one
+Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p);
+
+// slices from a partitioner run without filter
+Laik_SliceArray* laik_partitioning_allslices(Laik_Partitioning*);
+// slices from a partitioner run keeping only slices of this task
+Laik_SliceArray* laik_partitioning_myslices(Laik_Partitioning*);
+// slices from run intersecting with own slices of <p1> and <p2>
+Laik_SliceArray* laik_partitioning_interslices(Laik_Partitioning* p1,
+                                               Laik_Partitioning* p2);
+
+// store a slice array in partitioning, together with filter used (may be 0)
+void laik_partitioning_add_slices(Laik_Partitioning* p, Laik_SliceArray* sa, Laik_SliceFilter* sf);
+// run the partitioner specified for the partitioning, keeping all slices
+void laik_partitioning_store_allslices(Laik_Partitioning* p);
+// run the partitioner specified for the partitioning, keeping only slices of this task
+void laik_partitioning_store_myslices(Laik_Partitioning* p);
+// run the partitioner specified for the partitioning, keeping intersecting slices
+void laik_partitioning_store_intersectslices(Laik_Partitioning* p, Laik_Partitioning* p2);
+
+
+// create a new partitioning by running an offline partitioner algorithm.
+// the partitioner may be derived from another partitioning which is
+// forwarded to the partitioner algorithm
+Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
+                                         Laik_Group* g, Laik_Space* space,
+                                         Laik_Partitioning* otherP);
+
+// new partitioning taking slices from another, migrating to new group
+Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
+                                                  Laik_Group* newg);
+
+// free resources allocated for a partitioning object
+void laik_free_partitioning(Laik_Partitioning* p);
+
+
+// give an access phase a name, for debug output
+void laik_partitioning_set_name(Laik_Partitioning* p, char* n);
+
+// migrate partitioning to new group without changing borders
+// - added tasks get empty partitions
+// - removed tasks must have empty partitiongs
+void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
+
+// get number of slices for this task
+int laik_my_slicecount(Laik_Partitioning* p);
+
+// how many mappings does the partitioning for this process ask for?
+int laik_my_mapcount(Laik_Partitioning* p);
+
+// get number of slices within a given mapping for this task
+int laik_my_mapslicecount(Laik_Partitioning* p, int mapNo);
+
+// get slice number <n> from the slices for this task
+Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n);
+
+// get slice number <n> within mapping <mapNo> from the slices for this task
+Laik_TaskSlice* laik_my_mapslice(Laik_Partitioning* p, int mapNo, int n);
+
+// get borders of slice number <n> from the 1d slices for this task
+Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
+                                 int64_t* from, int64_t* to);
+
+// get borders of slice number <n> from the 2d slices for this task
+Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
+                                 int64_t* x1, int64_t* x2,
+                                 int64_t* y1, int64_t* y2);
+
+// get borders of slice number <n> from the 3d slices for this task
+Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
+                                 int64_t* x1, int64_t* x2,
+                                 int64_t* y1, int64_t* y2,
+                                 int64_t* z1, int64_t* z2);
+
+
+
 Laik_Space* laik_partitioning_get_space(Laik_Partitioning* p);
 Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p);
 int laik_partitioning_slicecount(Laik_Partitioning* p);
 Laik_TaskSlice* laik_partitioning_get_tslice(Laik_Partitioning* p, int n);
-Laik_SliceArray* laik_partitioning_slices(Laik_Partitioning*);
+
 
 // get slice of a task slice
 const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts);

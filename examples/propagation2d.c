@@ -320,8 +320,8 @@ int main(int argc, char* argv[])
     pNodes = laik_new_empty_partitioning(world, node_space,
                                          get_node_partitioner(neighbours),
                                          pElements);
-    laik_partitioning_set_myfilter(pNodes);
-    laik_partitioning_gen(pNodes);
+    laik_partitioning_store_myslices(pNodes);
+    laik_partitioning_store_intersectslices(pNodes, pNodes);
 
     double *baseN, *baseE;
     uint64_t countN, countE;
