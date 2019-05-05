@@ -12,3 +12,5 @@ log*
 /build/
 *.so.dSYM/
 /messungen/
+*.exe
+.idea
