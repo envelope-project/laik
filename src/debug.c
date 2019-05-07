@@ -254,11 +254,13 @@ void laik_log_SliceFilter(Laik_SliceFilter* sf)
     if (!sf)
         laik_log_append("no filter");
     else if (sf->filter_tid >=0)
-        laik_log_append("own-task (%d) filter", sf->filter_tid);
+        laik_log_append("filter task %d", sf->filter_tid);
     else if (sf->pfilter1 || sf->pfilter2)
-        laik_log_append("intersection filter with '%s' and '%s'",
-                        sf->pfilter1->p ? sf->pfilter1->p->name : "",
-                        sf->pfilter2->p ? sf->pfilter2->p->name : "");
+        laik_log_append("intersection filter with %d [%lld;%lld[ and %d [%lld;%lld[ slices",
+                        sf->pfilter1->len,
+                        (long long) sf->pfilter1->from, (long long) sf->pfilter1->to,
+                        sf->pfilter2->len,
+                        (long long) sf->pfilter2->from, (long long) sf->pfilter2->to);
 }
 
 void laik_log_Partitioning(Laik_Partitioning* p)
@@ -276,8 +278,17 @@ void laik_log_Partitioning(Laik_Partitioning* p)
     SliceArray_Entry* e = p->saList;
     while(e) {
         laik_log_append("\n  ");
-        laik_log_SliceFilter(e->filter);
-        laik_log_append(": ");
+        switch(e->info) {
+        case LAIK_AI_UNKNOWN: break;
+        case LAIK_AI_FULL: laik_log_append("(full run): "); break;
+        case LAIK_AI_SINGLETASK:
+            laik_log_append("(run filtered with task %d): ", e->filter_tid);
+            break;
+        case LAIK_AI_INTERSECT:
+            laik_log_append("(run filtered with intersection with part '%s'): ",
+                            e->other);
+            break;
+        }
         laik_log_SliceArray(e->slices);
         e = e->next;
     }

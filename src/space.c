@@ -912,18 +912,11 @@ void calcAddReductions(int tflags,
     assert(fromP->space == toP->space);
 
     Laik_SliceArray *fromSA = 0, *toSA = 0;
-    fromSA = laik_partitioning_allslices(fromP);
-    if (fromSA == 0) {
-        // there must be at least an intersection of own slices in fromP/toP
-        fromSA = laik_partitioning_interslices(fromP, toP);
-        assert(fromSA != 0); // TODO: user API error
-    }
-    toSA = laik_partitioning_allslices(toP);
-    if (toSA == 0) {
-        // there must be at least an intersection of own slices in fromP/toP
-        toSA = laik_partitioning_interslices(toP, fromP);
-        assert(toSA != 0); // TODO: user API error
-    }
+    // need at least intersection of own slices in fromP/toP to calculate transition
+    fromSA = laik_partitioning_interslices(fromP, toP);
+    toSA = laik_partitioning_interslices(toP, fromP);
+    assert(fromSA != 0); // TODO: user API error
+    assert(toSA != 0); // TODO: user API error
 
     if (laik_log_begin(1)) {
         laik_log_append("calc '");
