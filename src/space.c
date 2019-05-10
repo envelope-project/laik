@@ -911,12 +911,15 @@ void calcAddReductions(int tflags,
     assert(fromP->space->dims == 1);
     assert(fromP->space == toP->space);
 
-    Laik_SliceArray *fromSA = 0, *toSA = 0;
+    Laik_SliceArray *fromSA, *toSA;
     // need at least intersection of own slices in fromP/toP to calculate transition
     fromSA = laik_partitioning_interslices(fromP, toP);
     toSA = laik_partitioning_interslices(toP, fromP);
-    assert(fromSA != 0); // TODO: user API error
-    assert(toSA != 0); // TODO: user API error
+    if ((fromSA == 0) || (toSA == 0)) {
+        // required slices for transition calculation not calculated yet
+        laik_panic("Transition calculation not possible without pre-calculated slices");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     if (laik_log_begin(1)) {
         laik_log_append("calc '");
@@ -1221,28 +1224,17 @@ do_calc_transition(Laik_Space* space,
 
     int dims = space->dims;
     int taskCount = group->size;
-    Laik_SliceArray *fromSA = 0, *toSA = 0;
-    if (fromP) {
-        fromSA = laik_partitioning_allslices(fromP);
-        if ((fromSA == 0) && toP) {
-            // there must be at least an intersection of own slices in fromP/toP
-            fromSA = laik_partitioning_interslices(fromP, toP);
-            assert(fromSA != 0);
-        }
-    }
-    if (toP) {
-        toSA = laik_partitioning_allslices(toP);
-        if ((toSA == 0) && fromP) {
-            // there must be at least an intersection of own slices in fromP/toP
-            toSA = laik_partitioning_interslices(toP, fromP);
-            assert(toSA != 0);
-        }
-    }
-
     unsigned int o, o1, o2;
 
     // request to initialize values?
     if ((toP != 0) && (flow == LAIK_DF_Init)) {
+
+        // own slices enough
+        Laik_SliceArray* toSA = laik_partitioning_myslices(toP);
+        if (!toSA) {
+            laik_panic("Own slices not known for init in transition calculation");
+            exit(1); // not actually needed, laik_panic never returns
+        }
 
         for(o = toSA->off[myid]; o < toSA->off[myid+1]; o++) {
             if (laik_slice_isEmpty(&(toSA->tslice[o].s))) continue;
@@ -1265,6 +1257,14 @@ do_calc_transition(Laik_Space* space,
             calcAddReductions(tflags, group, redOp, fromP, toP);
         }
         else {
+            // we need intersection of own slices in fromP/toP
+            Laik_SliceArray* fromSA = laik_partitioning_allslices(fromP);
+            Laik_SliceArray* toSA = laik_partitioning_allslices(toP);
+            if ((fromSA == 0) || (toSA == 0)) {
+                laik_panic("Slices not known for transition calculation");
+                exit(1); // not actually needed, laik_panic never returns
+            }
+
             // determine local slices to keep
             // (may need local copy if from/to mappings are different).
             // reductions are not handled here, but by backend

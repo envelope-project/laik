@@ -422,7 +422,12 @@ void laik_partitioning_store_myslices(Laik_Partitioning* p)
     e->filter_tid = p->group->myid;
 }
 
-// run the partitioner specified for the partitioning, keeping intersecting slices
+// run the partitioner specified for the partitioning, keeping slices
+// intersecting with own slices from <p2> (and own slices in <p>).
+// The resulting slices are required for the transition calculation
+// from <p> to <p2> in calcAddRections().
+// Using these slices instead of all slices from a partitioner run
+// can significantly reduce memory consumption for slice storage
 void laik_partitioning_store_intersectslices(Laik_Partitioning* p,
                                              Laik_Partitioning* p2)
 {
@@ -435,9 +440,15 @@ void laik_partitioning_store_intersectslices(Laik_Partitioning* p,
 
     sf = laik_slicefilter_new();
     sa = laik_partitioning_myslices(p);
-    laik_slicefilter_add_idxfilter(sf, sa, p->group->myid);
     sa2 = laik_partitioning_myslices(p2);
-    laik_slicefilter_add_idxfilter(sf, sa2, p->group->myid);
+    if ((sa == 0) || (sa2 == 0)) {
+        // partitioner for own slices not run yet: but we need them!
+        laik_panic("Request for intersection without base slices");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    int myid = p->group->myid;
+    laik_slicefilter_add_idxfilter(sf, sa, myid);
+    laik_slicefilter_add_idxfilter(sf, sa2, myid);
 
     SliceArray_Entry* e = laik_partitioning_run(p, sf);
     e->info = LAIK_AI_INTERSECT;
