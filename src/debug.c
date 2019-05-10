@@ -254,13 +254,16 @@ void laik_log_SliceFilter(Laik_SliceFilter* sf)
     if (!sf)
         laik_log_append("no filter");
     else if (sf->filter_tid >=0)
-        laik_log_append("filter task %d", sf->filter_tid);
-    else if (sf->pfilter1 || sf->pfilter2)
-        laik_log_append("intersection filter with %d [%lld;%lld[ and %d [%lld;%lld[ slices",
+        laik_log_append("filter for task %d", sf->filter_tid);
+    else if (sf->pfilter1) {
+        laik_log_append("intersection filter with %d [%lld;%lld[",
                         sf->pfilter1->len,
-                        (long long) sf->pfilter1->from, (long long) sf->pfilter1->to,
-                        sf->pfilter2->len,
+                        (long long) sf->pfilter1->from, (long long) sf->pfilter1->to);
+        if (sf->pfilter2)
+            laik_log_append(" and %d [%lld;%lld[", sf->pfilter2->len,
                         (long long) sf->pfilter2->from, (long long) sf->pfilter2->to);
+        laik_log_append(" slices");
+    }
 }
 
 void laik_log_Partitioning(Laik_Partitioning* p)

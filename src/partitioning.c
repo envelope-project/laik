@@ -393,7 +393,7 @@ SliceArray_Entry* laik_partitioning_run(Laik_Partitioning* p, Laik_SliceFilter* 
                         p->partitioner->name, p->name,
                         p->group->gid, p->space->name, sa->count);
         if (sf) {
-            laik_log_append("\n  using filter ");
+            laik_log_append("\n  using ");
             laik_log_SliceFilter(sf);
         }
         laik_log_flush(0);
@@ -448,7 +448,8 @@ void laik_partitioning_store_intersectslices(Laik_Partitioning* p,
     }
     int myid = p->group->myid;
     laik_slicefilter_add_idxfilter(sf, sa, myid);
-    laik_slicefilter_add_idxfilter(sf, sa2, myid);
+    if (p2 != p) // no need to add same slices twice to filter
+        laik_slicefilter_add_idxfilter(sf, sa2, myid);
 
     SliceArray_Entry* e = laik_partitioning_run(p, sf);
     e->info = LAIK_AI_INTERSECT;
