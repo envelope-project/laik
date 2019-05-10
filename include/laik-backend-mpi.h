@@ -26,5 +26,7 @@
 // if application already called MPI_Init, pass 0 for args
 // returns the same object if called multiple times
 Laik_Instance* laik_init_mpi(int* argc, char*** argv);
+int laik_mpi_get_rank_by_node(Laik_Instance* inst, char** nodes, size_t sznodes, int** list, size_t* szlist);
+
 
 #endif // LAIK_BACKEND_MPI_H

@@ -61,6 +61,10 @@ struct _Laik_Backend {
 
   // sync of key-value store
   void (*sync)(Laik_Instance*);
+
+  // get a list of ranks by nodes
+  int (*get_rank_by_nodes)(Laik_Instance*, char**, size_t, int**, size_t*);
+
 };
 
 

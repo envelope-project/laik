@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
+#define USE_MPI 1
 #ifdef USE_MPI
 
 #include "laik-internal.h"
@@ -40,6 +40,7 @@ static void laik_mpi_cleanup(Laik_ActionSeq*);
 static void laik_mpi_exec(Laik_ActionSeq* as);
 static void laik_mpi_updateGroup(Laik_Group*);
 
+
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
     .name        = "MPI Backend Driver (synchronous)",
@@ -47,7 +48,8 @@ static Laik_Backend laik_backend_mpi = {
     .prepare     = laik_mpi_prepare,
     .cleanup     = laik_mpi_cleanup,
     .exec        = laik_mpi_exec,
-    .updateGroup = laik_mpi_updateGroup
+    .updateGroup = laik_mpi_updateGroup,
+    .get_rank_by_nodes = laik_mpi_get_rank_by_node
 };
 
 static Laik_Instance* mpi_instance = 0;
@@ -706,6 +708,59 @@ static void laik_mpi_cleanup(Laik_ActionSeq* as)
     }
 
     assert(as->backend == &laik_backend_mpi);
+}
+
+
+#define MAX_RANKS 65536
+#define MAX_NODE_NAME_LENGTH 512
+int laik_mpi_get_rank_by_node(Laik_Instance* inst, char** nodes, size_t sznodes, int** list, size_t* szlist){
+    
+    //all gather
+    //map. 
+
+    char* my_loc = laik_mylocation(inst);
+    int my_rank = atoi(inst->guid);
+    
+#pragma pack(1)
+    struct rank_loc_pair{
+        char location[MAX_NODE_NAME_LENGTH];
+        int rank;
+    };
+#pragma pack() 
+
+    struct rank_loc_pair myid;
+    struct rank_loc_pair* all_ids;
+
+    strncpy(myid.location, my_loc, sizeof(myid.location));
+    myid.rank = my_rank;
+
+    //all gather    
+    all_ids = (char*) malloc ((inst->size) * sizeof(struct rank_loc_pair));
+    MPI_Allgather(&myid, sizeof(struct rank_loc_pair), MPI_BYTE, 
+                  all_ids, sizeof(struct rank_loc_pair), MPI_BYTE, MPI_COMM_WORLD);
+     
+    int ranks_buf[65536];
+    int count = 0;
+    //test the failed ranks
+    //FIXME: High complexity
+    laik_log(LAIK_LL_Debug, "#all ids %d\n", inst->size);
+
+    for(size_t i=0; i<sznodes; i++){
+        for(int j=0; j<inst->size; j++){
+        laik_log(LAIK_LL_Debug, "#all ids %d\n", inst->size);
+            laik_log(LAIK_LL_Debug, "Rank/loc %d/%s\n", all_ids[j].rank, all_ids[j].location);
+            if(strncmp(all_ids[j].location, nodes[i], MAX_NODE_NAME_LENGTH-1) == 0){
+                ranks_buf[count] = all_ids[j].rank;
+                count++;
+            }
+        }
+    }
+
+    *list = (int*) malloc(count*sizeof(int));
+    memcpy(*list, ranks_buf, count*sizeof(int));
+    *szlist = count;
+
+    return count;
 }
 
 #endif // USE_MPI
