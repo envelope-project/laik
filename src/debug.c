@@ -273,7 +273,7 @@ void laik_log_Partitioning(Laik_Partitioning* p)
         return;
     }
     laik_log_append("partitioning '%s' on space '%s', group %d",
-                    p->name, p->space, p->group->gid);
+                    p->name, p->space->name, p->group->gid);
     if (!p->saList) {
         laik_log_append(" - no slices stored");
         return;
