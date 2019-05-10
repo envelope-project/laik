@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
 
 	//(1) Laik_Instance* inst;
 	inst = laik_init (&argc, &argv);
-	DEBUG_PRINT("laik init done L:1! \n");
+	DEBUG_PRINT("laik init done. \n");
 
 
 	//(2) laik_ext_init(inst);
@@ -45,14 +45,14 @@ int main(int argc, char* argv[])
 	//(3) laik_ext_loadagent     or    laik_ext_load_agent_from_file
 	char *path = "./external/file/libfileagent.so";
 	laik_ext_load_agent_from_file( inst, path, 0, 0);
-	printf("laik_ext_load_agent done ! L:1 \n");
+	printf("laik_ext_load_agent done ! \n");
 
 	//(4) laik_get_failed
 	node_uid_t failed_ranks;
 	int* dummy = & tmp;
 
 	laik_get_failed( inst, dummy, &failed_ranks, 10);
-	printf("get_failed (Final) num_failed: %d L:1 \n", *dummy );
+	printf("get_failed (Final) num_failed: %d failed: %s \n", *dummy, failed_ranks.uid);
 
 	//(5) laik_ext_cleanup
 	//laik_ext_cleanup(inst);
