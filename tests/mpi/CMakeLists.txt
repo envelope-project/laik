@@ -31,6 +31,7 @@ if ("USE_MPI" IN_LIST definitions)
         "test-markov-40-4-mpi-4.sh"
         "test-propagation2d-10-mpi-1.sh"
         "test-propagation2d-10-mpi-4.sh"
+	"test-propagation2do-10-mpi-4.sh"
         "test-spmv2-mpi-1.sh"
         "test-spmv2-mpi-4.sh"
         "test-spmv2r-mpi-1.sh"
