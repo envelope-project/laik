@@ -2,7 +2,7 @@
 PREFIX=/usr/local
 OPT=-O0 -g
 WARN=-Wall -Wextra
-SUBDIRS=examples
+SUBDIRS=examples tests/fault-tolerance
 
 # settings from 'configure', may overwrite defaults
 -include Makefile.config
@@ -62,6 +62,10 @@ examples: $(LAIKLIB)
 
 examples/c++: $(LAIKLIB)
 	cd examples/c++ && $(MAKE)
+
+tests/fault-tolerance: $(LAIKLIB)
+	echo test
+	cd tests/fault-tolerance && $(MAKE)
 
 
 # tests
