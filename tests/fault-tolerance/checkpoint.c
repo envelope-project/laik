@@ -10,15 +10,10 @@
 #include <string.h>
 #include <openssl/sha.h>
 
-void hexHash(char* msg, unsigned char hash[SHA_DIGEST_LENGTH]) {
-    printf("%s ", msg);
-    for (int i = 0; i < SHA_DIGEST_LENGTH; ++i) {
-        printf("%02x", hash[i]);
-    }
-    printf("\n");
-}
+void hexHash(char *msg, uint64_t *base, uint64_t count, unsigned char *hash);
 
-int main(int argc, char* argv[]) {
+
+int main(int argc, char *argv[]) {
     laik_set_loglevel(LAIK_LL_Debug);
     Laik_Instance *inst = laik_init(&argc, &argv);
     Laik_Group *world = laik_world(inst);
@@ -28,11 +23,11 @@ int main(int argc, char* argv[]) {
     // provides meta-information for logging
     laik_set_phase(inst, 0, "init", 0);
 
-    uint64_t* base;
+    uint64_t *base, *backupBase;
     uint64_t count, backupCount;
 
-    Laik_Space *space, *checkpointSpace;
-    Laik_Data *originalData, *checkpointData;
+    Laik_Space *space;
+    Laik_Data *originalData;
     Laik_Partitioner *blockPartitioner;
     Laik_Partitioning *masterPartitioning, *blockPartitioning, *checkpointPartitioning;
 
@@ -56,28 +51,53 @@ int main(int argc, char* argv[]) {
     laik_map_def1(originalData, (void **) &base, &count);
 
     unsigned char hash1[SHA_DIGEST_LENGTH];
-    SHA1((const unsigned char *) base, count * sizeof(uint64_t), hash1);
+    hexHash("Memory hash before checkpoint creation", base, count * sizeof(uint64_t), hash1);
 
-    hexHash("Memory hash before checkpoint creation", hash1);
 
-    Laik_Checkpoint checkpoint = laik_create_checkpoint(inst, space, originalData);
-    checkpointSpace = checkpoint.space;
-    checkpointData = checkpoint.data;
+    Laik_Checkpoint checkpoint = laik_checkpoint_create(inst, space, originalData);
 
-    checkpointPartitioning = laik_new_partitioning(blockPartitioner, world, checkpointSpace, NULL);
-
-    laik_switchto_partitioning(checkpointData, checkpointPartitioning, LAIK_DF_Preserve, LAIK_RO_None);
-
-    laik_map_def1(checkpointData, (void **) &base, &backupCount);
+    checkpointPartitioning = laik_new_partitioning(blockPartitioner, world, checkpoint.space, NULL);
+    laik_switchto_partitioning(checkpoint.data, checkpointPartitioning, LAIK_DF_Preserve, LAIK_RO_None);
+    laik_map_def1(checkpoint.data, (void **) &backupBase, &backupCount);
 
     unsigned char hash2[SHA_DIGEST_LENGTH];
-    SHA1((const unsigned char *) base, backupCount, hash2);
+    hexHash("Memory hash of checkpoint", backupBase, backupCount, hash2);
 
-    hexHash("Memory hash of checkpoint", hash2);
-
-    if(memcmp(hash1, hash2, SHA_DIGEST_LENGTH) != 0) {
-        printf("Hashes different, error\n");
+    if (memcmp(hash1, hash2, SHA_DIGEST_LENGTH) != 0) {
+        printf("Hashes different, checkpoint failed\n");
         return -1;
     }
+
+    // Write garbage over the original data and then restore
+    for (uint64_t i = 0; i < count; i++) base[i] = (uint64_t) i + 1;
+
+    unsigned char hash3[SHA_DIGEST_LENGTH];
+    hexHash("Memory hash of garbage data", base, count * sizeof(uint64_t), hash3);
+
+    if (memcmp(hash2, hash3, SHA_DIGEST_LENGTH) == 0) {
+        printf("Checkpoint hash equal to garbage hash, error.\n");
+        return -1;
+    }
+
+    // Restore useful data from checkpoint over the garbage data
+    laik_checkpoint_restore(inst, &checkpoint, space, originalData);
+
+    unsigned char hash4[SHA_DIGEST_LENGTH];
+    hexHash("Memory hash of restored data", base, count * sizeof(uint64_t), hash4);
+
+    if (memcmp(hash1, hash4, SHA_DIGEST_LENGTH) != 0) {
+        printf("Original hash not equal to restored hash, error.\n");
+        return -1;
+    }
+
+}
+
+void hexHash(char *msg, uint64_t *base, uint64_t count, unsigned char *hash) {
+    SHA1((const unsigned char *) base, count, hash);
+    printf("%s ", msg);
+    for (int i = 0; i < SHA_DIGEST_LENGTH; ++i) {
+        printf("%02x", hash[i]);
+    }
+    printf("\n");
 
 }

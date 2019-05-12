@@ -12,6 +12,8 @@ struct _Laik_Checkpoint {
 
 typedef struct _Laik_Checkpoint Laik_Checkpoint;
 
-Laik_Checkpoint laik_create_checkpoint(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *d);
+Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data);
+
+void laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data);
 
 #endif //LAIK_LAIK_FAULT_TOLERANCE_H
