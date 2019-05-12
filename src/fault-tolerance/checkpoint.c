@@ -49,17 +49,18 @@ void laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *check
 void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
                  uint64_t *count, void **backupBase, uint64_t *backupCount) {
 
-    Laik_Partitioning *backupPartitioning;
-    backupPartitioning = laik_new_partitioning(laik_All, laik_world(laikInstance), (*checkpoint).space, NULL);
+    Laik_Partitioner *backupPartitioner = laik_new_block_partitioner1();
+    Laik_Partitioning *backupPartitioning = laik_new_partitioning(backupPartitioner, laik_world(laikInstance), checkpoint->space, NULL);
 
-    laik_switchto_partitioning((*checkpoint).data, backupPartitioning, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1((*checkpoint).data, backupBase, backupCount);
+    laik_switchto_partitioning(checkpoint->data, backupPartitioning, LAIK_DF_None, LAIK_RO_None);
+    laik_map_def1(checkpoint->data, backupBase, backupCount);
 
     assert(data->activeMappings->count == 1);
     Laik_Mapping activeMapping = data->activeMappings->map[0];
     *base = activeMapping.base;
     *count = activeMapping.count;
 
+    laik_log(LAIK_LL_Debug, "Preparing buffer for %lu elements of size %i (%lu)\n", *count, data->elemsize, *backupCount);
     assert(*count * data->elemsize == *backupCount);
 }
 

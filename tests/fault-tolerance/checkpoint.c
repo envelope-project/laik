@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
 
     // define global 1d double originalData with <size> entries
     space = laik_new_space_1d(inst, size);
-    originalData = laik_new_data(space, laik_UInt64);
+    originalData = laik_new_data(space, laik_Double);
 
     // Create some sample originalData to checkpoint
     masterPartitioning = laik_new_partitioning(laik_Master, world, space, 0);
@@ -90,6 +90,8 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    printf("Test passed\n");
+    return 0;
 }
 
 void hexHash(char *msg, uint64_t *base, uint64_t count, unsigned char *hash) {
