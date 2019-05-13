@@ -418,6 +418,8 @@ void laik_partitioning_store_myslices(Laik_Partitioning* p)
     laik_slicefilter_set_myfilter(sf, p->group);
 
     SliceArray_Entry* e = laik_partitioning_run(p, sf);
+    laik_slicefilter_free(sf);
+
     e->info = LAIK_AI_SINGLETASK;
     e->filter_tid = p->group->myid;
 }
@@ -452,6 +454,8 @@ void laik_partitioning_store_intersectslices(Laik_Partitioning* p,
         laik_slicefilter_add_idxfilter(sf, sa2, myid);
 
     SliceArray_Entry* e = laik_partitioning_run(p, sf);
+    laik_slicefilter_free(sf);
+
     e->info = LAIK_AI_INTERSECT;
     e->other = p2;
 }
