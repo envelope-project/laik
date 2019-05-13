@@ -1,6 +1,7 @@
 # Build the C examples
 foreach (test
         "checkpoint"
+        "checkpoint-jac2d"
         )
     add_executable ("${test}"
             "${test}.c"
