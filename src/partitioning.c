@@ -414,6 +414,8 @@ void laik_partitioning_store_allslices(Laik_Partitioning* p)
 // run the partitioner specified for the partitioning, keeping only slices of this task
 void laik_partitioning_store_myslices(Laik_Partitioning* p)
 {
+    if (p->group->myid < 0) return;
+
     Laik_SliceFilter* sf = laik_slicefilter_new();
     laik_slicefilter_set_myfilter(sf, p->group);
 
