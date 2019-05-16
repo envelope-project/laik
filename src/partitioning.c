@@ -334,6 +334,12 @@ Laik_SliceArray* laik_partitioning_myslices(Laik_Partitioning* p)
 Laik_SliceArray* laik_partitioning_interslices(Laik_Partitioning* p,
                                                Laik_Partitioning* p2)
 {
+    // it is a programmer error if <p> and <p2> work on different spaces
+    if (p->space != p2->space) {
+        laik_panic("Requesting intersection between different spaces");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
     SliceArray_Entry* e = p->saList;
     while(e) {
         if (e->info == LAIK_AI_FULL) {
@@ -438,9 +444,12 @@ void laik_partitioning_store_intersectslices(Laik_Partitioning* p,
     Laik_SliceFilter* sf;
     Laik_SliceArray *sa, *sa2;
 
-    // requires same space and same tid group
-    assert(p->group == p2->group);
-    assert(p->space == p2->space);
+    // it is a programmer error if <p> and <p2> work on different spaces
+    // (different groups are Ok, as the installed filters works on indexes)
+    if (p->space != p2->space) {
+        laik_panic("Requesting intersection filter on different spaces");
+        exit(1); // not actually needed, laik_panic never returns
+    }
 
     sf = laik_slicefilter_new();
     sa = laik_partitioning_myslices(p);
@@ -450,10 +459,9 @@ void laik_partitioning_store_intersectslices(Laik_Partitioning* p,
         laik_panic("Request for intersection without base slices");
         exit(1); // not actually needed, laik_panic never returns
     }
-    int myid = p->group->myid;
-    laik_slicefilter_add_idxfilter(sf, sa, myid);
+    laik_slicefilter_add_idxfilter(sf, sa, p->group->myid);
     if (p2 != p) // no need to add same slices twice to filter
-        laik_slicefilter_add_idxfilter(sf, sa2, myid);
+        laik_slicefilter_add_idxfilter(sf, sa2, p2->group->myid);
 
     SliceArray_Entry* e = laik_partitioning_run(p, sf);
     laik_slicefilter_free(sf);
