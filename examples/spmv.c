@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
 
     int size = 0;
     if (argc > 1) size = atoi(argv[1]);
-    if ((size == 0) || (size > MAXSIZE)) size = MAXSIZE;
+    if ((size <= 0) || (size > MAXSIZE)) size = MAXSIZE;
 
     laik_set_phase(inst, 0, "init", NULL);
 
