@@ -357,7 +357,7 @@ void laik_mpi_updateGroup(Laik_Group* g)
     // calculate MPI communicator for group <g>
     // TODO: only supports shrinking of parent for now
     assert(g->parent);
-    assert(g->parent->size > g->size);
+    assert(g->parent->size >= g->size);
 
     laik_log(1, "MPI backend updateGroup: parent %d (size %d, myid %d) "
              "=> group %d (size %d, myid %d)",
