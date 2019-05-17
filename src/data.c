@@ -961,7 +961,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
         Laik_SliceArray* sa = laik_partitioning_myslices(p);
         laik_updateMapOffsets(sa, p->group->myid); // could be done always, not just lazy
         assert(sa->map_tid == p->group->myid);
-        assert(sa->map_off != 0);
+        if (sa->map_count > 0) assert(sa->map_off != 0);
         groupCount += sa->map_count;
     }
 
