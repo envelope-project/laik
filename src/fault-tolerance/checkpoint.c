@@ -12,6 +12,8 @@ Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *che
 void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
                  uint64_t *count, void **backupBase, uint64_t *backupCount);
 
+laik_run_partitioner_t wrapPartitionerRun(const Laik_Partitioner *currentPartitioner);
+
 Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data) {
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i\n", iteration);
@@ -71,4 +73,31 @@ Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *che
 
     (*checkpoint).data = laik_new_data((*checkpoint).space, laik_UChar);
     return (*checkpoint);
+}
+
+void run_wrapped_partitioner(Laik_SliceReceiver* receiver, Laik_PartitionerParams* params) {
+    Laik_Partitioner* originalPartitioner = (Laik_Partitioner*)params->partitioner->data;
+    Laik_PartitionerParams modifiedParams;
+    Laik_Group modifiedGroup;
+
+    // Change the original laik group rotating all ids by 1
+    // This should cause data to be switched to the neighbor
+    memcpy(&modifiedGroup, params->group, sizeof(Laik_Group));
+    modifiedGroup.myid = (modifiedGroup.myid + 1) % modifiedGroup.size;
+
+    modifiedParams.partitioner = originalPartitioner;
+    modifiedParams.group = &modifiedGroup;
+    modifiedParams.other = params->other;
+    modifiedParams.space = params->space;
+
+    originalPartitioner->run(receiver, &modifiedParams);
+}
+
+Laik_Partitioner create_checkpoint_partitioner(Laik_Partitioner* currentPartitioner) {
+    Laik_Partitioner backupPartitioner;
+    backupPartitioner.name = currentPartitioner->name;
+    backupPartitioner.flags = currentPartitioner->flags;
+    backupPartitioner.data = currentPartitioner;
+    backupPartitioner.run = run_wrapped_partitioner;
+    return backupPartitioner;
 }
