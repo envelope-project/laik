@@ -6,7 +6,7 @@
 #include <assert.h>
 #include <string.h>
 
-Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Space *space,
+Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space,
                                const Laik_Data *data);
 
 void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
@@ -26,33 +26,35 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
     uint64_t count, backupCount;
     initBuffers(laikInstance, &checkpoint, data, &base, &count, &backupBase, &backupCount);
 
-    memcpy(backupBase, base, backupCount);
+    memcpy(backupBase, base, backupCount * data->elemsize);
 
     laik_log(LAIK_LL_Info, "Checkpoint %s completed\n", checkpoint.space->name);
     return checkpoint;
 }
 
 
-void laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data) {
+void
+laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data) {
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint restore requested at iteration %i\n", iteration);
 
     void *base, *backupBase;
     uint64_t count, backupCount;
 
-    assert(laik_space_size(space) * data->elemsize == laik_space_size(checkpoint->space));
+    assert(laik_space_size(space) == laik_space_size(checkpoint->space));
     initBuffers(laikInstance, checkpoint, data, &base, &count, &backupBase, &backupCount);
 
-    memcpy(base, backupBase, backupCount);
+    memcpy(base, backupBase, backupCount * data->elemsize);
 
     laik_log(LAIK_LL_Info, "Checkpoint restore %s completed", checkpoint->space->name);
 }
 
 void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
                  uint64_t *count, void **backupBase, uint64_t *backupCount) {
-
-    Laik_Partitioner *backupPartitioner = laik_new_block_partitioner1();
-    Laik_Partitioning *backupPartitioning = laik_new_partitioning(backupPartitioner, laik_world(laikInstance), checkpoint->space, NULL);
+    // TODO: Temporarily unused
+    (void)laikInstance;
+//    Laik_Partitioner *backupPartitioner = data->activePartitioning->;
+    Laik_Partitioning *backupPartitioning = data->activePartitioning;
 
     laik_switchto_partitioning(checkpoint->data, backupPartitioning, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(checkpoint->data, backupBase, backupCount);
@@ -62,21 +64,25 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
     *base = activeMapping.base;
     *count = activeMapping.count;
 
-    laik_log(LAIK_LL_Debug, "Preparing buffer for %lu elements of size %i (%lu)\n", *count, data->elemsize, *backupCount);
-    assert(*count * data->elemsize == *backupCount);
+    laik_log(LAIK_LL_Debug, "Preparing buffer for %lu elements of size %i (%lu)\n", *count, data->elemsize,
+             *backupCount);
+    assert(*count == *backupCount);
 }
 
-Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Space *space,
+Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space,
                                const Laik_Data *data) {
-    (*checkpoint).space = laik_new_space_1d(laikInstance, laik_space_size(space) * data->elemsize);
-    laik_set_space_name((*checkpoint).space, "checkpoint");
+    //TODO: Temporarily unused
+    (void) laikInstance; (void)data;
+//    (*checkpoint).space = laik_new_space_1d(laikInstance, laik_space_size(space) * data->elemsize);
+//    laik_set_space_name((*checkpoint).space, "checkpoint");
+    checkpoint->space = space;
 
-    (*checkpoint).data = laik_new_data((*checkpoint).space, laik_UChar);
+    checkpoint->data = laik_new_data((*checkpoint).space, data->type);
     return (*checkpoint);
 }
 
-void run_wrapped_partitioner(Laik_SliceReceiver* receiver, Laik_PartitionerParams* params) {
-    Laik_Partitioner* originalPartitioner = (Laik_Partitioner*)params->partitioner->data;
+void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParams *params) {
+    Laik_Partitioner *originalPartitioner = (Laik_Partitioner *) params->partitioner->data;
     Laik_PartitionerParams modifiedParams;
     Laik_Group modifiedGroup;
 
@@ -93,7 +99,7 @@ void run_wrapped_partitioner(Laik_SliceReceiver* receiver, Laik_PartitionerParam
     originalPartitioner->run(receiver, &modifiedParams);
 }
 
-Laik_Partitioner create_checkpoint_partitioner(Laik_Partitioner* currentPartitioner) {
+Laik_Partitioner create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner) {
     Laik_Partitioner backupPartitioner;
     backupPartitioner.name = currentPartitioner->name;
     backupPartitioner.flags = currentPartitioner->flags;
