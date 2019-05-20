@@ -153,8 +153,6 @@ int main(int argc, char* argv[])
                 if ((z == 0) || (pdiff < 0)) continue;
                 // minimize idle cores and diff in x/y/z
                 int d = abs(y-x) + abs(z-x) + abs(z-y) + 2 * pdiff;
-                if (laik_myid(world) == 0)
-                    printf("Checking %d/%d/%d (diff %d)\n", z, y, x, d);
                 if (mind <= d) continue;
                 mind = d;
                 zblocks = z; yblocks = y; xblocks = x;
