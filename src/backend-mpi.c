@@ -87,10 +87,10 @@ static char packbuf[PACKBUFSIZE];
 //----------------------------------------------------------------------------
 // MPI-specific actions + transformation
 
-const Laik_ActionType LAIK_AT_MpiReq   = (Laik_ActionType) (LAIK_AT_Backend + 0);
-const Laik_ActionType LAIK_AT_MpiIrecv = (Laik_ActionType) (LAIK_AT_Backend + 1);
-const Laik_ActionType LAIK_AT_MpiIsend = (Laik_ActionType) (LAIK_AT_Backend + 2);
-const Laik_ActionType LAIK_AT_MpiWait  = (Laik_ActionType) (LAIK_AT_Backend + 3);
+#define LAIK_AT_MpiReq   (LAIK_AT_Backend + 0)
+#define LAIK_AT_MpiIrecv (LAIK_AT_Backend + 1)
+#define LAIK_AT_MpiIsend (LAIK_AT_Backend + 2)
+#define LAIK_AT_MpiWait  (LAIK_AT_Backend + 3)
 
 // ReqBuf action: provide base address for MPI_Request array
 // referenced in following IRecv/Wait actions via req_it operands
