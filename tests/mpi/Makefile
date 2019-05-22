@@ -1,5 +1,8 @@
 # often same tests as in tests/, but using 1 and 4 MPI tasks
 
+# local test config
+-include ../../Makefile.config
+
 TESTS= \
     test-vsum test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
@@ -8,7 +11,7 @@ TESTS= \
     test-jac2d test-jac2d-noc \
     test-jac3d test-jac3dr test-jac3d-noc test-jac3dr-noc \
     test-jac3de test-jac3der test-jac3da test-jac3dar \
-    test-jac3dri test-jac3deri test-jac3dari \
+    test-jac3dri test-jac3deri test-jac3dari test-jac3d-rgx3 \
     test-markov test-markov2 test-markov2-f \
     test-propagation2d test-propagation2do
 
@@ -67,6 +70,9 @@ test-jac3dr:
 
 test-jac3dri:
 	$(SDIR)./test-jac3dri-100-mpi-4.sh
+
+test-jac3d-rgx3:
+	$(SDIR)./test-jac3d-rgx3-100-mpi-4.sh
 
 test-jac3de:
 	$(SDIR)./test-jac3de-100-mpi-1.sh
