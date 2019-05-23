@@ -49,16 +49,26 @@ Laik_SwitchStat* laik_newSwitchStat()
     ss->switches_noactions = 0;
     ss->mallocCount        = 0;
     ss->freeCount          = 0;
-    ss->sendCount          = 0;
-    ss->recvCount          = 0;
-    ss->reduceCount        = 0;
     ss->mallocedBytes      = 0;
     ss->freedBytes         = 0;
     ss->initedBytes        = 0;
     ss->copiedBytes        = 0;
-    ss->sentBytes          = 0;
-    ss->receivedBytes      = 0;
-    ss->reducedBytes       = 0;
+
+    ss->transitionCount = 0;
+    ss->msgSendCount = 0;
+    ss->msgRecvCount = 0;
+    ss->msgReduceCount = 0;
+    ss->msgAsyncSendCount = 0;
+    ss->msgAsyncRecvCount = 0;
+    ss->elemSendCount = 0;
+    ss->elemRecvCount = 0;
+    ss->elemReduceCount = 0;
+    ss->byteSendCount = 0;
+    ss->byteRecvCount = 0;
+    ss->byteReduceCount = 0;
+    ss->initOpCount = 0;
+    ss->reduceOpCount = 0;
+    ss->byteBufCopyCount = 0;
 
     return ss;
 }
@@ -69,16 +79,47 @@ void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src)
     target->switches_noactions += src->switches_noactions ;
     target->mallocCount        += src->mallocCount        ;
     target->freeCount          += src->freeCount          ;
-    target->sendCount          += src->sendCount          ;
-    target->recvCount          += src->recvCount          ;
-    target->reduceCount        += src->reduceCount        ;
     target->mallocedBytes      += src->mallocedBytes      ;
     target->freedBytes         += src->freedBytes         ;
     target->initedBytes        += src->initedBytes        ;
     target->copiedBytes        += src->copiedBytes        ;
-    target->sentBytes          += src->sentBytes          ;
-    target->receivedBytes      += src->receivedBytes      ;
-    target->reducedBytes       += src->reducedBytes       ;
+
+    target->transitionCount    += src->transitionCount;
+    target->msgSendCount       += src->msgSendCount;
+    target->msgRecvCount       += src->msgRecvCount;
+    target->msgReduceCount     += src->msgReduceCount;
+    target->msgAsyncSendCount  += src->msgAsyncSendCount;
+    target->msgAsyncRecvCount  += src->msgAsyncRecvCount;
+    target->elemSendCount      += src->elemSendCount;
+    target->elemRecvCount      += src->elemRecvCount;
+    target->elemReduceCount    += src->elemReduceCount;
+    target->byteSendCount      += src->byteSendCount;
+    target->byteRecvCount      += src->byteRecvCount;
+    target->byteReduceCount    += src->byteReduceCount;
+    target->initOpCount        += src->initOpCount;
+    target->reduceOpCount      += src->reduceOpCount;
+    target->byteBufCopyCount   += src->byteBufCopyCount;
+}
+
+void laik_switchstat_addASeq(Laik_SwitchStat* target, Laik_ActionSeq* as)
+{
+    assert(as->transitionCount > 0);
+
+    target->transitionCount    += as->transitionCount;
+    target->msgSendCount       += as->msgSendCount;
+    target->msgRecvCount       += as->msgRecvCount;
+    target->msgReduceCount     += as->msgReduceCount;
+    target->msgAsyncSendCount  += as->msgAsyncSendCount;
+    target->msgAsyncRecvCount  += as->msgAsyncRecvCount;
+    target->elemSendCount      += as->elemSendCount;
+    target->elemRecvCount      += as->elemRecvCount;
+    target->elemReduceCount    += as->elemReduceCount;
+    target->byteSendCount      += as->byteSendCount;
+    target->byteRecvCount      += as->byteRecvCount;
+    target->byteReduceCount    += as->byteReduceCount;
+    target->initOpCount        += as->initOpCount;
+    target->reduceOpCount      += as->reduceOpCount;
+    target->byteBufCopyCount   += as->byteBufCopyCount;
 }
 
 
@@ -766,6 +807,10 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
         const Laik_Backend* backend = d->space->inst->backend;
         if (backend->prepare)
             (backend->prepare)(as);
+        else {
+            // for statistics: usually called in backend prepare function
+            laik_aseq_calc_stats(as);
+        }
 #endif
         doASeqCleanup = true;
     }
@@ -781,7 +826,11 @@ void doTransition(Laik_Data* d, Laik_Transition* t, Laik_ActionSeq* as,
 
         if (inst->profiling->do_profiling)
             inst->profiling->time_backend += laik_wtime() - inst->profiling->timer_backend;
+
     }
+
+    if (d->stat)
+        laik_switchstat_addASeq(d->stat, as);
 
     if (doASeqCleanup)
         laik_aseq_free(as);
@@ -1176,6 +1225,10 @@ Laik_ActionSeq* laik_calc_actions(Laik_Data* d,
         Laik_TransitionContext* tc = as->context[0];
         tc->prepFromList = fromList;
         tc->prepToList = toList;
+    }
+    else {
+        // for statistics: usually called in backend prepare function
+        laik_aseq_calc_stats(as);
     }
 
     if (laik_log_begin(2)) {

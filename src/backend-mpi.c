@@ -92,6 +92,9 @@ static char packbuf[PACKBUFSIZE];
 #define LAIK_AT_MpiIsend (LAIK_AT_Backend + 2)
 #define LAIK_AT_MpiWait  (LAIK_AT_Backend + 3)
 
+// action structs must be packed
+#pragma pack(push,1)
+
 // ReqBuf action: provide base address for MPI_Request array
 // referenced in following IRecv/Wait actions via req_it operands
 typedef struct {
@@ -99,6 +102,26 @@ typedef struct {
     unsigned int count;
     MPI_Request* req;
 } Laik_A_MpiReq;
+
+// IRecv action
+typedef struct {
+    Laik_Action h;
+    unsigned int count;
+    int from_rank;
+    int req_id;
+    char* buf;
+} Laik_A_MpiIrecv;
+
+// ISend action
+typedef struct {
+    Laik_Action h;
+    unsigned int count;
+    int to_rank;
+    int req_id;
+    char* buf;
+} Laik_A_MpiIsend;
+
+#pragma pack(pop)
 
 static
 void laik_mpi_addMpiReq(Laik_ActionSeq* as, int round,
@@ -110,15 +133,6 @@ void laik_mpi_addMpiReq(Laik_ActionSeq* as, int round,
     a->count = count;
     a->req = buf;
 }
-
-// IRecv action
-typedef struct {
-    Laik_Action h;
-    unsigned int count;
-    int from_rank;
-    int req_id;
-    char* buf;
-} Laik_A_MpiIrecv;
 
 static
 void laik_mpi_addMpiIrecv(Laik_ActionSeq* as, int round,
@@ -132,15 +146,6 @@ void laik_mpi_addMpiIrecv(Laik_ActionSeq* as, int round,
     a->from_rank = from;
     a->req_id = req_id;
 }
-
-// ISend action
-typedef struct {
-    Laik_Action h;
-    unsigned int count;
-    int to_rank;
-    int req_id;
-    char* buf;
-} Laik_A_MpiIsend;
 
 static
 void laik_mpi_addMpiIsend(Laik_ActionSeq* as, int round,
@@ -647,6 +652,9 @@ void laik_mpi_exec(Laik_ActionSeq* as)
         laik_log_ActionSeqIfChanged(changed, as, "After buffer alloc");
         changed = laik_aseq_sort_2phases(as);
         laik_log_ActionSeqIfChanged(changed, as, "After sorting");
+
+        int not_handled = laik_aseq_calc_stats(as);
+        assert(not_handled == 0); // there should be no MPI-specific actions
     }
 
     if (laik_log_begin(1)) {
@@ -657,7 +665,6 @@ void laik_mpi_exec(Laik_ActionSeq* as)
 
     // TODO: use transition context given by each action
     Laik_TransitionContext* tc = as->context[0];
-    Laik_SwitchStat* ss = tc->data->stat;
     Laik_MappingList* fromList = tc->fromList;
     Laik_MappingList* toList = tc->toList;
     int elemsize = tc->data->elemsize;
@@ -879,12 +886,36 @@ void laik_mpi_exec(Laik_ActionSeq* as)
         }
     }
     assert( ((char*)as->action) + as->bytesUsed == ((char*)a) );
-
-    ss->sentBytes     += as->sendCount * tc->data->elemsize;
-    ss->receivedBytes += as->recvCount * tc->data->elemsize;
-    ss->reducedBytes  += as->reduceCount * tc->data->elemsize;
 }
 
+
+// calc statistics updates for MPI-specific actions
+static
+void laik_mpi_aseq_calc_stats(Laik_ActionSeq* as)
+{
+    unsigned int count;
+    Laik_TransitionContext* tc = as->context[0];
+    int current_tid = 0;
+    Laik_Action* a = as->action;
+    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+        assert(a->tid == current_tid); // TODO: only assumes actions from one transition
+        switch(a->type) {
+        case LAIK_AT_MpiIsend:
+            count = ((Laik_A_MpiIsend*)a)->count;
+            as->msgAsyncSendCount++;
+            as->elemSendCount += count;
+            as->byteSendCount += count * tc->data->elemsize;
+            break;
+        case LAIK_AT_MpiIrecv:
+            count = ((Laik_A_MpiIrecv*)a)->count;
+            as->msgAsyncRecvCount++;
+            as->elemRecvCount += count;
+            as->byteRecvCount += count * tc->data->elemsize;
+            break;
+        default: break;
+        }
+    }
+}
 
 
 static
@@ -901,7 +932,10 @@ void laik_mpi_prepare(Laik_ActionSeq* as)
 
     bool changed = laik_aseq_splitTransitionExecs(as);
     laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
-    if (as->actionCount == 0) return;
+    if (as->actionCount == 0) {
+        laik_aseq_calc_stats(as);
+        return;
+    }
 
     changed = laik_aseq_flattenPacking(as);
     laik_log_ActionSeqIfChanged(changed, as, "After flattening actions");
@@ -945,8 +979,10 @@ void laik_mpi_prepare(Laik_ActionSeq* as)
         changed = laik_aseq_sort_rounds(as);
         laik_log_ActionSeqIfChanged(changed, as, "After sorting rounds 2");
     }
-
     laik_aseq_freeTempSpace(as);
+
+    laik_aseq_calc_stats(as);
+    laik_mpi_aseq_calc_stats(as);
 }
 
 static void laik_mpi_cleanup(Laik_ActionSeq* as)

@@ -66,9 +66,8 @@ Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
     as->newBytesAlloc = 0;
     as->newRoundCount = 0;
 
-    as->sendCount = 0;
-    as->recvCount = 0;
-    as->reduceCount = 0;
+    // mark that stats are not yet calculated
+    as->transitionCount = 0;
 
     laik_log(1, "new action seq '%s'", as->name);
 
@@ -113,6 +112,7 @@ void laik_aseq_free(Laik_ActionSeq* as)
 
     free(as);
 }
+
 
 // get sum of sizes of all allocated temporary buffers
 int laik_aseq_bufsize(Laik_ActionSeq* as)
@@ -384,8 +384,6 @@ void laik_aseq_addMapSend(Laik_ActionSeq* as, int round,
     a->offset = off;
     a->count = count;
     a->rank = to;
-
-    as->sendCount += count;
 }
 
 // append send action from a buffer
@@ -398,8 +396,6 @@ void laik_aseq_addBufSend(Laik_ActionSeq* as, int round,
     a->buf = fromBuf;
     a->count = count;
     a->to_rank = to;
-
-    as->sendCount += count;
 }
 
 // append recv action into a mapping with offset
@@ -414,8 +410,6 @@ void laik_aseq_addMapRecv(Laik_ActionSeq* as, int round,
     a->offset = off;
     a->count = count;
     a->rank = from;
-
-    as->recvCount += count;
 }
 
 // append recv action into a buffer
@@ -428,8 +422,6 @@ void laik_aseq_addBufRecv(Laik_ActionSeq* as, int round,
     a->buf = toBuf;
     a->count = count;
     a->from_rank = from;
-
-    as->recvCount += count;
 }
 
 void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
@@ -445,8 +437,6 @@ void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
     a->rank = to;
     assert(count < (1ul<<32));
     a->count = (unsigned int) count;
-
-    as->sendCount += a->count;
 }
 
 void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
@@ -496,8 +486,6 @@ void laik_aseq_addMapPackAndSend(Laik_ActionSeq* as, int round,
     a->to_rank = to;
     assert(count < (1ul<<32));
     a->count = (unsigned int) count;
-
-    as->sendCount += a->count;
 }
 
 void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
@@ -545,8 +533,6 @@ void laik_aseq_addRecvAndUnpack(Laik_ActionSeq* as, int round,
     a->rank = from;
     assert(count < (1ul<<32));
     a->count = (unsigned int) count;
-
-    as->recvCount += a->count;
 }
 
 void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
@@ -636,6 +622,7 @@ void laik_aseq_addReduce(Laik_ActionSeq* as, int round,
                          int rootTask, Laik_ReductionOperation redOp)
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
+    assert(count > 0);
 
     a->h.type = LAIK_AT_Reduce;
     a->fromBuf = fromBuf;
@@ -643,9 +630,6 @@ void laik_aseq_addReduce(Laik_ActionSeq* as, int round,
     a->count = count;
     a->rank = rootTask;
     a->redOp = redOp;
-
-    assert(count > 0);
-    as->reduceCount += count;
 }
 
 void laik_aseq_addRBufReduce(Laik_ActionSeq* as, int round,
@@ -653,15 +637,14 @@ void laik_aseq_addRBufReduce(Laik_ActionSeq* as, int round,
                              int rootTask, Laik_ReductionOperation redOp)
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
+    assert(count > 0);
+
     a->h.type = LAIK_AT_RBufReduce;
     a->bufID = bufID;
     a->offset = byteOffset;
     a->count = count;
     a->rank = rootTask;
     a->redOp = redOp;
-
-    assert(count > 0);
-    as->reduceCount += count;
 }
 
 // append group reduce action
@@ -683,8 +666,6 @@ void laik_aseq_addMapGroupReduce(Laik_ActionSeq* as, int round,
     a->redOp = redOp;
     assert(count < (1ul<<32));
     a->count = (unsigned int) count;
-
-    as->reduceCount += a->count;
 }
 
 
@@ -694,6 +675,8 @@ void laik_aseq_addGroupReduce(Laik_ActionSeq* as, int round,
                               Laik_ReductionOperation redOp)
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
+    assert(count > 0);
+
     a->h.type = LAIK_AT_GroupReduce;
     a->inputGroup = inputGroup;
     a->outputGroup = outputGroup;
@@ -701,9 +684,6 @@ void laik_aseq_addGroupReduce(Laik_ActionSeq* as, int round,
     a->toBuf = toBuf;
     a->count = count;
     a->redOp = redOp;
-
-    assert(count > 0);
-    as->reduceCount += count;
 }
 
 // similar to addGroupReduce
@@ -714,6 +694,7 @@ void laik_aseq_addRBufGroupReduce(Laik_ActionSeq* as, int round,
                                   Laik_ReductionOperation redOp)
 {
     Laik_BackendAction* a = laik_aseq_addBAction(as, round);
+    assert(count > 0);
 
     a->h.type = LAIK_AT_RBufGroupReduce;
     a->inputGroup = inputGroup;
@@ -722,9 +703,6 @@ void laik_aseq_addRBufGroupReduce(Laik_ActionSeq* as, int round,
     a->offset = byteOffset;
     a->count = count;
     a->redOp = redOp;
-
-    assert(count > 0);
-    as->reduceCount += count;
 }
 
 
@@ -2438,4 +2416,149 @@ bool laik_aseq_splitTransitionExecs(Laik_ActionSeq* as)
 
     laik_aseq_activateNewActions(as);
     return true;
+}
+
+// calculate stats of one run of the action sequence
+// (if the action seq has backend-specific actions, a corresponding function in the
+//  backend needs to be called in addition)
+// must be called before laik_switchstat_addASeq() for correct stats
+// return number of not handled actions
+int laik_aseq_calc_stats(Laik_ActionSeq* as)
+{
+    Laik_CopyEntry* ce;
+    int not_processed = 0;
+    unsigned int count = 0;
+
+    as->msgSendCount = 0;
+    as->msgRecvCount = 0;
+    as->msgReduceCount = 0;
+    as->msgAsyncSendCount = 0;
+    as->msgAsyncRecvCount = 0;
+    as->elemSendCount = 0;
+    as->elemRecvCount = 0;
+    as->elemReduceCount = 0;
+    as->byteSendCount = 0;
+    as->byteRecvCount = 0;
+    as->byteReduceCount = 0;
+    as->initOpCount = 0;
+    as->reduceOpCount = 0;
+    as->byteBufCopyCount = 0;
+
+    // TODO: we only allow 1 transition at the moment
+    Laik_TransitionContext* tc = as->context[0];
+    int current_tid = 0;
+    as->transitionCount = 1;
+
+    Laik_Action* a = as->action;
+    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+        assert(a->tid == current_tid); // TODO: only assumes actions from one transition
+
+        switch(a->type) {
+        case LAIK_AT_TExec:
+            break;
+
+        // these actions are not expected to be found
+        case LAIK_AT_BufReserve:
+            assert(0);
+            break;
+
+        case LAIK_AT_MapSend:
+        case LAIK_AT_BufSend:
+        case LAIK_AT_RBufSend:
+        case LAIK_AT_PackAndSend:
+        case LAIK_AT_MapPackAndSend:
+            switch(a->type) {
+            case LAIK_AT_RBufSend:    count = ((Laik_A_RBufSend*)a)->count; break;
+            case LAIK_AT_MapSend:
+            case LAIK_AT_PackAndSend: count = ((Laik_BackendAction*)a)->count; break;
+            case LAIK_AT_BufSend:     count = ((Laik_A_BufSend*)a)->count; break;
+            case LAIK_AT_MapPackAndSend:
+                count = ((Laik_A_MapPackAndSend*)a)->count; break;
+            }
+            as->msgSendCount++;
+            as->elemSendCount += count;
+            as->byteSendCount += count * tc->data->elemsize;
+
+            switch(a->type) {
+            case LAIK_AT_PackAndSend:
+            case LAIK_AT_MapPackAndSend:
+                as->byteBufCopyCount += count * tc->data->elemsize;
+                break;
+            }
+            break;
+
+        case LAIK_AT_MapRecv:
+        case LAIK_AT_BufRecv:
+        case LAIK_AT_RBufRecv:
+        case LAIK_AT_RecvAndUnpack:
+        case LAIK_AT_MapRecvAndUnpack:
+            switch(a->type) {
+            case LAIK_AT_RBufRecv:      count = ((Laik_A_RBufRecv*)a)->count; break;
+            case LAIK_AT_MapRecv:
+            case LAIK_AT_RecvAndUnpack: count = ((Laik_BackendAction*)a)->count; break;
+            case LAIK_AT_BufRecv:       count = ((Laik_A_BufRecv*)a)->count; break;
+            case LAIK_AT_MapRecvAndUnpack:
+                count = ((Laik_A_MapRecvAndUnpack*)a)->count; break;
+            }
+            as->msgRecvCount++;
+            as->elemRecvCount += count;
+            as->byteRecvCount += count * tc->data->elemsize;
+
+            switch(a->type) {
+            case LAIK_AT_RecvAndUnpack:
+            case LAIK_AT_MapRecvAndUnpack:
+                as->byteBufCopyCount += count * tc->data->elemsize;
+                break;
+            }
+            break;
+
+        case LAIK_AT_Reduce:
+        case LAIK_AT_RBufReduce:
+        case LAIK_AT_MapGroupReduce:
+        case LAIK_AT_GroupReduce:
+        case LAIK_AT_RBufGroupReduce:
+            count = ((Laik_BackendAction*)a)->count;
+            as->msgReduceCount++;
+            as->elemReduceCount += count;
+            as->byteReduceCount += count * tc->data->elemsize;
+            break;
+
+        case LAIK_AT_RBufLocalReduce:
+            as->reduceOpCount += ((Laik_BackendAction*)a)->count;
+            break;
+
+        case LAIK_AT_BufInit:
+            as->initOpCount += ((Laik_BackendAction*)a)->count;
+            break;
+
+        case LAIK_AT_RBufCopy:
+        case LAIK_AT_BufCopy:
+        case LAIK_AT_PackToRBuf:
+        case LAIK_AT_PackToBuf:
+        case LAIK_AT_MapPackToRBuf:
+        case LAIK_AT_MapPackToBuf:
+        case LAIK_AT_UnpackFromRBuf:
+        case LAIK_AT_UnpackFromBuf:
+        case LAIK_AT_MapUnpackFromRBuf:
+        case LAIK_AT_MapUnpackFromBuf:
+            as->byteBufCopyCount += ((Laik_BackendAction*)a)->count * tc->data->elemsize;
+            break;
+
+        case LAIK_AT_CopyToBuf:
+        case LAIK_AT_CopyToRBuf:
+        case LAIK_AT_CopyFromBuf:
+        case LAIK_AT_CopyFromRBuf:
+            count = ((Laik_BackendAction*)a)->count;
+            ce = ((Laik_BackendAction*)a)->ce;
+            for(unsigned int i = 0; i < count; i++)
+                as->byteBufCopyCount += ce[i].bytes;
+            break;
+
+        default:
+            not_processed++;
+            break;
+        }
+    }
+
+    return not_processed;
 }

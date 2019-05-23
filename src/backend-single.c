@@ -60,6 +60,10 @@ Laik_Group* laik_single_world()
 
 void laik_single_exec(Laik_ActionSeq* as)
 {
+    if (as->backend == 0) {
+        as->backend = &laik_backend_single;
+        laik_aseq_calc_stats(as);
+    }
     // we only support 1 transition exec action
     assert(as->actionCount == 1);
     assert(as->action[0].type == LAIK_AT_TExec);
