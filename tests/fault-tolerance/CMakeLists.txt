@@ -2,6 +2,7 @@
 foreach (test
         "checkpoint"
         "checkpoint-jac2d"
+        "checkpoint_partitioner"
         )
     add_executable ("${test}"
             "${test}.c"
