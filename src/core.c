@@ -392,6 +392,23 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
     return g2;
 }
 
+// For a specific group and id (offset into the group), find the offset into the top level group (should be world) equal
+// to the referenced rank
+int laik_group_location(Laik_Group* group, int id) {
+    while(group->parent != NULL) {
+        // Ensure we don't go out of bounds
+        assert(id >= 0 && id < group->size);
+        // Ensure a mapping from this group's ids to the parent group's ids is provided
+        assert(group->toParent != NULL);
+
+        id = group->toParent[id];
+        group = group->parent;
+    }
+    assert(id >= 0 && id < group->size);
+    return id;
+}
+
+
 // Utilities
 
 char* laik_get_guid(Laik_Instance* i){
