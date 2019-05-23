@@ -81,6 +81,12 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
 //! Enlarging controlled by master in a group (collective)
 bool laik_enlarge_group(Laik_Group* g, int len, char** list);
 
+// For a specific group and id (offset into the group),
+// find the offset into the top level group (should be world) equal
+// to the referenced rank
+int laik_group_location(Laik_Group* group, int id);
+
+
 // change the master to task <id>. Return if successful
 bool laik_set_master(Laik_Group* g, int id);
 
