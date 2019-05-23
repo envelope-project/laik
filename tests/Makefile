@@ -4,13 +4,17 @@ TESTS= \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac3d test-jac3dr \
     test-markov test-markov2 test-markov2-f \
-    test-propagation2d
+    test-propagation2d \
+    test-kvstest
 
 -include ../Makefile.config
 
 .PHONY: mpi tcp $(TESTS)
 
-all: clean $(TESTS) $(TEST_SUBDIRS)
+all: clean testbins $(TESTS) $(TEST_SUBDIRS)
+
+testbins:
+	$(MAKE) -C src
 
 mpi:
 	+$(MAKE) -C mpi
@@ -62,6 +66,9 @@ test-markov2-f:
 
 test-propagation2d:
 	$(SDIR)./test-propagation2d-10-single.sh
+
+test-kvstest:
+	$(SDIR)./test-kvstest-single.sh
 
 clean:
 	rm -rf *.out

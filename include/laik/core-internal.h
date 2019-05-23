@@ -91,6 +91,39 @@ struct _Laik_Error {
 };
 
 
+//--------------------------------------------------------
+// KV Store
+//
+
+typedef struct _Laik_KVS_Entry {
+    char* key;
+    char* data;
+    unsigned int size;
+    bool updated;
+} Laik_KVS_Entry;
+
+typedef struct _Laik_KVStore {
+    Laik_Instance* inst;
+    const char* name;
+
+    // KV array
+    Laik_KVS_Entry* entry;
+    unsigned int size, used;
+    // new entries are unsorted, call laik_kvs_sort to enable binary search
+    unsigned int sorted_upto;
+
+    // arrays collecting new/change data to send at next sync
+    unsigned int myOffSize, myOffUsed;
+    unsigned int* myOff;
+    unsigned int myDataSize, myDataUsed;
+    char* myData;
+    // if true, setting values will not be propagated for next sync
+    bool in_sync;
+} Laik_KVStore;
+
+
+// higher level API, currently not used
+
 /*
  * Key-Value store for internal LAIK data, organized in a tree structure
  * Whenever new global objects are created, they are synchronized via the
@@ -154,8 +187,6 @@ Laik_KVNode* laik_kv_next(Laik_KVNode* n, Laik_KVNode* prev);
 int laik_kv_count(Laik_KVNode* n);
 // remove child with key, return false if not found
 bool laik_kv_remove(Laik_KVNode*n, char* path);
-// synchronize KV store
-void laik_kv_sync(Laik_Instance* inst);
 
 
 

@@ -661,6 +661,220 @@ void laik_panic(const char* msg)
 
 // KV Store
 
+
+
+Laik_KVStore* laik_kvs_new(const char* name, Laik_Instance *inst)
+{
+    Laik_KVStore* kvs = (Laik_KVStore*) malloc(sizeof(Laik_KVStore));
+
+    kvs->name = name;
+    kvs->inst = inst;
+
+    kvs->size = 1000;
+    kvs->entry = (Laik_KVS_Entry*) malloc(kvs->size * sizeof(Laik_KVS_Entry));
+    kvs->used = 0;
+    kvs->sorted_upto = 0;
+
+    kvs->myOffSize = 100;      // allow to specify 100 new/changed entries per sync
+    kvs->myOffUsed = 0;
+    kvs->myOff = (unsigned int*) malloc(kvs->myOffSize * sizeof(int));
+    kvs->myOff[0] = 0; // 1st offset into data is always 0
+    kvs->myDataSize = 100000; // reserve 100k for data of new/changed entries per sync
+    kvs->myDataUsed = 0;
+    kvs->myData = (char*) malloc(kvs->myDataSize);
+    kvs->in_sync = false;
+
+    return kvs;
+}
+
+void laik_kvs_free(Laik_KVStore* kvs)
+{
+    assert(kvs);
+
+    free(kvs->entry);
+    free(kvs->myOff);
+    free(kvs->myData);
+    free(kvs);
+}
+
+// returns true on actual change
+// do not take ownership of name/data (do a deep copy)
+bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
+{
+    assert(data != 0);
+
+    Laik_KVS_Entry* e = laik_kvs_entry(kvs, key);
+    if (e && (memcmp(e->data, data, (size_t) size) == 0)) {
+        laik_log(1, "set KV entry '%s' (size %d, '%.20s'): already existing",
+                 key, size, data);
+        return false;
+    }
+
+    if (!e) {
+        assert(kvs->used < kvs->size);
+        e = &kvs->entry[kvs->used];
+        kvs->used++;
+        e->key = strdup(key);
+        e->data = 0;
+        e->updated = false;
+    }
+
+    laik_log(1, "set %s KV entry '%s' (size %d) to '%.20s'",
+             (e->data == 0) ? "new" : "changed", key, size, data);
+
+    if (e->updated && kvs->in_sync) {
+        // update from other process and updated ourself differently
+        laik_log(LAIK_LL_Panic,
+                 "KVS '%s' at key '%s': update inconsistency\n",
+                 kvs->name, key);
+        exit(1);
+    }
+
+    free(e->data);
+    e->data = (char*) malloc(size);
+    assert(e->data);
+    memcpy(e->data, data, size);
+    e->size = size;
+
+    if (kvs->in_sync) return true;
+    e->updated = true;
+
+    // queue this update for propagation on next sync
+    unsigned int nsize = (unsigned int) strlen(key);
+    assert(kvs->myOffUsed + 2 < kvs->myOffSize); // 3 new entries
+    assert(kvs->myDataUsed + nsize + 1 + size < kvs->myDataSize); // name and data must fit
+    assert(kvs->myOff[kvs->myOffUsed] == kvs->myDataUsed); // marker correct?
+    memcpy(kvs->myData + kvs->myDataUsed, key, nsize + 1); // include string end '0'
+    kvs->myOff[kvs->myOffUsed + 1] = kvs->myDataUsed + nsize + 1;
+    kvs->myDataUsed += nsize + 1;
+    memcpy(kvs->myData + kvs->myDataUsed, data, size);
+    kvs->myOff[kvs->myOffUsed + 2] = kvs->myDataUsed + size;
+    kvs->myDataUsed += size;
+    kvs->myOffUsed += 2;
+
+    return true;
+}
+
+// synchronize KV store
+void laik_kvs_sync(Laik_KVStore* kvs)
+{
+    const Laik_Backend* b = kvs->inst->backend;
+    assert(b && b->sync);
+
+    laik_log(1, "sync KVS '%s' (progagating %d/%d entries) ...",
+             kvs->name, kvs->myOffUsed / 2, kvs->used);
+    kvs->in_sync = true;
+    (b->sync)(kvs);
+    kvs->in_sync = false;
+
+    // all queued entries sent, remove
+    kvs->myOffUsed = 0;
+    kvs->myDataUsed = 0;
+
+    for(unsigned int i = 0; i < kvs->used; i++)
+        kvs->entry[i].updated = false;
+
+    laik_log(1, "  sync done (now %d entries).", kvs->used);
+
+    laik_kvs_sort(kvs);
+}
+
+Laik_KVS_Entry* laik_kvs_entry(Laik_KVStore* kvs, char* key)
+{
+    Laik_KVS_Entry* e;
+
+    // do binary search in range [0 .. (sorted_upto-1)]
+    int low = 0, high = ((int)kvs->sorted_upto) - 1, mid, res;
+    //laik_log(1, "  binary search in KVS '%s' for '%s' in [%d,%d]",
+    //         kvs->name, key, low, high);
+    while(low <= high) {
+        mid = (low + high) / 2;
+        e = &(kvs->entry[mid]);
+        res = strcmp(key, e->key);
+        //laik_log(1, "    test [%d] '%s': %d", mid, e->key, res);
+        if (res == 0)
+            return e;
+        if (res < 0)
+            high = mid-1;
+        else
+            low = mid+1;
+    }
+
+    // linear search for unsorted items
+    for(unsigned int i = kvs->sorted_upto; i < kvs->used; i++) {
+        e = &(kvs->entry[i]);
+        if (strcmp(e->key, key) == 0)
+            return e;
+    }
+
+    return 0;
+}
+
+char* laik_kvs_data(Laik_KVS_Entry* e, unsigned int *psize)
+{
+    assert(e);
+    if (psize) *psize = e->size;
+    return e->data;
+}
+
+char* laik_kvs_get(Laik_KVStore* kvs, char* key, unsigned int* psize)
+{
+    Laik_KVS_Entry* e = laik_kvs_entry(kvs, key);
+    if (!e) return 0;
+
+    return laik_kvs_data(e, psize);
+}
+
+unsigned int laik_kvs_count(Laik_KVStore* kvs)
+{
+    assert(kvs);
+    return kvs->used;
+}
+
+Laik_KVS_Entry* laik_kvs_getn(Laik_KVStore* kvs, unsigned int n)
+{
+    assert(kvs);
+    if (n >= kvs->used) return 0;
+    return &(kvs->entry[n]);
+}
+
+char* laik_kvs_key(Laik_KVS_Entry* e)
+{
+    assert(e);
+    return e->key;
+}
+
+unsigned int laik_kvs_size(Laik_KVS_Entry* e)
+{
+    assert(e);
+    return e->size;
+}
+
+
+unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size)
+{
+    assert(e);
+    if (e->size < size) size = e->size;
+    memcpy(mem, e->data, size);
+    return size;
+}
+
+static int entrycmp(const void * v1, const void * v2)
+{
+    const Laik_KVS_Entry* e1 = (const Laik_KVS_Entry*) v1;
+    const Laik_KVS_Entry* e2 = (const Laik_KVS_Entry*) v2;
+    return strcmp(e1->key, e2->key);
+}
+
+void laik_kvs_sort(Laik_KVStore* kvs)
+{
+    qsort(kvs->entry, kvs->used, sizeof(Laik_KVS_Entry), entrycmp);
+    kvs->sorted_upto = kvs->used;
+}
+
+
+// more high level interface
+
 Laik_KVNode* laik_kv_newNode(char* name, Laik_KVNode* parent, Laik_KValue* v)
 {
     Laik_KVNode* n = malloc(sizeof(Laik_KVNode));
@@ -808,12 +1022,4 @@ bool laik_kv_remove(Laik_KVNode* n, char* path)
     return true;
 }
 
-// synchronize KV store
-void laik_kv_sync(Laik_Instance* inst)
-{
-    const Laik_Backend* b = inst->backend;
-
-    assert(b && b->sync);
-    (b->sync)(inst);
-}
 

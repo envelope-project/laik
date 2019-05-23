@@ -40,6 +40,7 @@ static void laik_mpi_cleanup(Laik_ActionSeq*);
 static void laik_mpi_exec(Laik_ActionSeq* as);
 static void laik_mpi_updateGroup(Laik_Group*);
 static bool laik_mpi_log_action(Laik_Action* a);
+static void laik_mpi_sync(Laik_KVStore* kvs);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
@@ -49,7 +50,8 @@ static Laik_Backend laik_backend_mpi = {
     .cleanup     = laik_mpi_cleanup,
     .exec        = laik_mpi_exec,
     .updateGroup = laik_mpi_updateGroup,
-    .log_action  = laik_mpi_log_action
+    .log_action  = laik_mpi_log_action,
+    .sync        = laik_mpi_sync
 };
 
 static Laik_Instance* mpi_instance = 0;
@@ -1058,5 +1060,105 @@ static void laik_mpi_cleanup(Laik_ActionSeq* as)
         laik_log(1, "  freed MPI_Request array with %d entries", aa->count);
     }
 }
+
+
+//----------------------------------------------------------------------------
+// KV store
+
+// helper struct for first step in sync
+typedef struct _CountEntry {
+    unsigned int offCount;
+    unsigned int dataCount;
+} CountEntry;
+static CountEntry* cespace = 0; // size array of local data for each MPI rank
+static unsigned int cespace_size = 0;
+
+static void laik_mpi_sync(Laik_KVStore* kvs)
+{
+    assert(kvs->inst == mpi_instance);
+    MPI_Comm comm = mpiData(mpi_instance)->comm;
+
+    // step 1:
+    // all-to-all exchange number of updates from each process
+
+    unsigned int count = (unsigned int) kvs->inst->size;
+    if (cespace == 0) {
+        cespace = (CountEntry*) malloc(count * sizeof(CountEntry));
+        cespace_size = count;
+    }
+    else
+        assert(cespace_size >= count);
+
+    CountEntry se;
+    if (kvs->myOffUsed > 0) {
+        se.offCount = kvs->myOffUsed + 1;
+        assert(kvs->myDataUsed > 0);
+        se.dataCount = kvs->myDataUsed;
+    }
+    else {
+        se.offCount = 0;
+        se.dataCount = 0;
+    }
+    MPI_Allgather(&se, 2, MPI_INTEGER, cespace, 2, MPI_INTEGER, comm);
+
+    // (2) allocate space (maximum of what each rank announces)
+    unsigned int maxOffCount = 0, maxDataCount = 0;
+    unsigned int i, offCount = 0;
+    int myid = kvs->inst->myid;
+    for(i = 0; i < count; i++) {
+        if (myid == (int) i) continue;
+        offCount += (cespace[i].offCount - 1);
+        if (maxOffCount < cespace[i].offCount) maxOffCount = cespace[i].offCount;
+        if (maxDataCount < cespace[i].dataCount) maxDataCount = cespace[i].dataCount;
+    }
+
+    laik_log(1, "MPI sync: getting %d entries (max %d from one)",
+             offCount / 2, maxOffCount / 2);
+
+    // nothing to exchange?
+    if (maxOffCount == 0) {
+        assert(maxDataCount == 0);
+        return;
+    }
+
+    unsigned int* offArray = (unsigned int*) malloc(maxOffCount * sizeof(int));
+    char* dataArray = (char*) malloc(maxDataCount);
+
+    // (3) rank-by-rank: if non-zero-length data is to be send, broadcast to all other,
+    //     directly update local KV entries
+    for(i = 0; i < count; i++) {
+        CountEntry* ce = &(cespace[i]);
+        if (ce->offCount == 0) continue;
+        assert(ce->dataCount > 0);
+
+        if (myid == (int) i) {
+            // I am sender
+            MPI_Bcast(kvs->myOff, (int) ce->offCount, MPI_INTEGER, (int) i, comm);
+            MPI_Bcast(kvs->myData, (int) ce->dataCount, MPI_CHAR, (int) i, comm);
+            // skip own entries
+            continue;
+        }
+        else {
+            // I am receiver: receive into off/data arrays
+            MPI_Bcast(offArray, (int) ce->offCount, MPI_INTEGER, (int) i, comm);
+            MPI_Bcast(dataArray, (int) ce->dataCount, MPI_CHAR, (int) i, comm);
+        }
+
+        offCount = ce->offCount;
+        assert((offCount & 1) == 1); // must be odd number of entries
+        offCount--;
+
+        laik_log(1, "  got %d entries from T%d", offCount / 2, i);
+
+        for(unsigned int j = 0; j < offCount; j += 2)
+            laik_kvs_set(kvs, dataArray + offArray[j],
+                         offArray[j+2] - offArray[j+1], // data size
+                         dataArray + offArray[j+1]);
+    }
+
+    free(offArray);
+    free(dataArray);
+}
+
 
 #endif // USE_MPI
