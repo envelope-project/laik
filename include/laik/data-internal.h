@@ -57,8 +57,8 @@ struct _Laik_SwitchStat
     int mallocCount, freeCount;
     uint64_t mallocedBytes, freedBytes, initedBytes, copiedBytes;
     int transitionCount;
-    int msgSendCount, msgRecvCount, msgReduceCount;
-    int msgAsyncSendCount, msgAsyncRecvCount;
+    unsigned int msgSendCount, msgRecvCount, msgReduceCount;
+    unsigned int msgAsyncSendCount, msgAsyncRecvCount;
     uint64_t elemSendCount, elemRecvCount, elemReduceCount;
     uint64_t byteSendCount, byteRecvCount, byteReduceCount;
     uint64_t initOpCount, reduceOpCount, byteBufCopyCount;

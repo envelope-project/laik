@@ -245,8 +245,8 @@ struct _Laik_ActionSeq {
 
     // aggreated actions of one execution, for updating statistics
     int transitionCount;
-    int msgSendCount, msgRecvCount, msgReduceCount;
-    int msgAsyncSendCount, msgAsyncRecvCount;
+    unsigned int msgSendCount, msgRecvCount, msgReduceCount;
+    unsigned int msgAsyncSendCount, msgAsyncRecvCount;
     uint64_t elemSendCount, elemRecvCount, elemReduceCount;
     uint64_t byteSendCount, byteRecvCount, byteReduceCount;
     uint64_t initOpCount, reduceOpCount, byteBufCopyCount;
