@@ -17,9 +17,10 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
 laik_run_partitioner_t wrapPartitionerRun(const Laik_Partitioner *currentPartitioner);
 
 Laik_Partitioner* create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner);
+Laik_Group* create_checkpoint_group(Laik_Group* originalGroup, int rotationDistance);
 
 Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
-                                       Laik_Partitioner *backupPartitioner) {
+                                       Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup) {
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i\n", iteration);
 
@@ -41,8 +42,13 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
         backupPartitioner = create_checkpoint_partitioner(data->activePartitioning->partitioner);
     }
 
+    if(backupGroup == NULL) {
+        laik_log(LAIK_LL_Debug, "Creating a backup group from the original group %i using rotation distance %i", data->activePartitioning->group->gid, SLICE_ROTATE_DISTANCE);
+        backupGroup = create_checkpoint_group(data->activePartitioning->group, SLICE_ROTATE_DISTANCE);
+    }
+
     laik_log(LAIK_LL_Debug, "Switching to backup partitioning\n");
-    Laik_Partitioning* partitioning = laik_new_partitioning(backupPartitioner, data->activePartitioning->group, space, 0);
+    Laik_Partitioning* partitioning = laik_new_partitioning(backupPartitioner, backupGroup, space, 0);
     partitioning->name = "Backup partitioning";
     laik_switchto_partitioning(checkpoint.data, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
 
@@ -119,18 +125,18 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
 
     originalPartitioner->run(receiver, &modifiedParams);
 
-    laik_log(LAIK_LL_Debug, "wrap partitioner: rotating slice array of size %i by %i.", receiver->array->count, SLICE_ROTATE_DISTANCE);
+    laik_log(LAIK_LL_Debug, "wrap partitioner: rotating slice array of size %i by %i. Number mappings: %i.", receiver->array->count, SLICE_ROTATE_DISTANCE, receiver->array->map_count);
 
-    //Currently, only distance 1 supported
-    static_assert(SLICE_ROTATE_DISTANCE == 1, "");
-    Laik_TaskSlice_Gen temp;
-    //Save first element in temp
-    memcpy(&temp, &(receiver->array->tslice[0]), sizeof(Laik_TaskSlice_Gen));
-    for(unsigned int i = 0; i < receiver->array->count - 1; i++) {
-        //Copy each element to the left
-        memcpy(&(receiver->array->tslice[i]), &(receiver->array->tslice[i+1]), sizeof(Laik_TaskSlice_Gen));
-    }
-    memcpy(&(receiver->array->tslice[receiver->array->count - 1]), &temp, sizeof(Laik_TaskSlice_Gen));
+//    //Currently, only distance 1 supported
+//    static_assert(SLICE_ROTATE_DISTANCE == 1, "");
+//    Laik_TaskSlice_Gen temp;
+//    //Save first element in temp
+//    memcpy(&temp, &(receiver->array->tslice[0]), sizeof(Laik_TaskSlice_Gen));
+//    for(unsigned int i = 0; i < receiver->array->count - 1; i++) {
+//        //Copy each element to the left
+//        memcpy(&(receiver->array->tslice[i]), &(receiver->array->tslice[i+1]), sizeof(Laik_TaskSlice_Gen));
+//    }
+//    memcpy(&(receiver->array->tslice[receiver->array->count - 1]), &temp, sizeof(Laik_TaskSlice_Gen));
 
     for (unsigned int j = 0; j < receiver->array->count; ++j) {
         laik_log(LAIK_LL_Debug, "slice at %i: start %lu", j, receiver->array->tslice[j].s.from.i[0]);
@@ -141,4 +147,22 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
 
 Laik_Partitioner* create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner) {
     return laik_new_partitioner("checkpoint-partitioner", run_wrapped_partitioner, currentPartitioner, currentPartitioner->flags);
+}
+
+Laik_Group* create_checkpoint_group(Laik_Group* originalGroup, int rotationDistance) {
+    Laik_Group* newGroup = laik_clone_group(originalGroup);
+    assert(rotationDistance >= 0 && rotationDistance < newGroup->size);
+
+    for (int i = 0; i < newGroup->size; ++i) {
+        newGroup->toParent[i] = (i + rotationDistance) % newGroup->size;
+        //Ensure that the argument to modulo operator is not negative
+        newGroup->fromParent[(i + rotationDistance) % newGroup->size] = i;
+    }
+
+    //Update backend if necessary
+    if(newGroup->inst->backend->updateGroup) {
+        newGroup->inst->backend->updateGroup(newGroup);
+    }
+
+    return newGroup;
 }

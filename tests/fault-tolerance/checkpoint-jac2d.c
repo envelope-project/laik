@@ -196,9 +196,9 @@ int main(int argc, char* argv[])
 
         // At iteration 10, do a checkpoint
         if(iter == 10) {
-            spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, NULL);
-            spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL);
-            spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, NULL);
+            spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, NULL, NULL);
+            spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL, NULL);
+            spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, NULL, NULL);
             printf("Checkpoint successful\n");
         } else if(!hasRestored && iter == 40) {
             laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, sumD);
