@@ -254,6 +254,11 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     first_group->myid         = myid;
     first_group->backend_data = gdata;
 
+    // Assign default location mappings
+    for(int i = 0; i <first_group->size; i++) {
+        first_group->toLocation[i] = i;
+    }
+
     return instance;
 }
 
@@ -296,7 +301,7 @@ Laik_Group* laik_create_group(Laik_Instance* i)
 
     Laik_Group* g;
 
-    g = malloc(sizeof(Laik_Group) + 2 * (i->size) * sizeof(int));
+    g = malloc(sizeof(Laik_Group) + 3 * (i->size) * sizeof(int));
     if (!g) {
         laik_panic("Out of memory allocating Laik_Group object");
         exit(1); // not actually needed, laik_panic never returns
@@ -312,6 +317,7 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     // space after struct
     g->toParent   = (int*) (((char*)g) + sizeof(Laik_Group));
     g->fromParent = g->toParent + i->size;
+    g->toLocation = g->fromParent + i->size;
 
     i->group_count++;
     return g;
@@ -346,6 +352,7 @@ Laik_Group* laik_clone_group(Laik_Group* g)
     for(int i=0; i < g->size; i++) {
         g2->toParent[i] = i;
         g2->fromParent[i] = i;
+        g2->toLocation[i] = g->toLocation[i];
     }
 
     return g2;
@@ -369,6 +376,7 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
         if (g2->fromParent[i] < 0) continue;
         g2->fromParent[i] = o;
         g2->toParent[o] = i;
+        g2->toLocation[o] = g->toLocation[i];
         o++;
     }
     g2->size = o;
@@ -389,6 +397,61 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
     }
 
     return g2;
+}
+
+// For a specific group and id (offset into the group), find the offset into the top level group (should be world) equal
+// to the referenced rank
+int laik_location_get_world_offset(Laik_Group *group, int id) {
+    while(group->parent != NULL) {
+        // Ensure we don't go out of bounds
+        assert(id >= 0 && id < group->size);
+        // Ensure a mapping from this group's ids to the parent group's ids is provided
+        assert(group->toParent != NULL);
+
+        id = group->toParent[id];
+        group = group->parent;
+    }
+    assert(id >= 0 && id < group->size);
+    return id;
+}
+
+int laik_group_get_location(Laik_Group *group, int id) {
+    assert(id >= 0 && id < group->size);
+    return group->toLocation[id];
+}
+
+#define LAIK_LOCATION_STORE_MAX_KEY_SIZE 128
+#define LAIK_LOCATION_GET_KEY(x,y) snprintf(x, LAIK_LOCATION_STORE_MAX_KEY_SIZE, "location_%i", y)
+
+// Synchronizes location identifiers across all nodes in the group. Call this with world to synchronize location data
+// with everyone
+void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup) {
+    if(instance->locationStore == NULL) {
+        instance->locationStore = laik_kvs_new("Laik_Location_Data", instance);
+    }
+
+    char *mylocation = laik_mylocation(instance);
+    int locationSize = strlen(mylocation);
+    char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
+    LAIK_LOCATION_GET_KEY(myKey, laik_group_get_location(synchronizationGroup, laik_myid(synchronizationGroup)));
+
+    // + 1 for the null terminator?
+    laik_kvs_set(instance->locationStore, myKey, locationSize + 1, mylocation);
+
+    laik_kvs_sync(instance->locationStore);
+}
+
+// Fetches the location identifier of any process in the world, as long as it was previously synchronized. Uses the id
+// as offset to the passed group to calculate global offset and identifier.
+char* laik_location_get(Laik_Group *group, int id) {
+    if(group->inst->locationStore == NULL) {
+        return NULL;
+    }
+
+    char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
+    LAIK_LOCATION_GET_KEY(myKey, laik_group_get_location(group, id));
+
+    return laik_kvs_get(group->inst->locationStore, myKey, NULL);
 }
 
 // Utilities
