@@ -280,8 +280,7 @@ void laik_slicefilter_free(Laik_SliceFilter*);
 // set filter to only keep slices for own process when adding slices
 void laik_slicefilter_set_myfilter(Laik_SliceFilter* sf, Laik_Group* g);
 // add filter to only keep slices intersecting with slices in <sa>
-void laik_slicefilter_add_idxfilter(Laik_SliceFilter* sf, Laik_SliceArray* sa,
-                                    Laik_Partitioning* p);
+void laik_slicefilter_add_idxfilter(Laik_SliceFilter* sf, Laik_SliceArray* sa, int tid);
 
 
 // Partitioner API:
@@ -383,8 +382,6 @@ Laik_SliceArray* laik_partitioning_myslices(Laik_Partitioning*);
 Laik_SliceArray* laik_partitioning_interslices(Laik_Partitioning* p1,
                                                Laik_Partitioning* p2);
 
-// store a slice array in partitioning, together with filter used (may be 0)
-void laik_partitioning_add_slices(Laik_Partitioning* p, Laik_SliceArray* sa, Laik_SliceFilter* sf);
 // run the partitioner specified for the partitioning, keeping all slices
 void laik_partitioning_store_allslices(Laik_Partitioning* p);
 // run the partitioner specified for the partitioning, keeping only slices of this task

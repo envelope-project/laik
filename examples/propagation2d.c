@@ -9,9 +9,16 @@
 /**
  * Simple 2d finite element example
  *
- * Elements with square shape are regularly arranged in a 2d grid, with each
- * element bound by 4 nodes in its square corners. Corners are shared by
- * neighboring elements.
+ * Elements with square shape are regularly arranged in a 2d grid with a given
+ * side length <size>, with each element bound by 4 nodes in its square corners.
+ * Corners are shared by neighboring elements.
+ * In the example, the state at each node and each element is 1 double value,
+ * and we store these values in two 1d LAIK containers, with the global offset
+ * for n_x / e_x being x. Array sizes (and thus, 1d LAIK spaces) for elements
+ * is <size>**2, and for nodes it is (<size>+1)**2 .
+ * Distribution of work is done by splitting the elements into a 2d grid.
+ * For this, we provide our own partitioner algorithms for elements and nodes.
+ * The partitioner for nodes is using the element partitioning as base.
  *
  * As example, 16 elements arranged in a 4x4 grid need 5x5 nodes as element
  * corners. Using a x/y order for numbering elements and nodes, this results
@@ -27,24 +34,23 @@
  *      e12 ...
  *   n20   n21 ...
  *
- * Distribution of work is done by splitting the elements into a 2d grid,
- * e.g. with 4 tasks into 2 x 2, with elements 0, 1, 4, 5 mapped to task 0.
- * With 1d indexing of elements, task 0 gets two slices: [0-1] and [4-5].
+ * With 4 tasks and a distribution into a 2 x 2 grid, elements 0, 1, 4, 5 get
+ * mapped to task 0. That is, the slices for task 0 are [0-1] and [4-5].
+ * The derived slices of the nodes for task 0 are [0-2], [5-7], and [10-12].
+ * Here, task 0 and 1 share nodes 2,7,12. Node 12 is shared by all 4 tasks.
  *
- * We start with element values 1.0 and node values 0.0, and do
- * multiple iterations. In each
- *  (3) add 1/4 of node values to each element value the node is corner of
- *  (1) propagate values from elements to nodes
- *  (2) aggregate propagated values in nodes (we do a sum here)
+ * For the computation, we start with element values 1.0 and node values 0.0,
+ * and do multiple iterations with the following substeps:
+ *  (1) for each element: add 1/4 of node values at corners to element value
+ *  (2) zero node values, propagate element values to corner nodes, using sum
+ *  (3) do a LAIK transition on nodes into same partitioning with sum reduction,
+ *      resulting in summing up values shared between tasks
  *
  * While elements are exclusively partitioned, nodes may directly lie on
  * partition boundaries, shared by multiple processes with having private
- * copies. In (1), such private copies will contain only partial sums.
- * We can use a LAIK transition to sum up the partitial values of private
+ * copies. In (2), such private copies will contain only partial sums.
+ * We use a LAIK transition to sum up the partitial values of private
  * copies corresponding to the same nodes, resulting in full sums.
- *
- * This example uses seperate data containers for elements and nodes.
- * The partitioning of nodes is derived from the partitoning of elements.
 **/
 
 // search for a good 2d grid partitioning
@@ -270,14 +276,27 @@ int main(int argc, char* argv[])
     Laik_Instance* inst = laik_init (&argc, &argv);
     Laik_Group* world = laik_world(inst);
 
-    // handling the arguments
+    // process command line arguments
     int size = 0;
     int maxIt = 0;
-    if (argc > 1) size = atoi(argv[1]);
-    if (argc > 2) maxIt = atoi(argv[2]);
+    bool sliceopt = false; // use slices filters for reduced memory consumption
 
-    if (size < 1) size = 10;
-    if (maxIt < 1) maxIt = 5;
+    int arg = 1;
+    while((arg < argc) && (argv[arg][0] == '-')) {
+        if (argv[arg][1] == 'o') sliceopt = true;
+        else if (argv[arg][1] == 'h') {
+            printf("Usage: %s [-o] [<size> [<maxiter>]]\n", argv[0]);
+            exit(1);
+        }
+        else assert(0);
+        arg++;
+    }
+    if (argc > arg) size = atoi(argv[arg]);
+    if (argc > arg + 1) maxIt = atoi(argv[arg + 1]);
+
+    // defaults
+    if (size == 0) size = 10;
+    if (maxIt == 0) maxIt = 5;
 
     // not all the configurations are supported
     // number of elements per task should be
@@ -317,11 +336,16 @@ int main(int argc, char* argv[])
     pElements = laik_new_partitioning(get_element_partitioner(&Nx),
                                       world, element_space, 0);
 
-    pNodes = laik_new_empty_partitioning(world, node_space,
-                                         get_node_partitioner(neighbours),
-                                         pElements);
-    laik_partitioning_store_myslices(pNodes);
-    laik_partitioning_store_intersectslices(pNodes, pNodes);
+    if (!sliceopt)
+        pNodes = laik_new_partitioning(get_node_partitioner(neighbours),
+                                       world, node_space, pElements);
+    else {
+        pNodes = laik_new_empty_partitioning(world, node_space,
+                                             get_node_partitioner(neighbours),
+                                             pElements);
+        laik_partitioning_store_myslices(pNodes);
+        laik_partitioning_store_intersectslices(pNodes, pNodes);
+    }
 
     double *baseN, *baseE;
     uint64_t countN, countE;

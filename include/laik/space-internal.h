@@ -116,8 +116,6 @@ typedef struct {
     int64_t from, to;
     Laik_TaskSlice_Gen* ts;
     unsigned int len;
-    // originating partitioning
-    Laik_Partitioning* p;
 } PFilterPar;
 
 // parameters for filtering slices on a partitioner run
@@ -135,10 +133,22 @@ struct _Laik_SliceFilter {
     PFilterPar *pfilter1, *pfilter2;
 };
 
+// meta info about slices arrays stored with partitionings (AI = array info)
+// this gets set when running partitioner with specific filter
+typedef enum _ArrayInfo {
+    LAIK_AI_UNKNOWN = 0, // slice array explicitly set
+    LAIK_AI_FULL,        // run of partitioner without
+    LAIK_AI_SINGLETASK,  // run of partitioner filtering slices of a task
+    LAIK_AI_INTERSECT    // run of partitioner filtering intersecting slices
+} ArrayInfo;
+
 // a partitioning can store multiple slice arrays created from partitioner
 // runs with different filters
 typedef struct _SliceArray_Entry {
-    Laik_SliceFilter* filter;
+    ArrayInfo info;
+    int filter_tid; // for AI_SINGLETASK
+    Laik_Partitioning* other; // for AI_INTERSECT
+
     Laik_SliceArray* slices;
     struct _SliceArray_Entry* next;
 } SliceArray_Entry;

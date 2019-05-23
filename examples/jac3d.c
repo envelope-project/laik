@@ -25,9 +25,9 @@
 #include <assert.h>
 
 // boundary values
-double loRowValue = -5.0, hiRowValue = 10.0;
-double loColValue = -10.0, hiColValue = 5.0;
-double loPlaneValue = -20.0, hiPlaneValue = 15.0;
+static double loRowValue = -5.0, hiRowValue = 10.0;
+static double loColValue = -10.0, hiColValue = 5.0;
+static double loPlaneValue = -20.0, hiPlaneValue = 15.0;
 
 
 void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
@@ -111,12 +111,17 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'e') do_exec = true;
         if (argv[arg][1] == 'a') do_actions = true;
         if (argv[arg][1] == 'g') do_grid = true;
+        if (argv[arg][1] == 'x' && argc > arg+1) {
+            xblocks = atoi(argv[++arg]);
+            do_grid = true;
+        }
         if (argv[arg][1] == 'i' && argc > arg+1) { iter_shrink = atoi(argv[++arg]); }
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter>\n\n"
                    "Options:\n"
                    " -n        : use partitioner which does not include corners\n"
-                   " -g        : use regular grid instead of bisection partitioner\n"
+                   " -g        : use grid partitioning with automatic block size\n"
+                   " -x <xgrid>: use grid partitioning with given x block length\n"
                    " -p        : write profiling data to 'jac3d_profiling.txt'\n"
                    " -s        : print value sum at end (warning: sum done at master)\n"
                    " -r        : do space reservation before iteration loop\n"
@@ -138,12 +143,16 @@ int main(int argc, char* argv[])
     if (do_grid) {
         // find grid partitioning with less or equal blocks than processes
         int pcount = laik_size(world);
-        int mind = 2 * pcount;
-        for(int x = 1; x < pcount; x++)
-            for(int y = x; y < pcount; y++) {
-                int z = ((double) pcount) / x / y;
-                if ((z == 0) || (x * y * z > pcount)) continue;
-                int d = abs(y-x) + abs(z-x) + abs(z-y);
+        int mind = 3 * pcount;
+        int xmin = 1, xmax = pcount;
+        if ((xblocks > 0) && (xblocks <= pcount)) xmin = xmax = xblocks;
+        for(int x = xmin; x <= xmax; x++)
+            for(int y = 1; y <= pcount; y++) {
+                int z = (int) (((double) pcount) / x / y);
+                int pdiff = pcount - x * y * z;
+                if ((z == 0) || (pdiff < 0)) continue;
+                // minimize idle cores and diff in x/y/z
+                int d = abs(y-x) + abs(z-x) + abs(z-y) + 2 * pdiff;
                 if (mind <= d) continue;
                 mind = d;
                 zblocks = z; yblocks = y; xblocks = x;
