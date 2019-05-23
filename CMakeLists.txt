@@ -1,8 +1,8 @@
-# Set the project name
-project ("laik")
-
 # Set the minimal CMake version required
 cmake_minimum_required (VERSION 3.5)
+
+# Set the project name
+project ("laik")
 
 # Enable testing with CMake's CTest
 enable_testing ()
