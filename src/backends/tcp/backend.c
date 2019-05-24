@@ -170,8 +170,8 @@ static void laik_tcp_backend_receive
 
     // Update the statistics
     if (data->stat) {
-        data->stat->recvCount++;
-        data->stat->receivedBytes += bytes;
+        data->stat->msgRecvCount++;
+        data->stat->byteRecvCount += bytes;
     }
 }
 
@@ -227,8 +227,8 @@ static void laik_tcp_backend_send
 
     // Update the statistics
     if (data->stat) {
-        data->stat->sendCount++;
-        data->stat->sentBytes += bytes;
+        data->stat->msgSendCount++;
+        data->stat->byteSendCount += bytes;
     }
 }
 
@@ -554,8 +554,8 @@ static void laik_tcp_backend_reduce
 
     // Update the statistics
     if (data->stat) {
-        data->stat->reduceCount++;
-        data->stat->reducedBytes += bytes;
+        data->stat->msgReduceCount++;
+        data->stat->byteReduceCount += bytes;
     }
 }
 
