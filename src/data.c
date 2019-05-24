@@ -51,6 +51,8 @@ Laik_SwitchStat* laik_newSwitchStat()
     ss->freeCount          = 0;
     ss->mallocedBytes      = 0;
     ss->freedBytes         = 0;
+    ss->currAllocedBytes   = 0;
+    ss->maxAllocedBytes    = 0;
     ss->initedBytes        = 0;
     ss->copiedBytes        = 0;
 
@@ -81,6 +83,7 @@ void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src)
     target->freeCount          += src->freeCount          ;
     target->mallocedBytes      += src->mallocedBytes      ;
     target->freedBytes         += src->freedBytes         ;
+    target->maxAllocedBytes    += src->maxAllocedBytes    ;
     target->initedBytes        += src->initedBytes        ;
     target->copiedBytes        += src->copiedBytes        ;
 
@@ -122,6 +125,29 @@ void laik_switchstat_addASeq(Laik_SwitchStat* target, Laik_ActionSeq* as)
     target->byteBufCopyCount   += as->byteBufCopyCount;
 }
 
+void laik_switchstat_malloc(Laik_SwitchStat* ss, uint64_t bytes)
+{
+    if (!ss) return;
+
+    ss->mallocCount++;
+    ss->mallocedBytes += bytes;
+
+    ss->currAllocedBytes += bytes;
+    if (ss->currAllocedBytes > ss->maxAllocedBytes)
+        ss->maxAllocedBytes = ss->currAllocedBytes;
+}
+
+void laik_switchstat_free(Laik_SwitchStat* ss, uint64_t bytes)
+{
+    if (!ss) return;
+
+    ss->freeCount++;
+    ss->freedBytes += bytes;
+
+    ss->currAllocedBytes -= bytes;
+}
+
+//-------------------------------------------------------------------
 
 static int data_id = 0;
 
@@ -336,10 +362,7 @@ void freeMap(Laik_Mapping* m, Laik_Data* d, Laik_SwitchStat* ss)
             m->layout = 0;
         }
 
-        if (ss) {
-            ss->freeCount++;
-            ss->freedBytes += m->capacity;
-        }
+        laik_switchstat_free(ss, m->capacity);
 
         // TODO: different policies
         if ((!d->allocator) || (!d->allocator->free))
@@ -432,11 +455,7 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     Laik_Data* d = m->data;
 
     m->capacity = m->count * d->elemsize;
-
-    if (ss) {
-        ss->mallocCount++;
-        ss->mallocedBytes += m->capacity;
-    }
+    laik_switchstat_malloc(ss, m->capacity);
 
     // TODO: different policies
     if ((!d->allocator) || (!d->allocator->malloc))

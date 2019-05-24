@@ -97,8 +97,7 @@ void laik_aseq_free(Laik_ActionSeq* as)
         free(as->buf[i]);
 
         // update allocation statistics
-        tc->data->stat->freeCount++;
-        tc->data->stat->freedBytes += as->bufSize[i];
+        laik_switchstat_free(tc->data->stat, as->bufSize[i]);
     }
 
     for(int i = 0; i < as->contextCount; i++)
@@ -950,8 +949,7 @@ bool laik_aseq_allocBuffer(Laik_ActionSeq* as)
     assert(buf != 0);
 
     // update allocation statistics
-    tc->data->stat->mallocCount++;
-    tc->data->stat->mallocedBytes += bufSize;
+    laik_switchstat_malloc(tc->data->stat, bufSize);
 
     // substitute RBuf actions, now that buffer allocation is known
     a = as->action;

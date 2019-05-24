@@ -324,7 +324,9 @@ void laik_log_SwitchStat(Laik_SwitchStat* ss)
     if (ss->mallocCount > 0) {
         laik_log_append("    data alloc: %dx, ", ss->mallocCount);
         laik_log_PrettyInt(ss->mallocedBytes);
-        laik_log_append("B, free: %dx, ", ss->freeCount);
+        laik_log_append("B (max ");
+        laik_log_PrettyInt(ss->maxAllocedBytes);
+        laik_log_append("B), free: %dx, ", ss->freeCount);
         laik_log_PrettyInt(ss->freedBytes);
         laik_log_append("B, init ");
         laik_log_PrettyInt(ss->initedBytes);
