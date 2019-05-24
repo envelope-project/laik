@@ -707,7 +707,9 @@ static void laik_tcp_backend_exec (Laik_ActionSeq* as)
     }
 }
 
-static void laik_tcp_backend_finalize () {
+static void laik_tcp_backend_finalize (Laik_Instance* inst) {
+    (void) inst; // unused parameter of this backend function signature
+
     g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
     // Finalize the MPI subsystem if necessary
