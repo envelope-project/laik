@@ -20,7 +20,10 @@
 #include <stdarg.h>  // for va_end, va_list, va_start
 #include <stdio.h>   // for fflush, fprintf, NULL, stderr
 #include <stdlib.h>  // for abort
+#include <laik-backend-tcp.h>
 #include "debug.h"   // for laik_tcp_always
+
+LaikTCPErrorHandler abortErrorHandler;
 
 static void laik_tcp_errors_show1 (void* data, void* userdata) {
     laik_tcp_always (data);
@@ -37,6 +40,11 @@ void laik_tcp_errors_abort (Laik_Tcp_Errors* this) {
 
     fprintf (stderr, "[LAIK TCP Backend] Aborting, the contents of the error stack follow:\n%s", laik_tcp_errors_show (this));
     fflush (stderr);
+
+    if(abortErrorHandler != NULL) {
+        fprintf(stderr, "[LAIK TCP Backend] Error handler found, attempting to handle error.\n");
+        abortErrorHandler(this);
+    }
 
     abort ();
 }
@@ -115,4 +123,8 @@ char* laik_tcp_errors_show (Laik_Tcp_Errors* this) {
     g_queue_foreach (this, laik_tcp_errors_show1, result);
 
     return g_string_free (result, false);
+}
+
+void laik_tcp_set_error_handler(LaikTCPErrorHandler newErrorHandler) {
+    abortErrorHandler = newErrorHandler;
 }
