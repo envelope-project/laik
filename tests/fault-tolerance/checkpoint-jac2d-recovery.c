@@ -91,19 +91,42 @@ void errorHandler(void* errors) {
 
 Laik_Instance* inst;
 Laik_Group* world;
+Laik_Group* smallWorld;
+Laik_Space* space;
+Laik_Space* sp1;
+
+// [0]: Global sum, [1]: data1, [2]: data2
+Laik_Checkpoint spaceCheckpoints[3];
+
 int main(int argc, char* argv[])
 {
     laik_set_loglevel(LAIK_LL_Debug);
     if(inst == NULL) {
         inst = laik_init(&argc, &argv);
         world = laik_world(inst);
+
+        printf("Preparing shrinked world, eliminating rank 1 (world size %i)\n", world->size);
+        int elimination[] = {1};
+        smallWorld = laik_new_shrinked_group(world, 1, elimination);
+
+        // Set the error handler to be able to recover from
+        laik_tcp_set_error_handler(errorHandler);
+
     } else {
-//        printf("Instance already allocated, not calling init.\n");
-//        printf("Shrinking world, eliminating rank 1 (world size %i)\n", world->size);
-//        int elimination[] = {1};
-//        world = laik_new_shrinked_group(world, 1, elimination);
+        printf("Instance already allocated, not calling init.\n");
+        printf("Activating small world (size %i)\n", smallWorld->size);
+        world = smallWorld;
 
+        // Set the error handler to be able to recover from
+        laik_tcp_set_error_handler(NULL);
 
+//        printf("Calling LAIK finalize\n");
+//        laik_finalize(inst);
+
+//        printf("Creating the new instance\n");
+//        laik_init(&argc, &argv);
+
+//        world = laik_world(inst);
     }
 
     int size = 0;
@@ -159,7 +182,9 @@ int main(int argc, char* argv[])
     int64_t x1, x2, y1, y2;
 
     // two 2d arrays for jacobi, using same space
-    Laik_Space* space = laik_new_space_2d(inst, size, size);
+    if(space == NULL) {
+        space = laik_new_space_2d(inst, size, size);
+    }
     Laik_Data* data1 = laik_new_data(space, laik_Double);
     Laik_Data* data2 = laik_new_data(space, laik_Double);
 
@@ -180,7 +205,9 @@ int main(int argc, char* argv[])
     laik_partitioning_set_name(pRead, "pRead");
 
     // for global sum, used for residuum: 1 double accessible by all
-    Laik_Space* sp1 = laik_new_space_1d(inst, 1);
+    if(sp1 == NULL) {
+        sp1 = laik_new_space_1d(inst, 1);
+    }
     Laik_Partitioning* sumP = laik_new_partitioning(laik_All, world, sp1, 0);
     Laik_Data* sumD = laik_new_data(sp1, laik_Double);
     laik_data_set_name(sumD, "sum");
@@ -213,16 +240,11 @@ int main(int argc, char* argv[])
 
     int iter = 0;
 
-    // [0]: Global sum, [1]: data1, [2]: data2
-    Laik_Checkpoint spaceCheckpoints[3];
-    // Set the error handler to be able to recover from
-    laik_tcp_set_error_handler(errorHandler);
-
     for(; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
 
         // At every 10 iterations, do a checkpoint
-        if(iter % 10 == 0) {
+        if(iter % 10 == 9) {
             printf("Creating checkpoint of sum\n");
             spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, laik_All, world, LAIK_RO_Max);
             printf("Creating checkpoint of data\n");
@@ -233,16 +255,21 @@ int main(int argc, char* argv[])
             printf("Checkpoint successful at iteration %i\n", iter);
 
         } else if(doRestore) {
+            // If error happens here, do not try to recover
+//            laik_tcp_set_error_handler(NULL);
+
             printf("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
             laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, sumD);
             laik_checkpoint_restore(inst, &spaceCheckpoints[1], space, data1);
 //            laik_checkpoint_restore(inst, &spaceCheckpoints[2], space, data2);
             printf("Restore successful\n");
             iter = restoreIteration;
+            doRestore = false;
         }
 
         // *Randomly* fail on one node
-        if(laik_myid(world) == 1 && iter == 35) {
+        // Make sure to always use the real world here
+        if(laik_myid(laik_world(inst)) == 1 && iter == 35) {
             printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world), iter);
             abort();
         }
