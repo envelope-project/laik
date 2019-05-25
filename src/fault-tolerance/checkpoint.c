@@ -20,7 +20,8 @@ Laik_Partitioner* create_checkpoint_partitioner(Laik_Partitioner *currentPartiti
 Laik_Group* create_checkpoint_group(Laik_Group* originalGroup, int rotationDistance);
 
 Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
-                                       Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup) {
+                                       Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup,
+                                       enum _Laik_ReductionOperation reductionOperation) {
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i\n", iteration);
 
@@ -43,6 +44,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
     }
 
     if(backupGroup == NULL) {
+        //TODO: This group needs to be released at some point
         laik_log(LAIK_LL_Debug, "Creating a backup group from the original group %i using rotation distance %i", data->activePartitioning->group->gid, SLICE_ROTATE_DISTANCE);
         backupGroup = create_checkpoint_group(data->activePartitioning->group, SLICE_ROTATE_DISTANCE);
     }
@@ -50,7 +52,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
     laik_log(LAIK_LL_Debug, "Switching to backup partitioning\n");
     Laik_Partitioning* partitioning = laik_new_partitioning(backupPartitioner, backupGroup, space, 0);
     partitioning->name = "Backup partitioning";
-    laik_switchto_partitioning(checkpoint.data, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+    laik_switchto_partitioning(checkpoint.data, partitioning, LAIK_DF_Preserve, reductionOperation);
 
     laik_log(LAIK_LL_Info, "Checkpoint %s completed\n", checkpoint.space->name);
     return checkpoint;
@@ -80,6 +82,7 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
 //    Laik_Partitioner *backupPartitioner = data->activePartitioning->;
     Laik_Partitioning *backupPartitioning = data->activePartitioning;
 
+    //TODO@VB: LAIK_RO_ANY might not be a good default
     laik_switchto_partitioning(checkpoint->data, backupPartitioning, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(checkpoint->data, backupBase, backupCount);
 
@@ -150,6 +153,7 @@ Laik_Partitioner* create_checkpoint_partitioner(Laik_Partitioner *currentPartiti
 }
 
 Laik_Group* create_checkpoint_group(Laik_Group* originalGroup, int rotationDistance) {
+    //TODO@VB: other parts of LAIK assume that the mapping is provided in lexicographic order (not possible with a ring)
     Laik_Group* newGroup = laik_clone_group(originalGroup);
     assert(rotationDistance >= 0 && rotationDistance < newGroup->size);
 

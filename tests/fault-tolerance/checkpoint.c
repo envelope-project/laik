@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     unsigned char hash1[SHA_DIGEST_LENGTH];
     test_hexHash("Memory hash before checkpoint creation", base, length, hash1);
 
-    Laik_Checkpoint checkpoint = laik_checkpoint_create(inst, space, originalData, NULL, NULL);
+    Laik_Checkpoint checkpoint = laik_checkpoint_create(inst, space, originalData, NULL, NULL, LAIK_RO_None);
 
     backupPartitioning = laik_new_partitioning(originalPartitioner, world, checkpoint.space, NULL);
     laik_switchto_partitioning(checkpoint.data, backupPartitioning, LAIK_DF_Preserve, LAIK_RO_None);

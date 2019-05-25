@@ -13,7 +13,8 @@ struct _Laik_Checkpoint {
 typedef struct _Laik_Checkpoint Laik_Checkpoint;
 
 Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
-                                       Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup);
+                                       Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup,
+                                       enum _Laik_ReductionOperation reductionOperation);
 
 void laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data);
 
