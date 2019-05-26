@@ -33,21 +33,26 @@ double loRowValue = -5.0, hiRowValue = 10.0;
 double loColValue = -10.0, hiColValue = 5.0;
 
 bool doRestore = false;
+bool hasRestored = false;
 int restoreIteration = -1;
 int save_argc;
 char **save_argv;
 
 int main(int argc, char **argv);
 
-double do_jacobi_iteration(double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
+double do_jacobi_iteration(const double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
                            int64_t x2, int64_t y1, int64_t y2);
 
-double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, Laik_Data *sumD, double *t, double *t2,
+double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, double *t, double *t2,
                                int *last_iter,
                                int iter);
 
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
                                        int64_t gy1);
+
+void createCheckpoints(int iter);
+
+void restoreCheckpoints();
 
 void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
     double *baseW;
@@ -104,6 +109,12 @@ Laik_Group *world;
 Laik_Group *smallWorld;
 Laik_Space *space;
 Laik_Space *sp1;
+Laik_Data *data1;
+Laik_Data *data2;
+Laik_Data *sumD;
+Laik_Partitioner *prWrite, *prRead;
+
+
 uint64_t originalHashSize;
 
 // [0]: Global sum, [1]: data1, [2]: data2
@@ -195,14 +206,16 @@ int main(int argc, char *argv[]) {
     // two 2d arrays for jacobi, using same space
     if (space == NULL) {
         space = laik_new_space_2d(inst, size, size);
+        laik_set_space_name(space, "Jacobi Matrix Space");
+        data1 = laik_new_data(space, laik_Double);
+        laik_data_set_name(data1, "Data 1");
+        data2 = laik_new_data(space, laik_Double);
+        laik_data_set_name(data2, "Data 2");
     }
-    Laik_Data *data1 = laik_new_data(space, laik_Double);
-    Laik_Data *data2 = laik_new_data(space, laik_Double);
 
     // we use two types of partitioners algorithms:
     // - prWrite: cells to update (disjunctive partitioning)
     // - prRead : extends partitionings by haloes, to read neighbor values
-    Laik_Partitioner *prWrite, *prRead;
     prWrite = laik_new_bisection_partitioner();
     prRead = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
              laik_new_halo_partitioner(1);
@@ -218,10 +231,11 @@ int main(int argc, char *argv[]) {
     // for global sum, used for residuum: 1 double accessible by all
     if (sp1 == NULL) {
         sp1 = laik_new_space_1d(inst, 1);
+        laik_set_space_name(sp1, "Sum Space");
+        sumD = laik_new_data(sp1, laik_Double);
+        laik_data_set_name(sumD, "sum");
     }
     Laik_Partitioning *sumP = laik_new_partitioning(laik_All, world, sp1, 0);
-    Laik_Data *sumD = laik_new_data(sp1, laik_Double);
-    laik_data_set_name(sumD, "sum");
     laik_switchto_partitioning(sumD, sumP, LAIK_DF_None, LAIK_RO_None);
 
     // start with writing (= initialization) data1
@@ -253,14 +267,7 @@ int main(int argc, char *argv[]) {
 
         // At every 10 iterations, do a checkpoint
         if (iter % 10 == 9) {
-            printf("Creating checkpoint of sum\n");
-            spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, laik_All, world, LAIK_RO_Max);
-            printf("Creating checkpoint of data\n");
-            spaceCheckpoints[1] = laik_checkpoint_create(inst, space, dWrite, laik_All, world, LAIK_RO_None);
-//            printf("Creating checkpoint 3\n");
-//            spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, laik_All, world, LAIK_RO_None);
-            restoreIteration = iter;
-            printf("Checkpoint successful at iteration %i\n", iter);
+            createCheckpoints(iter);
             originalHashSize = ysizeW * ystrideW + xsizeW;
             test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
 
@@ -268,23 +275,23 @@ int main(int argc, char *argv[]) {
             // If error happens here, do not try to recover
 //            laik_tcp_set_error_handler(NULL);
 
-            printf("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
-            laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, sumD);
-            laik_checkpoint_restore(inst, &spaceCheckpoints[1], space, dWrite);
-//            laik_checkpoint_restore(inst, &spaceCheckpoints[2], space, data2);
-            printf("Restore successful\n");
+            restoreCheckpoints();
             test_hexHash_noKeep("Checkpoint data hash (original size)", baseW, originalHashSize);
             test_hexHash_noKeep("Checkpoint data hash", baseW, ysizeW * ystrideW + xsizeW);
             iter = restoreIteration;
             doRestore = false;
+            hasRestored = true;
         }
 
         // *Randomly* fail on one node
         // Make sure to always use the real world here
-        if (laik_myid(laik_world(inst)) == 1 && iter == 35) {
-            printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
-                   iter);
-            abort();
+//        if (laik_myid(laik_world(inst)) == 1 && iter == 35) {
+//            printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
+//                   iter);
+//            abort();
+//        }
+        if(iter == 35 && !hasRestored) {
+            doRestore = true;
         }
 
         // switch roles: data written before now is read
@@ -328,9 +335,8 @@ int main(int argc, char *argv[]) {
 
         // check for residuum every 10 iterations (3 Flops more per update)
         if ((iter % 10) == 0) {
-            double globalResiduum = calculateGlobalResiduum(localResiduum, size, &sumPtr, sumD, &t, &t2, &last_iter,
+            double globalResiduum = calculateGlobalResiduum(localResiduum, size, &sumPtr, &t, &t2, &last_iter,
                                                             iter);
-
             if (globalResiduum < .001) break;
         }
         // TODO: allow repartitioning
@@ -374,6 +380,25 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+void restoreCheckpoints() {
+    printf("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
+    laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, sumD);
+    laik_checkpoint_restore(inst, &spaceCheckpoints[1], space, data1);
+    laik_checkpoint_restore(inst, &spaceCheckpoints[2], space, data2);
+    printf("Restore successful\n");
+}
+
+void createCheckpoints(int iter) {
+    printf("Creating checkpoint of sum\n");
+    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, laik_Master, world, LAIK_RO_Max);
+    printf("Creating checkpoint of data\n");
+    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, world, LAIK_RO_None);
+    printf("Creating checkpoint 3\n");
+    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, world, LAIK_RO_None);
+    restoreIteration = iter;
+    printf("Checkpoint successful at iteration %i\n", iter);
+}
+
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
                                        int64_t gy1) {// arbitrary non-zero values based on global indexes to detect bugs
     for (uint64_t y = 0; y < ysizeW; y++)
@@ -381,7 +406,7 @@ void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t 
             baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
 }
 
-double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, Laik_Data *sumD, double *t, double *t2,
+double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, double *t, double *t2,
                                int *last_iter,
                                int iter) {// calculate global residuum
     laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
@@ -413,7 +438,7 @@ double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, 
     return localResiduum;
 }
 
-double do_jacobi_iteration(double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
+double do_jacobi_iteration(const double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
                            int64_t x2, int64_t y1, int64_t y2) {
     double newValue, diff, res;
     res = 0.0;
