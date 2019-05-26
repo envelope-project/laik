@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <laik-backend-tcp.h>
+#include "fault_tolerance_test.h"
 
 // boundary values
 double loRowValue = -5.0, hiRowValue = 10.0;
@@ -33,12 +34,22 @@ double loColValue = -10.0, hiColValue = 5.0;
 
 bool doRestore = false;
 int restoreIteration = -1;
-int save_argc; char** save_argv;
+int save_argc;
+char **save_argv;
 
-int main(int argc, char** argv);
+int main(int argc, char **argv);
 
-void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
-{
+double do_jacobi_iteration(double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
+                           int64_t x2, int64_t y1, int64_t y2);
+
+double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, Laik_Data *sumD, double *t, double *t2,
+                               int *last_iter,
+                               int iter);
+
+void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
+                                       int64_t gy1);
+
+void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
     double *baseW;
     uint64_t ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2;
@@ -49,59 +60,59 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
     // default mapping order for 2d:
     //   with y in [0;ysize[, x in [0;xsize[
     //   base[y][x] is at (base + y * ystride + x)
-    laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+    laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
     // set fixed boundary values at the 4 edges
     if (gy1 == 0) {
         // top row
-        for(uint64_t x = 0; x < xsizeW; x++)
+        for (uint64_t x = 0; x < xsizeW; x++)
             baseW[x] = loRowValue;
     }
     if (gy2 == size) {
         // bottom row
-        for(uint64_t x = 0; x < xsizeW; x++)
+        for (uint64_t x = 0; x < xsizeW; x++)
             baseW[(ysizeW - 1) * ystrideW + x] = hiRowValue;
     }
     if (gx1 == 0) {
         // left column, may overwrite global (0,0) and (0,size-1)
-        for(uint64_t y = 0; y < ysizeW; y++)
+        for (uint64_t y = 0; y < ysizeW; y++)
             baseW[y * ystrideW] = loColValue;
     }
     if (gx2 == size) {
         // right column, may overwrite global (size-1,0) and (size-1,size-1)
-        for(uint64_t y = 0; y < ysizeW; y++)
+        for (uint64_t y = 0; y < ysizeW; y++)
             baseW[y * ystrideW + xsizeW - 1] = hiColValue;
     }
 }
 
 // to deliberately change block partitioning (if arg 3 provided)
-double getTW(int rank, const void* userData)
-{
-    int v = * ((int*) userData);
+double getTW(int rank, const void *userData) {
+    int v = *((int *) userData);
     // switch non-equal weigthing on and off
     return 1.0 + (rank * (v & 1));
 }
 
-void errorHandler(void* errors) {
-    (void)errors;
+void errorHandler(void *errors) {
+    (void) errors;
     doRestore = true;
     main(save_argc, save_argv);
     exit(0);
 }
 
-Laik_Instance* inst;
-Laik_Group* world;
-Laik_Group* smallWorld;
-Laik_Space* space;
-Laik_Space* sp1;
+Laik_Instance *inst;
+Laik_Group *world;
+Laik_Group *smallWorld;
+Laik_Space *space;
+Laik_Space *sp1;
+uint64_t originalHashSize;
 
 // [0]: Global sum, [1]: data1, [2]: data2
 Laik_Checkpoint spaceCheckpoints[3];
 
-int main(int argc, char* argv[])
-{
-    laik_set_loglevel(LAIK_LL_Debug);
-    if(inst == NULL) {
+int main(int argc, char *argv[]) {
+    laik_set_loglevel(LAIK_LL_Info);
+//    laik_set_loglevel(LAIK_LL_Debug);
+    if (inst == NULL) {
         inst = laik_init(&argc, &argv);
         world = laik_world(inst);
 
@@ -182,11 +193,11 @@ int main(int argc, char* argv[])
     int64_t x1, x2, y1, y2;
 
     // two 2d arrays for jacobi, using same space
-    if(space == NULL) {
+    if (space == NULL) {
         space = laik_new_space_2d(inst, size, size);
     }
-    Laik_Data* data1 = laik_new_data(space, laik_Double);
-    Laik_Data* data2 = laik_new_data(space, laik_Double);
+    Laik_Data *data1 = laik_new_data(space, laik_Double);
+    Laik_Data *data2 = laik_new_data(space, laik_Double);
 
     // we use two types of partitioners algorithms:
     // - prWrite: cells to update (disjunctive partitioning)
@@ -194,28 +205,28 @@ int main(int argc, char* argv[])
     Laik_Partitioner *prWrite, *prRead;
     prWrite = laik_new_bisection_partitioner();
     prRead = use_cornerhalo ? laik_new_cornerhalo_partitioner(1) :
-                              laik_new_halo_partitioner(1);
+             laik_new_halo_partitioner(1);
 
     // run partitioners to get partitionings over 2d space and <world> group
     // data1/2 are then alternately accessed using pRead/pWrite
     Laik_Partitioning *pWrite, *pRead;
     pWrite = laik_new_partitioning(prWrite, world, space, 0);
-    pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+    pRead = laik_new_partitioning(prRead, world, space, pWrite);
     laik_partitioning_set_name(pWrite, "pWrite");
     laik_partitioning_set_name(pRead, "pRead");
 
     // for global sum, used for residuum: 1 double accessible by all
-    if(sp1 == NULL) {
+    if (sp1 == NULL) {
         sp1 = laik_new_space_1d(inst, 1);
     }
-    Laik_Partitioning* sumP = laik_new_partitioning(laik_All, world, sp1, 0);
-    Laik_Data* sumD = laik_new_data(sp1, laik_Double);
+    Laik_Partitioning *sumP = laik_new_partitioning(laik_All, world, sp1, 0);
+    Laik_Data *sumD = laik_new_data(sp1, laik_Double);
     laik_data_set_name(sumD, "sum");
     laik_switchto_partitioning(sumD, sumP, LAIK_DF_None, LAIK_RO_None);
 
     // start with writing (= initialization) data1
-    Laik_Data* dWrite = data1;
-    Laik_Data* dRead = data2;
+    Laik_Data *dWrite = data1;
+    Laik_Data *dRead = data2;
 
     // distributed initialization
     laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
@@ -224,11 +235,8 @@ int main(int argc, char* argv[])
     // default mapping order for 2d:
     //   with y in [0;ysize], x in [0;xsize[
     //   base[y][x] is at (base + y * ystride + x)
-    laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
-    // arbitrary non-zero values based on global indexes to detect bugs
-    for(uint64_t y = 0; y < ysizeW; y++)
-        for(uint64_t x = 0; x < xsizeW; x++)
-            baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
+    laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
+    initialize_write_arbitrary_values(baseW, ysizeW, ystrideW, xsizeW, gx1, gy1);
 
     setBoundary(size, pWrite, dWrite);
     laik_log(2, "Init done\n");
@@ -240,11 +248,11 @@ int main(int argc, char* argv[])
 
     int iter = 0;
 
-    for(; iter < maxiter; iter++) {
+    for (; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
 
         // At every 10 iterations, do a checkpoint
-        if(iter % 10 == 9) {
+        if (iter % 10 == 9) {
             printf("Creating checkpoint of sum\n");
             spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, laik_All, world, LAIK_RO_Max);
             printf("Creating checkpoint of data\n");
@@ -253,42 +261,53 @@ int main(int argc, char* argv[])
 //            spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, laik_All, world, LAIK_RO_None);
             restoreIteration = iter;
             printf("Checkpoint successful at iteration %i\n", iter);
+            originalHashSize = ysizeW * ystrideW + xsizeW;
+            test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
 
-        } else if(doRestore) {
+        } else if (doRestore) {
             // If error happens here, do not try to recover
 //            laik_tcp_set_error_handler(NULL);
 
             printf("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
             laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, sumD);
-            laik_checkpoint_restore(inst, &spaceCheckpoints[1], space, data1);
+            laik_checkpoint_restore(inst, &spaceCheckpoints[1], space, dWrite);
 //            laik_checkpoint_restore(inst, &spaceCheckpoints[2], space, data2);
             printf("Restore successful\n");
+            test_hexHash_noKeep("Checkpoint data hash (original size)", baseW, originalHashSize);
+            test_hexHash_noKeep("Checkpoint data hash", baseW, ysizeW * ystrideW + xsizeW);
             iter = restoreIteration;
             doRestore = false;
         }
 
         // *Randomly* fail on one node
         // Make sure to always use the real world here
-        if(laik_myid(laik_world(inst)) == 1 && iter == 35) {
-            printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world), iter);
+        if (laik_myid(laik_world(inst)) == 1 && iter == 35) {
+            printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
+                   iter);
             abort();
         }
 
         // switch roles: data written before now is read
-        if (dRead == data1) { dRead = data2; dWrite = data1; }
-        else                { dRead = data1; dWrite = data2; }
+        if (dRead == data1) {
+            dRead = data2;
+            dWrite = data1;
+        } else {
+            dRead = data1;
+            dWrite = data2;
+        }
 
-        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
+        laik_switchto_partitioning(dRead, pRead, LAIK_DF_Preserve, LAIK_RO_None);
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-        laik_map_def1_2d(dRead,  (void**) &baseR, &ysizeR, &ystrideR, &xsizeR);
-        laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+        laik_map_def1_2d(dRead, (void **) &baseR, &ysizeR, &ystrideR, &xsizeR);
+        laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
+        test_hexHash_noKeep("BaseR data hash", baseR, ysizeR * ystrideR + xsizeR);
         setBoundary(size, pWrite, dWrite);
 
         // local range for which to do 2d stencil, without global edges
         laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
-        y1 = (gy1 == 0)    ? 1 : 0;
-        x1 = (gx1 == 0)    ? 1 : 0;
+        y1 = (gy1 == 0) ? 1 : 0;
+        x1 = (gx1 == 0) ? 1 : 0;
         y2 = (gy2 == size) ? (ysizeW - 1) : ysizeW;
         x2 = (gx2 == size) ? (xsizeW - 1) : xsizeW;
 
@@ -304,67 +323,16 @@ int main(int argc, char* argv[])
 
         // do jacobi
 
+        double localResiduum = do_jacobi_iteration(baseR, baseW, ystrideR, ystrideW, x1, x2, y1, y2);
+        res_iters++;
+
         // check for residuum every 10 iterations (3 Flops more per update)
         if ((iter % 10) == 0) {
+            double globalResiduum = calculateGlobalResiduum(localResiduum, size, &sumPtr, sumD, &t, &t2, &last_iter,
+                                                            iter);
 
-            double newValue, diff, res;
-            res = 0.0;
-            for(int64_t y = y1; y < y2; y++) {
-                for(int64_t x = x1; x < x2; x++) {
-                    newValue = 0.25 * ( baseR[ (y-1) * ystrideR + x    ] +
-                                        baseR[  y    * ystrideR + x - 1] +
-                                        baseR[  y    * ystrideR + x + 1] +
-                                        baseR[ (y+1) * ystrideR + x    ] );
-                    diff = baseR[y * ystrideR + x] - newValue;
-                    res += diff * diff;
-                    baseW[y * ystrideW + x] = newValue;
-                }
-            }
-            res_iters++;
-
-            // calculate global residuum
-            laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
-            *sumPtr = res;
-            laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
-            res = *sumPtr;
-
-            if (iter > 0) {
-                t = laik_wtime();
-                // current iteration already done
-                int diter = (iter + 1) - last_iter;
-                double dt = t - t2;
-                double gUpdates = 0.000000001 * size * size; // per iteration
-                laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
-                         diter, dt,
-                         // 4 Flops per update in reg iters, with res 7 (once)
-                         gUpdates * (7 + 4 * (diter-1)) / dt,
-                         // per update 32 bytes read + 8 byte written
-                         gUpdates * diter * 40 / dt);
-                last_iter = iter + 1;
-                t2 = t;
-            }
-
-            if (laik_myid(laik_data_get_group(sumD)) == 0) {
-                printf("Residuum after %2d iters: %f\n", iter+1, res);
-            }
-
-            if (res < .001) break;
+            if (globalResiduum < .001) break;
         }
-        else {
-            double newValue;
-            for(int64_t y = y1; y < y2; y++) {
-                for(int64_t x = x1; x < x2; x++) {
-                    newValue = 0.25 * ( baseR[ (y-1) * ystrideR + x    ] +
-                                        baseR[  y    * ystrideR + x - 1] +
-                                        baseR[  y    * ystrideR + x + 1] +
-                                        baseR[ (y+1) * ystrideR + x    ] );
-                    baseW[y * ystrideW + x] = newValue;
-                }
-            }
-        }
-
         // TODO: allow repartitioning
     }
 
@@ -377,26 +345,26 @@ int main(int argc, char* argv[])
         double gUpdates = 0.000000001 * size * size; // per iteration
         laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
                  diter, dt,
-                 // 2 Flops per update in reg iters, with res 5
+                // 2 Flops per update in reg iters, with res 5
                  gUpdates * (7 * res_iters + 4 * (diter - res_iters)) / dt,
-                 // per update 32 bytes read + 8 byte written
+                // per update 32 bytes read + 8 byte written
                  gUpdates * diter * 40 / dt);
     }
 
     if (do_sum) {
-        Laik_Group* activeGroup = laik_data_get_group(dWrite);
+        Laik_Group *activeGroup = laik_data_get_group(dWrite);
 
         // for check at end: sum up all just written values
-        Laik_Partitioning* pMaster;
+        Laik_Partitioning *pMaster;
         pMaster = laik_new_partitioning(laik_Master, activeGroup, space, 0);
         laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
 
         if (laik_myid(activeGroup) == 0) {
             double sum = 0.0;
-            laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
-            for(uint64_t y = 0; y < ysizeW; y++)
-                for(uint64_t x = 0; x < xsizeW; x++)
-                    sum += baseW[ y * ystrideW + x];
+            laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
+            for (uint64_t y = 0; y < ysizeW; y++)
+                for (uint64_t x = 0; x < xsizeW; x++)
+                    sum += baseW[y * ystrideW + x];
             printf("Global value sum after %d iterations: %f\n",
                    iter, sum);
         }
@@ -404,4 +372,61 @@ int main(int argc, char* argv[])
 
     laik_finalize(inst);
     return 0;
+}
+
+void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
+                                       int64_t gy1) {// arbitrary non-zero values based on global indexes to detect bugs
+    for (uint64_t y = 0; y < ysizeW; y++)
+        for (uint64_t x = 0; x < xsizeW; x++)
+            baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
+}
+
+double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, Laik_Data *sumD, double *t, double *t2,
+                               int *last_iter,
+                               int iter) {// calculate global residuum
+    laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
+    laik_map_def1(sumD, (void **) sumPtr, 0);
+    *(*sumPtr) = localResiduum;
+    laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
+    laik_map_def1(sumD, (void **) sumPtr, 0);
+    localResiduum = *(*sumPtr);
+
+    if (iter > 0) {
+        *t = laik_wtime();
+        // current iteration already done
+        int diter = (iter + 1) - *last_iter;
+        double dt = *t - *t2;
+        double gUpdates = 0.000000001 * size * size; // per iteration
+        laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
+                 diter, dt,
+                // 4 Flops per update in reg iters, with localResiduum 7 (once)
+                 gUpdates * (7 + 4 * (diter - 1)) / dt,
+                // per update 32 bytes read + 8 byte written
+                 gUpdates * diter * 40 / dt);
+        *last_iter = iter + 1;
+        *t2 = *t;
+    }
+
+    if (laik_myid(laik_data_get_group(sumD)) == 0) {
+        printf("Residuum after %2d iters: %f\n", iter + 1, localResiduum);
+    }
+    return localResiduum;
+}
+
+double do_jacobi_iteration(double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
+                           int64_t x2, int64_t y1, int64_t y2) {
+    double newValue, diff, res;
+    res = 0.0;
+    for (int64_t y = y1; y < y2; y++) {
+        for (int64_t x = x1; x < x2; x++) {
+            newValue = 0.25 * (baseR[(y - 1) * ystrideR + x] +
+                               baseR[y * ystrideR + x - 1] +
+                               baseR[y * ystrideR + x + 1] +
+                               baseR[(y + 1) * ystrideR + x]);
+            diff = baseR[y * ystrideR + x] - newValue;
+            res += diff * diff;
+            baseW[y * ystrideW + x] = newValue;
+        }
+    }
+    return res;
 }

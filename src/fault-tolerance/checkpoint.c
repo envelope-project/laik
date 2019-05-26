@@ -103,6 +103,7 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
 
     laik_log(LAIK_LL_Debug, "Preparing buffer for %lu elements of size %i (%lu)\n", *count, data->elemsize,
              *backupCount);
+    laik_log(LAIK_LL_Error, "First double of base %f, first double of backup base %f.", **((double**)base), **((double**)backupBase));
     assert(*count == *backupCount);
 }
 
