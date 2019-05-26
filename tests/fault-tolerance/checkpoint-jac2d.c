@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <laik-internal.h>
 
 // boundary values
 double loRowValue = -5.0, hiRowValue = 10.0;
@@ -196,9 +197,9 @@ int main(int argc, char* argv[])
 
         // At iteration 10, do a checkpoint
         if(iter == 10) {
-            spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, NULL, NULL, LAIK_RO_None);
-            spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL, NULL, LAIK_RO_None);
-            spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, NULL, NULL, LAIK_RO_None);
+            spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, sumD->activePartitioning->partitioner, world, LAIK_RO_Max);
+            spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, world, LAIK_RO_None);
+            spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, world, LAIK_RO_None);
             printf("Checkpoint successful\n");
         } else if(!hasRestored && iter == 40) {
             laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, sumD);
