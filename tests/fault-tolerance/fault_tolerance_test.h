@@ -5,7 +5,7 @@
 #ifndef LAIK_FAULT_TOLERANCE_TEST_H
 #define LAIK_FAULT_TOLERANCE_TEST_H
 
-#include <openssl/sha.h>
+#include "fault_tolerance_test_hash.h"
 
 #define TEST_SIZE 4096
 
@@ -53,19 +53,6 @@ void test_create_sample_data() {
     }
 }
 
-void test_hexHash(char *msg, void *baseAddress, uint64_t length, unsigned char *hash) {
-    SHA1((const unsigned char *) baseAddress, length, hash);
-    printf("%i: %s ", laik_myid(world), msg);
-    for (int i = 0; i < SHA_DIGEST_LENGTH; ++i) {
-        printf("%02x", hash[i]);
-    }
-    printf(" (%lu bytes)\n", length);
-}
-
-void test_hexHash_noKeep(char *msg, void* baseAddress, uint64_t length) {
-    unsigned char hash[SHA_DIGEST_LENGTH] ;
-    test_hexHash(msg, baseAddress, length, hash);
-}
 
 
 #endif //LAIK_FAULT_TOLERANCE_TEST_H
