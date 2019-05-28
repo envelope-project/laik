@@ -144,3 +144,8 @@ int laik_tcp_get_status() {
 Laik_Tcp_Errors *laik_tcp_get_error_trace() {
     return errorTrace;
 }
+
+void laik_tcp_clear_errors() {
+    statusFlag = 0;
+    errorTrace = NULL;
+}
