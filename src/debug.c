@@ -317,31 +317,66 @@ void laik_log_PrettyInt(uint64_t v)
 
 void laik_log_SwitchStat(Laik_SwitchStat* ss)
 {
-    laik_log_append("%d switches (%d without actions)\n",
-                    ss->switches, ss->switches_noactions);
+    laik_log_append("%d switches (%d without actions, %d transitions)\n",
+                    ss->switches, ss->switches_noactions, ss->transitionCount);
     if (ss->switches == ss->switches_noactions) return;
 
     if (ss->mallocCount > 0) {
-        laik_log_append("    malloc: %dx, ", ss->mallocCount);
+        laik_log_append("    data alloc: %dx, ", ss->mallocCount);
         laik_log_PrettyInt(ss->mallocedBytes);
-        laik_log_append("B, freed: %dx, ", ss->freeCount);
+        laik_log_append("B (max ");
+        laik_log_PrettyInt(ss->maxAllocedBytes);
+        laik_log_append("B), free: %dx, ", ss->freeCount);
         laik_log_PrettyInt(ss->freedBytes);
-        laik_log_append("B, copied ");
+        laik_log_append("B, init ");
+        laik_log_PrettyInt(ss->initedBytes);
+        laik_log_append("B, copy ");
         laik_log_PrettyInt(ss->copiedBytes);
         laik_log_append("B\n");
     }
-    if ((ss->sendCount > 0) || (ss->recvCount > 0)) {
-        laik_log_append("    sent: %dx, ", ss->sendCount);
-        laik_log_PrettyInt(ss->sentBytes);
-        laik_log_append("B, recv: %dx, ", ss->recvCount);
-        laik_log_PrettyInt(ss->receivedBytes);
-        laik_log_append("B\n");
+    int out = 0;
+    unsigned int msgSendCount = ss->msgSendCount + ss->msgAsyncSendCount;
+    if (msgSendCount > 0) {
+        laik_log_append("    %s sent: %dx", out++ ? "   ":"msg", msgSendCount);
+        if (ss->msgAsyncSendCount > 0)
+            laik_log_append(" (%d async)", ss->msgAsyncSendCount);
+        laik_log_append(", ");
+        laik_log_PrettyInt(ss->elemSendCount);
+        laik_log_append("Elems = ");
+        laik_log_PrettyInt(ss->byteSendCount);
+        laik_log_append("B (avg ");
+        laik_log_PrettyInt(ss->byteSendCount / msgSendCount);
+        laik_log_append("B/msg)\n");
     }
-    if (ss->reduceCount) {
-        laik_log_append("    reduce: %dx, ", ss->reduceCount);
-        laik_log_PrettyInt(ss->reducedBytes);
-        laik_log_append("B, initialized ");
-        laik_log_PrettyInt(ss->initedBytes);
+    unsigned int msgRecvCount = ss->msgRecvCount + ss->msgAsyncRecvCount;
+    if (msgRecvCount > 0) {
+        laik_log_append("    %s recv: %dx", out++ ? "   ":"msg", msgRecvCount);
+        if (ss->msgAsyncRecvCount > 0)
+            laik_log_append(" (%d async)", ss->msgAsyncRecvCount);
+        laik_log_append(", ");
+        laik_log_PrettyInt(ss->elemRecvCount);
+        laik_log_append("Elems = ");
+        laik_log_PrettyInt(ss->byteRecvCount);
+        laik_log_append("B (avg ");
+        laik_log_PrettyInt(ss->byteRecvCount / msgRecvCount);
+        laik_log_append("B/msg)\n");
+    }
+    if (ss->msgReduceCount > 0) {
+        laik_log_append("    %s reduce: %dx, ", out++ ? "   ":"msg", ss->msgReduceCount);
+        laik_log_PrettyInt(ss->elemReduceCount);
+        laik_log_append("Elems = ");
+        laik_log_PrettyInt(ss->byteReduceCount);
+        laik_log_append("B (avg ");
+        laik_log_PrettyInt(ss->byteReduceCount / ss->msgReduceCount);
+        laik_log_append("B/red)\n");
+    }
+    if ((ss->initOpCount > 0) || (ss->reduceOpCount > 0)) {
+        laik_log_append("    ops init: ");
+        laik_log_PrettyInt(ss->initOpCount);
+        laik_log_append(", reduce: ");
+        laik_log_PrettyInt(ss->reduceOpCount);
+        laik_log_append(", buf copy: ");
+        laik_log_PrettyInt(ss->byteBufCopyCount);
         laik_log_append("B\n");
     }
 }

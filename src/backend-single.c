@@ -43,7 +43,7 @@ Laik_Instance* laik_init_single()
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_single, 1, 0, "local", 0, 0);
 
-    laik_log(1, "Single backend initialized\n");
+    laik_log(2, "Single backend initialized\n");
 
     single_instance = inst;
     return inst;
@@ -60,6 +60,10 @@ Laik_Group* laik_single_world()
 
 void laik_single_exec(Laik_ActionSeq* as)
 {
+    if (as->backend == 0) {
+        as->backend = &laik_backend_single;
+        laik_aseq_calc_stats(as);
+    }
     // we only support 1 transition exec action
     assert(as->actionCount == 1);
     assert(as->action[0].type == LAIK_AT_TExec);

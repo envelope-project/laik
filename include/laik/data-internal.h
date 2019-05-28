@@ -54,13 +54,23 @@ Laik_Type* laik_type_new(char* name, Laik_TypeKind kind, int size,
 struct _Laik_SwitchStat
 {
     int switches, switches_noactions;
-    int mallocCount, freeCount, sendCount, recvCount, reduceCount;
+    int mallocCount, freeCount;
     uint64_t mallocedBytes, freedBytes, initedBytes, copiedBytes;
-    uint64_t sentBytes, receivedBytes, reducedBytes;
+    uint64_t currAllocedBytes, maxAllocedBytes;
+    int transitionCount;
+    unsigned int msgSendCount, msgRecvCount, msgReduceCount;
+    unsigned int msgAsyncSendCount, msgAsyncRecvCount;
+    uint64_t elemSendCount, elemRecvCount, elemReduceCount;
+    uint64_t byteSendCount, byteRecvCount, byteReduceCount;
+    uint64_t initOpCount, reduceOpCount, byteBufCopyCount;
+
 };
 
 Laik_SwitchStat* laik_newSwitchStat(void);
 void laik_addSwitchStat(Laik_SwitchStat* target, Laik_SwitchStat* src);
+void laik_switchstat_addASeq(Laik_SwitchStat* target, Laik_ActionSeq* as);
+void laik_switchstat_malloc(Laik_SwitchStat* ss, uint64_t bytes);
+void laik_switchstat_free(Laik_SwitchStat* ss, uint64_t bytes);
 
 // information for a reservation
 typedef struct _Laik_ReservationEntry {

@@ -129,11 +129,20 @@ void laik_finalize(Laik_Instance* inst)
 
     if (laik_log_begin(2)) {
         laik_log_append("switch statistics (this task):\n");
+        Laik_SwitchStat* ss = laik_newSwitchStat();
         for(int i=0; i<inst->data_count; i++) {
             Laik_Data* d = inst->data[i];
+            laik_addSwitchStat(ss, d->stat);
+
             laik_log_append("  data '%s': ", d->name);
             laik_log_SwitchStat(d->stat);
         }
+        if (inst->data_count > 1) {
+            laik_log_append("  summary: ");
+            laik_log_SwitchStat(ss);
+        }
+        free(ss);
+
         laik_log_flush(0);
     }
 
