@@ -32,8 +32,6 @@
 double loRowValue = -5.0, hiRowValue = 10.0;
 double loColValue = -10.0, hiColValue = 5.0;
 
-bool doRestore = false;
-bool hasRestored = false;
 int restoreIteration = -1;
 int save_argc;
 char **save_argv;
@@ -99,9 +97,7 @@ double getTW(int rank, const void *userData) {
 
 void errorHandler(void *errors) {
     (void) errors;
-    doRestore = true;
-    main(save_argc, save_argv);
-    exit(0);
+    printf("Received an error condition, attempting to continue.\n");
 }
 
 Laik_Instance *inst;
@@ -111,7 +107,7 @@ Laik_Space *space;
 Laik_Space *sp1;
 Laik_Data *data1;
 Laik_Data *data2;
-Laik_Data *sumD;
+Laik_Data *dSum;
 Laik_Partitioner *prWrite, *prRead;
 
 
@@ -123,33 +119,15 @@ Laik_Checkpoint spaceCheckpoints[3];
 int main(int argc, char *argv[]) {
     laik_set_loglevel(LAIK_LL_Info);
 //    laik_set_loglevel(LAIK_LL_Debug);
-    if (inst == NULL) {
-        inst = laik_init(&argc, &argv);
-        world = laik_world(inst);
+    inst = laik_init(&argc, &argv);
+    world = laik_world(inst);
 
-        printf("Preparing shrinked world, eliminating rank 1 (world size %i)\n", world->size);
-        int elimination[] = {1};
-        smallWorld = laik_new_shrinked_group(world, 1, elimination);
+    printf("Preparing shrinked world, eliminating rank 1 (world size %i)\n", world->size);
+    int elimination[] = {1};
+    smallWorld = laik_new_shrinked_group(world, 1, elimination);
 
-        // Set the error handler to be able to recover from
-        laik_tcp_set_error_handler(errorHandler);
-
-    } else {
-        printf("Instance already allocated, not calling init.\n");
-        printf("Activating small world (size %i)\n", smallWorld->size);
-        world = smallWorld;
-
-        // Set the error handler to be able to recover from
-        laik_tcp_set_error_handler(NULL);
-
-//        printf("Calling LAIK finalize\n");
-//        laik_finalize(inst);
-
-//        printf("Creating the new instance\n");
-//        laik_init(&argc, &argv);
-
-//        world = laik_world(inst);
-    }
+    // Set the error handler to be able to recover from
+    laik_tcp_set_error_handler(errorHandler);
 
     int size = 0;
     int maxiter = 0;
@@ -182,15 +160,13 @@ int main(int argc, char *argv[]) {
     if (size == 0) size = 2500; // 6.25 mio entries
     if (maxiter == 0) maxiter = 50;
 
-    printf("Jac_2d parallel with rank %i\n", laik_myid(world));
+    TPRINTF("Jac_2d parallel with rank %i\n", laik_myid(world));
     if (laik_myid(world) == 0) {
-        printf("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks",
-               size, size, .000016 * size * size, maxiter, laik_size(world));
-        if (!use_cornerhalo)
-            printf(" (halo without corners)");
-        if (repart > 0)
-            printf("\n  with repartitioning every %d iterations\n", repart);
-        printf("\n");
+        TPRINTF("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks",
+                size, size, .000016 * size * size, maxiter, laik_size(world));
+        if (!use_cornerhalo) TPRINTF(" (halo without corners)");
+        if (repart > 0) TPRINTF("\n  with repartitioning every %d iterations\n", repart);
+        TPRINTF("\n");
     }
 
     // start profiling interface
@@ -204,14 +180,12 @@ int main(int argc, char *argv[]) {
     int64_t x1, x2, y1, y2;
 
     // two 2d arrays for jacobi, using same space
-    if (space == NULL) {
-        space = laik_new_space_2d(inst, size, size);
-        laik_set_space_name(space, "Jacobi Matrix Space");
-        data1 = laik_new_data(space, laik_Double);
-        laik_data_set_name(data1, "Data 1");
-        data2 = laik_new_data(space, laik_Double);
-        laik_data_set_name(data2, "Data 2");
-    }
+    space = laik_new_space_2d(inst, size, size);
+    laik_set_space_name(space, "Jacobi Matrix Space");
+    data1 = laik_new_data(space, laik_Double);
+    laik_data_set_name(data1, "Data 1");
+    data2 = laik_new_data(space, laik_Double);
+    laik_data_set_name(data2, "Data 2");
 
     // we use two types of partitioners algorithms:
     // - prWrite: cells to update (disjunctive partitioning)
@@ -229,14 +203,12 @@ int main(int argc, char *argv[]) {
     laik_partitioning_set_name(pRead, "pRead");
 
     // for global sum, used for residuum: 1 double accessible by all
-    if (sp1 == NULL) {
-        sp1 = laik_new_space_1d(inst, 1);
-        laik_set_space_name(sp1, "Sum Space");
-        sumD = laik_new_data(sp1, laik_Double);
-        laik_data_set_name(sumD, "sum");
-    }
-    Laik_Partitioning *sumP = laik_new_partitioning(laik_All, world, sp1, 0);
-    laik_switchto_partitioning(sumD, sumP, LAIK_DF_None, LAIK_RO_None);
+    sp1 = laik_new_space_1d(inst, 1);
+    laik_set_space_name(sp1, "Sum Space");
+    dSum = laik_new_data(sp1, laik_Double);
+    laik_data_set_name(dSum, "sum");
+    Laik_Partitioning *pSum = laik_new_partitioning(laik_All, world, sp1, 0);
+    laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
     // start with writing (= initialization) data1
     Laik_Data *dWrite = data1;
@@ -271,16 +243,27 @@ int main(int argc, char *argv[]) {
             originalHashSize = ysizeW * ystrideW + xsizeW;
             test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
 
-        } else if (doRestore) {
+        } else if (laik_tcp_get_status() != 0) {
             // If error happens here, do not try to recover
-//            laik_tcp_set_error_handler(NULL);
+            TPRINTF("Attempting to restore\n");
+            laik_tcp_set_error_handler(NULL);
+
+            pWrite = laik_new_partitioning(prWrite, smallWorld, space, 0);
+            pRead = laik_new_partitioning(prRead, smallWorld, space, pWrite);
+            pSum = laik_new_partitioning(laik_All, smallWorld, sp1, 0);
+
+            laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
+
+            TPRINTF("Switched to new partitionings\n");
 
             restoreCheckpoints();
-            test_hexHash_noKeep("Checkpoint data hash (original size)", baseW, originalHashSize);
-            test_hexHash_noKeep("Checkpoint data hash", baseW, ysizeW * ystrideW + xsizeW);
             iter = restoreIteration;
-            doRestore = false;
-            hasRestored = true;
+            laik_tcp_clear_errors();
+            world = smallWorld;
+            TPRINTF("Restore complete, cleared errors.\n");
+
         }
 
         // *Randomly* fail on one node
@@ -290,14 +273,13 @@ int main(int argc, char *argv[]) {
 //                   iter);
 //            abort();
 //        }
-        if(iter == 35 && !hasRestored) {
-            doRestore = true;
+        if (iter == 35 && laik_myid(laik_world(inst)) == 1) {
 //            if (laik_myid(laik_world(inst)) != 1) {
 //                errorHandler(NULL);
 //            } else {
-//                printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
-//                       iter);
-//                abort();
+            TPRINTF("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
+                    iter);
+            abort();
 //            }
         }
 
@@ -377,8 +359,8 @@ int main(int argc, char *argv[]) {
             for (uint64_t y = 0; y < ysizeW; y++)
                 for (uint64_t x = 0; x < xsizeW; x++)
                     sum += baseW[y * ystrideW + x];
-            printf("Global value sum after %d iterations: %f\n",
-                   iter, sum);
+            TPRINTF("Global value sum after %d iterations: %f\n",
+                    iter, sum);
         }
     }
 
@@ -387,22 +369,22 @@ int main(int argc, char *argv[]) {
 }
 
 void restoreCheckpoints() {
-    printf("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
-    laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, sumD);
+    TPRINTF("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
+    laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, dSum);
     laik_checkpoint_restore(inst, &spaceCheckpoints[1], space, data1);
     laik_checkpoint_restore(inst, &spaceCheckpoints[2], space, data2);
-    printf("Restore successful\n");
+    TPRINTF("Restore successful\n");
 }
 
 void createCheckpoints(int iter) {
-    printf("Creating checkpoint of sum\n");
-    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, laik_Master, world, LAIK_RO_Max);
-    printf("Creating checkpoint of data\n");
+    TPRINTF("Creating checkpoint of sum\n");
+    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, world, LAIK_RO_Max);
+    TPRINTF("Creating checkpoint of data\n");
     spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, world, LAIK_RO_None);
-    printf("Creating checkpoint 3\n");
+    TPRINTF("Creating checkpoint 3\n");
     spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, world, LAIK_RO_None);
     restoreIteration = iter;
-    printf("Checkpoint successful at iteration %i\n", iter);
+    TPRINTF("Checkpoint successful at iteration %i\n", iter);
 }
 
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
@@ -415,11 +397,11 @@ void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t 
 double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, double *t, double *t2,
                                int *last_iter,
                                int iter) {// calculate global residuum
-    laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(sumD, (void **) sumPtr, 0);
+    laik_switchto_flow(dSum, LAIK_DF_None, LAIK_RO_None);
+    laik_map_def1(dSum, (void **) sumPtr, 0);
     *(*sumPtr) = localResiduum;
-    laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
-    laik_map_def1(sumD, (void **) sumPtr, 0);
+    laik_switchto_flow(dSum, LAIK_DF_Preserve, LAIK_RO_Sum);
+    laik_map_def1(dSum, (void **) sumPtr, 0);
     localResiduum = *(*sumPtr);
 
     if (iter > 0) {
@@ -438,8 +420,8 @@ double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, 
         *t2 = *t;
     }
 
-    if (laik_myid(laik_data_get_group(sumD)) == 0) {
-        printf("Residuum after %2d iters: %f\n", iter + 1, localResiduum);
+    if (laik_myid(laik_data_get_group(dSum)) == 0) {
+        TPRINTF("Residuum after %2d iters: %f\n", iter + 1, localResiduum);
     }
     return localResiduum;
 }
