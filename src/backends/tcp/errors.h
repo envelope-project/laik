@@ -22,7 +22,6 @@
 
 typedef GQueue Laik_Tcp_Errors;
 
-__attribute__ ((noreturn))
 void laik_tcp_errors_abort (Laik_Tcp_Errors* this);
 
 void laik_tcp_errors_clear (Laik_Tcp_Errors* this);
