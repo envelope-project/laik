@@ -41,9 +41,7 @@ int main(int argc, char **argv);
 double do_jacobi_iteration(const double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
                            int64_t x2, int64_t y1, int64_t y2);
 
-double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, double *t, double *t2,
-                               int *last_iter,
-                               int iter);
+double calculateGlobalResiduum(double localResiduum, double **sumPtr);
 
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
                                        int64_t gy1);
@@ -227,18 +225,13 @@ int main(int argc, char *argv[]) {
     setBoundary(size, pWrite, dWrite);
     laik_log(2, "Init done\n");
 
-    // for statistics (with LAIK_LOG=2)
-    double t, t1 = laik_wtime(), t2 = t1;
-    int last_iter = 0;
-    int res_iters = 0; // iterations done with residuum calculation
-
     int iter = 0;
 
     for (; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
 
         // At every 10 iterations, do a checkpoint
-        if (iter == 10) {
+        if (iter == 25) {
             createCheckpoints(iter);
             originalHashSize = ysizeW * ystrideW + xsizeW;
             test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
@@ -259,6 +252,7 @@ int main(int argc, char *argv[]) {
             TPRINTF("Switched to new partitionings\n");
 
             restoreCheckpoints();
+
             iter = restoreIteration;
             laik_tcp_clear_errors();
             world = smallWorld;
@@ -319,30 +313,18 @@ int main(int argc, char *argv[]) {
         // do jacobi
 
         double localResiduum = do_jacobi_iteration(baseR, baseW, ystrideR, ystrideW, x1, x2, y1, y2);
-        res_iters++;
 
         // check for residuum every 10 iterations (3 Flops more per update)
-        if ((iter % 10) == 0) {
-            double globalResiduum = calculateGlobalResiduum(localResiduum, size, &sumPtr, &t, &t2, &last_iter,
-                                                            iter);
-            if (globalResiduum < .001) break;
+        if ((iter % 1) == 0) {
+            double globalResiduum = calculateGlobalResiduum(localResiduum, &sumPtr);
+
+            //    if (laik_myid(laik_data_get_group(dSum)) == 0) {
+            TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
+            //    }
+
+//            if (globalResiduum < .001) break;
         }
         // TODO: allow repartitioning
-    }
-
-    // statistics for all iterations and reductions
-    // using work load in all tasks
-    if (laik_log_shown(2)) {
-        t = laik_wtime();
-        int diter = iter;
-        double dt = t - t1;
-        double gUpdates = 0.000000001 * size * size; // per iteration
-        laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
-                 diter, dt,
-                // 2 Flops per update in reg iters, with res 5
-                 gUpdates * (7 * res_iters + 4 * (diter - res_iters)) / dt,
-                // per update 32 bytes read + 8 byte written
-                 gUpdates * diter * 40 / dt);
     }
 
     if (do_sum) {
@@ -378,11 +360,11 @@ void restoreCheckpoints() {
 
 void createCheckpoints(int iter) {
     TPRINTF("Creating checkpoint of sum\n");
-    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, world, LAIK_RO_Max);
+    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, smallWorld, LAIK_RO_Max);
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, world, LAIK_RO_None);
+    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, smallWorld, LAIK_RO_None);
     TPRINTF("Creating checkpoint 3\n");
-    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, world, LAIK_RO_None);
+    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, smallWorld, LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 }
@@ -394,9 +376,7 @@ void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t 
             baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
 }
 
-double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, double *t, double *t2,
-                               int *last_iter,
-                               int iter) {// calculate global residuum
+double calculateGlobalResiduum(double localResiduum, double **sumPtr) {// calculate global residuum
     laik_switchto_flow(dSum, LAIK_DF_None, LAIK_RO_None);
     laik_map_def1(dSum, (void **) sumPtr, 0);
     *(*sumPtr) = localResiduum;
@@ -404,25 +384,6 @@ double calculateGlobalResiduum(double localResiduum, int size, double **sumPtr, 
     laik_map_def1(dSum, (void **) sumPtr, 0);
     localResiduum = *(*sumPtr);
 
-    if (iter > 0) {
-        *t = laik_wtime();
-        // current iteration already done
-        int diter = (iter + 1) - *last_iter;
-        double dt = *t - *t2;
-        double gUpdates = 0.000000001 * size * size; // per iteration
-        laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
-                 diter, dt,
-                // 4 Flops per update in reg iters, with localResiduum 7 (once)
-                 gUpdates * (7 + 4 * (diter - 1)) / dt,
-                // per update 32 bytes read + 8 byte written
-                 gUpdates * diter * 40 / dt);
-        *last_iter = iter + 1;
-        *t2 = *t;
-    }
-
-    if (laik_myid(laik_data_get_group(dSum)) == 0) {
-        TPRINTF("Residuum after %2d iters: %f\n", iter + 1, localResiduum);
-    }
     return localResiduum;
 }
 
