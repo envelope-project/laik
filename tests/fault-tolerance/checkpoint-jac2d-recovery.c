@@ -266,7 +266,7 @@ int main(int argc, char *argv[]) {
         laik_set_iteration(inst, iter + 1);
 
         // At every 10 iterations, do a checkpoint
-        if (iter % 10 == 9) {
+        if (iter == 10) {
             createCheckpoints(iter);
             originalHashSize = ysizeW * ystrideW + xsizeW;
             test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
@@ -292,6 +292,13 @@ int main(int argc, char *argv[]) {
 //        }
         if(iter == 35 && !hasRestored) {
             doRestore = true;
+//            if (laik_myid(laik_world(inst)) != 1) {
+//                errorHandler(NULL);
+//            } else {
+//                printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
+//                       iter);
+//                abort();
+//            }
         }
 
         // switch roles: data written before now is read
@@ -308,7 +315,6 @@ int main(int argc, char *argv[]) {
         laik_map_def1_2d(dRead, (void **) &baseR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
-        test_hexHash_noKeep("BaseR data hash", baseR, ysizeR * ystrideR + xsizeR);
         setBoundary(size, pWrite, dWrite);
 
         // local range for which to do 2d stencil, without global edges
