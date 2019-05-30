@@ -271,6 +271,23 @@ bool laik_mpi_asyncSendRecv(Laik_ActionSeq* as)
     return true;
 }
 
+//----------------------------------------------------------------------------
+// error helpers
+
+static
+void laik_mpi_panic(int err)
+{
+    char str[MPI_MAX_ERROR_STRING];
+    int len;
+
+    assert(err != MPI_SUCCESS);
+    if (MPI_Error_string(err, str, &len) != MPI_SUCCESS)
+        laik_panic("MPI backend: Unknown MPI error!");
+    else
+        laik_log(LAIK_LL_Panic, "MPI backend: MPI error '%s'", str);
+    exit(1);
+}
+
 
 //----------------------------------------------------------------------------
 // backend interface implementation: initialization
@@ -278,6 +295,8 @@ bool laik_mpi_asyncSendRecv(Laik_ActionSeq* as)
 Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 {
     if (mpi_instance) return mpi_instance;
+
+    int err;
 
     MPIData* d = malloc(sizeof(MPIData));
     if (!d) {
@@ -294,23 +313,35 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
     // eventually initialize MPI first before accessing MPI_COMM_WORLD
     if (argc) {
-        MPI_Init(argc, argv);
+        err = MPI_Init(argc, argv);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
         d->didInit = true;
     }
 
-    // now finish initilization of <gd>/<d>, as MPI_Init is run
-    gd->comm = MPI_COMM_WORLD;
-    d->comm = MPI_COMM_WORLD;
+    // create own communicator duplicating WORLD to
+    // - not have to worry about conflicting use of MPI_COMM_WORLD by application
+    // - install error handler which passes errors through - we want them
+    MPI_Comm ownworld;
+    err = MPI_Comm_dup(MPI_COMM_WORLD, &ownworld);
+    if (err != MPI_SUCCESS) laik_mpi_panic(err);
+    err = MPI_Comm_set_errhandler(ownworld, MPI_ERRORS_RETURN);
+    if (err != MPI_SUCCESS) laik_mpi_panic(err);
 
+    // now finish initilization of <gd>/<d>, as MPI_Init is run
+    gd->comm = ownworld;
+    d->comm = ownworld;
 
     int size, rank;
-    MPI_Comm_size(d->comm, &size);
-    MPI_Comm_rank(d->comm, &rank);
+    err = MPI_Comm_size(d->comm, &size);
+    if (err != MPI_SUCCESS) laik_mpi_panic(err);
+    err = MPI_Comm_rank(d->comm, &rank);
+    if (err != MPI_SUCCESS) laik_mpi_panic(err);
 
     // Get the name of the processor
     char processor_name[MPI_MAX_PROCESSOR_NAME];
     int name_len;
-    MPI_Get_processor_name(processor_name, &name_len);
+    err = MPI_Get_processor_name(processor_name, &name_len);
+    if (err != MPI_SUCCESS) laik_mpi_panic(err);
 
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_mpi, size, rank,
@@ -351,8 +382,10 @@ void laik_mpi_finalize(Laik_Instance* inst)
 {
     assert(inst == mpi_instance);
 
-    if (mpiData(mpi_instance)->didInit)
-        MPI_Finalize();
+    if (mpiData(mpi_instance)->didInit) {
+        int err = MPI_Finalize();
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
+    }
 }
 
 // update backend specific data for group if needed
@@ -387,8 +420,9 @@ void laik_mpi_updateGroup(Laik_Group* g)
     laik_log(1, "MPI Comm_split: old myid %d => new myid %d",
              g->parent->myid, g->fromParent[g->parent->myid]);
 
-    MPI_Comm_split(gdParent->comm, g->myid < 0 ? MPI_UNDEFINED : 0, g->myid,
-        &(gd->comm));
+    int err = MPI_Comm_split(gdParent->comm, g->myid < 0 ? MPI_UNDEFINED : 0,
+                             g->myid, &(gd->comm));
+    if (err != MPI_SUCCESS) laik_mpi_panic(err);
 }
 
 static
@@ -442,14 +476,16 @@ void laik_mpi_exec_packAndSend(Laik_Mapping* map, Laik_Slice* slc,
 {
     Laik_Index idx = slc->from;
     int dims = slc->space->dims;
-    int packed;
+    unsigned int packed;
     uint64_t count = 0;
     while(1) {
         packed = (map->layout->pack)(map, slc, &idx,
                                      packbuf, PACKBUFSIZE);
         assert(packed > 0);
-        MPI_Send(packbuf, packed,
-                 dataType, to_rank, tag, comm);
+        int err = MPI_Send(packbuf, (int) packed,
+                           dataType, to_rank, tag, comm);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
+
         count += packed;
         if (laik_index_isEqual(dims, &idx, &(slc->to))) break;
     }
@@ -480,9 +516,12 @@ void laik_mpi_exec_recvAndUnpack(Laik_Mapping* map, Laik_Slice* slc,
     int recvCount, unpacked;
     uint64_t count = 0;
     while(1) {
-        MPI_Recv(packbuf, PACKBUFSIZE / elemsize,
-                 dataType, from_rank, tag, comm, &st);
-        MPI_Get_count(&st, dataType, &recvCount);
+        int err = MPI_Recv(packbuf, PACKBUFSIZE / elemsize,
+                           dataType, from_rank, tag, comm, &st);
+        if (err == MPI_SUCCESS)
+            err = MPI_Get_count(&st, dataType, &recvCount);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
+
         unpacked = (map->layout->unpack)(map, slc, &idx,
                                          packbuf, recvCount * elemsize);
         assert(recvCount == unpacked);
@@ -500,32 +539,34 @@ void laik_mpi_exec_reduce(Laik_TransitionContext* tc, Laik_BackendAction* a,
 
     MPI_Op mpiRedOp = getMPIOp(a->redOp);
     int rootTask = a->rank;
+    int err;
 
     if (rootTask == -1) {
         if (a->fromBuf == a->toBuf) {
             laik_log(1, "      exec MPI_Allreduce in-place, count %d", a->count);
-            MPI_Allreduce(MPI_IN_PLACE, a->toBuf, a->count,
-                          dataType, mpiRedOp, comm);
+            err = MPI_Allreduce(MPI_IN_PLACE, a->toBuf, (int) a->count,
+                                    dataType, mpiRedOp, comm);
         }
         else {
             laik_log(1, "      exec MPI_Allreduce, count %d", a->count);
-            MPI_Allreduce(a->fromBuf, a->toBuf, a->count,
-                          dataType, mpiRedOp, comm);
+            err = MPI_Allreduce(a->fromBuf, a->toBuf, (int) a->count,
+                                dataType, mpiRedOp, comm);
         }
     }
     else {
         if ((a->fromBuf == a->toBuf) && (tc->transition->group->myid == rootTask)) {
             laik_log(1, "      exec MPI_Reduce in-place, count %d, root %d",
                      a->count, rootTask);
-            MPI_Reduce(MPI_IN_PLACE, a->toBuf, a->count,
-                       dataType, mpiRedOp, rootTask, comm);
+            err = MPI_Reduce(MPI_IN_PLACE, a->toBuf, (int) a->count,
+                             dataType, mpiRedOp, rootTask, comm);
         }
         else {
             laik_log(1, "      exec MPI_Reduce, count %d, root %d", a->count, rootTask);
-            MPI_Reduce(a->fromBuf, a->toBuf, a->count,
-                       dataType, mpiRedOp, rootTask, comm);
+            err = MPI_Reduce(a->fromBuf, a->toBuf, (int) a->count,
+                             dataType, mpiRedOp, rootTask, comm);
         }
     }
+    if (err != MPI_SUCCESS) laik_mpi_panic(err);
 }
 
 // a naive, manual reduction using send/recv:
@@ -548,17 +589,22 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
     int myid = t->group->myid;
     MPI_Status st;
+    int err;
 
     if (myid != reduceTask) {
         // not the reduce task: eventually send input and recv result
 
         if (laik_trans_isInGroup(t, a->inputGroup, myid)) {
             laik_log(1, "        exec MPI_Send to T%d", reduceTask);
-            MPI_Send(a->fromBuf, a->count, dataType, reduceTask, 1, comm);
+            err = MPI_Send(a->fromBuf, (int) a->count, dataType,
+                           reduceTask, 1, comm);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
         }
         if (laik_trans_isInGroup(t, a->outputGroup, myid)) {
             laik_log(1, "        exec MPI_Recv from T%d", reduceTask);
-            MPI_Recv(a->toBuf, a->count, dataType, reduceTask, 1, comm, &st);
+            err = MPI_Recv(a->toBuf, (int) a->count, dataType,
+                           reduceTask, 1, comm, &st);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
         }
         return;
     }
@@ -593,7 +639,9 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
                  inTask, off, a->count);
 
         bufOff[ii++] = off;
-        MPI_Recv(packbuf + off, a->count, dataType, inTask, 1, comm, &st);
+        err = MPI_Recv(packbuf + off, (int) a->count, dataType,
+                       inTask, 1, comm, &st);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
         off += byteCount;
     }
     assert(ii == inCount);
@@ -628,7 +676,8 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         }
 
         laik_log(1, "        exec MPI_Send result to T%d", outTask);
-        MPI_Send(a->toBuf, a->count, dataType, outTask, 1, comm);
+        err = MPI_Send(a->toBuf, (int) a->count, dataType, outTask, 1, comm);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
     }
 }
 
@@ -676,6 +725,7 @@ void laik_mpi_exec(Laik_ActionSeq* as)
     MPI_Comm comm = gd->comm;
     MPI_Datatype dataType = getMPIDataType(tc->data);
     MPI_Status st;
+    int err;
 
     // MPI_Request array: not set yet
     int req_count = 0;
@@ -709,8 +759,9 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             // MPI-specific action: call MPI_Isend
             Laik_A_MpiIsend* aa = (Laik_A_MpiIsend*) a;
             assert(aa->req_id < req_count);
-            MPI_Isend(aa->buf, aa->count,
-                      dataType, aa->to_rank, tag, comm, req + aa->req_id);
+            err = MPI_Isend(aa->buf, aa->count,
+                            dataType, aa->to_rank, tag, comm, req + aa->req_id);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
@@ -718,8 +769,9 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             // MPI-specific action: exec MPI_IRecv
             Laik_A_MpiIrecv* aa = (Laik_A_MpiIrecv*) a;
             assert(aa->req_id < req_count);
-            MPI_Irecv(aa->buf, aa->count,
-                      dataType, aa->from_rank, tag, comm, req + aa->req_id);
+            err = MPI_Irecv(aa->buf, aa->count,
+                            dataType, aa->from_rank, tag, comm, req + aa->req_id);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
@@ -727,7 +779,8 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             // MPI-specific action: wait for request
             Laik_A_MpiWait* aa = (Laik_A_MpiWait*) a;
             assert(aa->req_id < req_count);
-            MPI_Wait(req + aa->req_id, &st);
+            err = MPI_Wait(req + aa->req_id, &st);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
@@ -735,23 +788,26 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             assert(ba->fromMapNo < fromList->count);
             Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
             assert(fromMap->base != 0);
-            MPI_Send(fromMap->base + ba->offset, ba->count,
-                     dataType, ba->rank, tag, comm);
+            err = MPI_Send(fromMap->base + ba->offset, ba->count,
+                           dataType, ba->rank, tag, comm);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
         case LAIK_AT_RBufSend: {
             Laik_A_RBufSend* aa = (Laik_A_RBufSend*) a;
             assert(aa->bufID < ASEQ_BUFFER_MAX);
-            MPI_Send(as->buf[aa->bufID] + aa->offset, aa->count,
-                     dataType, aa->to_rank, tag, comm);
+            err = MPI_Send(as->buf[aa->bufID] + aa->offset, aa->count,
+                           dataType, aa->to_rank, tag, comm);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
         case LAIK_AT_BufSend: {
             Laik_A_BufSend* aa = (Laik_A_BufSend*) a;
-            MPI_Send(aa->buf, aa->count,
-                     dataType, aa->to_rank, tag, comm);
+            err = MPI_Send(aa->buf, aa->count,
+                           dataType, aa->to_rank, tag, comm);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
@@ -759,23 +815,26 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             assert(ba->toMapNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
             assert(toMap->base != 0);
-            MPI_Recv(toMap->base + ba->offset, ba->count,
-                     dataType, ba->rank, tag, comm, &st);
+            err = MPI_Recv(toMap->base + ba->offset, ba->count,
+                           dataType, ba->rank, tag, comm, &st);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
         case LAIK_AT_RBufRecv: {
             Laik_A_RBufRecv* aa = (Laik_A_RBufRecv*) a;
             assert(aa->bufID < ASEQ_BUFFER_MAX);
-            MPI_Recv(as->buf[aa->bufID] + aa->offset, aa->count,
-                     dataType, aa->from_rank, tag, comm, &st);
+            err = MPI_Recv(as->buf[aa->bufID] + aa->offset, aa->count,
+                           dataType, aa->from_rank, tag, comm, &st);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
         case LAIK_AT_BufRecv: {
             Laik_A_BufRecv* aa = (Laik_A_BufRecv*) a;
-            MPI_Recv(aa->buf, aa->count,
-                     dataType, aa->from_rank, tag, comm, &st);
+            err = MPI_Recv(aa->buf, aa->count,
+                           dataType, aa->from_rank, tag, comm, &st);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             break;
         }
 
