@@ -277,17 +277,6 @@ MPI_Op getMPIOp(Laik_ReductionOperation redOp)
 }
 
 static
-void laik_mpi_exec_pack(Laik_BackendAction* a, Laik_Mapping* map)
-{
-    Laik_Index idx = a->slc->from;
-    int dims = a->slc->space->dims;
-    unsigned int byteCount = a->count * map->data->elemsize;
-    unsigned int packed = (map->layout->pack)(map, a->slc, &idx, a->toBuf, byteCount);
-    assert(packed == a->count);
-    assert(laik_index_isEqual(dims, &idx, &(a->slc->to)));
-}
-
-static
 void laik_mpi_exec_packAndSend(Laik_Mapping* map, Laik_Slice* slc,
                                int to_rank, uint64_t slc_size,
                                MPI_Datatype dataType, int tag, MPI_Comm comm)
@@ -308,18 +297,6 @@ void laik_mpi_exec_packAndSend(Laik_Mapping* map, Laik_Slice* slc,
         if (laik_index_isEqual(dims, &idx, &(slc->to))) break;
     }
     assert(count == slc_size);
-}
-
-static
-void laik_mpi_exec_unpack(Laik_BackendAction* a, Laik_Mapping* map)
-{
-    Laik_Index idx = a->slc->from;
-    int dims = a->slc->space->dims;
-    unsigned int byteCount = a->count * map->data->elemsize;
-    unsigned int unpacked = (map->layout->unpack)(map, a->slc, &idx,
-                                                  a->fromBuf, byteCount);
-    assert(unpacked == a->count);
-    assert(laik_index_isEqual(dims, &idx, &(a->slc->to)));
 }
 
 static
@@ -651,26 +628,26 @@ void laik_tcp_exec(Laik_ActionSeq* as)
             break;
 
         case LAIK_AT_PackToBuf:
-            laik_mpi_exec_pack(ba, ba->map);
+            laik_exec_pack(ba, ba->map);
             break;
 
         case LAIK_AT_MapPackToBuf: {
             assert(ba->fromMapNo < fromList->count);
             Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
             assert(fromMap->base != 0);
-            laik_mpi_exec_pack(ba, fromMap);
+            laik_exec_pack(ba, fromMap);
             break;
         }
 
         case LAIK_AT_UnpackFromBuf:
-            laik_mpi_exec_unpack(ba, ba->map);
+            laik_exec_unpack(ba, ba->map);
             break;
 
         case LAIK_AT_MapUnpackFromBuf: {
             assert(ba->toMapNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
             assert(toMap->base);
-            laik_mpi_exec_unpack(ba, toMap);
+            laik_exec_unpack(ba, toMap);
             break;
         }
 
