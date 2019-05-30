@@ -50,7 +50,7 @@
 ../include/laik/space-internal.h
 
 # TCP backend
-../src/backends/tcp/backend.c
+../src/backends/tcp/backend-tcp.c
 ../src/backends/tcp/client.c
 ../src/backends/tcp/config.c
 ../src/backends/tcp/debug.c

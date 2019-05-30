@@ -146,10 +146,14 @@ static size_t laik_tcp_minimpi_sizeof (const Laik_Tcp_MiniMpiType datatype, Laik
     laik_tcp_always (errors);
 
     switch (datatype) {
-        case LAIK_TCP_MINIMPI_DOUBLE:
-            return sizeof (double);
-        case LAIK_TCP_MINIMPI_FLOAT:
-            return sizeof (float);
+        case LAIK_TCP_MINIMPI_DOUBLE:   return sizeof(double);
+        case LAIK_TCP_MINIMPI_FLOAT:    return sizeof(float);
+        case LAIK_TCP_MINIMPI_INT64:    return sizeof(int64_t);
+        case LAIK_TCP_MINIMPI_INT32:    return sizeof(int32_t);
+        case LAIK_TCP_MINIMPI_INT8:     return sizeof(int8_t);
+        case LAIK_TCP_MINIMPI_UINT64:   return sizeof(uint64_t);
+        case LAIK_TCP_MINIMPI_UINT32:   return sizeof(uint32_t);
+        case LAIK_TCP_MINIMPI_UINT8:    return sizeof(uint8_t);
         default:
             laik_tcp_errors_push (errors, __func__, 0, "Invalid MPI datatype %d", datatype);
             return 0;
@@ -163,29 +167,33 @@ static void laik_tcp_minimpi_combine (void* buffer, const void* data, const size
 
     switch (op) {
         case LAIK_TCP_MINIMPI_SUM:
-            switch (datatype) {
-                case LAIK_TCP_MINIMPI_DOUBLE:
-                    {
-                        double* b = buffer;
-                        const double* d = data;
-                        for (size_t i = 0; i < elements; i++) {
-                            b[i] += d[i];
-                        }
-                    }
-                    break;
-                case LAIK_TCP_MINIMPI_FLOAT:
-                    {
-                        float* b = buffer;
-                        const float* d = data;
-                        for (size_t i = 0; i < elements; i++) {
-                            b[i] += d[i];
-                        }
-                    }
-                    break;
-                default:
+        switch (datatype) {
+
+#define do_sum(TYPE) TYPE* b = buffer; \
+                     const TYPE* d = data; \
+                     for (size_t i = 0; i < elements; i++) \
+                         b[i] += d[i];
+
+            case LAIK_TCP_MINIMPI_DOUBLE: { do_sum(double)   } break;
+            case LAIK_TCP_MINIMPI_FLOAT:  { do_sum(float)    } break;
+            case LAIK_TCP_MINIMPI_INT64:  { do_sum(int64_t)  } break;
+            case LAIK_TCP_MINIMPI_INT32:  { do_sum(int32_t)  } break;
+            case LAIK_TCP_MINIMPI_INT8:   { do_sum(int8_t)   } break;
+            case LAIK_TCP_MINIMPI_UINT64: { do_sum(uint64_t) } break;
+            case LAIK_TCP_MINIMPI_UINT32: { do_sum(uint32_t) } break;
+            case LAIK_TCP_MINIMPI_UINT8:  { do_sum(uint8_t)  } break;
+#undef do_sum
+            default:
                     laik_tcp_errors_push (errors, __func__, 0, "Invalid MPI datatype %d", datatype);
                     break;
             }
+            break;
+        case LAIK_TCP_MINIMPI_PROD:
+        case LAIK_TCP_MINIMPI_MIN:
+        case LAIK_TCP_MINIMPI_MAX:
+        case LAIK_TCP_MINIMPI_LAND:
+        case LAIK_TCP_MINIMPI_LOR:
+            laik_tcp_errors_push (errors, __func__, 1, "Unimplemented MPI operation %d", op);
             break;
         default:
             laik_tcp_errors_push (errors, __func__, 1, "Invalid MPI operation %d", op);

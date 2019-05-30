@@ -112,7 +112,7 @@ if (tcp-backend)
         target_sources ("laik"
             PRIVATE
                 "backends/tcp/async.c"
-                "backends/tcp/backend.c"
+                "backends/tcp/backend-tcp.c"
                 "backends/tcp/client.c"
                 "backends/tcp/condition.c"
                 "backends/tcp/config.c"
