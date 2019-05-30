@@ -518,8 +518,8 @@ void laik_mpi_exec_recvAndUnpack(Laik_Mapping* map, Laik_Slice* slc,
     while(1) {
         int err = MPI_Recv(packbuf, PACKBUFSIZE / elemsize,
                            dataType, from_rank, tag, comm, &st);
-        if (err == MPI_SUCCESS)
-            err = MPI_Get_count(&st, dataType, &recvCount);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
+        err = MPI_Get_count(&st, dataType, &recvCount);
         if (err != MPI_SUCCESS) laik_mpi_panic(err);
 
         unpacked = (map->layout->unpack)(map, slc, &idx,
@@ -589,7 +589,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
 
     int myid = t->group->myid;
     MPI_Status st;
-    int err;
+    int count, err;
 
     if (myid != reduceTask) {
         // not the reduce task: eventually send input and recv result
@@ -605,6 +605,10 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
             err = MPI_Recv(a->toBuf, (int) a->count, dataType,
                            reduceTask, 1, comm, &st);
             if (err != MPI_SUCCESS) laik_mpi_panic(err);
+            // check that we received the expected number of elements
+            err = MPI_Get_count(&st, dataType, &count);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
+            assert((int)a->count == count);
         }
         return;
     }
@@ -642,6 +646,10 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         err = MPI_Recv(packbuf + off, (int) a->count, dataType,
                        inTask, 1, comm, &st);
         if (err != MPI_SUCCESS) laik_mpi_panic(err);
+        // check that we received the expected number of elements
+        err = MPI_Get_count(&st, dataType, &count);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
+        assert((int)a->count == count);
         off += byteCount;
     }
     assert(ii == inCount);
@@ -654,7 +662,7 @@ void laik_mpi_exec_groupReduce(Laik_TransitionContext* tc,
         (data->type->reduce)(a->toBuf,
                              (inCount < 1) ? 0 : buf0,
                              (inCount < 2) ? 0 : (packbuf + bufOff[1]),
-                a->count, a->redOp);
+                             a->count, a->redOp);
         for(int t = 2; t < inCount; t++)
             (data->type->reduce)(a->toBuf, a->toBuf, packbuf + bufOff[t],
                                  a->count, a->redOp);
@@ -725,7 +733,7 @@ void laik_mpi_exec(Laik_ActionSeq* as)
     MPI_Comm comm = gd->comm;
     MPI_Datatype dataType = getMPIDataType(tc->data);
     MPI_Status st;
-    int err;
+    int err, count;
 
     // MPI_Request array: not set yet
     int req_count = 0;
@@ -818,6 +826,11 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             err = MPI_Recv(toMap->base + ba->offset, ba->count,
                            dataType, ba->rank, tag, comm, &st);
             if (err != MPI_SUCCESS) laik_mpi_panic(err);
+
+            // check that we received the expected number of elements
+            err = MPI_Get_count(&st, dataType, &count);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
+            assert((int)ba->count == count);
             break;
         }
 
@@ -827,6 +840,11 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             err = MPI_Recv(as->buf[aa->bufID] + aa->offset, aa->count,
                            dataType, aa->from_rank, tag, comm, &st);
             if (err != MPI_SUCCESS) laik_mpi_panic(err);
+
+            // check that we received the expected number of elements
+            err = MPI_Get_count(&st, dataType, &count);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
+            assert((int)ba->count == count);
             break;
         }
 
@@ -835,6 +853,11 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             err = MPI_Recv(aa->buf, aa->count,
                            dataType, aa->from_rank, tag, comm, &st);
             if (err != MPI_SUCCESS) laik_mpi_panic(err);
+
+            // check that we received the expected number of elements
+            err = MPI_Get_count(&st, dataType, &count);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
+            assert((int)ba->count == count);
             break;
         }
 
