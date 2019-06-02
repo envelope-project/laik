@@ -237,6 +237,9 @@ int main(int argc, char *argv[]) {
             test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
 
         } else if (laik_tcp_get_status() != 0) {
+            TPRINTF("Problem detected, attempting to determine global status\n");
+            laik_failure_check_nodes(inst, smallWorld);
+
             // If error happens here, do not try to recover
             TPRINTF("Attempting to restore\n");
             laik_tcp_set_error_handler(NULL);

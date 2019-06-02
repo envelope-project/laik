@@ -23,7 +23,8 @@ add_library ("laik" SHARED
     "space.c"
     "slicearray.c"
     "type.c"
-    "fault-tolerance/checkpoint.c")
+    "fault-tolerance/checkpoint.c"
+    "fault-tolerance/failure_detector.c")
 
 SET_SOURCE_FILES_PROPERTIES(revinfo.c
     PROPERTIES OBJECT_DEPENDS
