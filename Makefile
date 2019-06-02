@@ -65,7 +65,7 @@ examples/c++: $(LAIKLIB)
 
 
 # tests
-test: examples
+test: examples tests/fault-tolerance
 	make -C tests
 
 # tidy
