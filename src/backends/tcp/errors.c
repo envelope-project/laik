@@ -137,12 +137,21 @@ void laik_tcp_set_error_handler(LaikTCPErrorHandler newErrorHandler) {
     abortErrorHandler = newErrorHandler;
 }
 
+LaikTCPErrorHandler laik_tcp_get_error_handler() {
+    return abortErrorHandler;
+}
+
 int laik_tcp_get_status() {
     return statusFlag;
 }
 
 Laik_Tcp_Errors *laik_tcp_get_error_trace() {
     return errorTrace;
+}
+
+void laik_tcp_set_errors(int newStatusFlag, void* newErrorTrace) {
+    statusFlag = newStatusFlag;
+    errorTrace = newErrorTrace;
 }
 
 void laik_tcp_clear_errors() {

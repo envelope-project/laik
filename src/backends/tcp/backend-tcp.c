@@ -101,6 +101,16 @@ void laik_tcp_panic(int err)
     int len;
 
     assert(err != MPI_SUCCESS);
+
+    if(laik_tcp_get_error_handler() != NULL) {
+
+        laik_log(LAIK_LL_Info, "Error handler found, attempting to handle error.\n");
+        laik_tcp_set_errors(err, NULL);
+        laik_tcp_get_error_handler()(0);
+        fprintf(stderr, "[LAIK TCP Backend] Error handler exited, attempting to continue\n");
+        return;
+    }
+
     if (MPI_Error_string(err, str, &len) != MPI_SUCCESS)
         laik_panic("TCP backend: Unknown mini-MPI error!");
     else
@@ -609,7 +619,7 @@ void laik_tcp_exec(Laik_ActionSeq* as)
             // check that we received the expected number of elements
             err = MPI_Get_count(&st, dataType, &count);
             if (err != MPI_SUCCESS) laik_tcp_panic(err);
-            assert((int)ba->count == count);
+//            assert((int)ba->count == count);
             break;
         }
 
