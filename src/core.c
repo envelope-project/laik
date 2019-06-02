@@ -184,7 +184,6 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
 
     instance->firstSpaceForInstance = 0;
 
-    instance->kvstore = laik_kv_newNode(0, 0, 0); // empty root
     instance->group_count = 0;
     instance->data_count = 0;
     instance->mapping_count = 0;
@@ -678,159 +677,214 @@ void laik_panic(const char* msg)
 
 // KV Store
 
-Laik_KVNode* laik_kv_newNode(char* name, Laik_KVNode* parent, Laik_KValue* v)
+
+
+Laik_KVStore* laik_kvs_new(const char* name, Laik_Instance *inst)
 {
-    Laik_KVNode* n = malloc(sizeof(Laik_KVNode));
-    if (!n) {
-        laik_panic("Out of memory allocating Laik_KVNode object");
-        exit(1); // not actually needed, laik_panic never returns
+    Laik_KVStore* kvs = (Laik_KVStore*) malloc(sizeof(Laik_KVStore));
+
+    kvs->name = name;
+    kvs->inst = inst;
+
+    kvs->size = 1000;
+    kvs->entry = (Laik_KVS_Entry*) malloc(kvs->size * sizeof(Laik_KVS_Entry));
+    kvs->used = 0;
+    kvs->sorted_upto = 0;
+
+    kvs->myOffSize = 100;      // allow to specify 100 new/changed entries per sync
+    kvs->myOffUsed = 0;
+    kvs->myOff = (unsigned int*) malloc(kvs->myOffSize * sizeof(int));
+    kvs->myOff[0] = 0; // 1st offset into data is always 0
+    kvs->myDataSize = 100000; // reserve 100k for data of new/changed entries per sync
+    kvs->myDataUsed = 0;
+    kvs->myData = (char*) malloc(kvs->myDataSize);
+    kvs->in_sync = false;
+
+    return kvs;
+}
+
+void laik_kvs_free(Laik_KVStore* kvs)
+{
+    assert(kvs);
+
+    free(kvs->entry);
+    free(kvs->myOff);
+    free(kvs->myData);
+    free(kvs);
+}
+
+// returns true on actual change
+// do not take ownership of name/data (do a deep copy)
+bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
+{
+    assert(data != 0);
+
+    Laik_KVS_Entry* e = laik_kvs_entry(kvs, key);
+    if (e && (memcmp(e->data, data, (size_t) size) == 0)) {
+        laik_log(1, "set KV entry '%s' (size %d, '%.20s'): already existing",
+                 key, size, data);
+        return false;
     }
 
-    n->name = name; // take ownership
-    n->parent = parent;
-    n->value = v;
-    n->synched = false;
-    n->firstChild = 0;
-    n->nextSibling = 0;
-
-    return n;
-}
-
-Laik_KVNode* laik_kv_getNode(Laik_KVNode* n, char* path, bool create)
-{
-    char* sep;
-    assert(path != 0);
-
-    while(*path) {
-        sep = path;
-        while(*sep && (*sep != '/')) sep++;
-
-        Laik_KVNode* cNode = n->firstChild;
-        while(cNode) {
-            assert(cNode->name != 0);
-            if ((strncmp(cNode->name, path, sep - path) == 0) &&
-                (cNode->name[sep - path] == 0))
-                break;
-            cNode = cNode->nextSibling;
-        }
-
-        if (cNode == 0) {
-            // no match found, create?
-            if (!create) return 0;
-
-            cNode = laik_kv_newNode(strndup(path, sep - path), n, 0);
-            cNode->nextSibling = n->firstChild;
-            n->firstChild = cNode;
-        }
-
-        n = cNode;
-        if (*sep == 0) break;
-    }
-    return n;
-}
-
-Laik_KValue* laik_kv_setValue(Laik_KVNode* n,
-                              char* path, int count, int size, void* value)
-{
-    Laik_KVNode* nn = laik_kv_getNode(n, path, true);
-    assert(nn->value == 0); // should not be set yet
-
-    Laik_KValue* v = malloc(sizeof(Laik_KValue));
-    if (!v) {
-        laik_panic("Out of memory allocating Laik_KValue object");
-        exit(1); // not actually needed, laik_panic never returns
+    if (!e) {
+        assert(kvs->used < kvs->size);
+        e = &kvs->entry[kvs->used];
+        kvs->used++;
+        e->key = strdup(key);
+        e->data = 0;
+        e->updated = false;
     }
 
-    v->type = LAIK_KV_Struct;
-    v->size = size;
-    v->vPtr = value;
-    v->synched = false;
-    v->count = count;
+    laik_log(1, "set %s KV entry '%s' (size %d) to '%.20s'",
+             (e->data == 0) ? "new" : "changed", key, size, data);
 
-    nn->value = v;
-    return v;
-}
-
-int laik_kv_getPathLen(Laik_KVNode* n)
-{
-    int len = 0;
-    while(n) {
-        len += strlen(n->name);
-        n = n->parent;
-        if (n) len++;
-    }
-    return len;
-}
-
-char* laik_kv_getPath(Laik_KVNode* n)
-{
-    static char path[100];
-
-    int len = laik_kv_getPathLen(n);
-    assert(len < 100);
-
-    path[len] = 0;
-    while(n) {
-        int nlen = strlen(n->name);
-        len -= nlen;
-        assert(len >= 0);
-        strncpy(path + len, n->name, nlen);
-        n = n->parent;
-        if (n) path[--len] = '/';
-    }
-    assert(len == 0);
-    return path;
-}
-
-// return the value attached to node reachable by <path> from <n>
-Laik_KValue* laik_kv_value(Laik_KVNode* n, char* path)
-{
-    Laik_KVNode* nn = laik_kv_getNode(n, path, false);
-
-    return nn ? nn->value : 0;
-}
-
-// iterate over all children of a node <n>, use 0 for <prev> to get first
-Laik_KVNode* laik_kv_next(Laik_KVNode* n, Laik_KVNode* prev)
-{
-    if (prev) {
-        assert(prev->parent == n);
-        return prev->nextSibling;
-    }
-    return n->firstChild;
-}
-
-// number of children
-int laik_kv_count(Laik_KVNode* n)
-{
-    Laik_KVNode* cNode = n->firstChild;
-    int c = 0;
-
-    while(cNode) {
-        c++;
-        cNode = cNode->nextSibling;
+    if (e->updated && kvs->in_sync) {
+        // update from other process and updated ourself differently
+        laik_log(LAIK_LL_Panic,
+                 "KVS '%s' at key '%s': update inconsistency\n",
+                 kvs->name, key);
+        exit(1);
     }
 
-    return c;
-}
+    free(e->data);
+    e->data = (char*) malloc(size);
+    assert(e->data);
+    memcpy(e->data, data, size);
+    e->size = size;
 
-// remove child with key, return false if not found
-bool laik_kv_remove(Laik_KVNode* n, char* path)
-{
-    Laik_KVNode* nn = laik_kv_getNode(n, path, false);
-    if (!nn) return false;
+    if (kvs->in_sync) return true;
+    e->updated = true;
 
-    // TODO
+    // queue this update for propagation on next sync
+    unsigned int nsize = (unsigned int) strlen(key);
+    assert(kvs->myOffUsed + 2 < kvs->myOffSize); // 3 new entries
+    assert(kvs->myDataUsed + nsize + 1 + size < kvs->myDataSize); // name and data must fit
+    assert(kvs->myOff[kvs->myOffUsed] == kvs->myDataUsed); // marker correct?
+    memcpy(kvs->myData + kvs->myDataUsed, key, nsize + 1); // include string end '0'
+    kvs->myOff[kvs->myOffUsed + 1] = kvs->myDataUsed + nsize + 1;
+    kvs->myDataUsed += nsize + 1;
+    memcpy(kvs->myData + kvs->myDataUsed, data, size);
+    kvs->myOff[kvs->myOffUsed + 2] = kvs->myDataUsed + size;
+    kvs->myDataUsed += size;
+    kvs->myOffUsed += 2;
 
     return true;
 }
 
 // synchronize KV store
-void laik_kv_sync(Laik_Instance* inst)
+void laik_kvs_sync(Laik_KVStore* kvs)
 {
-    const Laik_Backend* b = inst->backend;
-
+    const Laik_Backend* b = kvs->inst->backend;
     assert(b && b->sync);
-    (b->sync)(inst);
+
+    laik_log(1, "sync KVS '%s' (progagating %d/%d entries) ...",
+             kvs->name, kvs->myOffUsed / 2, kvs->used);
+    kvs->in_sync = true;
+    (b->sync)(kvs);
+    kvs->in_sync = false;
+
+    // all queued entries sent, remove
+    kvs->myOffUsed = 0;
+    kvs->myDataUsed = 0;
+
+    for(unsigned int i = 0; i < kvs->used; i++)
+        kvs->entry[i].updated = false;
+
+    laik_log(1, "  sync done (now %d entries).", kvs->used);
+
+    laik_kvs_sort(kvs);
+}
+
+Laik_KVS_Entry* laik_kvs_entry(Laik_KVStore* kvs, char* key)
+{
+    Laik_KVS_Entry* e;
+
+    // do binary search in range [0 .. (sorted_upto-1)]
+    int low = 0, high = ((int)kvs->sorted_upto) - 1, mid, res;
+    //laik_log(1, "  binary search in KVS '%s' for '%s' in [%d,%d]",
+    //         kvs->name, key, low, high);
+    while(low <= high) {
+        mid = (low + high) / 2;
+        e = &(kvs->entry[mid]);
+        res = strcmp(key, e->key);
+        //laik_log(1, "    test [%d] '%s': %d", mid, e->key, res);
+        if (res == 0)
+            return e;
+        if (res < 0)
+            high = mid-1;
+        else
+            low = mid+1;
+    }
+
+    // linear search for unsorted items
+    for(unsigned int i = kvs->sorted_upto; i < kvs->used; i++) {
+        e = &(kvs->entry[i]);
+        if (strcmp(e->key, key) == 0)
+            return e;
+    }
+
+    return 0;
+}
+
+char* laik_kvs_data(Laik_KVS_Entry* e, unsigned int *psize)
+{
+    assert(e);
+    if (psize) *psize = e->size;
+    return e->data;
+}
+
+char* laik_kvs_get(Laik_KVStore* kvs, char* key, unsigned int* psize)
+{
+    Laik_KVS_Entry* e = laik_kvs_entry(kvs, key);
+    if (!e) return 0;
+
+    return laik_kvs_data(e, psize);
+}
+
+unsigned int laik_kvs_count(Laik_KVStore* kvs)
+{
+    assert(kvs);
+    return kvs->used;
+}
+
+Laik_KVS_Entry* laik_kvs_getn(Laik_KVStore* kvs, unsigned int n)
+{
+    assert(kvs);
+    if (n >= kvs->used) return 0;
+    return &(kvs->entry[n]);
+}
+
+char* laik_kvs_key(Laik_KVS_Entry* e)
+{
+    assert(e);
+    return e->key;
+}
+
+unsigned int laik_kvs_size(Laik_KVS_Entry* e)
+{
+    assert(e);
+    return e->size;
+}
+
+
+unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size)
+{
+    assert(e);
+    if (e->size < size) size = e->size;
+    memcpy(mem, e->data, size);
+    return size;
+}
+
+static int entrycmp(const void * v1, const void * v2)
+{
+    const Laik_KVS_Entry* e1 = (const Laik_KVS_Entry*) v1;
+    const Laik_KVS_Entry* e2 = (const Laik_KVS_Entry*) v2;
+    return strcmp(e1->key, e2->key);
+}
+
+void laik_kvs_sort(Laik_KVStore* kvs)
+{
+    qsort(kvs->entry, kvs->used, sizeof(Laik_KVS_Entry), entrycmp);
+    kvs->sorted_upto = kvs->used;
 }
 

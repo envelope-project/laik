@@ -13,7 +13,8 @@ TESTS= \
     test-jac3de test-jac3der test-jac3da test-jac3dar \
     test-jac3dri test-jac3deri test-jac3dari test-jac3d-rgx3 \
     test-markov test-markov2 test-markov2-f \
-    test-propagation2d test-propagation2do
+    test-propagation2d test-propagation2do \
+    test-kvstest
 
 .PHONY: $(TESTS)
 
@@ -119,6 +120,10 @@ test-propagation2d:
 
 test-propagation2do:
 	$(SDIR)./test-propagation2do-10-mpi-4.sh
+
+test-kvstest:
+	$(SDIR)./test-kvstest-mpi-1.sh
+	$(SDIR)./test-kvstest-mpi-4.sh
 
 clean:
 	rm -rf *.out

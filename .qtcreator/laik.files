@@ -50,7 +50,7 @@
 ../include/laik/space-internal.h
 
 # TCP backend
-../src/backends/tcp/backend.c
+../src/backends/tcp/backend-tcp.c
 ../src/backends/tcp/client.c
 ../src/backends/tcp/config.c
 ../src/backends/tcp/debug.c
@@ -95,8 +95,10 @@
 ../examples/c++/.gitignore
 ../examples/c++/raytracer.cpp
 
-
 ../tests/Makefile
 ../tests/.gitignore
 ../tests/mpi/Makefile
 ../tests/tcp/Makefile
+
+../tests/src/Makefile
+../tests/src/kvstest.c

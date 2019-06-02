@@ -168,4 +168,62 @@ void laik_log_flush(const char* msg, ...);
 // which backend LAIK actually uses (e.g. the examples).
 Laik_Instance* laik_init (int* argc, char*** argv);
 
+
+/*********************************************************************/
+/* KV Store
+ *********************************************************************/
+
+// - with explicit request for synchronization
+// - multiple KVS possible with own synchronization
+// - entries may be shadows
+//
+// current restrictions:
+// - flat
+// - sync only among all processues of current world
+
+// a flat KV store
+typedef struct _Laik_KVStore Laik_KVStore;
+
+// an entry in a KV Store
+typedef struct _Laik_KVS_Entry Laik_KVS_Entry;
+
+// create KVS among processes of current world in instance
+Laik_KVStore* laik_kvs_new(const char *name, Laik_Instance* inst);
+
+// free KVS resources
+void laik_kvs_free(Laik_KVStore* kvs);
+
+// set an entry in a KV store, does a deep copy of data and key
+bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data);
+
+// synchronize KV store
+void laik_kvs_sync(Laik_KVStore* kvs);
+
+// get data and size via *psize (warning: may get invalid on updates)
+char* laik_kvs_get(Laik_KVStore* kvs, char* key, unsigned int *psize);
+
+// get entry for a name
+Laik_KVS_Entry* laik_kvs_entry(Laik_KVStore* kvs, char* key);
+
+// get current number of entries
+unsigned int laik_kvs_count(Laik_KVStore* kvs);
+
+// get specific entry (warning: order may change an updates)
+Laik_KVS_Entry* laik_kvs_getn(Laik_KVStore* kvs, unsigned int n);
+
+// get key of an entry
+char* laik_kvs_key(Laik_KVS_Entry* e);
+
+// get size of entry data
+unsigned int laik_kvs_size(Laik_KVS_Entry* e);
+
+// get data and size via *psize (warning: may get invalid on updates)
+char* laik_kvs_data(Laik_KVS_Entry* e, unsigned int *psize);
+
+// deep copy of entry data, at most <size> bytes, returns bytes copied
+unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size);
+
+// sort KVS entries for faster access (done after sync)
+void laik_kvs_sort(Laik_KVStore* kvs);
+
 #endif // LAIK_CORE_H

@@ -2560,3 +2560,31 @@ int laik_aseq_calc_stats(Laik_ActionSeq* as)
 
     return not_processed;
 }
+
+
+//-------------------------------------------------------------------
+// Default Exec implementations for actions not specific to a backend.
+// Backends can to use them or implement their own versions
+
+// LAIK_AT_PackToBuf
+void laik_exec_pack(Laik_BackendAction* a, Laik_Mapping* map)
+{
+    Laik_Index idx = a->slc->from;
+    int dims = a->slc->space->dims;
+    unsigned int byteCount = a->count * map->data->elemsize;
+    unsigned int packed = (map->layout->pack)(map, a->slc, &idx, a->toBuf, byteCount);
+    assert(packed == a->count);
+    assert(laik_index_isEqual(dims, &idx, &(a->slc->to)));
+}
+
+// LAIK_AT_UnpackFromBuf
+void laik_exec_unpack(Laik_BackendAction* a, Laik_Mapping* map)
+{
+    Laik_Index idx = a->slc->from;
+    int dims = a->slc->space->dims;
+    unsigned int byteCount = a->count * map->data->elemsize;
+    unsigned int unpacked = (map->layout->unpack)(map, a->slc, &idx,
+                                                  a->fromBuf, byteCount);
+    assert(unpacked == a->count);
+    assert(laik_index_isEqual(dims, &idx, &(a->slc->to)));
+}
