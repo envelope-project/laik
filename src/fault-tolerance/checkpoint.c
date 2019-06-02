@@ -6,8 +6,6 @@
 #include <assert.h>
 #include <string.h>
 
-#include "../../tests/fault-tolerance/fault_tolerance_test_hash.h"
-
 #define SLICE_ROTATE_DISTANCE 1
 
 Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space,
@@ -38,9 +36,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
 
     uint64_t data_length = backupCount * data->elemsize;
     laik_log(LAIK_LL_Debug, "Checkpoint buffers allocated, copying data of size %lu\n", data_length);
-    test_hexHash_noKeep("Checkpoint original data", base, data_length);
     memcpy(backupBase, base, data_length);
-    test_hexHash_noKeep("Checkpoint duplicated data", base, data_length);
 
     if (backupPartitioner == NULL) {
         //TODO: This partitioner needs to be released at some point
@@ -81,9 +77,7 @@ laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint
     assert(laik_space_size(space) == laik_space_size(checkpoint->space));
     initBuffers(laikInstance, checkpoint, data, &base, &count, &backupBase, &backupCount);
 
-    test_hexHash_noKeep("Checkpoint restore data", backupBase, backupCount * data->elemsize);
     memcpy(base, backupBase, backupCount * data->elemsize);
-    test_hexHash_noKeep("Checkpoint restored data", base, backupCount * data->elemsize);
 
     laik_log(LAIK_LL_Info, "Checkpoint restore %s completed", checkpoint->space->name);
 }
