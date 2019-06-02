@@ -500,4 +500,13 @@ bool laik_aseq_splitTransitionExecs(Laik_ActionSeq* as);
 // calculate stats of one run of the action sequence
 int laik_aseq_calc_stats(Laik_ActionSeq* as);
 
+
+// Exec implementations for actions not specific to a backend
+
+// exec action LAIK_AT_PackToBuf
+void laik_exec_pack(Laik_BackendAction* a, Laik_Mapping* map);
+// exec action LAIK_AT_UnpackFromBuf
+void laik_exec_unpack(Laik_BackendAction* a, Laik_Mapping* map);
+
+
 #endif // LAIK_ACTION_INTERNAL_H

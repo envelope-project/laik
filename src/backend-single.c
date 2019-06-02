@@ -26,11 +26,13 @@
 
 // forward decl
 void laik_single_exec(Laik_ActionSeq* as);
+void laik_single_sync(Laik_KVStore* kvs);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_single = {
     .name = "Single Process Backend Driver",
-    .exec = laik_single_exec
+    .exec = laik_single_exec,
+    .sync = laik_single_sync
 };
 
 static Laik_Instance* single_instance = 0;
@@ -104,4 +106,10 @@ void laik_single_exec(Laik_ActionSeq* as)
     // the single backend should never need to do send/recv actions
     assert(t->recvCount == 0);
     assert(t->sendCount == 0);
+}
+
+void laik_single_sync(Laik_KVStore* kvs)
+{
+    // nothing to do
+    (void) kvs;
 }

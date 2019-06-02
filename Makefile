@@ -33,7 +33,7 @@ LAIKLIB = liblaik.so
 # build targets
 .PHONY: $(SUBDIRS) force
 
-all: $(LAIKLIB) $(SUBDIRS)
+all: $(LAIKLIB) $(SUBDIRS) testbins
 
 # version information for first line of LAIK_LOG=2
 # only trigger compile if git revision changes
@@ -68,8 +68,11 @@ tests/fault-tolerance: $(LAIKLIB)
 
 
 # tests
-test: examples tests/fault-tolerance
-	make -C tests
+test: examples testbins
+	$(MAKE) -C tests
+
+testbins: $(LAIKLIB)
+	+$(MAKE) testbins -C tests
 
 # tidy
 tidy:
