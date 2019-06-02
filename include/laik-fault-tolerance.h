@@ -18,6 +18,6 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
 
 void laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data);
 
-int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup);
+int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup, unsigned int (*failedNodes)[]);
 
 #endif //LAIK_LAIK_FAULT_TOLERANCE_H
