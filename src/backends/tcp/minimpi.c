@@ -191,6 +191,28 @@ static void laik_tcp_minimpi_combine (void* buffer, const void* data, const size
         case LAIK_TCP_MINIMPI_PROD:
         case LAIK_TCP_MINIMPI_MIN:
         case LAIK_TCP_MINIMPI_MAX:
+            switch (datatype) {
+
+#define do_max(TYPE) TYPE* b = buffer; \
+                     const TYPE* d = data; \
+                     for (size_t i = 0; i < elements; i++) \
+                         b[i] = b[i]>d[i] ? b[i] : d[i];
+
+                case LAIK_TCP_MINIMPI_DOUBLE: { do_max(double)   } break;
+                case LAIK_TCP_MINIMPI_FLOAT:  { do_max(float)    } break;
+                case LAIK_TCP_MINIMPI_INT64:  { do_max(int64_t)  } break;
+                case LAIK_TCP_MINIMPI_INT32:  { do_max(int32_t)  } break;
+                case LAIK_TCP_MINIMPI_INT8:   { do_max(int8_t)   } break;
+                case LAIK_TCP_MINIMPI_UINT64: { do_max(uint64_t) } break;
+                case LAIK_TCP_MINIMPI_UINT32: { do_max(uint32_t) } break;
+                case LAIK_TCP_MINIMPI_UINT8:  { do_max(uint8_t)  } break;
+#undef do_max
+                default:
+                    laik_tcp_errors_push (errors, __func__, 0, "Invalid MPI datatype %d", datatype);
+                    break;
+            }
+            break;
+
         case LAIK_TCP_MINIMPI_LAND:
         case LAIK_TCP_MINIMPI_LOR:
             laik_tcp_errors_push (errors, __func__, 1, "Unimplemented MPI operation %d", op);
