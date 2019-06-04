@@ -92,14 +92,14 @@ struct _Laik_Error {
 // KV Store
 //
 
-typedef struct _Laik_KVS_Entry {
+struct _Laik_KVS_Entry {
     char* key;
     char* data;
     unsigned int size;
     bool updated;
-} Laik_KVS_Entry;
+};
 
-typedef struct _Laik_KVStore {
+struct _Laik_KVStore {
     Laik_Instance* inst;
     const char* name;
 
@@ -116,7 +116,7 @@ typedef struct _Laik_KVStore {
     char* myData;
     // if true, setting values will not be propagated for next sync
     bool in_sync;
-} Laik_KVStore;
+};
 
 
 #endif // LAIK_CORE_INTERNAL_H
