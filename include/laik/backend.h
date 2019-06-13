@@ -59,6 +59,8 @@ struct _Laik_Backend {
   // update backend specific data for group if needed
   void (*updateGroup)(Laik_Group*);
 
+  Laik_Group* (*eliminateNodes)(Laik_Group* g, int* nodeStatuses);
+
   // sync of key-value store
   void (*sync)(Laik_KVStore* kvs);
 

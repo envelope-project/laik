@@ -53,6 +53,7 @@ static void laik_tcp_prepare(Laik_ActionSeq*);
 static void laik_tcp_cleanup(Laik_ActionSeq*);
 static void laik_tcp_exec(Laik_ActionSeq* as);
 static void laik_tcp_updateGroup(Laik_Group*);
+static Laik_Group* laik_tcp_eliminate_nodes(Laik_Group* g, int* nodeStatuses);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_tcp = {
@@ -61,7 +62,8 @@ static Laik_Backend laik_backend_tcp = {
     .prepare     = laik_tcp_prepare,
     .cleanup     = laik_tcp_cleanup,
     .exec        = laik_tcp_exec,
-    .updateGroup = laik_tcp_updateGroup
+    .updateGroup = laik_tcp_updateGroup,
+    .eliminateNodes = laik_tcp_eliminate_nodes
 };
 
 static Laik_Instance* tcp_instance = 0;
@@ -216,9 +218,20 @@ void laik_tcp_finalize(Laik_Instance* inst)
     }
 }
 
+static TCPGroupData *allocateBackendData(Laik_Group *g) {
+    TCPGroupData *gd = (TCPGroupData *) g->backend_data;
+    assert(gd == 0); // must not be updated yet
+    gd = malloc(sizeof(TCPGroupData));
+    if (!gd) {
+        laik_panic("Out of memory allocating TCPGroupData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    g->backend_data = gd;
+    return gd;
+}
+
 // update backend specific data for group if needed
-static
-void laik_tcp_updateGroup(Laik_Group* g)
+static void laik_tcp_updateGroup(Laik_Group* g)
 {
     // calculate MPI communicator for group <g>
     // TODO: only supports shrinking of parent for now
@@ -236,14 +249,7 @@ void laik_tcp_updateGroup(Laik_Group* g)
     TCPGroupData* gdParent = (TCPGroupData*) g->parent->backend_data;
     assert(gdParent);
 
-    TCPGroupData* gd = (TCPGroupData*) g->backend_data;
-    assert(gd == 0); // must not be updated yet
-    gd = malloc(sizeof(TCPGroupData));
-    if (!gd) {
-        laik_panic("Out of memory allocating TCPGroupData object");
-        exit(1); // not actually needed, laik_panic never returns
-    }
-    g->backend_data = gd;
+    TCPGroupData *gd = allocateBackendData(g);
 
     laik_log(1, "Comm_split: old myid %d => new myid %d",
              g->parent->myid, g->fromParent[g->parent->myid]);
@@ -251,6 +257,22 @@ void laik_tcp_updateGroup(Laik_Group* g)
     int err = MPI_Comm_split(gdParent->comm, g->myid < 0 ? MPI_UNDEFINED : 0,
                              g->myid, &(gd->comm));
     if (err != MPI_SUCCESS) laik_tcp_panic(err);
+}
+
+static Laik_Group* laik_tcp_eliminate_nodes(Laik_Group* g, int* nodeStatuses) {
+    laik_log(1, "TCP backend eliminate nodes");
+
+    Laik_Group* newGroup = laik_create_group(g->inst);
+
+    TCPGroupData *gd = allocateBackendData(newGroup);
+
+    int err = MPI_Comm_eliminate(((TCPGroupData*)g->backend_data)->comm, g->size,
+                             nodeStatuses, g->myid, &gd->comm);
+    if (err != MPI_SUCCESS) laik_tcp_panic(err);
+
+    LAIK_TCP_MINIMPI_COMM_WORLD = gd->comm;
+
+    return newGroup;
 }
 
 static

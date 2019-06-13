@@ -238,12 +238,17 @@ int main(int argc, char *argv[]) {
 
         } else if (laik_tcp_get_status() != 0) {
             TPRINTF("Problem detected, attempting to determine global status.\n");
-            unsigned int nodeStatuses[world->size];
+            int nodeStatuses[world->size];
             int numFailed = laik_failure_check_nodes(inst, world, &nodeStatuses);
             if(numFailed == 0) {
                 TPRINTF("Could not detect a failed node but got abnormal status. Abort.\n");
                 abort();
             }
+
+            laik_failure_eliminate_nodes(inst, numFailed, &nodeStatuses);
+
+            // Re-fetch the world
+            world = laik_world(inst);
 
             // If error happens here, do not try to recover
             TPRINTF("Attempting to restore\n");

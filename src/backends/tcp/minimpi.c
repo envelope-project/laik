@@ -39,6 +39,11 @@ struct Laik_Tcp_MiniMpiComm {
     size_t   generation; // The number of generations to the world communicator
 };
 
+int laik_tcp_minimpi_split_exchange_split_data(const Laik_Tcp_MiniMpiComm *comm, GBytes *split_bytes, GArray *splits);
+
+void laik_tcp_minimpi_split_create_communicator(const Laik_Tcp_MiniMpiComm *comm, const int color,
+                                                Laik_Tcp_MiniMpiComm **new_communicator, GArray *splits);
+
 typedef struct __attribute__ ((packed)) {
     int64_t  color;
     int64_t  hint;
@@ -404,8 +409,6 @@ int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int col
 
     laik_tcp_debug ("Splitting with color %d and hint %d (I am task %zu)", color, hint, comm->rank);
 
-    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
-    g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
 
     // Create our own split info structure
     const Laik_Tcp_Split split = {
@@ -423,80 +426,44 @@ int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int col
     // Insert ourselves into the array
     g_array_append_vals (splits, &split, 1);
 
-    if (config->minimpi_async_split) {
-        // Start an asynchrounous operation which will do all the send operations
-        Laik_Tcp_MiniMpi_AsyncSplitInfo info = {
-            .comm = comm,
-            .body = split_bytes,
+    int exchangeError = laik_tcp_minimpi_split_exchange_split_data(comm, split_bytes, splits);
+    if(exchangeError != LAIK_TCP_MINIMPI_SUCCESS) {
+        return exchangeError;
+    }
+    laik_tcp_minimpi_split_create_communicator(comm, color, new_communicator, splits);
+
+    return LAIK_TCP_MINIMPI_SUCCESS;
+}
+
+int laik_tcp_minimpi_comm_eliminate(const struct Laik_Tcp_MiniMpiComm* comm, const int count, const int* rankStatus, const int selfIndex, struct Laik_Tcp_MiniMpiComm** newCommunicator) {
+    g_autoptr(GArray) splits = g_array_new(false, false, sizeof(Laik_Tcp_Split));
+
+    for(int i = 0; i < count; i++) {
+        Laik_Tcp_Split splitData = {
+                .color = rankStatus[i],
+                .hint = i,
+                .rank = i
         };
-        Laik_Tcp_Async* async = laik_tcp_async_new (laik_tcp_minimpi_run_async_split, &info);
-
-        // Handle the receive operations
-        for (size_t sender = 0; sender < comm->tasks->len; sender++) {
-            if (sender != comm->rank) {
-                // It's not our turn to send, instead we should receive data
-                g_autoptr (GBytes) header = laik_tcp_minimpi_header (comm->generation, TYPE_SPLIT, sender, comm->rank, 0);
-
-                g_autoptr (GBytes) body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header, errors);
-                if (laik_tcp_errors_present (errors)) {
-                    laik_tcp_errors_push (errors, __func__, 0, "Failed to receive split info from task %zu", sender);
-                    return laik_tcp_minimpi_error (errors);
-                }
-
-                if (g_bytes_get_size (body) != sizeof (Laik_Tcp_Split)) {
-                    laik_tcp_errors_push (errors, __func__, 1, "Task %zu sent %zu bytes when splitting, expected %zu bytes", sender, g_bytes_get_size (body), sizeof (Laik_Tcp_Split));
-                    return laik_tcp_minimpi_error (errors);
-                }
-
-                g_array_append_vals (splits, g_bytes_get_data (body, NULL), 1);
-            }
-        }
-
-        // Wait for the asynchronous send operations to complete
-        __attribute__ ((unused)) void* result = laik_tcp_async_wait (async, errors);
-        if (laik_tcp_errors_present (errors)) {
-            laik_tcp_errors_push (errors, __func__, 2, "Asynchronous send operation failed");
-            return laik_tcp_minimpi_error (errors);
-        }
-    } else {
-        // Iterate over all peers
-        for (size_t sender = 0; sender < comm->tasks->len; sender++) {
-            if (sender == comm->rank) {
-                // It's our turn to send our split info structure all other peers
-                for (size_t receiver = 0; receiver < comm->tasks->len; receiver++) {
-                    if (receiver != comm->rank) {
-                        g_autoptr (GBytes) header = laik_tcp_minimpi_header (comm->generation, TYPE_SPLIT, sender, receiver, 0);
-                        laik_tcp_messenger_push (messenger, laik_tcp_minimpi_lookup (comm, receiver), header, split_bytes);
-                    }
-                }
-            } else {
-                // It's not our turn to send, instead we should receive data
-                g_autoptr (GBytes) header = laik_tcp_minimpi_header (comm->generation, TYPE_SPLIT, sender, comm->rank, 0);
-
-                g_autoptr (GBytes) body = laik_tcp_messenger_get (messenger, laik_tcp_minimpi_lookup (comm, sender), header, errors);
-                if (laik_tcp_errors_present (errors)) {
-                    laik_tcp_errors_push (errors, __func__, 3, "Failed to receive split info from task %zu", sender);
-                    return laik_tcp_minimpi_error (errors);
-                }
-
-                if (g_bytes_get_size (body) != sizeof (Laik_Tcp_Split)) {
-                    laik_tcp_errors_push (errors, __func__, 4, "Task %zu sent %zu bytes when splitting, expected %zu bytes", sender, g_bytes_get_size (body), sizeof (Laik_Tcp_Split));
-                    return laik_tcp_minimpi_error (errors);
-                }
-
-                g_array_append_vals (splits, g_bytes_get_data (body, NULL), 1);
-            }
-        }
+        g_array_append_val(splits, splitData);
     }
 
+    laik_tcp_minimpi_split_create_communicator(comm, selfIndex, newCommunicator, splits);
+
+    return LAIK_TCP_MINIMPI_SUCCESS;
+}
+
+void laik_tcp_minimpi_split_create_communicator(const Laik_Tcp_MiniMpiComm *comm, const int color,
+                                                Laik_Tcp_MiniMpiComm **new_communicator, GArray *splits) {
     // Create a new task list
-    g_autoptr (GArray) tasks = g_array_new (false, false, sizeof (size_t));
+    g_autoptr (GArray) tasks = g_array_new(false, false, sizeof(size_t));
 
     // Sort all the split info structures (including our own!) by hint
-    g_array_sort (splits, laik_tcp_split_compare);
+    g_array_sort(splits, laik_tcp_split_compare);
 
     // Initialize our new rank with something invalid
     size_t new_local_rank = SIZE_MAX;
+
+    assert(tasks != NULL);
 
     // Iterate over all the split info structures
     for (size_t i = 0; i < splits->len; i++) {
@@ -509,8 +476,9 @@ int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int col
 
         // If it's us or somebody with the same color, add them to the task list
         if (split.rank == comm->rank || (split.color == color && split.color != LAIK_TCP_MINIMPI_UNDEFINED)) {
-            const size_t world_rank = laik_tcp_minimpi_lookup (comm, split.rank);
-            g_array_append_vals (tasks, &world_rank, 1);
+            const size_t world_rank = laik_tcp_minimpi_lookup(comm, split.rank);
+            g_array_append_vals(tasks, &world_rank, 1);
+            assert(tasks != NULL);
         }
     }
 
@@ -518,7 +486,88 @@ int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int col
     laik_tcp_always (new_local_rank < tasks->len);
 
     // Construct the new communicator
-    *new_communicator = laik_tcp_minimpi_new (g_steal_pointer (&tasks), new_local_rank, comm->generation + 1);
+    *new_communicator = laik_tcp_minimpi_new(g_steal_pointer (&tasks), new_local_rank, comm->generation + 1);
+}
+
+int laik_tcp_minimpi_split_exchange_split_data(const Laik_Tcp_MiniMpiComm *comm, GBytes *split_bytes, GArray *splits) {
+    g_autoptr (Laik_Tcp_Config) config = laik_tcp_config ();
+    g_autoptr (Laik_Tcp_Errors) errors = laik_tcp_errors_new ();
+
+    if (config->minimpi_async_split) {
+        // Start an asynchrounous operation which will do all the send operations
+        Laik_Tcp_MiniMpi_AsyncSplitInfo info = {
+                .comm = comm,
+                .body = split_bytes,
+        };
+        Laik_Tcp_Async *async = laik_tcp_async_new(laik_tcp_minimpi_run_async_split, &info);
+
+        // Handle the receive operations
+        for (size_t sender = 0; sender < comm->tasks->len; sender++) {
+            if (sender != comm->rank) {
+                // It's not our turn to send, instead we should receive data
+                g_autoptr (GBytes) header = laik_tcp_minimpi_header(comm->generation, TYPE_SPLIT, sender, comm->rank,
+                                                                    0);
+
+                g_autoptr (GBytes) body = laik_tcp_messenger_get(messenger, laik_tcp_minimpi_lookup(comm, sender),
+                                                                 header, errors);
+                if (laik_tcp_errors_present(errors)) {
+                    laik_tcp_errors_push(errors, __func__, 0, "Failed to receive split info from task %zu", sender);
+                    return laik_tcp_minimpi_error(errors);
+                }
+
+                if (g_bytes_get_size(body) != sizeof(Laik_Tcp_Split)) {
+                    laik_tcp_errors_push(errors, __func__, 1,
+                                         "Task %zu sent %zu bytes when splitting, expected %zu bytes", sender,
+                                         g_bytes_get_size(body), sizeof(Laik_Tcp_Split));
+                    return laik_tcp_minimpi_error(errors);
+                }
+
+                g_array_append_vals(splits, g_bytes_get_data(body, NULL), 1);
+            }
+        }
+
+        // Wait for the asynchronous send operations to complete
+        __attribute__ ((unused)) void *result = laik_tcp_async_wait(async, errors);
+        if (laik_tcp_errors_present(errors)) {
+            laik_tcp_errors_push(errors, __func__, 2, "Asynchronous send operation failed");
+            return laik_tcp_minimpi_error(errors);
+        }
+    } else {
+        // Iterate over all peers
+        for (size_t sender = 0; sender < comm->tasks->len; sender++) {
+            if (sender == comm->rank) {
+                // It's our turn to send our split info structure all other peers
+                for (size_t receiver = 0; receiver < comm->tasks->len; receiver++) {
+                    if (receiver != comm->rank) {
+                        g_autoptr (GBytes) header = laik_tcp_minimpi_header(comm->generation, TYPE_SPLIT, sender,
+                                                                            receiver, 0);
+                        laik_tcp_messenger_push(messenger, laik_tcp_minimpi_lookup(comm, receiver), header,
+                                                split_bytes);
+                    }
+                }
+            } else {
+                // It's not our turn to send, instead we should receive data
+                g_autoptr (GBytes) header = laik_tcp_minimpi_header(comm->generation, TYPE_SPLIT, sender, comm->rank,
+                                                                    0);
+
+                g_autoptr (GBytes) body = laik_tcp_messenger_get(messenger, laik_tcp_minimpi_lookup(comm, sender),
+                                                                 header, errors);
+                if (laik_tcp_errors_present(errors)) {
+                    laik_tcp_errors_push(errors, __func__, 3, "Failed to receive split info from task %zu", sender);
+                    return laik_tcp_minimpi_error(errors);
+                }
+
+                if (g_bytes_get_size(body) != sizeof(Laik_Tcp_Split)) {
+                    laik_tcp_errors_push(errors, __func__, 4,
+                                         "Task %zu sent %zu bytes when splitting, expected %zu bytes", sender,
+                                         g_bytes_get_size(body), sizeof(Laik_Tcp_Split));
+                    return laik_tcp_minimpi_error(errors);
+                }
+
+                g_array_append_vals(splits, g_bytes_get_data(body, NULL), 1);
+            }
+        }
+    }
 
     return LAIK_TCP_MINIMPI_SUCCESS;
 }

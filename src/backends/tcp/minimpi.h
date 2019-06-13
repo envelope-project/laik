@@ -73,6 +73,9 @@ __attribute__ ((warn_unused_result))
 int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, int color, int hint, Laik_Tcp_MiniMpiComm** new_communicator);
 
 __attribute__ ((warn_unused_result))
+int laik_tcp_minimpi_comm_eliminate(const struct Laik_Tcp_MiniMpiComm* comm, int count, const int* rankStatus, int selfIndex, struct Laik_Tcp_MiniMpiComm** newCommunicator);
+
+__attribute__ ((warn_unused_result))
 int laik_tcp_minimpi_error_string (int error_code, char *string, int *result_length);
 
 __attribute__ ((warn_unused_result))

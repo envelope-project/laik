@@ -55,6 +55,7 @@ typedef Laik_Tcp_MiniMpiComm* MPI_Comm;
 #define MPI_Comm_rank          laik_tcp_minimpi_comm_rank
 #define MPI_Comm_size          laik_tcp_minimpi_comm_size
 #define MPI_Comm_split         laik_tcp_minimpi_comm_split
+#define MPI_Comm_eliminate     laik_tcp_minimpi_comm_eliminate
 #define MPI_Error_string       laik_tcp_minimpi_error_string
 #define MPI_Finalize           laik_tcp_minimpi_finalize
 #define MPI_Get_count          laik_tcp_minimpi_get_count
