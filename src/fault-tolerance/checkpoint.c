@@ -24,7 +24,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
                                        Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup,
                                        enum _Laik_ReductionOperation reductionOperation) {
     int iteration = laik_get_iteration(laikInstance);
-    laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i\n", iteration);
+    laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i for space %s data %s\n", iteration, space->name, data->name);
 
     Laik_Checkpoint checkpoint;
 
@@ -53,7 +53,11 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
     }
 
     laik_log(LAIK_LL_Debug, "Switching to backup partitioning\n");
-    Laik_Partitioning *partitioning = laik_new_partitioning(backupPartitioner, backupGroup, space, data->activePartitioning);
+    Laik_Partitioning *currentPartitioning = data->activePartitioning;
+    if(currentPartitioning->group != backupGroup) {
+        currentPartitioning = NULL;
+    }
+    Laik_Partitioning *partitioning = laik_new_partitioning(backupPartitioner, backupGroup, space, currentPartitioning);
 //    Laik_SliceArray *sliceArray = partitioning->saList->slices;
 //    assert(partitioning && sliceArray);
 //    for(unsigned int i = 0; i < sliceArray->count; i++) {
@@ -79,7 +83,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
 void
 laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data) {
     int iteration = laik_get_iteration(laikInstance);
-    laik_log(LAIK_LL_Info, "Checkpoint restore requested at iteration %i\n", iteration);
+    laik_log(LAIK_LL_Info, "Checkpoint restore requested at iteration %i for space %s data %s\n", iteration, space->name, data->name);
 
     void *base, *backupBase;
     uint64_t count, backupCount;

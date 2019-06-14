@@ -248,22 +248,22 @@ int main(int argc, char *argv[]) {
             laik_failure_eliminate_nodes(inst, numFailed, &nodeStatuses);
 
             // Re-fetch the world
-            world = laik_world(inst);
+            world = laik_world_fault_tolerant(inst);
 
             // If error happens here, do not try to recover
             TPRINTF("Attempting to restore\n");
             laik_tcp_set_error_handler(NULL);
 
-            pWrite = laik_new_partitioning(prWrite, smallWorld, space, 0);
-            pRead = laik_new_partitioning(prRead, smallWorld, space, pWrite);
-            pSum = laik_new_partitioning(laik_All, smallWorld, sp1, 0);
+            pWrite = laik_new_partitioning(prWrite, world, space, 0);
+            pRead = laik_new_partitioning(prRead, world, space, pWrite);
+            pSum = laik_new_partitioning(laik_All, world, sp1, 0);
 
+            TPRINTF("Switching to new partitionings\n");
             laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
             laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
             laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
-            TPRINTF("Switched to new partitionings\n");
-
+            TPRINTF("Removing failed slices from checkpoints\n");
             if(!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[0], &nodeStatuses)) {
                 abort();
             }

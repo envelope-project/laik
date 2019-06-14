@@ -115,6 +115,6 @@ void laik_set_fault_tolerant_world(Laik_Group* group) {
 }
 //
 ////TODO: Store current world index for each instance;
-//Laik_Group* laik_world_fault_tolerant(Laik_Instance* instance) {
-//    return instance->group[current_world_index];
-//}
+Laik_Group* laik_world_fault_tolerant(Laik_Instance* instance) {
+    return instance->group[current_world_index];
+}
