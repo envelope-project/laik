@@ -239,7 +239,7 @@ int main(int argc, char *argv[]) {
         } else if (laik_tcp_get_status() != 0) {
             TPRINTF("Problem detected, attempting to determine global status.\n");
             int nodeStatuses[world->size];
-            int numFailed = laik_failure_check_nodes(inst, world, &nodeStatuses);
+            int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
             if(numFailed == 0) {
                 TPRINTF("Could not detect a failed node but got abnormal status. Abort.\n");
                 abort();
@@ -263,6 +263,17 @@ int main(int argc, char *argv[]) {
             laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
             TPRINTF("Switched to new partitionings\n");
+
+            if(!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[0], &nodeStatuses)) {
+                abort();
+            }
+            if(!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[1], &nodeStatuses)) {
+                abort();
+            }
+            if(!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[2], &nodeStatuses)) {
+                abort();
+            }
+
 
             restoreCheckpoints();
 
@@ -373,11 +384,13 @@ void restoreCheckpoints() {
 
 void createCheckpoints(int iter) {
     TPRINTF("Creating checkpoint of sum\n");
-    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, smallWorld, LAIK_RO_Max);
+    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, world, LAIK_RO_Max);
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, smallWorld, LAIK_RO_None);
+    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL, world, LAIK_RO_None);
+//    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL, world, LAIK_RO_None);
     TPRINTF("Creating checkpoint 3\n");
-    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, smallWorld, LAIK_RO_None);
+//    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, smallWorld, LAIK_RO_None);
+    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, NULL, world, LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 }

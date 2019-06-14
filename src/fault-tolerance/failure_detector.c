@@ -15,7 +15,9 @@ Laik_Data *nodeData;
 Laik_Partitioning *each;
 Laik_Partitioning *all;
 
-int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup, int (*failedNodes)[]) {
+void laik_set_fault_tolerant_world(Laik_Group* group);
+
+int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup, int *failedNodes) {
     int checkGroupSize = laik_size(checkGroup);
     if(nodeSpace == NULL) {
         nodeSpace = laik_new_space_1d(laikInstance, checkGroupSize);
@@ -28,7 +30,7 @@ int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup
     uint64_t nodeCount;
     laik_map_def1(nodeData, (void **)&nodeBase, &nodeCount);
     assert(nodeCount == 1);
-    *nodeBase = 1;
+    *nodeBase = LAIK_FT_NODE_OK;
 
     laik_switchto_partitioning(nodeData, all, LAIK_DF_Preserve, LAIK_RO_None);
     laik_map_def1(nodeData, (void **)&nodeBase, &nodeCount);
@@ -36,14 +38,17 @@ int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup
     int failuresFound = 0;
 
     for (unsigned int i = 0; i < nodeCount; ++i) {
-        if(nodeBase[i] != 1) {
+        if(nodeBase[i] != LAIK_FT_NODE_OK) {
             laik_log(LAIK_LL_Warning, "Node %i has abnormal status %d", i, nodeBase[i]);
             if(failedNodes != NULL) {
-                (*failedNodes)[failuresFound] = i;
+                failedNodes[i] = LAIK_FT_NODE_FAULT;
             }
             failuresFound++;
         } else {
             laik_log(LAIK_LL_Info, "Node %i has normal status %d", i, nodeBase[i]);
+            if(failedNodes != NULL) {
+                failedNodes[i] = LAIK_FT_NODE_OK;
+            }
         }
     }
 
@@ -99,6 +104,17 @@ int laik_failure_eliminate_nodes(Laik_Instance* instance, int count, int (*nodes
 
     Laik_Group* newGroup = instance->backend->eliminateNodes(laik_world(instance), *nodesToRemove);
 
-    (void)newGroup;
+    laik_log(LAIK_LL_Warning, "New world size: %i", newGroup->size);
+//    laik_set_fault_tolerant_world(newGroup);
     return 0;
 }
+
+int current_world_index = 0;
+void laik_set_fault_tolerant_world(Laik_Group* group) {
+    current_world_index = group->gid;
+}
+//
+////TODO: Store current world index for each instance;
+//Laik_Group* laik_world_fault_tolerant(Laik_Instance* instance) {
+//    return instance->group[current_world_index];
+//}
