@@ -245,7 +245,7 @@ int main(int argc, char *argv[]) {
         if (iter % 10 == 5) {
             TPRINTF("Attempting to determine global status.\n");
             int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
-            if(numFailed == 0) {
+            if (numFailed == 0) {
                 TPRINTF("Could not detect a failed node.\n");
             } else {
 
@@ -266,13 +266,10 @@ int main(int argc, char *argv[]) {
                 laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
                 TPRINTF("Removing failed slices from checkpoints\n");
-                if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[0], &nodeStatuses)) {
-                    abort();
-                }
-                if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[1], &nodeStatuses)) {
-                    abort();
-                }
-                if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[2], &nodeStatuses)) {
+                if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[0], &nodeStatuses)
+                    || !laik_checkpoint_remove_failed_slices(&spaceCheckpoints[1], &nodeStatuses)
+                    || !laik_checkpoint_remove_failed_slices(&spaceCheckpoints[2], &nodeStatuses)) {
+                    TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
                     abort();
                 }
 
