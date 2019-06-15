@@ -26,7 +26,9 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <laik-backend-tcp.h>
+#include "fault_tolerance_test_output.h"
 #include "fault_tolerance_test.h"
+#include "fault_tolerance_test_hash.h"
 
 // boundary values
 double loRowValue = -5.0, hiRowValue = 10.0;
@@ -234,6 +236,9 @@ int main(int argc, char *argv[]) {
 
         // At every 10 iterations, do a checkpoint
         if (iter == 25) {
+            writeDataToFile("data1_pre_", ".pgm", data1);
+            writeDataToFile("data2_pre_", ".pgm", data2);
+
 //            laik_switchto_partitioning(data1, pRead, LAIK_DF_Preserve, LAIK_RO_None);
 //            laik_switchto_partitioning(data2, pRead, LAIK_DF_Preserve, LAIK_RO_None);
 
@@ -277,8 +282,11 @@ int main(int argc, char *argv[]) {
 
                 iter = restoreIteration;
                 laik_tcp_clear_errors();
-                world = smallWorld;
+//                world = smallWorld;
                 TPRINTF("Restore complete, cleared errors.\n");
+
+                writeDataToFile("data1_post_", ".pgm", data1);
+                writeDataToFile("data2_post_", ".pgm", data2);
             }
         }
 
@@ -391,6 +399,7 @@ void createCheckpoints(int iter) {
     spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, NULL, world, LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
+
 }
 
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
