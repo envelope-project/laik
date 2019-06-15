@@ -232,6 +232,9 @@ int main(int argc, char *argv[]) {
 
         // At every 10 iterations, do a checkpoint
         if (iter == 25) {
+//            laik_switchto_partitioning(data1, pRead, LAIK_DF_Preserve, LAIK_RO_None);
+//            laik_switchto_partitioning(data2, pRead, LAIK_DF_Preserve, LAIK_RO_None);
+
             createCheckpoints(iter);
             originalHashSize = ysizeW * ystrideW + xsizeW;
             test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
@@ -245,13 +248,13 @@ int main(int argc, char *argv[]) {
                 abort();
             }
 
-            laik_failure_eliminate_nodes(inst, numFailed, &nodeStatuses);
+            laik_failure_eliminate_nodes(inst, numFailed, nodeStatuses);
 
             // Re-fetch the world
             world = laik_world_fault_tolerant(inst);
 
             // If error happens here, do not try to recover
-            TPRINTF("Attempting to restore\n");
+            TPRINTF("Attempting to restore with new world size %i\n", world->size);
             laik_tcp_set_error_handler(NULL);
 
             pWrite = laik_new_partitioning(prWrite, world, space, 0);
@@ -259,8 +262,8 @@ int main(int argc, char *argv[]) {
             pSum = laik_new_partitioning(laik_All, world, sp1, 0);
 
             TPRINTF("Switching to new partitionings\n");
-            laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
-            laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(data1, pRead, LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(data2, pRead, LAIK_DF_None, LAIK_RO_None);
             laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
             TPRINTF("Removing failed slices from checkpoints\n");
@@ -273,7 +276,6 @@ int main(int argc, char *argv[]) {
             if(!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[2], &nodeStatuses)) {
                 abort();
             }
-
 
             restoreCheckpoints();
 

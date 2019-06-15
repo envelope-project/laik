@@ -53,7 +53,7 @@ static void laik_tcp_prepare(Laik_ActionSeq*);
 static void laik_tcp_cleanup(Laik_ActionSeq*);
 static void laik_tcp_exec(Laik_ActionSeq* as);
 static void laik_tcp_updateGroup(Laik_Group*);
-static Laik_Group* laik_tcp_eliminate_nodes(Laik_Group* g, int* nodeStatuses);
+static void laik_tcp_eliminate_nodes(Laik_Group *oldGroup, Laik_Group *newGroup, int *nodeStatuses);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_tcp = {
@@ -107,6 +107,11 @@ void laik_tcp_panic(int err)
     if(laik_tcp_get_error_handler() != NULL) {
 
         laik_log(LAIK_LL_Info, "Error handler found, attempting to handle error.\n");
+        if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
+            laik_log(LAIK_LL_Warning, "Unknown mini-MPI error!");
+        } else {
+            laik_log(LAIK_LL_Warning, "Mini-MPI error: %s", str);
+        }
         laik_tcp_set_errors(err, NULL);
         laik_tcp_get_error_handler()(0);
         fprintf(stderr, "[LAIK TCP Backend] Error handler exited, attempting to continue\n");
@@ -259,20 +264,17 @@ static void laik_tcp_updateGroup(Laik_Group* g)
     if (err != MPI_SUCCESS) laik_tcp_panic(err);
 }
 
-static Laik_Group* laik_tcp_eliminate_nodes(Laik_Group* g, int* nodeStatuses) {
+static void laik_tcp_eliminate_nodes(Laik_Group *oldGroup, Laik_Group *newGroup, int *nodeStatuses) {
     laik_log(1, "TCP backend eliminate nodes");
-
-    Laik_Group* newGroup = laik_create_group(g->inst);
 
     TCPGroupData *gd = allocateBackendData(newGroup);
 
-    int err = MPI_Comm_eliminate(((TCPGroupData*)g->backend_data)->comm, g->size,
-                             nodeStatuses, g->myid, &gd->comm);
+    int err = MPI_Comm_eliminate(((TCPGroupData*)oldGroup->backend_data)->comm, oldGroup->size,
+                             nodeStatuses, LAIK_FT_NODE_OK, &gd->comm);
     if (err != MPI_SUCCESS) laik_tcp_panic(err);
 
+    // Reset the TCP MiniMPI Comm World to the smaller group. To date, this is only used for MPI_Finalize.
     LAIK_TCP_MINIMPI_COMM_WORLD = gd->comm;
-
-    return newGroup;
 }
 
 static

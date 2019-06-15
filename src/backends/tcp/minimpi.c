@@ -33,15 +33,10 @@
 
 // Type definitions
 
-struct Laik_Tcp_MiniMpiComm {
-    GArray*  tasks;      // Mapping from per-communicator ranks to world ranks
-    size_t   rank;       // Our own rank in this communicator
-    size_t   generation; // The number of generations to the world communicator
-};
 
 int laik_tcp_minimpi_split_exchange_split_data(const Laik_Tcp_MiniMpiComm *comm, GBytes *split_bytes, GArray *splits);
 
-void laik_tcp_minimpi_split_create_communicator(const Laik_Tcp_MiniMpiComm *comm, const int color,
+void laik_tcp_minimpi_split_create_communicator(const Laik_Tcp_MiniMpiComm *comm, const int selfColor,
                                                 Laik_Tcp_MiniMpiComm **new_communicator, GArray *splits);
 
 typedef struct __attribute__ ((packed)) {
@@ -435,7 +430,7 @@ int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, const int col
     return LAIK_TCP_MINIMPI_SUCCESS;
 }
 
-int laik_tcp_minimpi_comm_eliminate(const struct Laik_Tcp_MiniMpiComm* comm, const int count, const int* rankStatus, const int selfIndex, struct Laik_Tcp_MiniMpiComm** newCommunicator) {
+int laik_tcp_minimpi_comm_eliminate(const struct Laik_Tcp_MiniMpiComm* comm, const int count, const int* rankStatus, const int selfColor, struct Laik_Tcp_MiniMpiComm** newCommunicator) {
     g_autoptr(GArray) splits = g_array_new(false, false, sizeof(Laik_Tcp_Split));
 
     for(int i = 0; i < count; i++) {
@@ -447,12 +442,12 @@ int laik_tcp_minimpi_comm_eliminate(const struct Laik_Tcp_MiniMpiComm* comm, con
         g_array_append_val(splits, splitData);
     }
 
-    laik_tcp_minimpi_split_create_communicator(comm, selfIndex, newCommunicator, splits);
+    laik_tcp_minimpi_split_create_communicator(comm, selfColor, newCommunicator, splits);
 
     return LAIK_TCP_MINIMPI_SUCCESS;
 }
 
-void laik_tcp_minimpi_split_create_communicator(const Laik_Tcp_MiniMpiComm *comm, const int color,
+void laik_tcp_minimpi_split_create_communicator(const Laik_Tcp_MiniMpiComm *comm, const int selfColor,
                                                 Laik_Tcp_MiniMpiComm **new_communicator, GArray *splits) {
     // Create a new task list
     g_autoptr (GArray) tasks = g_array_new(false, false, sizeof(size_t));
@@ -475,7 +470,7 @@ void laik_tcp_minimpi_split_create_communicator(const Laik_Tcp_MiniMpiComm *comm
         }
 
         // If it's us or somebody with the same color, add them to the task list
-        if (split.rank == comm->rank || (split.color == color && split.color != LAIK_TCP_MINIMPI_UNDEFINED)) {
+        if (split.rank == comm->rank || (split.color == selfColor && split.color != LAIK_TCP_MINIMPI_UNDEFINED)) {
             const size_t world_rank = laik_tcp_minimpi_lookup(comm, split.rank);
             g_array_append_vals(tasks, &world_rank, 1);
             assert(tasks != NULL);
