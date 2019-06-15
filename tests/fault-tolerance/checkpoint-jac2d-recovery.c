@@ -262,8 +262,8 @@ int main(int argc, char *argv[]) {
             pSum = laik_new_partitioning(laik_All, world, sp1, 0);
 
             TPRINTF("Switching to new partitionings\n");
-            laik_switchto_partitioning(data1, pRead, LAIK_DF_None, LAIK_RO_None);
-            laik_switchto_partitioning(data2, pRead, LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
             laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
             TPRINTF("Removing failed slices from checkpoints\n");
