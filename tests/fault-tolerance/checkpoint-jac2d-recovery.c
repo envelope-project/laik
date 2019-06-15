@@ -227,6 +227,8 @@ int main(int argc, char *argv[]) {
 
     int iter = 0;
 
+    int nodeStatuses[world->size];
+
     for (; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
 
@@ -239,51 +241,48 @@ int main(int argc, char *argv[]) {
             originalHashSize = ysizeW * ystrideW + xsizeW;
             test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
 
-        } else if (laik_tcp_get_status() != 0) {
-            TPRINTF("Problem detected, attempting to determine global status.\n");
-            int nodeStatuses[world->size];
+        }
+        if (iter % 10 == 5) {
+            TPRINTF("Attempting to determine global status.\n");
             int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
             if(numFailed == 0) {
-                TPRINTF("Could not detect a failed node but got abnormal status. Abort.\n");
-                abort();
+                TPRINTF("Could not detect a failed node.\n");
+            } else {
+
+                laik_failure_eliminate_nodes(inst, numFailed, nodeStatuses);
+
+                // Re-fetch the world
+                world = laik_world_fault_tolerant(inst);
+
+                TPRINTF("Attempting to restore with new world size %i\n", world->size);
+
+                pWrite = laik_new_partitioning(prWrite, world, space, 0);
+                pRead = laik_new_partitioning(prRead, world, space, pWrite);
+                pSum = laik_new_partitioning(laik_All, world, sp1, 0);
+
+                TPRINTF("Switching to new partitionings\n");
+                laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
+                laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
+                laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
+
+                TPRINTF("Removing failed slices from checkpoints\n");
+                if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[0], &nodeStatuses)) {
+                    abort();
+                }
+                if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[1], &nodeStatuses)) {
+                    abort();
+                }
+                if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[2], &nodeStatuses)) {
+                    abort();
+                }
+
+                restoreCheckpoints();
+
+                iter = restoreIteration;
+                laik_tcp_clear_errors();
+                world = smallWorld;
+                TPRINTF("Restore complete, cleared errors.\n");
             }
-
-            laik_failure_eliminate_nodes(inst, numFailed, nodeStatuses);
-
-            // Re-fetch the world
-            world = laik_world_fault_tolerant(inst);
-
-            // If error happens here, do not try to recover
-            TPRINTF("Attempting to restore with new world size %i\n", world->size);
-            laik_tcp_set_error_handler(NULL);
-
-            pWrite = laik_new_partitioning(prWrite, world, space, 0);
-            pRead = laik_new_partitioning(prRead, world, space, pWrite);
-            pSum = laik_new_partitioning(laik_All, world, sp1, 0);
-
-            TPRINTF("Switching to new partitionings\n");
-            laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
-            laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-            laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
-
-            TPRINTF("Removing failed slices from checkpoints\n");
-            if(!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[0], &nodeStatuses)) {
-                abort();
-            }
-            if(!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[1], &nodeStatuses)) {
-                abort();
-            }
-            if(!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[2], &nodeStatuses)) {
-                abort();
-            }
-
-            restoreCheckpoints();
-
-            iter = restoreIteration;
-            laik_tcp_clear_errors();
-            world = smallWorld;
-            TPRINTF("Restore complete, cleared errors.\n");
-
         }
 
         // *Randomly* fail on one node
@@ -293,7 +292,7 @@ int main(int argc, char *argv[]) {
 //                   iter);
 //            abort();
 //        }
-        if (iter == 35 && laik_myid(laik_world(inst)) == 1) {
+        if (iter == 34 && laik_myid(laik_world(inst)) == 1) {
 //            if (laik_myid(laik_world(inst)) != 1) {
 //                errorHandler(NULL);
 //            } else {

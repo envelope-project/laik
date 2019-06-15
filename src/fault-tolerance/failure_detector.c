@@ -19,9 +19,18 @@ void laik_set_fault_tolerant_world(Laik_Group* group);
 
 int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup, int *failedNodes) {
     int checkGroupSize = laik_size(checkGroup);
-    if(nodeSpace == NULL) {
+    if(nodeSpace == NULL || all->group != checkGroup) {
+        laik_log(LAIK_LL_Debug, "Resetting failure check container.");
+        if(nodeSpace != NULL) {
+            laik_free_space(nodeSpace);
+            laik_free(nodeData);
+            laik_free_partitioning(all);
+            laik_free_partitioning(each);
+        }
         nodeSpace = laik_new_space_1d(laikInstance, checkGroupSize);
+        laik_set_space_name(nodeSpace, "Failure detection space");
         nodeData = laik_new_data(nodeSpace, laik_UChar);
+        laik_data_set_name(nodeData, "Failure detection data container");
         all = laik_new_partitioning(laik_All, checkGroup, nodeSpace, NULL);
         each = laik_new_partitioning(laik_new_block_partitioner1(), checkGroup, nodeSpace, NULL);
     }
@@ -50,6 +59,9 @@ int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup
                 failedNodes[i] = LAIK_FT_NODE_OK;
             }
         }
+
+        //Clear the value to make sure it isn't accidentally reused
+        nodeBase[i] = LAIK_FT_NODE_FAULT;
     }
 
     return failuresFound;
