@@ -20,23 +20,30 @@ Laik_Partitioner *create_checkpoint_partitioner(Laik_Partitioner *currentPartiti
 
 Laik_Group *create_checkpoint_group(Laik_Group *originalGroup, int rotationDistance);
 
+void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning);
+
+void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget);
+
 Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
                                        Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup,
                                        enum _Laik_ReductionOperation reductionOperation) {
     int iteration = laik_get_iteration(laikInstance);
-    laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i for space %s data %s\n", iteration, space->name, data->name);
+    laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i for space %s data %s\n", iteration, space->name,
+             data->name);
 
     Laik_Checkpoint checkpoint;
 
     checkpoint = initCheckpoint(laikInstance, &checkpoint, space, data);
 
-    void *base, *backupBase;
-    uint64_t count, backupCount;
-    initBuffers(laikInstance, &checkpoint, data, &base, &count, &backupBase, &backupCount);
+//    void *base, *backupBase;
+//    uint64_t count, backupCount;
+//    initBuffers(laikInstance, &checkpoint, data, &base, &count, &backupBase, &backupCount);
+//
+//    uint64_t data_length = backupCount * data->elemsize;
+//    laik_log(LAIK_LL_Debug, "Checkpoint buffers allocated, copying data of size %lu\n", data_length);
+//    memcpy(backupBase, base, data_length);
+    migrateData(data, checkpoint.data, data->activePartitioning);
 
-    uint64_t data_length = backupCount * data->elemsize;
-    laik_log(LAIK_LL_Debug, "Checkpoint buffers allocated, copying data of size %lu\n", data_length);
-    memcpy(backupBase, base, data_length);
 
     if (backupPartitioner == NULL) {
         //TODO: This partitioner needs to be released at some point
@@ -54,7 +61,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
 
     laik_log(LAIK_LL_Debug, "Switching to backup partitioning\n");
     Laik_Partitioning *currentPartitioning = data->activePartitioning;
-    if(currentPartitioning->group != backupGroup) {
+    if (currentPartitioning->group != backupGroup) {
         currentPartitioning = NULL;
     }
     Laik_Partitioning *partitioning = laik_new_partitioning(backupPartitioner, backupGroup, space, currentPartitioning);
@@ -83,19 +90,21 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
 void
 laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data) {
     int iteration = laik_get_iteration(laikInstance);
-    laik_log(LAIK_LL_Info, "Checkpoint restore requested at iteration %i for space %s data %s\n", iteration, space->name, data->name);
+    laik_log(LAIK_LL_Info, "Checkpoint restore requested at iteration %i for space %s data %s\n", iteration,
+             space->name, data->name);
 
-    void *base, *backupBase;
-    uint64_t count, backupCount;
+//    void *base, *backupBase;
+//    uint64_t count, backupCount;
 
 
     assert(checkpoint->space);
     assert(checkpoint->data);
 
     assert(laik_space_size(space) == laik_space_size(checkpoint->space));
-    initBuffers(laikInstance, checkpoint, data, &base, &count, &backupBase, &backupCount);
-
-    memcpy(base, backupBase, backupCount * data->elemsize);
+//    initBuffers(laikInstance, checkpoint, data, &base, &count, &backupBase, &backupCount);
+//
+//    memcpy(base, backupBase, backupCount * data->elemsize);
+    migrateData(checkpoint->data, data, data->activePartitioning);
 
     laik_log(LAIK_LL_Info, "Checkpoint restore %s completed", checkpoint->space->name);
 }
@@ -123,6 +132,46 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
     assert(*count == *backupCount);
 }
 
+void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
+    laik_log(LAIK_LL_Debug, "Switching data containers to partitioning %s", partitioning->name);
+    laik_switchto_partitioning(sourceData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+    laik_switchto_partitioning(targetData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+
+    int numberMyMappings = laik_my_mapcount(partitioning);
+    laik_log(LAIK_LL_Debug, "Copying %i data containers", numberMyMappings);
+    for (int mappingNumber = 0; mappingNumber < numberMyMappings; ++mappingNumber) {
+        Laik_Mapping *sourceMapping = laik_map(sourceData, mappingNumber, 0);
+        Laik_Mapping *targetMapping = laik_map(targetData, mappingNumber, 0);
+
+        bufCopy(sourceMapping, targetMapping);
+    }
+}
+
+// Copies from 1 to 2! Not like memcpy
+void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
+    void *baseTarget = mappingTarget->base, *baseSource = mappingSource->base;
+    uint64_t *strideSource = mappingSource->layout->stride;
+    uint64_t *strideTarget = mappingTarget->layout->stride;
+    uint64_t *sizeSource = mappingSource->size;
+    uint64_t *sizeTarget = mappingTarget->size;
+    assert(memcmp(sizeTarget, sizeSource, sizeof(uint64_t) * 3) == 0);
+
+    assert(mappingTarget->data->type == mappingSource->data->type);
+    Laik_Type *type = mappingTarget->data->type;
+
+    for (uint64_t z = 0; z < sizeTarget[2]; ++z) {
+        for (uint64_t y = 0; y < sizeTarget[1]; ++y) {
+            for (uint64_t x = 0; x < sizeTarget[0]; ++x) {
+                memcpy((unsigned char *) baseTarget +
+                       ((z * strideTarget[2]) + (y * strideTarget[1]) + (x * strideTarget[0])) * type->size,
+                       (unsigned char *) baseSource +
+                       ((z * strideSource[2]) + (y * strideSource[1]) + (x * strideTarget[0])) * type->size,
+                       type->size);
+            }
+        }
+    }
+}
+
 Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space,
                                const Laik_Data *data) {
     //TODO: Temporarily unused
@@ -133,6 +182,7 @@ Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *che
     checkpoint->space = space;
 
     checkpoint->data = laik_new_data((*checkpoint).space, data->type);
+    laik_data_set_name(checkpoint->data, "Backup data");
     return (*checkpoint);
 }
 
@@ -225,16 +275,16 @@ Laik_Group *create_checkpoint_group(Laik_Group *originalGroup, int rotationDista
 }
 
 bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nodeStatuses)[]) {
-    Laik_Partitioning* backupPartitioning = checkpoint->data->activePartitioning;
+    Laik_Partitioning *backupPartitioning = checkpoint->data->activePartitioning;
 
     assert(backupPartitioning->saList->next == NULL && backupPartitioning->saList->info == LAIK_AI_FULL);
     Laik_SliceArray *sliceArray = backupPartitioning->saList->slices;
     for (unsigned int oldIndex = 0; oldIndex < sliceArray->count; ++oldIndex) {
-        Laik_TaskSlice_Gen* taskSlice = &sliceArray->tslice[oldIndex];
+        Laik_TaskSlice_Gen *taskSlice = &sliceArray->tslice[oldIndex];
         //TODO: export this to some sort of constant
         int taskIdInGroup = taskSlice->task;
         int taskIdInWorld = laik_group_location(backupPartitioning->group, taskIdInGroup);
-        if((*nodeStatuses)[taskIdInWorld] != LAIK_FT_NODE_OK) {
+        if ((*nodeStatuses)[taskIdInWorld] != LAIK_FT_NODE_OK) {
             // Set this task slice's size to zero (don't get any data from here)
             taskSlice->s.from.i[0] = INT64_MIN;
             taskSlice->s.from.i[1] = INT64_MIN;
