@@ -139,28 +139,33 @@ Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *che
 
 void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParams *params) {
     Laik_Partitioner *originalPartitioner = (Laik_Partitioner *) params->partitioner->data;
-    Laik_PartitionerParams modifiedParams;
-    Laik_Group modifiedGroup;
-
-    // Change the original laik group rotating all ids by 1
-    // This should cause data to be switched to the neighbor
-    memcpy(&modifiedGroup, params->group, sizeof(Laik_Group));
-    modifiedGroup.myid = (modifiedGroup.myid + 1) % modifiedGroup.size;
-
-    laik_log(LAIK_LL_Debug, "wrap partitioner: modifying group of size %i, old id %i to new id %i", modifiedGroup.size,
-             params->group->myid, modifiedGroup.myid);
-
-    modifiedParams.partitioner = originalPartitioner;
-//    modifiedParams.group = &modifiedGroup;
-    modifiedParams.group = params->group;
-    modifiedParams.other = params->other;
-    modifiedParams.space = params->space;
+    Laik_PartitionerParams modifiedParams = {
+            .space = params->space,
+            .group = params->group,
+            .other = params->other,
+            .partitioner = originalPartitioner
+    };
+//    Laik_Group modifiedGroup;
+//
+//    // Change the original laik group rotating all ids by 1
+//    // This should cause data to be switched to the neighbor
+//    memcpy(&modifiedGroup, params->group, sizeof(Laik_Group));
+//    modifiedGroup.myid = (modifiedGroup.myid + 1) % modifiedGroup.size;
+//
+//    laik_log(LAIK_LL_Debug, "wrap partitioner: modifying group of size %i, old id %i to new id %i", modifiedGroup.size,
+//             params->group->myid, modifiedGroup.myid);
+//
+//    modifiedParams.partitioner = originalPartitioner;
+////    modifiedParams.group = &modifiedGroup;
+//    modifiedParams.group = params->group;
+//    modifiedParams.other = params->other;
+//    modifiedParams.space = params->space;
 
     originalPartitioner->run(receiver, &modifiedParams);
 
-    laik_log(LAIK_LL_Debug, "wrap partitioner: rotating slice array of size %i by %i. Number mappings: %i.",
-             receiver->array->count, SLICE_ROTATE_DISTANCE, receiver->array->map_count);
-
+//    laik_log(LAIK_LL_Debug, "wrap partitioner: rotating slice array of size %i by %i. Number mappings: %i.",
+//             receiver->array->count, SLICE_ROTATE_DISTANCE, receiver->array->map_count);
+//
 //    //Currently, only distance 1 supported
 //    static_assert(SLICE_ROTATE_DISTANCE == 1, "");
 //    Laik_TaskSlice_Gen temp;
@@ -174,6 +179,7 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
 
     // Duplicate slices to neighbor. Make sure to duplicate only the original ones, and not the ones we add in the
     // process
+    laik_log(LAIK_LL_Debug, "wrap partitioner: duplicating slices for redundant storage");
     unsigned int originalCount = receiver->array->count;
     for (unsigned int i = 0; i < originalCount; i++) {
         Laik_TaskSlice_Gen duplicateSlice = receiver->array->tslice[i];
