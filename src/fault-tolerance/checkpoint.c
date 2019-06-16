@@ -134,8 +134,12 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
     laik_log(LAIK_LL_Debug, "Switching data containers to partitioning %s", partitioning->name);
-    laik_switchto_partitioning(sourceData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
-    laik_switchto_partitioning(targetData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+    if(sourceData->activePartitioning != partitioning) {
+        laik_switchto_partitioning(sourceData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+    }
+    if(targetData->activePartitioning != partitioning) {
+        laik_switchto_partitioning(targetData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+    }
 
     int numberMyMappings = laik_my_mapcount(partitioning);
     laik_log(LAIK_LL_Debug, "Copying %i data containers", numberMyMappings);
