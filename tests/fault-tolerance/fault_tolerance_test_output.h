@@ -28,7 +28,7 @@ void writeDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *d
     uint64_t count = data->activeMappings->map[0].count;
     assert(dim0Size * dim1Size == count);
 
-    fprintf(myOutput, "P2\n%lu %lu\n%i", dim1Size, dim0Size, 255);
+    fprintf(myOutput, "P2\n%lu %lu\n%i", dim0Size, dim1Size, 255);
 
     for (unsigned long y = 0; y < dim1Size; ++y) {
         fprintf(myOutput, "\n");
