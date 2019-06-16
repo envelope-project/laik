@@ -134,15 +134,15 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
     laik_log(LAIK_LL_Debug, "Switching data containers to partitioning %s", partitioning->name);
-    if(sourceData->activePartitioning != partitioning) {
+    if (sourceData->activePartitioning != partitioning) {
         laik_switchto_partitioning(sourceData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
     }
-    if(targetData->activePartitioning != partitioning) {
+    if (targetData->activePartitioning != partitioning) {
         laik_switchto_partitioning(targetData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
     }
 
     int numberMyMappings = laik_my_mapcount(partitioning);
-    laik_log(LAIK_LL_Debug, "Copying %i data containers", numberMyMappings);
+    laik_log(LAIK_LL_Debug, "Copying %i data mappings", numberMyMappings);
     for (int mappingNumber = 0; mappingNumber < numberMyMappings; ++mappingNumber) {
         Laik_Mapping *sourceMapping = laik_map(sourceData, mappingNumber, 0);
         Laik_Mapping *targetMapping = laik_map(targetData, mappingNumber, 0);
@@ -162,6 +162,13 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
 
     assert(mappingTarget->data->type == mappingSource->data->type);
     Laik_Type *type = mappingTarget->data->type;
+
+    laik_log(LAIK_LL_Debug,
+             "Copying mapping of type %s (size %i) with strides z:%lu y:%lu x:%lu and size z:%lu y:%lu x:%lu to mapping with strides z:%lu y:%lu x:%lu",
+             type->name, type->size,
+             strideSource[2], strideSource[1], strideSource[0],
+             sizeSource[2], sizeSource[1], sizeSource[0],
+             strideTarget[2], strideTarget[1], strideTarget[0]);
 
     for (uint64_t z = 0; z < sizeTarget[2]; ++z) {
         for (uint64_t y = 0; y < sizeTarget[1]; ++y) {
