@@ -117,8 +117,8 @@ uint64_t originalHashSize;
 Laik_Checkpoint spaceCheckpoints[3];
 
 int main(int argc, char *argv[]) {
-    laik_set_loglevel(LAIK_LL_Info);
-//    laik_set_loglevel(LAIK_LL_Debug);
+//    laik_set_loglevel(LAIK_LL_Info);
+    laik_set_loglevel(LAIK_LL_Debug);
     inst = laik_init(&argc, &argv);
     world = laik_world(inst);
 
@@ -261,9 +261,12 @@ int main(int argc, char *argv[]) {
 
                 TPRINTF("Attempting to restore with new world size %i\n", world->size);
 
-                pWrite = laik_new_partitioning(prWrite, world, space, 0);
-                pRead = laik_new_partitioning(prRead, world, space, pWrite);
                 pSum = laik_new_partitioning(laik_All, world, sp1, 0);
+                laik_partitioning_set_name(pSum, "pSum_new");
+                pWrite = laik_new_partitioning(prWrite, world, space, 0);
+                laik_partitioning_set_name(pWrite, "pWrite_new");
+                pRead = laik_new_partitioning(prRead, world, space, pWrite);
+                laik_partitioning_set_name(pRead, "pRead_new");
 
                 TPRINTF("Switching to new partitionings\n");
                 laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
