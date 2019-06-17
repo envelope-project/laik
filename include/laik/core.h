@@ -86,7 +86,12 @@ bool laik_enlarge_group(Laik_Group* g, int len, char** list);
 // to the referenced rank
 int laik_location_get_world_offset(Laik_Group *group, int id);
 
+// Synchronizes location identifiers across all nodes in the group. Call this with world to synchronize location data
+// with everyone
 void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup);
+
+// Fetches the location identifier of any process in the world, as long as it was previously synchronized. Uses the id
+// as offset to the passed group to calculate global offset and identifier.
 char* laik_location_get(Laik_Group *group, int id);
 
 // change the master to task <id>. Return if successful

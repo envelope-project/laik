@@ -407,29 +407,12 @@ int laik_location_get_world_offset(Laik_Group *group, int id) {
     return id;
 }
 
-
-//char* laik_group_get_world_location(Laik_Group *group, int id) {
-//    assert(id >= 0 && id < group->size);
-//
-//    int locationOffset = group->toLocation[id];
-//
-//    Laik_Instance *instance = group->inst;
-//    assert(locationOffset >= 0 && locationOffset < instance->size);
-//    return instance->location[id];
-//}
-
-//TODO: Move to laik_instance
 #define LAIK_LOCATION_STORE_MAX_KEY_SIZE 128
 #define LAIK_LOCATION_GET_KEY(x,y) snprintf(x, LAIK_LOCATION_STORE_MAX_KEY_SIZE, "location_%i", y)
 
+// Synchronizes location identifiers across all nodes in the group. Call this with world to synchronize location data
+// with everyone
 void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup) {
-//    Laik_Space* space = laik_new_space_1d(instance, synchronizationGroup->size * LAIK_LOCATION_MAX_LENGTH);
-//    Laik_Data* data = laik_new_data(space, laik_UChar);
-//
-//    void* base;
-//    uint64_t size;
-//    laik_map_def1(data, &base, &size);
-
     if(instance->locationStore == NULL) {
         instance->locationStore = laik_kvs_new("Laik_Location_Data", instance);
     }
@@ -445,6 +428,8 @@ void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchro
     laik_kvs_sync(instance->locationStore);
 }
 
+// Fetches the location identifier of any process in the world, as long as it was previously synchronized. Uses the id
+// as offset to the passed group to calculate global offset and identifier.
 char* laik_location_get(Laik_Group *group, int id) {
     if(group->inst->locationStore == NULL) {
         return NULL;

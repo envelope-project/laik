@@ -54,7 +54,7 @@ struct _Laik_Instance {
     char* mylocation;
     char guid[64];
 
-//    char** location;
+    // Stores exchanged location information if user requested it using synchronize.
     Laik_KVStore* locationStore;
 
     // for time logging
