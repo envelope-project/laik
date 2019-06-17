@@ -408,6 +408,52 @@ int laik_group_location(Laik_Group* group, int id) {
 }
 
 
+//char* laik_group_get_world_location(Laik_Group *group, int id) {
+//    assert(id >= 0 && id < group->size);
+//
+//    int locationOffset = group->toLocation[id];
+//
+//    Laik_Instance *instance = group->inst;
+//    assert(locationOffset >= 0 && locationOffset < instance->size);
+//    return instance->location[id];
+//}
+
+//TODO: Move to laik_instance
+#define LAIK_LOCATION_STORE_MAX_KEY_SIZE 128
+#define LAIK_LOCATION_GET_KEY(x,y) snprintf(x, LAIK_LOCATION_STORE_MAX_KEY_SIZE, "location_%i", y)
+
+void laik_synchronize_location_data(Laik_Instance* instance, Laik_Group* synchronizationGroup) {
+//    Laik_Space* space = laik_new_space_1d(instance, synchronizationGroup->size * LAIK_LOCATION_MAX_LENGTH);
+//    Laik_Data* data = laik_new_data(space, laik_UChar);
+//
+//    void* base;
+//    uint64_t size;
+//    laik_map_def1(data, &base, &size);
+
+    if(instance->locationStore == NULL) {
+        laik_kvs_new("Laik_Location_Data", instance);
+    }
+
+    char *mylocation = laik_mylocation(instance);
+    int locationSize = strlen(mylocation);
+    char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
+    LAIK_LOCATION_GET_KEY(myKey, laik_group_location(synchronizationGroup, laik_myid(synchronizationGroup)));
+    laik_kvs_set(instance->locationStore, myKey, locationSize, mylocation);
+
+    laik_kvs_sync(instance->locationStore);
+}
+
+char* laik_get_location_identifier(Laik_Group* group, int id) {
+    if(group->inst->locationStore == NULL) {
+        return NULL;
+    }
+
+    char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
+    LAIK_LOCATION_GET_KEY(myKey, laik_group_location(group, id));
+
+    return laik_kvs_get(group->inst->locationStore, myKey, NULL);
+}
+
 // Utilities
 
 char* laik_get_guid(Laik_Instance* i){

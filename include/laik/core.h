@@ -86,6 +86,8 @@ bool laik_enlarge_group(Laik_Group* g, int len, char** list);
 // to the referenced rank
 int laik_group_location(Laik_Group* group, int id);
 
+void laik_synchronize_location_data(Laik_Instance* instance, Laik_Group* synchronizationGroup);
+char* laik_get_location_identifier(Laik_Group* group, int id);
 
 // change the master to task <id>. Return if successful
 bool laik_set_master(Laik_Group* g, int id);

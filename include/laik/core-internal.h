@@ -43,6 +43,8 @@ struct _Laik_Group {
     Laik_Group* parent;
     int* toParent;   // mapping local task IDs to parent task IDs
     int* fromParent; // mapping parent task IDs to local task IDs
+
+    int* toLocation;
 };
 
 
@@ -51,6 +53,9 @@ struct _Laik_Instance {
     int myid;
     char* mylocation;
     char guid[64];
+
+//    char** location;
+    Laik_KVStore* locationStore;
 
     // for time logging
     struct timeval init_time;
