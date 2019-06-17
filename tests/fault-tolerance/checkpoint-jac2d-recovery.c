@@ -236,9 +236,6 @@ int main(int argc, char *argv[]) {
 
         // At every 10 iterations, do a checkpoint
         if (iter == 25) {
-            writeDataToFile("data1_pre_", ".pgm", data1);
-            writeDataToFile("data2_pre_", ".pgm", data2);
-
 //            laik_switchto_partitioning(data1, pRead, LAIK_DF_Preserve, LAIK_RO_None);
 //            laik_switchto_partitioning(data2, pRead, LAIK_DF_Preserve, LAIK_RO_None);
 
@@ -253,6 +250,9 @@ int main(int argc, char *argv[]) {
             if (numFailed == 0) {
                 TPRINTF("Could not detect a failed node.\n");
             } else {
+                // Don't allow any failures while and after recovery
+                laik_log(LAIK_LL_Warning, "Deactivating error handler!");
+                laik_tcp_set_error_handler(NULL);
 
                 laik_failure_eliminate_nodes(inst, numFailed, nodeStatuses);
 
@@ -288,8 +288,6 @@ int main(int argc, char *argv[]) {
 //                world = smallWorld;
                 TPRINTF("Restore complete, cleared errors.\n");
 
-                writeDataToFile("data1_post_", ".pgm", data1);
-                writeDataToFile("data2_post_", ".pgm", data2);
             }
         }
 
@@ -323,6 +321,13 @@ int main(int argc, char *argv[]) {
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
         laik_map_def1_2d(dRead, (void **) &baseR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
+
+        if(iter == 25 && world->size == 4) {
+            writeDataToFile("dRead_pre_", ".pgm", dRead);
+        }
+        if(iter == 25 && world->size == 3) {
+            writeDataToFile("dRead_post", ".pgm", dRead);
+        }
 
         setBoundary(size, pWrite, dWrite);
 
