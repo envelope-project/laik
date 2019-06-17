@@ -431,14 +431,16 @@ void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchro
 //    laik_map_def1(data, &base, &size);
 
     if(instance->locationStore == NULL) {
-        laik_kvs_new("Laik_Location_Data", instance);
+        instance->locationStore = laik_kvs_new("Laik_Location_Data", instance);
     }
 
     char *mylocation = laik_mylocation(instance);
     int locationSize = strlen(mylocation);
     char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
     LAIK_LOCATION_GET_KEY(myKey, laik_location_get_world_offset(synchronizationGroup, laik_myid(synchronizationGroup)));
-    laik_kvs_set(instance->locationStore, myKey, locationSize, mylocation);
+
+    // + 1 for the null terminator?
+    laik_kvs_set(instance->locationStore, myKey, locationSize + 1, mylocation);
 
     laik_kvs_sync(instance->locationStore);
 }
