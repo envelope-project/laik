@@ -16,14 +16,12 @@ void test_laik_group_get_location(Laik_Instance* instance) {
         assert(false);
     }
 
-
     //Right now, the group should map to itself
     Laik_Group* g0 = laik_clone_group(laik_world(instance));
     assert(0 == laik_location_get_world_offset(g0, 0));
     assert(1 == laik_location_get_world_offset(g0, 1));
     assert(2 == laik_location_get_world_offset(g0, 2));
     assert(3 == laik_location_get_world_offset(g0, 3));
-
 
     // Create some shrinked groups
     int eliminate1[] =  {1};
@@ -43,10 +41,12 @@ void test_laik_group_get_location(Laik_Instance* instance) {
 void test_laik_location_data(Laik_Instance* instance) {
     Laik_Group* world = laik_world(instance);
 
+    printf("Testing identifiers\n%i my location: %s\n", world->myid, laik_mylocation(instance));
+
     laik_location_synchronize_data(instance, world);
 
     for(int i = 0; i < world->size; i++) {
-        printf("Identifier: " + laik_location_get(world, i));
+        printf("%i identifier %i: %s\n", world->myid, i, laik_location_get(world, i));
     }
 }
 
