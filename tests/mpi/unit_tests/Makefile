@@ -14,7 +14,7 @@ all: $(UNIT_TESTS)
 %.o: $(SDIR)%.c
 	$(CC) -c $(CFLAGS) -c $< -o $@
 
-core: core.o $(LAIKLIB)
+core_location_utils: core_location_utils.o $(LAIKLIB)
 
 clean:
 	rm -f *.o *~ *.ppm $(UNIT_TESTS)

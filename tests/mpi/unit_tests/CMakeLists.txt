@@ -1,5 +1,5 @@
 foreach (unit_test
-        "core"
+        "core_location_utils"
 )
     add_executable("unit_test_${unit_test}" "${CMAKE_CURRENT_SOURCE_DIR}/${unit_test}.c")
 

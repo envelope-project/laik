@@ -39,6 +39,10 @@ void test_laik_group_get_location(Laik_Instance* instance) {
 
 }
 
+void test_laik_location_data(Laik_Instance* instance) {
+    Laik_Group* world = laik_world(instance);
+}
+
 int main(int argc, char* argv[]) {
     Laik_Instance* instance = laik_init(&argc, &argv);
 
