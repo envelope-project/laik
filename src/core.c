@@ -393,7 +393,7 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
 
 // For a specific group and id (offset into the group), find the offset into the top level group (should be world) equal
 // to the referenced rank
-int laik_group_location(Laik_Group* group, int id) {
+int laik_location_get_world_offset(Laik_Group *group, int id) {
     while(group->parent != NULL) {
         // Ensure we don't go out of bounds
         assert(id >= 0 && id < group->size);
@@ -422,7 +422,7 @@ int laik_group_location(Laik_Group* group, int id) {
 #define LAIK_LOCATION_STORE_MAX_KEY_SIZE 128
 #define LAIK_LOCATION_GET_KEY(x,y) snprintf(x, LAIK_LOCATION_STORE_MAX_KEY_SIZE, "location_%i", y)
 
-void laik_synchronize_location_data(Laik_Instance* instance, Laik_Group* synchronizationGroup) {
+void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup) {
 //    Laik_Space* space = laik_new_space_1d(instance, synchronizationGroup->size * LAIK_LOCATION_MAX_LENGTH);
 //    Laik_Data* data = laik_new_data(space, laik_UChar);
 //
@@ -437,19 +437,19 @@ void laik_synchronize_location_data(Laik_Instance* instance, Laik_Group* synchro
     char *mylocation = laik_mylocation(instance);
     int locationSize = strlen(mylocation);
     char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
-    LAIK_LOCATION_GET_KEY(myKey, laik_group_location(synchronizationGroup, laik_myid(synchronizationGroup)));
+    LAIK_LOCATION_GET_KEY(myKey, laik_location_get_world_offset(synchronizationGroup, laik_myid(synchronizationGroup)));
     laik_kvs_set(instance->locationStore, myKey, locationSize, mylocation);
 
     laik_kvs_sync(instance->locationStore);
 }
 
-char* laik_get_location_identifier(Laik_Group* group, int id) {
+char* laik_location_get(Laik_Group *group, int id) {
     if(group->inst->locationStore == NULL) {
         return NULL;
     }
 
     char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
-    LAIK_LOCATION_GET_KEY(myKey, laik_group_location(group, id));
+    LAIK_LOCATION_GET_KEY(myKey, laik_location_get_world_offset(group, id));
 
     return laik_kvs_get(group->inst->locationStore, myKey, NULL);
 }
