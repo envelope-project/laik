@@ -106,7 +106,8 @@ laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint
 //    memcpy(base, backupBase, backupCount * data->elemsize);
     migrateData(checkpoint->data, data, data->activePartitioning);
 
-    laik_log(LAIK_LL_Info, "Checkpoint restore %s completed", checkpoint->space->name);
+    laik_log(LAIK_LL_Info, "Checkpoint restore completed at iteration %i for space %s data %s\n", iteration,
+             space->name, data->name);
 }
 
 void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
