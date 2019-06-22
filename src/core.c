@@ -696,8 +696,8 @@ void laik_kvs_free(Laik_KVStore* kvs)
     free(kvs);
 }
 
-// returns true on actual change
-// do not take ownership of name/data (do a deep copy)
+// set a binary data blob as value for key (deep copy, overwrites if key exists)
+// returns false if key is already set to given value
 bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
 {
     assert(data != 0);
@@ -752,6 +752,13 @@ bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
     kvs->myOffUsed += 2;
 
     return true;
+}
+
+// set a null-terminated string as value for key
+bool laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str)
+{
+    unsigned int len = strlen(str) + 1; // include null at end
+    return laik_kvs_set(kvs, key, len, str);
 }
 
 // synchronize KV store

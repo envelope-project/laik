@@ -187,8 +187,11 @@ Laik_KVStore* laik_kvs_new(const char *name, Laik_Instance* inst);
 // free KVS resources
 void laik_kvs_free(Laik_KVStore* kvs);
 
-// set an entry in a KV store, does a deep copy of data and key
+// set a binary data blob as value for key (deep copy, overwrites if key exists)
 bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data);
+
+// set a null-terminated string as value for key
+bool laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str);
 
 // synchronize KV store
 void laik_kvs_sync(Laik_KVStore* kvs);
