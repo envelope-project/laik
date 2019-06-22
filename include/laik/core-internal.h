@@ -86,6 +86,9 @@ void laik_removeSpaceFromInstance(Laik_Instance* inst, Laik_Space* s);
 
 void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d);
 
+// synchronize location identifiers
+void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup);
+
 
 struct _Laik_Error {
   int type;
