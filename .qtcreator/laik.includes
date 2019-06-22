@@ -6,3 +6,4 @@
 /usr/include/glib-2.0
 ../examples
 ../
+../tests/src
