@@ -86,13 +86,6 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
     }
 }
 
-// to deliberately change block partitioning (if arg 3 provided)
-double getTW(int rank, const void *userData) {
-    int v = *((int *) userData);
-    // switch non-equal weigthing on and off
-    return 1.0 + (rank * (v & 1));
-}
-
 void errorHandler(void *errors) {
     (void) errors;
     printf("Received an error condition, attempting to continue.\n");
@@ -130,19 +123,16 @@ int main(int argc, char *argv[]) {
     int repart = 0; // enforce repartitioning after <repart> iterations
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
-    bool do_sum = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'n') use_cornerhalo = false;
         if (argv[arg][1] == 'p') do_profiling = true;
-        if (argv[arg][1] == 's') do_sum = true;
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac2d_profiling.txt'\n"
-                   " -s : print value sum at end (warning: sum done at master)\n"
                    " -h : print this help text and exit\n",
                    argv[0]);
             exit(1);
@@ -232,17 +222,17 @@ int main(int argc, char *argv[]) {
 
         // At every 10 iterations, do a checkpoint
         if (iter == 25) {
-            Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
-            TPRINTF("Switching READ.\n");
-            laik_switchto_partitioning(dRead, pMaster, LAIK_DF_None, LAIK_RO_None);
-            TPRINTF("Switching WRITE.\n");
-            laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_None, LAIK_RO_None);
-            TPRINTF("Switch OK.\n");
+//            Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
+//            TPRINTF("Switching READ.\n");
+//            laik_switchto_partitioning(dRead, pMaster, LAIK_DF_None, LAIK_RO_None);
+//            TPRINTF("Switching WRITE.\n");
+//            laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_None, LAIK_RO_None);
+//            TPRINTF("Switch OK.\n");
 
             createCheckpoints(iter);
 
         }
-        if (iter % 10 == 5) {
+        if (iter % 10 == 5 && iter == 35) {
             TPRINTF("Attempting to determine global status.\n");
             int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
             if (numFailed == 0) {
@@ -260,11 +250,11 @@ int main(int argc, char *argv[]) {
                 assert(world->size == 3);
                 TPRINTF("Attempting to restore with new world size %i\n", world->size);
 
-                pSum = laik_new_partitioning(laik_All, world, sp1, 0);
+                pSum = laik_new_partitioning(laik_All, smallWorld, sp1, 0);
                 laik_partitioning_set_name(pSum, "pSum_new");
-                pWrite = laik_new_partitioning(prWrite, world, space, 0);
+                pWrite = laik_new_partitioning(prWrite, smallWorld, space, 0);
                 laik_partitioning_set_name(pWrite, "pWrite_new");
-                pRead = laik_new_partitioning(prRead, world, space, pWrite);
+                pRead = laik_new_partitioning(prRead, smallWorld, space, pWrite);
                 laik_partitioning_set_name(pRead, "pRead_new");
 
                 TPRINTF("Switching to new partitionings\n");
@@ -288,7 +278,7 @@ int main(int argc, char *argv[]) {
 
                 iter = restoreIteration;
                 laik_tcp_clear_errors();
-//                world = smallWorld;
+                world = smallWorld;
                 TPRINTF("Restore complete, cleared errors.\n");
 
 //                TPRINTF("Special: Switching to all partitioning.\n");
@@ -323,20 +313,23 @@ int main(int argc, char *argv[]) {
         if (dRead == data1) {
             dRead = data2;
             dWrite = data1;
+            TPRINTF("Read: data2, Write: data1\n");
         } else {
             dRead = data1;
             dWrite = data2;
+            TPRINTF("Read: data1, Write: data2\n");
         }
 
         laik_switchto_partitioning(dRead, pRead, LAIK_DF_Preserve, LAIK_RO_None);
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
+        TPRINTF("Switched partitionings\n");
         laik_map_def1_2d(dRead, (void **) &baseR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
-        if(iter == 25 && world->size == 4) {
+        if (iter == 25 && world->size == 4) {
             writeDataToFile("dRead_pre_", ".pgm", dRead);
         }
-        if(iter == 25 && world->size == 3) {
+        if (iter == 25 && world->size == 3) {
             writeDataToFile("dRead_post", ".pgm", dRead);
         }
 
@@ -360,39 +353,9 @@ int main(int argc, char *argv[]) {
         }
 
         // do jacobi
-
         double localResiduum = do_jacobi_iteration(baseR, baseW, ystrideR, ystrideW, x1, x2, y1, y2);
-
-        // check for residuum every 10 iterations (3 Flops more per update)
-        if ((iter % 1) == 0) {
-            double globalResiduum = calculateGlobalResiduum(localResiduum, &sumPtr);
-
-            //    if (laik_myid(laik_data_get_group(dSum)) == 0) {
-            TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
-            //    }
-
-//            if (globalResiduum < .001) break;
-        }
-        // TODO: allow repartitioning
-    }
-
-    if (do_sum) {
-        Laik_Group *activeGroup = laik_data_get_group(dWrite);
-
-        // for check at end: sum up all just written values
-        Laik_Partitioning *pMaster;
-        pMaster = laik_new_partitioning(laik_Master, activeGroup, space, 0);
-        laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
-
-        if (laik_myid(activeGroup) == 0) {
-            double sum = 0.0;
-            laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
-            for (uint64_t y = 0; y < ysizeW; y++)
-                for (uint64_t x = 0; x < xsizeW; x++)
-                    sum += baseW[y * ystrideW + x];
-            TPRINTF("Global value sum after %d iterations: %f\n",
-                    iter, sum);
-        }
+        double globalResiduum = calculateGlobalResiduum(localResiduum, &sumPtr);
+        TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
     }
 
     laik_finalize(inst);
@@ -409,13 +372,13 @@ void restoreCheckpoints() {
 
 void createCheckpoints(int iter) {
     TPRINTF("Creating checkpoint of sum\n");
-    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, world, LAIK_RO_Max);
+    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, smallWorld, LAIK_RO_Max);
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL, world, LAIK_RO_None);
+    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, smallWorld, LAIK_RO_None);
 //    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL, world, LAIK_RO_None);
     TPRINTF("Creating checkpoint 3\n");
 //    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, smallWorld, LAIK_RO_None);
-    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, NULL, world, LAIK_RO_None);
+    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, smallWorld, LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 
