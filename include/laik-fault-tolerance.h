@@ -30,4 +30,6 @@ bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nod
 
 Laik_Group* laik_world_fault_tolerant(Laik_Instance* instance);
 
+int laik_location_get_world_offset(Laik_Group *group, int id);
+
 #endif //LAIK_LAIK_FAULT_TOLERANCE_H
