@@ -4,7 +4,7 @@ OPT=-g
 # settings from 'configure', may overwrite defaults
 -include ../../Makefile.config
 
-TESTBINS = kvstest
+TESTBINS = kvstest locationtest
 
 CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../../include
 LAIKLIB = $(abspath ../../liblaik.so)
@@ -15,6 +15,8 @@ all: $(TESTBINS)
 	$(CC) -c $(CFLAGS) -c $< -o $@
 
 kvstest: kvstest.o $(LAIKLIB)
+
+locationtest: locationtest.o $(LAIKLIB)
 
 clean:
 	rm -f *.o *~ $(TESTBINS)

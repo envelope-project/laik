@@ -43,6 +43,8 @@ struct _Laik_Group {
     Laik_Group* parent;
     int* toParent;   // mapping local task IDs to parent task IDs
     int* fromParent; // mapping parent task IDs to local task IDs
+
+    int* toLocation;
 };
 
 
@@ -51,6 +53,9 @@ struct _Laik_Instance {
     int myid;
     char* mylocation;
     char guid[64];
+
+    // Stores exchanged location information if user requested it using synchronize.
+    Laik_KVStore* locationStore;
 
     // for time logging
     struct timeval init_time;
@@ -81,6 +86,9 @@ void laik_removeSpaceFromInstance(Laik_Instance* inst, Laik_Space* s);
 
 void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d);
 
+// synchronize location identifiers
+void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup);
+
 
 struct _Laik_Error {
   int type;
@@ -92,14 +100,14 @@ struct _Laik_Error {
 // KV Store
 //
 
-typedef struct _Laik_KVS_Entry {
+struct _Laik_KVS_Entry {
     char* key;
     char* data;
     unsigned int size;
     bool updated;
-} Laik_KVS_Entry;
+};
 
-typedef struct _Laik_KVStore {
+struct _Laik_KVStore {
     Laik_Instance* inst;
     const char* name;
 
@@ -116,7 +124,7 @@ typedef struct _Laik_KVStore {
     char* myData;
     // if true, setting values will not be propagated for next sync
     bool in_sync;
-} Laik_KVStore;
+};
 
 
 #endif // LAIK_CORE_INTERNAL_H

@@ -35,8 +35,6 @@ double loRowValue = -5.0, hiRowValue = 10.0;
 double loColValue = -10.0, hiColValue = 5.0;
 
 int restoreIteration = -1;
-int save_argc;
-char **save_argv;
 
 int main(int argc, char **argv);
 
@@ -117,8 +115,8 @@ uint64_t originalHashSize;
 Laik_Checkpoint spaceCheckpoints[3];
 
 int main(int argc, char *argv[]) {
-//    laik_set_loglevel(LAIK_LL_Info);
-    laik_set_loglevel(LAIK_LL_Debug);
+    laik_set_loglevel(LAIK_LL_Info);
+//    laik_set_loglevel(LAIK_LL_Debug);
     inst = laik_init(&argc, &argv);
     world = laik_world(inst);
 
@@ -236,8 +234,11 @@ int main(int argc, char *argv[]) {
 
         // At every 10 iterations, do a checkpoint
         if (iter == 25) {
-//            laik_switchto_partitioning(data1, pRead, LAIK_DF_Preserve, LAIK_RO_None);
-//            laik_switchto_partitioning(data2, pRead, LAIK_DF_Preserve, LAIK_RO_None);
+            TPRINTF("Switching READ.\n");
+            laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
+            TPRINTF("Switching WRITE.\n");
+            laik_switchto_partitioning(dWrite, pRead, LAIK_DF_None, LAIK_RO_None);
+            TPRINTF("Switch OK.\n");
 
             createCheckpoints(iter);
             originalHashSize = ysizeW * ystrideW + xsizeW;
@@ -259,6 +260,7 @@ int main(int argc, char *argv[]) {
                 // Re-fetch the world
                 world = laik_world_fault_tolerant(inst);
 
+                assert(world->size == 3);
                 TPRINTF("Attempting to restore with new world size %i\n", world->size);
 
                 pSum = laik_new_partitioning(laik_All, world, sp1, 0);
@@ -272,6 +274,10 @@ int main(int argc, char *argv[]) {
                 laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
                 laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
                 laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
+
+                //TODO delete
+                laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
+                laik_switchto_partitioning(dRead, pWrite, LAIK_DF_None, LAIK_RO_None);
 
                 TPRINTF("Removing failed slices from checkpoints\n");
                 if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[0], &nodeStatuses)
@@ -287,6 +293,14 @@ int main(int argc, char *argv[]) {
                 laik_tcp_clear_errors();
 //                world = smallWorld;
                 TPRINTF("Restore complete, cleared errors.\n");
+
+//                TPRINTF("Special: Switching to all partitioning.\n");
+//                Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
+//
+//                laik_switchto_partitioning(data1, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
+//                laik_switchto_partitioning(data2, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
+//
+//                TPRINTF("Special: Switched to all partitioning.\n");
 
             }
         }

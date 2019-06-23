@@ -81,11 +81,12 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
 //! Enlarging controlled by master in a group (collective)
 bool laik_enlarge_group(Laik_Group* g, int len, char** list);
 
-// For a specific group and id (offset into the group),
-// find the offset into the top level group (should be world) equal
-// to the referenced rank
-int laik_group_location(Laik_Group* group, int id);
+// get location ID from process ID in given group
+int laik_group_locationid(Laik_Group *group, int id);
 
+// get location string identifier from process ID in given group
+// (returns 0 if location strings not synchronized)
+char* laik_group_location(Laik_Group *group, int id);
 
 // change the master to task <id>. Return if successful
 bool laik_set_master(Laik_Group* g, int id);
@@ -193,8 +194,11 @@ Laik_KVStore* laik_kvs_new(const char *name, Laik_Instance* inst);
 // free KVS resources
 void laik_kvs_free(Laik_KVStore* kvs);
 
-// set an entry in a KV store, does a deep copy of data and key
+// set a binary data blob as value for key (deep copy, overwrites if key exists)
 bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data);
+
+// set a null-terminated string as value for key
+bool laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str);
 
 // synchronize KV store
 void laik_kvs_sync(Laik_KVStore* kvs);

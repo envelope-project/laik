@@ -86,5 +86,7 @@ add_subdirectory ("src")
 add_subdirectory ("tests")
 add_subdirectory ("tests/mpi")
 add_subdirectory ("tests/tcp")
+add_subdirectory ("tests/src")
+
 add_subdirectory ("tests/fault-tolerance")
 add_subdirectory ("tests/unit_tests/")

@@ -45,6 +45,9 @@ if ("USE_MPI" IN_LIST definitions)
         "test-vsum2-mpi-4.sh"
         "test-vsum-mpi-1.sh"
         "test-vsum-mpi-4.sh"
+	"test-kvstest-mpi-1.sh"
+	"test-kvstest-mpi-4.sh"
+	"unit_tests/test-location-mpi-4.sh"
     )
 
         if ("${mpi-implementation}" STREQUAL "ompi")
