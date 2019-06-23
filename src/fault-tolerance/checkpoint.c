@@ -285,6 +285,7 @@ Laik_Group *create_checkpoint_group(Laik_Group *originalGroup, int rotationDista
 
     return newGroup;
 }
+int laik_location_get_world_offset(Laik_Group *group, int id);
 
 bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nodeStatuses)[]) {
     Laik_Partitioning *backupPartitioning = checkpoint->data->activePartitioning;
@@ -295,7 +296,7 @@ bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nod
         Laik_TaskSlice_Gen *taskSlice = &sliceArray->tslice[oldIndex];
         //TODO: export this to some sort of constant
         int taskIdInGroup = taskSlice->task;
-        int taskIdInWorld = laik_group_location(backupPartitioning->group, taskIdInGroup);
+        int taskIdInWorld = laik_location_get_world_offset(backupPartitioning->group, taskIdInGroup);
         if ((*nodeStatuses)[taskIdInWorld] != LAIK_FT_NODE_OK) {
             // Set this task slice's size to zero (don't get any data from here)
             taskSlice->s.from.i[0] = INT64_MIN;
@@ -312,4 +313,20 @@ bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nod
     laik_log_flush("\n");
 
     return laik_partitioning_coversSpace(backupPartitioning);
+}
+
+// For a specific group and id (offset into the group), find the offset into the top level group (should be world) equal
+// to the referenced rank
+int laik_location_get_world_offset(Laik_Group *group, int id) {
+    while(group->parent != NULL) {
+        // Ensure we don't go out of bounds
+        assert(id >= 0 && id < group->size);
+        // Ensure a mapping from this group's ids to the parent group's ids is provided
+        assert(group->toParent != NULL);
+
+        id = group->toParent[id];
+        group = group->parent;
+    }
+    assert(id >= 0 && id < group->size);
+    return id;
 }
