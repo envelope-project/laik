@@ -109,8 +109,6 @@ Laik_Data *dSum;
 Laik_Partitioner *prWrite, *prRead;
 
 
-uint64_t originalHashSize;
-
 // [0]: Global sum, [1]: data1, [2]: data2
 Laik_Checkpoint spaceCheckpoints[3];
 
@@ -234,15 +232,14 @@ int main(int argc, char *argv[]) {
 
         // At every 10 iterations, do a checkpoint
         if (iter == 25) {
+            Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
             TPRINTF("Switching READ.\n");
-            laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(dRead, pMaster, LAIK_DF_None, LAIK_RO_None);
             TPRINTF("Switching WRITE.\n");
-            laik_switchto_partitioning(dWrite, pRead, LAIK_DF_None, LAIK_RO_None);
+            laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_None, LAIK_RO_None);
             TPRINTF("Switch OK.\n");
 
             createCheckpoints(iter);
-            originalHashSize = ysizeW * ystrideW + xsizeW;
-            test_hexHash_noKeep("Checkpoint data hash", baseW, originalHashSize);
 
         }
         if (iter % 10 == 5) {
