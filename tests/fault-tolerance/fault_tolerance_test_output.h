@@ -20,12 +20,13 @@ void writeDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *d
     assert(myOutput);
     assert(data->activeMappings->count == 1);
 
-    double *base = (double *) data->activeMappings->map[0].base;
-    uint64_t dim0Size = data->activeMappings->map[0].size[0];
-    uint64_t dim1Size = data->activeMappings->map[0].size[1];
-    uint64_t stride = data->activeMappings->map[0].layout->stride[1];
+    Laik_Mapping* mapping = laik_map_def1(data, NULL, NULL);
+    double *base = (double *) mapping->base;
+    uint64_t dim0Size = mapping->size[0];
+    uint64_t dim1Size = mapping->size[1];
+    uint64_t stride = mapping->layout->stride[1];
 
-    uint64_t count = data->activeMappings->map[0].count;
+    uint64_t count = mapping->count;
     assert(dim0Size * dim1Size == count);
 
     fprintf(myOutput, "P2\n%lu %lu\n%i", dim0Size, dim1Size, 255);
@@ -44,7 +45,10 @@ void writeDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *d
     if (fclose(myOutput)) {
         assert(0);
     }
+
+    laik_log(LAIK_LL_Info, "Wrote data to file %s", debugOutputFileName);
 }
+
 
 
 #endif //LAIK_FAULT_TOLERANCE_TEST_OUTPUT_H
