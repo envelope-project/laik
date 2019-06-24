@@ -8,8 +8,7 @@
 
 #define SLICE_ROTATE_DISTANCE 1
 
-Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space,
-                               const Laik_Data *data);
+Laik_Checkpoint* initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data);
 
 void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
                  uint64_t *count, void **backupBase, uint64_t *backupCount);
@@ -24,16 +23,16 @@ void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning
 
 void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget);
 
-Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
+Laik_Checkpoint* laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
                                        Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup,
                                        enum _Laik_ReductionOperation reductionOperation) {
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i for space %s data %s\n", iteration, space->name,
              data->name);
 
-    Laik_Checkpoint checkpoint;
+    Laik_Checkpoint* checkpoint;
 
-    checkpoint = initCheckpoint(laikInstance, &checkpoint, space, data);
+    checkpoint = initCheckpoint(laikInstance, space, data);
 
 //    void *base, *backupBase;
 //    uint64_t count, backupCount;
@@ -42,7 +41,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
 //    uint64_t data_length = backupCount * data->elemsize;
 //    laik_log(LAIK_LL_Debug, "Checkpoint buffers allocated, copying data of size %lu\n", data_length);
 //    memcpy(backupBase, base, data_length);
-    migrateData(data, checkpoint.data, data->activePartitioning);
+    migrateData(data, checkpoint->data, data->activePartitioning);
 
 
     if (backupPartitioner == NULL) {
@@ -73,7 +72,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
 //    }
     partitioning->name = "Backup partitioning";
 
-    laik_switchto_partitioning(checkpoint.data, partitioning, LAIK_DF_Preserve, reductionOperation);
+    laik_switchto_partitioning(checkpoint->data, partitioning, LAIK_DF_Preserve, reductionOperation);
     laik_log_begin(LAIK_LL_Warning);
     laik_log_append("Active partitioning: \n");
     laik_log_Partitioning(data->activePartitioning);
@@ -82,7 +81,7 @@ Laik_Checkpoint laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *
     laik_log_Partitioning(partitioning);
     laik_log_flush(NULL);
 
-    laik_log(LAIK_LL_Info, "Checkpoint %s completed\n", checkpoint.space->name);
+    laik_log(LAIK_LL_Info, "Checkpoint %s completed\n", checkpoint->space->name);
     return checkpoint;
 }
 
@@ -159,6 +158,8 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
     uint64_t *strideTarget = mappingTarget->layout->stride;
     uint64_t *sizeSource = mappingSource->size;
     uint64_t *sizeTarget = mappingTarget->size;
+
+    assert(baseSource != NULL && baseTarget != NULL);
     assert(memcmp(sizeTarget, sizeSource, sizeof(uint64_t) * 3) == 0);
 
     assert(mappingTarget->data->type == mappingSource->data->type);
@@ -171,9 +172,32 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
              sizeSource[2], sizeSource[1], sizeSource[0],
              strideTarget[2], strideTarget[1], strideTarget[0]);
 
-    for (uint64_t z = 0; z < sizeTarget[2]; ++z) {
-        for (uint64_t y = 0; y < sizeTarget[1]; ++y) {
-            for (uint64_t x = 0; x < sizeTarget[0]; ++x) {
+    assert(strideSource[0] != 0 || strideSource[1] != 0 || strideSource[2] != 0);
+    assert(strideTarget[0] != 0 || strideTarget[1] != 0 || strideTarget[2] != 0);
+
+    uint64_t sizeZ = sizeTarget[2];
+    uint64_t sizeY = sizeTarget[1];
+    uint64_t sizeX = sizeTarget[0];
+
+    assert(mappingSource->layout->dims == mappingTarget->layout->dims);
+    // Sets all dimension sizes above current dimension to 1 (so that loop is executed).
+    switch (mappingSource->layout->dims) {
+        case 1:
+            sizeY = 1;
+            sizeZ = 1;
+            break;
+        case 2:
+            sizeZ = 1;
+            break;
+        case 3:
+            break;
+        default:
+            laik_log(LAIK_LL_Panic, "Unknown dimensionality in bufCopy: %i", mappingSource->layout->dims);
+    }
+
+    for (uint64_t z = 0; z < sizeZ; ++z) {
+        for (uint64_t y = 0; y < sizeY; ++y) {
+            for (uint64_t x = 0; x < sizeX; ++x) {
                 memcpy((unsigned char *) baseTarget +
                        ((z * strideTarget[2]) + (y * strideTarget[1]) + (x * strideTarget[0])) * type->size,
                        (unsigned char *) baseSource +
@@ -184,18 +208,23 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
     }
 }
 
-Laik_Checkpoint initCheckpoint(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space,
-                               const Laik_Data *data) {
+Laik_Checkpoint* initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data) {
     //TODO: Temporarily unused
     (void) laikInstance;
     (void) data;
+
+    Laik_Checkpoint* checkpoint = malloc(sizeof(Laik_Checkpoint));
+    if(checkpoint == NULL) {
+        laik_panic("Out of memory allocating checkpoint!");
+        assert(0);
+    }
 //    (*checkpoint).space = laik_new_space_1d(laikInstance, laik_space_size(space) * data->elemsize);
 //    laik_set_space_name((*checkpoint).space, "checkpoint");
     checkpoint->space = space;
 
     checkpoint->data = laik_new_data((*checkpoint).space, data->type);
     laik_data_set_name(checkpoint->data, "Backup data");
-    return (*checkpoint);
+    return checkpoint;
 }
 
 
