@@ -4,6 +4,7 @@ foreach (test
         "checkpoint-jac2d"
         "checkpoint-jac2d-recovery"
         "checkpoint_partitioner"
+        "checkpoint-mandelbrot-recovery"
         )
 
     add_executable ("${test}"
