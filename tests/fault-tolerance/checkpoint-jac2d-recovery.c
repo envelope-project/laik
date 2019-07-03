@@ -25,6 +25,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 #include <laik-backend-tcp.h>
 #include "fault_tolerance_test_output.h"
 #include "fault_tolerance_test.h"
@@ -65,7 +66,7 @@ void exportDataFile(char *label, Laik_Data *data);
 
 void exportDataFiles();
 
-void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
+void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
     double *baseW;
     uint64_t ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2;
@@ -112,6 +113,14 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
         baseW[ly * ystrideW + lx] = centerValue;
     }
     if (laik_global2local_2d(dWrite, (size - 1) / 2, (size - 1) / 2, &lx, &ly) != NULL) {
+        baseW[ly * ystrideW + lx] = centerValue;
+    }
+
+    // Create a spinning dot
+    double angle = 0.3 * iteration;
+    int64_t xOffset = (int64_t)(cos(angle) * (size / 4) + (size / 2));
+    int64_t yOffset = (int64_t)(sin(angle) * (size / 4) + (size / 2));
+    if (laik_global2local_2d(dWrite, xOffset, yOffset, &lx, &ly) != NULL) {
         baseW[ly * ystrideW + lx] = centerValue;
     }
 }
@@ -242,10 +251,10 @@ int main(int argc, char *argv[]) {
     laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
     initialize_write_arbitrary_values(baseW, ysizeW, ystrideW, xsizeW, gx1, gy1);
 
-    setBoundary(size, pWrite, dWrite);
+    int iter = 0;
+    setBoundary(size, iter, pWrite, dWrite);
     laik_log(2, "Init done\n");
 
-    int iter = 0;
 
     int nodeStatuses[world->size];
 
@@ -340,7 +349,7 @@ int main(int argc, char *argv[]) {
             abort();
 //            }
         }
-        setBoundary(size, pWrite, dWrite);
+        setBoundary(size, iter, pWrite, dWrite);
 
         exportDataFiles();
 
@@ -410,7 +419,7 @@ void exportDataFiles() {
     exportDataFile("dW", dWrite);
 //    exportDataFile("d2", data2);
     if (spaceCheckpoints[1] != NULL) {
-        exportDataFile("c1", spaceCheckpoints[1]->data);
+        exportDataFile("c1", spaceCheckpoints[2]->data);
     }
     dataFileCounter++;
 }
