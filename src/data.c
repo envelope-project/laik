@@ -1849,6 +1849,25 @@ bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
     return true;
 }
 
+Laik_Mapping* laik_global2local_2d(Laik_Data *d, int64_t gx, int64_t gy, int64_t *lx, int64_t *ly) {
+    assert(d->space->dims == 2);
+    if (!d->activeMappings) return 0;
+    for (int i = 0; i < d->activeMappings->count; i++) {
+        Laik_Mapping *m = &(d->activeMappings->map[i]);
+
+        if (gx < m->requiredSlice.from.i[0]) continue;
+        if (gx >= m->requiredSlice.to.i[0]) continue;
+        if (gy < m->requiredSlice.from.i[1]) continue;
+        if (gy >= m->requiredSlice.to.i[1]) continue;
+
+
+        if (lx) *lx = gx - m->requiredSlice.from.i[0];
+        if (ly) *ly = gy - m->requiredSlice.from.i[1];
+        return m;
+    }
+    return 0;
+}
+
 int laik_map_get_mapNo(const Laik_Mapping *map) {
     assert(map);
 

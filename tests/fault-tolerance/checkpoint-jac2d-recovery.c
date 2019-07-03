@@ -30,11 +30,22 @@
 #include "fault_tolerance_test.h"
 #include "fault_tolerance_test_hash.h"
 
+// Red is hard to see, so make it the last slice
+unsigned char colors[][3] = {
+        {128, 255, 0},
+        {0,   255, 255},
+        {0,   128, 255},
+        {255, 0,   0},
+};
+
 // boundary values
-double loRowValue = -5.0, hiRowValue = 10.0;
-double loColValue = -10.0, hiColValue = 5.0;
+double loRowValue = 0.0, hiRowValue = 0.0;
+double loColValue = 1.0, hiColValue = 1.0;
+double centerValue = 1.0;
+double initVal = 0.1;
 
 int restoreIteration = -1;
+int dataFileCounter = 0;
 
 int main(int argc, char **argv);
 
@@ -49,6 +60,10 @@ void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t 
 void createCheckpoints(int iter);
 
 void restoreCheckpoints();
+
+void exportDataFile(char *label, Laik_Data *data);
+
+void exportDataFiles();
 
 void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
     double *baseW;
@@ -84,6 +99,21 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
         for (uint64_t y = 0; y < ysizeW; y++)
             baseW[y * ystrideW + xsizeW - 1] = hiColValue;
     }
+
+    //Center point
+    int64_t lx, ly;
+    if (laik_global2local_2d(dWrite, size / 2, size / 2, &lx, &ly) != NULL) {
+        baseW[ly * ystrideW + lx] = centerValue;
+    }
+    if (laik_global2local_2d(dWrite, (size - 1) / 2, size / 2, &lx, &ly) != NULL) {
+        baseW[ly * ystrideW + lx] = centerValue;
+    }
+    if (laik_global2local_2d(dWrite, size / 2, (size - 1) / 2, &lx, &ly) != NULL) {
+        baseW[ly * ystrideW + lx] = centerValue;
+    }
+    if (laik_global2local_2d(dWrite, (size - 1) / 2, (size - 1) / 2, &lx, &ly) != NULL) {
+        baseW[ly * ystrideW + lx] = centerValue;
+    }
 }
 
 void errorHandler(void *errors) {
@@ -100,10 +130,11 @@ Laik_Data *data1;
 Laik_Data *data2;
 Laik_Data *dSum;
 Laik_Partitioner *prWrite, *prRead;
+Laik_Data *dWrite, *dRead;
 
 
 // [0]: Global sum, [1]: data1, [2]: data2
-Laik_Checkpoint spaceCheckpoints[3];
+Laik_Checkpoint *spaceCheckpoints[3];
 
 int main(int argc, char *argv[]) {
     laik_set_loglevel(LAIK_LL_Info);
@@ -124,6 +155,7 @@ int main(int argc, char *argv[]) {
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
 
+
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'n') use_cornerhalo = false;
@@ -143,7 +175,7 @@ int main(int argc, char *argv[]) {
     if (argc > arg + 1) maxiter = atoi(argv[arg + 1]);
     if (argc > arg + 2) repart = atoi(argv[arg + 2]);
 
-    if (size == 0) size = 2500; // 6.25 mio entries
+    if (size == 0) size = 32; // 16Ki entries
     if (maxiter == 0) maxiter = 50;
 
     TPRINTF("Jac_2d parallel with rank %i\n", laik_myid(world));
@@ -197,8 +229,8 @@ int main(int argc, char *argv[]) {
     laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
     // start with writing (= initialization) data1
-    Laik_Data *dWrite = data1;
-    Laik_Data *dRead = data2;
+    dWrite = data1;
+    dRead = data2;
 
     // distributed initialization
     laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
@@ -221,7 +253,7 @@ int main(int argc, char *argv[]) {
         laik_set_iteration(inst, iter + 1);
 
         // At every 10 iterations, do a checkpoint
-        if (iter == 25) {
+        if (iter == 5) {
 //            Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
 //            TPRINTF("Switching READ.\n");
 //            laik_switchto_partitioning(dRead, pMaster, LAIK_DF_None, LAIK_RO_None);
@@ -267,9 +299,9 @@ int main(int argc, char *argv[]) {
                 laik_switchto_partitioning(dRead, pWrite, LAIK_DF_None, LAIK_RO_None);
 
                 TPRINTF("Removing failed slices from checkpoints\n");
-                if (!laik_checkpoint_remove_failed_slices(&spaceCheckpoints[0], &nodeStatuses)
-                    || !laik_checkpoint_remove_failed_slices(&spaceCheckpoints[1], &nodeStatuses)
-                    || !laik_checkpoint_remove_failed_slices(&spaceCheckpoints[2], &nodeStatuses)) {
+                if (!laik_checkpoint_remove_failed_slices(spaceCheckpoints[0], &nodeStatuses)
+                    || !laik_checkpoint_remove_failed_slices(spaceCheckpoints[1], &nodeStatuses)
+                    || !laik_checkpoint_remove_failed_slices(spaceCheckpoints[2], &nodeStatuses)) {
                     TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
                     abort();
                 }
@@ -308,32 +340,28 @@ int main(int argc, char *argv[]) {
             abort();
 //            }
         }
+        setBoundary(size, pWrite, dWrite);
+
+        exportDataFiles();
 
         // switch roles: data written before now is read
         if (dRead == data1) {
             dRead = data2;
             dWrite = data1;
-            TPRINTF("Read: data2, Write: data1\n");
+//            TPRINTF("Read: data2, Write: data1\n");
         } else {
             dRead = data1;
             dWrite = data2;
-            TPRINTF("Read: data1, Write: data2\n");
+//            TPRINTF("Read: data1, Write: data2\n");
         }
 
         laik_switchto_partitioning(dRead, pRead, LAIK_DF_Preserve, LAIK_RO_None);
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-        TPRINTF("Switched partitionings\n");
+//        TPRINTF("Switched partitionings\n");
         laik_map_def1_2d(dRead, (void **) &baseR, &ysizeR, &ystrideR, &xsizeR);
         laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
-        if (iter == 25 && world->size == 4) {
-            writeDataToFile("dRead_pre_", ".pgm", dRead);
-        }
-        if (iter == 25 && world->size == 3) {
-            writeDataToFile("dRead_post", ".pgm", dRead);
-        }
 
-        setBoundary(size, pWrite, dWrite);
 
         // local range for which to do 2d stencil, without global edges
         laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
@@ -362,11 +390,36 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+void exportDataFile(char *label, Laik_Data *data) {//        if (iter == 25 && world->size == 4) {
+// export the data to an image
+    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, world,
+                                                               LAIK_RO_None);
+    if (laik_myid(world) == 0) {
+        char filenamePrefix[1024];
+        snprintf(filenamePrefix, 1024, "output/data_%s_%i_", label, dataFileCounter);
+//            writeDataToFile(filenamePrefix, ".pgm", exportCheckpoint->data);
+        writeColorDataToFile(filenamePrefix, ".ppm", exportCheckpoint->data, data->activePartitioning, colors);
+    }
+    laik_free(exportCheckpoint->data);
+    free(exportCheckpoint);
+//        }
+
+}
+
+void exportDataFiles() {
+    exportDataFile("dW", dWrite);
+//    exportDataFile("d2", data2);
+    if (spaceCheckpoints[1] != NULL) {
+        exportDataFile("c1", spaceCheckpoints[1]->data);
+    }
+    dataFileCounter++;
+}
+
 void restoreCheckpoints() {
     TPRINTF("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
-    laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, dSum);
-    laik_checkpoint_restore(inst, &spaceCheckpoints[1], space, data1);
-    laik_checkpoint_restore(inst, &spaceCheckpoints[2], space, data2);
+    laik_checkpoint_restore(inst, spaceCheckpoints[0], sp1, dSum);
+    laik_checkpoint_restore(inst, spaceCheckpoints[1], space, data1);
+    laik_checkpoint_restore(inst, spaceCheckpoints[2], space, data2);
     TPRINTF("Restore successful\n");
 }
 
@@ -386,9 +439,12 @@ void createCheckpoints(int iter) {
 
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
                                        int64_t gy1) {// arbitrary non-zero values based on global indexes to detect bugs
+    (void) gx1;
+    (void) gy1;
     for (uint64_t y = 0; y < ysizeW; y++)
         for (uint64_t x = 0; x < xsizeW; x++)
-            baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
+//            baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
+            baseW[y * ystrideW + x] = initVal;
 }
 
 double calculateGlobalResiduum(double localResiduum, double **sumPtr) {// calculate global residuum
