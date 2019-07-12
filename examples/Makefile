@@ -7,7 +7,8 @@ OPT=-g
 EXAMPLES = vsum vsum2 spmv spmv2 \
     jac1d jac2d jac2d-ser jac3d \
     markov-ser markov markov2 \
-    propagation1d propagation2d
+    propagation1d propagation2d \
+    README-example
 
 CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../include
 LAIKLIB = $(abspath ../liblaik.so)
@@ -41,6 +42,8 @@ propagation1d: $(SDIR)propagation1d.c $(LAIKLIB)
 
 propagation2d: $(SDIR)propagation2d.c $(LAIKLIB)
 	$(CC) $(CFLAGS) $< $(LAIKLIB) -o $@ -lm
+
+README-example: README-example.o $(LAIKLIB)
 
 clean:
 	rm -f *.o *~ *.ppm $(EXAMPLES)

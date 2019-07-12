@@ -16,6 +16,7 @@ markov
 markov2
 propagation1d
 propagation2d
+README-example
 /raytracer
 /raytracer.c
 /raytracer_omp.cpp
