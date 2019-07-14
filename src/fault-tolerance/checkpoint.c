@@ -131,7 +131,13 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
 }
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
-    laik_log(LAIK_LL_Debug, "Switching data containers to partitioning %s", partitioning->name);
+    laik_log_begin(LAIK_LL_Warning);
+    laik_log_append("Migrate source partitioning:\n");
+    laik_log_Partitioning(sourceData->activePartitioning);
+    laik_log_append("\nto target partitioning:\n");
+    laik_log_Partitioning(targetData->activePartitioning);
+    laik_log_flush("\nusing partitioning %s.\n", partitioning->name);
+
     if (sourceData->activePartitioning != partitioning) {
         laik_switchto_partitioning(sourceData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
     }
@@ -296,6 +302,32 @@ Laik_Partitioner *create_checkpoint_partitioner(Laik_Partitioner *currentPartiti
 
 int laik_location_get_world_offset(Laik_Group *group, int id);
 
+void set_slice_to_empty(Laik_Slice *slice);
+
+
+void set_slice_to_empty(Laik_Slice *slice) {
+    (*slice).from.i[0] = INT64_MIN;
+    (*slice).from.i[1] = INT64_MIN;
+    (*slice).from.i[2] = INT64_MIN;
+    (*slice).to.i[0] = INT64_MIN;
+    (*slice).to.i[1] = INT64_MIN;
+    (*slice).to.i[2] = INT64_MIN;
+}
+
+void laik_checkpoint_remove_redundant_slices(Laik_Checkpoint *checkpoint) {
+    Laik_Partitioning *backupPartitioning = checkpoint->data->activePartitioning;
+
+    assert(backupPartitioning->saList->next == NULL && backupPartitioning->saList->info == LAIK_AI_FULL);
+    Laik_SliceArray *sliceArray = backupPartitioning->saList->slices;
+    for (unsigned int oldIndex = 0; oldIndex < sliceArray->count; ++oldIndex) {
+        for (unsigned int newIndex = 0; newIndex < oldIndex; ++newIndex) {
+            if(laik_slice_isEqual(&sliceArray->tslice[oldIndex].s, &sliceArray->tslice[newIndex].s)) {
+                set_slice_to_empty(&sliceArray->tslice[oldIndex].s);
+            }
+        }
+    }
+}
+
 bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nodeStatuses)[]) {
     Laik_Partitioning *backupPartitioning = checkpoint->data->activePartitioning;
 
@@ -308,16 +340,18 @@ bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nod
         int taskIdInWorld = laik_location_get_world_offset(backupPartitioning->group, taskIdInGroup);
         if ((*nodeStatuses)[taskIdInWorld] != LAIK_FT_NODE_OK) {
             // Set this task slice's size to zero (don't get any data from here)
-            taskSlice->s.from.i[0] = INT64_MIN;
-            taskSlice->s.from.i[1] = INT64_MIN;
-            taskSlice->s.from.i[2] = INT64_MIN;
-            taskSlice->s.to.i[0] = INT64_MIN;
-            taskSlice->s.to.i[1] = INT64_MIN;
-            taskSlice->s.to.i[2] = INT64_MIN;
+            set_slice_to_empty(&taskSlice->s);
         }
     }
     laik_log_begin(LAIK_LL_Warning);
     laik_log_append("Eliminated partitioning:\n");
+    laik_log_Partitioning(backupPartitioning);
+    laik_log_flush("\n");
+
+    laik_checkpoint_remove_redundant_slices(checkpoint);
+
+    laik_log_begin(LAIK_LL_Warning);
+    laik_log_append("Non-redundant partitioning:\n");
     laik_log_Partitioning(backupPartitioning);
     laik_log_flush("\n");
 
