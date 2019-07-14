@@ -142,8 +142,8 @@ Laik_Partitioner *prWrite, *prRead;
 Laik_Data *dWrite, *dRead;
 
 
-// [0]: Global sum, [1]: data1, [2]: data2
-Laik_Checkpoint *spaceCheckpoints[3];
+// Always dWrite
+Laik_Checkpoint *spaceCheckpoint;
 
 int main(int argc, char *argv[]) {
     laik_set_loglevel(LAIK_LL_Info);
@@ -305,9 +305,7 @@ int main(int argc, char *argv[]) {
                 laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
                 TPRINTF("Removing failed slices from checkpoints\n");
-                if (!laik_checkpoint_remove_failed_slices(spaceCheckpoints[0], &nodeStatuses)
-                    || !laik_checkpoint_remove_failed_slices(spaceCheckpoints[1], &nodeStatuses)
-                    || !laik_checkpoint_remove_failed_slices(spaceCheckpoints[2], &nodeStatuses)) {
+                if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, &nodeStatuses)) {
                     TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
                     abort();
                 }
@@ -414,29 +412,21 @@ void exportDataFile(char *label, Laik_Data *data) {//        if (iter == 25 && w
 void exportDataFiles() {
     exportDataFile("dW", dWrite);
 //    exportDataFile("d2", data2);
-    if (spaceCheckpoints[1] != NULL) {
-        exportDataFile("c1", spaceCheckpoints[2]->data);
+    if (spaceCheckpoint != NULL) {
+        exportDataFile("c1", spaceCheckpoint->data);
     }
     dataFileCounter++;
 }
 
 void restoreCheckpoints() {
     TPRINTF("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
-//    laik_checkpoint_restore(inst, spaceCheckpoints[0], sp1, dSum);
-    laik_checkpoint_restore(inst, spaceCheckpoints[1], space, dWrite);
-//    laik_checkpoint_restore(inst, spaceCheckpoints[2], space, data2);
+    laik_checkpoint_restore(inst, spaceCheckpoint, space, dWrite);
     TPRINTF("Restore successful\n");
 }
 
 void createCheckpoints(int iter) {
-    TPRINTF("Creating checkpoint of sum\n");
-    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, true, world, LAIK_RO_Max);
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, dWrite, prWrite, true, world, LAIK_RO_None);
-//    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL, world, LAIK_RO_None);
-    TPRINTF("Creating checkpoint 3\n");
-//    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, smallWorld, LAIK_RO_None);
-    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, dRead, prWrite, true, world, LAIK_RO_None);
+    spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, true, world, LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 
