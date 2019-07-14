@@ -287,15 +287,16 @@ int main(int argc, char *argv[]) {
 
                 // Re-fetch the world
                 world = laik_world_fault_tolerant(inst);
+//                world = smallWorld;
 
                 assert(world->size == 3);
                 TPRINTF("Attempting to restore with new world size %i\n", world->size);
 
-                pSum = laik_new_partitioning(laik_All, smallWorld, sp1, 0);
+                pSum = laik_new_partitioning(laik_All, world, sp1, 0);
                 laik_partitioning_set_name(pSum, "pSum_new");
-                pWrite = laik_new_partitioning(prWrite, smallWorld, space, 0);
+                pWrite = laik_new_partitioning(prWrite, world, space, 0);
                 laik_partitioning_set_name(pWrite, "pWrite_new");
-                pRead = laik_new_partitioning(prRead, smallWorld, space, pWrite);
+                pRead = laik_new_partitioning(prRead, world, space, pWrite);
                 laik_partitioning_set_name(pRead, "pRead_new");
 
                 TPRINTF("Switching to new partitionings\n");
@@ -319,7 +320,6 @@ int main(int argc, char *argv[]) {
 
                 iter = restoreIteration;
                 laik_tcp_clear_errors();
-                world = smallWorld;
                 TPRINTF("Restore complete, cleared errors.\n");
 
 //                TPRINTF("Special: Switching to all partitioning.\n");
@@ -351,7 +351,7 @@ int main(int argc, char *argv[]) {
         }
         setBoundary(size, iter, pWrite, dWrite);
 
-        exportDataFiles();
+//        exportDataFiles();
 
         // switch roles: data written before now is read
         if (dRead == data1) {
@@ -401,7 +401,7 @@ int main(int argc, char *argv[]) {
 
 void exportDataFile(char *label, Laik_Data *data) {//        if (iter == 25 && world->size == 4) {
 // export the data to an image
-    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, world,
+    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, false, world,
                                                                LAIK_RO_None);
     if (laik_myid(world) == 0) {
         char filenamePrefix[1024];
@@ -434,13 +434,13 @@ void restoreCheckpoints() {
 
 void createCheckpoints(int iter) {
     TPRINTF("Creating checkpoint of sum\n");
-    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, smallWorld, LAIK_RO_Max);
+    spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, dSum, laik_Master, true, world, LAIK_RO_Max);
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, smallWorld, LAIK_RO_None);
+    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, true, world, LAIK_RO_None);
 //    spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, NULL, world, LAIK_RO_None);
     TPRINTF("Creating checkpoint 3\n");
 //    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, smallWorld, LAIK_RO_None);
-    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, smallWorld, LAIK_RO_None);
+    spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, true, world, LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 

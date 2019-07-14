@@ -36,9 +36,9 @@ int main(int argc, char *argv[]) {
     test_hexHash("Original data", base, length, hashOriginal);
 
     // This should automatically create a backup partitioner that stores data on another node
-    Laik_Checkpoint checkpoint = laik_checkpoint_create(inst, space, originalData, NULL, NULL, LAIK_RO_None);
+    Laik_Checkpoint* checkpoint = laik_checkpoint_create(inst, space, originalData, NULL, true, NULL, LAIK_RO_None);
 
-    laik_map_def1(checkpoint.data, (void**) &backupBase, &backupCount);
+    laik_map_def1(checkpoint->data, (void**) &backupBase, &backupCount);
     unsigned char hashBackup[SHA_DIGEST_LENGTH];
     test_hexHash("Checkpoint data using automatic backup partitioner", backupBase, length, hashBackup);
 

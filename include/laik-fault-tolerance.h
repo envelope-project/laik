@@ -5,6 +5,7 @@
 #ifndef LAIK_LAIK_FAULT_TOLERANCE_H
 #define LAIK_LAIK_FAULT_TOLERANCE_H
 
+#define LAIK_CHECKPOINT_SLICE_ROTATION_DISTANCE 1
 typedef enum {
     LAIK_FT_NODE_OK = 1,
     LAIK_FT_NODE_FAULT = -1
@@ -17,9 +18,9 @@ struct _Laik_Checkpoint {
 
 typedef struct _Laik_Checkpoint Laik_Checkpoint;
 
-Laik_Checkpoint* laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
-                                       Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup,
-                                       enum _Laik_ReductionOperation reductionOperation);
+Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
+                                        Laik_Partitioner *backupPartitioner, bool enableRedundancy,
+                                        Laik_Group *backupGroup, enum _Laik_ReductionOperation reductionOperation);
 
 void laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data);
 

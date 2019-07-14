@@ -21,9 +21,9 @@ void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning
 
 void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget);
 
-Laik_Checkpoint* laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
-                                       Laik_Partitioner *backupPartitioner, Laik_Group *backupGroup,
-                                       enum _Laik_ReductionOperation reductionOperation) {
+Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
+                                        Laik_Partitioner *backupPartitioner, bool enableRedundancy,
+                                        Laik_Group *backupGroup, enum _Laik_ReductionOperation reductionOperation) {
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i for space %s data %s\n", iteration, space->name,
              data->name);
@@ -41,12 +41,19 @@ Laik_Checkpoint* laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
 //    memcpy(backupBase, base, data_length);
     migrateData(data, checkpoint->data, data->activePartitioning);
 
+    if(backupGroup == NULL) {
+        backupGroup = data->activePartitioning->group;
+    }
 
     if (backupPartitioner == NULL) {
-        //TODO: This partitioner needs to be released at some point
-        laik_log(LAIK_LL_Debug, "Creating a backup partitioner from original partitioner %s\n",
+        laik_log(LAIK_LL_Debug, "Using original partitioner %s\n",
                  data->activePartitioning->partitioner->name);
-        backupPartitioner = create_checkpoint_partitioner(data->activePartitioning->partitioner);
+        backupPartitioner = data->activePartitioning->partitioner;
+    }
+
+    if(enableRedundancy) {
+        //TODO: This partitioner needs to be released at some point
+        backupPartitioner = create_checkpoint_partitioner(backupPartitioner);
     }
 
     laik_log(LAIK_LL_Debug, "Switching to backup partitioning\n");
@@ -265,7 +272,7 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
     unsigned int originalCount = receiver->array->count;
     for (unsigned int i = 0; i < originalCount; i++) {
         Laik_TaskSlice_Gen duplicateSlice = receiver->array->tslice[i];
-        int taskId = (duplicateSlice.task + 1) % receiver->params->group->size;
+        int taskId = (duplicateSlice.task + LAIK_CHECKPOINT_SLICE_ROTATION_DISTANCE) % receiver->params->group->size;
         laik_append_slice(receiver, taskId, &duplicateSlice.s, duplicateSlice.tag, duplicateSlice.data);
     }
 }

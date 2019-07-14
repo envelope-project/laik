@@ -188,7 +188,7 @@ int main(int argc, char* argv[])
     int iter = 0;
 
     // [0]: Global sum, [1]: data1, [2]: data2
-    Laik_Checkpoint spaceCheckpoints[3];
+    Laik_Checkpoint *spaceCheckpoints[3];
     // Flag to avoid restoring multiple times
     bool hasRestored = false;
 
@@ -197,14 +197,15 @@ int main(int argc, char* argv[])
 
         // At iteration 10, do a checkpoint
         if(iter == 10) {
-            spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, sumD->activePartitioning->partitioner, world, LAIK_RO_Max);
-            spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, world, LAIK_RO_None);
-            spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, world, LAIK_RO_None);
+            spaceCheckpoints[0] = laik_checkpoint_create(inst, sp1, sumD, sumD->activePartitioning->partitioner, true,
+                                                         world, LAIK_RO_Max);
+            spaceCheckpoints[1] = laik_checkpoint_create(inst, space, data1, prWrite, true, world, LAIK_RO_None);
+            spaceCheckpoints[2] = laik_checkpoint_create(inst, space, data2, prWrite, true, world, LAIK_RO_None);
             printf("Checkpoint successful\n");
         } else if(!hasRestored && iter == 40) {
-            laik_checkpoint_restore(inst, &spaceCheckpoints[0], sp1, sumD);
-            laik_checkpoint_restore(inst, &spaceCheckpoints[1], space, data1);
-            laik_checkpoint_restore(inst, &spaceCheckpoints[2], space, data2);
+            laik_checkpoint_restore(inst, spaceCheckpoints[0], sp1, sumD);
+            laik_checkpoint_restore(inst, spaceCheckpoints[1], space, data1);
+            laik_checkpoint_restore(inst, spaceCheckpoints[2], space, data2);
             printf("Restore successful\n");
             iter = 10;
             hasRestored = true;
