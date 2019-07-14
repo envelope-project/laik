@@ -17,8 +17,6 @@ laik_run_partitioner_t wrapPartitionerRun(const Laik_Partitioner *currentPartiti
 
 Laik_Partitioner *create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner);
 
-Laik_Group *create_checkpoint_group(Laik_Group *originalGroup, int rotationDistance);
-
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning);
 
 void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget);
@@ -49,13 +47,6 @@ Laik_Checkpoint* laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
         laik_log(LAIK_LL_Debug, "Creating a backup partitioner from original partitioner %s\n",
                  data->activePartitioning->partitioner->name);
         backupPartitioner = create_checkpoint_partitioner(data->activePartitioning->partitioner);
-    }
-
-    if (backupGroup == NULL) {
-        //TODO: This group needs to be released at some point
-        laik_log(LAIK_LL_Debug, "Creating a backup group from the original group %i using rotation distance %i",
-                 data->activePartitioning->group->gid, SLICE_ROTATE_DISTANCE);
-        backupGroup = create_checkpoint_group(data->activePartitioning->group, SLICE_ROTATE_DISTANCE);
     }
 
     laik_log(LAIK_LL_Debug, "Switching to backup partitioning\n");
@@ -296,24 +287,6 @@ Laik_Partitioner *create_checkpoint_partitioner(Laik_Partitioner *currentPartiti
                                 currentPartitioner->flags);
 }
 
-Laik_Group *create_checkpoint_group(Laik_Group *originalGroup, int rotationDistance) {
-    //TODO@VB: other parts of LAIK assume that the mapping is provided in lexicographic order (not possible with a ring)
-    Laik_Group *newGroup = laik_clone_group(originalGroup);
-    assert(rotationDistance >= 0 && rotationDistance < newGroup->size);
-
-    for (int i = 0; i < newGroup->size; ++i) {
-        newGroup->toParent[i] = (i + rotationDistance) % newGroup->size;
-        //Ensure that the argument to modulo operator is not negative
-        newGroup->fromParent[(i + rotationDistance) % newGroup->size] = i;
-    }
-
-    //Update backend if necessary
-    if (newGroup->inst->backend->updateGroup) {
-        newGroup->inst->backend->updateGroup(newGroup);
-    }
-
-    return newGroup;
-}
 int laik_location_get_world_offset(Laik_Group *group, int id);
 
 bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nodeStatuses)[]) {
