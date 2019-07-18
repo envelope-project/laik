@@ -116,7 +116,7 @@ uninstall_laik:
 	rm -f $(PREFIX)/lib/liblaik.*
 
 README.md: README.in examples/README-example.c
-	sed -e '/EXAMPLECODE/ {r examples/README-example.c' -e 'd}' README.in > README.md
+	sed -e '/EXAMPLECODE/ {r examples/README-example.c' -e 'd' -e '}' README.in > README.md
 
 # include previously generated dependency rules if existing
 -include $(DEPS)
