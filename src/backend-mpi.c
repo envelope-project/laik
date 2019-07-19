@@ -24,6 +24,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <mpi.h>
+#include <mpi-ext.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -41,6 +42,7 @@ static void laik_mpi_exec(Laik_ActionSeq* as);
 static void laik_mpi_updateGroup(Laik_Group*);
 static bool laik_mpi_log_action(Laik_Action* a);
 static void laik_mpi_sync(Laik_KVStore* kvs);
+static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup, int* nodeStatuses);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
@@ -51,7 +53,8 @@ static Laik_Backend laik_backend_mpi = {
     .exec        = laik_mpi_exec,
     .updateGroup = laik_mpi_updateGroup,
     .log_action  = laik_mpi_log_action,
-    .sync        = laik_mpi_sync
+    .sync        = laik_mpi_sync,
+    .eliminateNodes = laik_mpi_eliminate_nodes,
 };
 
 static Laik_Instance* mpi_instance = 0;
@@ -281,6 +284,20 @@ void laik_mpi_panic(int err)
     int len;
 
     assert(err != MPI_SUCCESS);
+
+    if(laik_mpi_get_error_handler() != NULL) {
+
+        laik_log(LAIK_LL_Info, "Error handler found, attempting to handle error.\n");
+        if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
+            laik_log(LAIK_LL_Warning, "Unknown mini-MPI error!");
+        } else {
+            laik_log(LAIK_LL_Warning, "MPI error: %s", str);
+        }
+        laik_mpi_get_error_handler()(0);
+        fprintf(stderr, "[LAIK MPI Backend] Error handler exited, attempting to continue\n");
+        return;
+    }
+
     if (MPI_Error_string(err, str, &len) != MPI_SUCCESS)
         laik_panic("MPI backend: Unknown MPI error!");
     else
@@ -1158,6 +1175,33 @@ static void laik_mpi_sync(Laik_KVStore* kvs)
 
     free(offArray);
     free(dataArray);
+}
+
+
+static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup, int* nodeStatuses) {
+    (void) oldGroup; (void)newGroup; (void)nodeStatuses;
+    MPI_Comm oldComm = ((MPIGroupData *) oldGroup->backend_data)->comm;
+    MPIX_Comm_revoke(oldComm);
+
+    MPIGroupData* gd = (MPIGroupData*) newGroup->backend_data;
+    assert(gd == 0); // must not be updated yet
+    gd = malloc(sizeof(MPIGroupData));
+    if (!gd) {
+        laik_panic("Out of memory allocating MPIGroupData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    newGroup->backend_data = gd;
+
+    assert(oldComm != NULL && gd->comm != NULL);
+    MPIX_Comm_shrink(oldComm, &gd->comm);
+}
+
+void laik_mpi_set_error_handler(LaikMPIErrorHandler newErrorHandler) {
+    abortErrorHandler = newErrorHandler;
+}
+
+LaikMPIErrorHandler laik_mpi_get_error_handler() {
+    return abortErrorHandler;
 }
 
 
