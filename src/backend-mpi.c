@@ -1196,6 +1196,10 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
 
     assert(oldComm != NULL && gd->comm != NULL);
     MPIX_Comm_shrink(oldComm, &gd->comm);
+
+    int newSize;
+    MPI_Comm_size(gd->comm, &newSize);
+    assert(newSize == newGroup->size);
 }
 
 static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {

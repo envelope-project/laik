@@ -127,7 +127,7 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
 
 void errorHandler(void *errors) {
     (void) errors;
-    printf("Received an error condition, attempting to continue.\n");
+    TPRINTF("Received an error condition, attempting to continue.\n");
 }
 
 Laik_Instance *inst;
