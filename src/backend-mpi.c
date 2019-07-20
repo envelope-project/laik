@@ -43,6 +43,7 @@ static void laik_mpi_updateGroup(Laik_Group*);
 static bool laik_mpi_log_action(Laik_Action* a);
 static void laik_mpi_sync(Laik_KVStore* kvs);
 static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup, int* nodeStatuses);
+static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
@@ -55,6 +56,7 @@ static Laik_Backend laik_backend_mpi = {
     .log_action  = laik_mpi_log_action,
     .sync        = laik_mpi_sync,
     .eliminateNodes = laik_mpi_eliminate_nodes,
+    .statusCheck = laik_mpi_status_check,
 };
 
 static Laik_Instance* mpi_instance = 0;
@@ -1194,6 +1196,113 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
 
     assert(oldComm != NULL && gd->comm != NULL);
     MPIX_Comm_shrink(oldComm, &gd->comm);
+}
+
+static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
+    laik_log(LAIK_LL_Warning, "Starting agreement protocol\n");
+
+//    // Make sure my position fits into the integer
+//    assert((unsigned long) group->myid < sizeof(int) * 8);
+//    int status = 1U << group->myid;
+//    MPIX_Comm_agree(((MPIGroupData*)group->backend_data)->comm, &status);
+//
+//    int numFailed = 0;
+//    for (int i = 0; i < group->size; ++i) {
+//        bool hasFailed = (status & (1U << i)) > 0;
+//        if(hasFailed) {
+//            nodeStatuses[i] = LAIK_FT_NODE_FAULT;
+//            numFailed++;
+//        } else {
+//            nodeStatuses[i] = LAIK_FT_NODE_OK;
+//        }
+//    }
+//    return numFailed;
+
+
+    MPI_Comm originalComm = ((MPIGroupData *) group->backend_data)->comm;
+//    MPI_Comm testComm;
+//    MPI_Group worldGroup, originalGroup, shrinkedGroup;
+//
+//    MPIX_Comm_shrink(originalComm, &testComm);
+//
+//    MPI_Comm_group(originalComm, &originalGroup);
+//    MPI_Comm_group(testComm, &shrinkedGroup);
+//    MPI_Comm_group(MPI_COMM_WORLD, &worldGroup);
+//
+//    MPI_Group difference;
+//
+//    MPI_Group_difference(originalGroup, shrinkedGroup, &difference);
+//
+//    int n = -1;
+//    MPI_Group_size(shrinkedGroup, &n);
+//    int ranks[n];
+//    int worldRanks[n];
+//
+//    laik_log(LAIK_LL_Warning, "Shrinked MPI_Group size is %i", n);
+//
+//    for (int i = 0; i < n; ++i) {
+//        ranks[i] = i;
+//    }
+//
+//    MPI_Group_translate_ranks(shrinkedGroup, n, ranks, worldGroup, worldRanks);
+//
+//    if(nodeStatuses != NULL) {
+//        for (int i = 0; i < group->size; ++i) {
+//            nodeStatuses[i] = LAIK_FT_NODE_FAULT;
+//        }
+//
+//        for (int i = 0; i < n; ++i) {
+//            nodeStatuses[worldRanks[i]] = LAIK_FT_NODE_OK;
+//        }
+//    }
+//
+//    MPI_Group_free(&originalGroup);
+//    MPI_Group_free(&shrinkedGroup);
+//    MPI_Group_free(&worldGroup);
+//
+//    MPI_Comm_free(&testComm);
+
+//    return group->size - n;
+
+    int result;
+    int reduceFlag = 1;
+    do {
+        MPIX_Comm_failure_ack(originalComm);
+        result = MPIX_Comm_agree(originalComm, &reduceFlag);
+    } while (result != MPI_SUCCESS);
+
+    MPI_Group failedGroup, worldGroup;
+    MPIX_Comm_failure_get_acked(originalComm, &failedGroup);
+
+    int n = -1;
+    MPI_Group_size(failedGroup, &n);
+    int ranks[n];
+    int worldRanks[n];
+
+    MPI_Comm_group(MPI_COMM_WORLD, &worldGroup);
+
+    laik_log(LAIK_LL_Warning, "Failed MPI_Group size is %i", n);
+
+    for (int i = 0; i < n; ++i) {
+        ranks[i] = i;
+    }
+
+    // WARNING: Different from above, this group contains only failed ones, not the survivors
+    MPI_Group_translate_ranks(failedGroup, n, ranks, worldGroup, worldRanks);
+    if (nodeStatuses != NULL) {
+        for (int i = 0; i < group->size; ++i) {
+            nodeStatuses[i] = LAIK_FT_NODE_OK;
+        }
+
+        for (int i = 0; i < n; ++i) {
+            nodeStatuses[worldRanks[i]] = LAIK_FT_NODE_FAULT;
+        }
+    }
+
+    MPI_Group_free(&failedGroup);
+    MPI_Group_free(&worldGroup);
+
+    return n;
 }
 
 void laik_mpi_set_error_handler(LaikMPIErrorHandler newErrorHandler) {

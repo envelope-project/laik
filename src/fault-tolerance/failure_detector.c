@@ -18,54 +18,70 @@ Laik_Partitioning *all;
 void laik_set_fault_tolerant_world(Laik_Group *group);
 
 int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup, int *failedNodes) {
-    int checkGroupSize = laik_size(checkGroup);
-    if (nodeSpace == NULL || all->group != checkGroup) {
-        laik_log(LAIK_LL_Debug, "Resetting failure check container.");
-        if (nodeSpace != NULL) {
-            laik_free_space(nodeSpace);
-            laik_free(nodeData);
-            laik_free_partitioning(all);
-            laik_free_partitioning(each);
-        }
-        nodeSpace = laik_new_space_1d(laikInstance, checkGroupSize);
-        laik_set_space_name(nodeSpace, "Failure detection space");
-        nodeData = laik_new_data(nodeSpace, laik_UChar);
-        laik_data_set_name(nodeData, "Failure detection data container");
-        all = laik_new_partitioning(laik_All, checkGroup, nodeSpace, NULL);
-        each = laik_new_partitioning(laik_new_block_partitioner1(), checkGroup, nodeSpace, NULL);
-    }
-    laik_switchto_partitioning(nodeData, each, LAIK_DF_None, LAIK_RO_None);
-    unsigned char *nodeBase;
-    uint64_t nodeCount;
-    laik_map_def1(nodeData, (void **) &nodeBase, &nodeCount);
-    assert(nodeCount == 1);
-    *nodeBase = LAIK_FT_NODE_OK;
-
-    laik_switchto_partitioning(nodeData, all, LAIK_DF_Preserve, LAIK_RO_None);
-    laik_map_def1(nodeData, (void **) &nodeBase, &nodeCount);
 
     int failuresFound = 0;
 
-    for (unsigned int i = 0; i < nodeCount; ++i) {
-        if (nodeBase[i] != LAIK_FT_NODE_OK) {
-            laik_log(LAIK_LL_Warning, "Node %i (global %i) has abnormal status %d", i,
-                     laik_location_get_world_offset(checkGroup, i), nodeBase[i]);
-            if (failedNodes != NULL) {
-                failedNodes[i] = LAIK_FT_NODE_FAULT;
+    // Check if there is a backend operation that will do this for us. Otherwise, fall back to the default
+    // implementation below
+    if (laikInstance->backend->statusCheck != NULL) {
+        laik_log(LAIK_LL_Debug, "Using backend %s status check operation to determine node status.",
+                 laikInstance->backend->name);
+        failuresFound = laikInstance->backend->statusCheck(checkGroup, failedNodes);
+    } else {
+        int checkGroupSize = laik_size(checkGroup);
+        if (nodeSpace == NULL || all->group != checkGroup) {
+            laik_log(LAIK_LL_Debug, "Resetting failure check container.");
+            if (nodeSpace != NULL) {
+                laik_free_space(nodeSpace);
+                laik_free(nodeData);
+                laik_free_partitioning(all);
+                laik_free_partitioning(each);
             }
-            failuresFound++;
-        } else {
-            laik_log(LAIK_LL_Warning, "Node %i (global %i) has normal status %d", i,
-                     laik_location_get_world_offset(checkGroup, i), nodeBase[i]);
-            if (failedNodes != NULL) {
-                failedNodes[i] = LAIK_FT_NODE_OK;
-            }
+            nodeSpace = laik_new_space_1d(laikInstance, checkGroupSize);
+            laik_set_space_name(nodeSpace, "Failure detection space");
+            nodeData = laik_new_data(nodeSpace, laik_UChar);
+            laik_data_set_name(nodeData, "Failure detection data container");
+            all = laik_new_partitioning(laik_All, checkGroup, nodeSpace, NULL);
+            each = laik_new_partitioning(laik_new_block_partitioner1(), checkGroup, nodeSpace, NULL);
         }
+        laik_switchto_partitioning(nodeData, each, LAIK_DF_None, LAIK_RO_None);
+        unsigned char *nodeBase;
+        uint64_t nodeCount;
+        laik_map_def1(nodeData, (void **) &nodeBase, &nodeCount);
+        assert(nodeCount == 1);
+        *nodeBase = LAIK_FT_NODE_OK;
 
-        //Clear the value to make sure it isn't accidentally reused
-        nodeBase[i] = LAIK_FT_NODE_FAULT;
+        laik_switchto_partitioning(nodeData, all, LAIK_DF_Preserve, LAIK_RO_None);
+        laik_map_def1(nodeData, (void **) &nodeBase, &nodeCount);
+
+        for (unsigned int i = 0; i < nodeCount; ++i) {
+            if (nodeBase[i] != LAIK_FT_NODE_OK) {
+                if (failedNodes != NULL) {
+                    failedNodes[i] = LAIK_FT_NODE_FAULT;
+                }
+                failuresFound++;
+            } else {
+                if (failedNodes != NULL) {
+                    failedNodes[i] = LAIK_FT_NODE_OK;
+                }
+            }
+
+            //Clear the value to make sure it isn't accidentally reused
+            nodeBase[i] = LAIK_FT_NODE_FAULT;
+        }
     }
 
+    if(failedNodes != NULL) {
+        for (int i = 0; i < checkGroup->size; ++i) {
+            if (failedNodes[i] != LAIK_FT_NODE_OK) {
+                laik_log(LAIK_LL_Warning, "Node %i (global %i) has abnormal status %d", i,
+                         laik_location_get_world_offset(checkGroup, i), failedNodes[i]);
+            } else {
+                laik_log(LAIK_LL_Warning, "Node %i (global %i) has normal status %d", i,
+                         laik_location_get_world_offset(checkGroup, i), failedNodes[i]);
+            }
+        }
+    }
     return failuresFound;
 }
 
