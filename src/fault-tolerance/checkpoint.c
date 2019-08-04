@@ -338,7 +338,7 @@ bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int *node
         //TODO: export this to some sort of constant
         int taskIdInGroup = taskSlice->task;
         int taskIdInWorld = laik_location_get_world_offset(backupPartitioning->group, taskIdInGroup);
-        if ((*nodeStatuses)[taskIdInWorld] != LAIK_FT_NODE_OK) {
+        if (nodeStatuses[taskIdInWorld] != LAIK_FT_NODE_OK) {
             // Set this task slice's size to zero (don't get any data from here)
             set_slice_to_empty(&taskSlice->s);
         }
