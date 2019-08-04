@@ -311,7 +311,7 @@ int main(int argc, char *argv[]) {
                 laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
                 TPRINTF("Removing failed slices from checkpoints\n");
-                if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, &nodeStatuses)) {
+                if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, nodeStatuses)) {
                     TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
                     abort();
                 }

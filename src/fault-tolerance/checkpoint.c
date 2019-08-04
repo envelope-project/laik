@@ -328,7 +328,7 @@ void laik_checkpoint_remove_redundant_slices(Laik_Checkpoint *checkpoint) {
     }
 }
 
-bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int (*nodeStatuses)[]) {
+bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int *nodeStatuses) {
     Laik_Partitioning *backupPartitioning = checkpoint->data->activePartitioning;
 
     assert(backupPartitioning->saList->next == NULL && backupPartitioning->saList->info == LAIK_AI_FULL);
