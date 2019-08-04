@@ -12,8 +12,6 @@ foreach (test
             )
 
     target_link_libraries ("${test}"
-            PRIVATE "ssl"
-            PRIVATE "crypto"
             PRIVATE "laik"
             PRIVATE "m"
             )
