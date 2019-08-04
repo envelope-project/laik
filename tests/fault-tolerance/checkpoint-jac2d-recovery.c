@@ -127,6 +127,7 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
 
 void errorHandler(void *errors) {
     (void) errors;
+    TRACE_EVENT_S("COMM_ERROR", "");
     TPRINTF("Received an error condition, attempting to continue.\n");
 }
 
@@ -255,8 +256,9 @@ int main(int argc, char *argv[]) {
     setBoundary(size, iter, pWrite, dWrite);
     laik_log(2, "Init done\n");
 
-
     int nodeStatuses[world->size];
+
+    TRACE_EVENT_S("INIT_END", "");
 
     for (; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
@@ -270,12 +272,15 @@ int main(int argc, char *argv[]) {
 //            laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_None, LAIK_RO_None);
 //            TPRINTF("Switch OK.\n");
 
+            TRACE_EVENT_S("CHECKPOINT_START", "");
             createCheckpoints(iter);
-
+            TRACE_EVENT_S("CHECKPOINT_END", "");
         }
         if (iter % 10 == 5 && iter == 35) {
             TPRINTF("Attempting to determine global status.\n");
+            TRACE_EVENT_S("FAILURE_CHECK_START", "");
             int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
+            TRACE_EVENT_S("FAILURE_CHECK_END", "");
             if (numFailed == 0) {
                 TPRINTF("Could not detect a failed node.\n");
             } else {
@@ -292,6 +297,7 @@ int main(int argc, char *argv[]) {
                 assert(world->size == 3);
                 TPRINTF("Attempting to restore with new world size %i\n", world->size);
 
+                TRACE_EVENT_S("RESTORE_START", "");
                 pSum = laik_new_partitioning(laik_All, world, sp1, 0);
                 laik_partitioning_set_name(pSum, "pSum_new");
                 pWrite = laik_new_partitioning(prWrite, world, space, 0);
@@ -314,6 +320,7 @@ int main(int argc, char *argv[]) {
 
                 iter = restoreIteration;
                 laik_tcp_clear_errors();
+                TRACE_EVENT_S("RESTORE_END", "");
                 TPRINTF("Restore complete, cleared errors.\n");
 
 //                TPRINTF("Special: Switching to all partitioning.\n");
@@ -338,6 +345,7 @@ int main(int argc, char *argv[]) {
 //            if (laik_myid(laik_world(inst)) != 1) {
 //                errorHandler(NULL);
 //            } else {
+            TRACE_EVENT_S("FAILURE_START", "");
             TPRINTF("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
                     iter);
             abort();

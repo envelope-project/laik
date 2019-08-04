@@ -924,3 +924,36 @@ void laik_kvs_sort(Laik_KVStore* kvs)
     kvs->sorted_upto = kvs->used;
 }
 
+#include <sys/time.h>
+
+double getTime(Laik_Instance* inst) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (double)(now.tv_sec - inst->init_time.tv_sec) +
+           0.000001 * (now.tv_usec - inst->init_time.tv_usec);
+}
+
+double getVSize() {
+    long rss = 0L;
+    FILE* fp = NULL;
+    if ( (fp = fopen( "/proc/self/statm", "r" )) == NULL )
+        return (size_t)0L;      /* Can't open? */
+    if ( fscanf( fp, "%*s%ld", &rss ) != 1 )
+    {
+        fclose( fp );
+        return (size_t)0L;      /* Can't read? */
+    }
+    fclose( fp );
+    return ((size_t)rss * (size_t)sysconf( _SC_PAGESIZE)) / 1024.0;
+}
+
+double getNSize(Laik_Instance *inst) {
+    size_t data = 0;
+    for(int i=0; i<inst->data_count; i++) {
+        Laik_Data* d = inst->data[i];
+        data += d->stat->byteRecvCount;
+        data += d->stat->byteSendCount;
+        data += d->stat->byteReduceCount;
+    }
+    return data / 1024.0;
+}

@@ -230,4 +230,14 @@ unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size);
 // sort KVS entries for faster access (done after sync)
 void laik_kvs_sort(Laik_KVStore* kvs);
 
+
+#include <stddef.h>
+double getTime(Laik_Instance*);
+double getVSize();
+double getNSize(Laik_Instance *inst);
+#define TRACE_EVENT(name, format, ...) printf("=== EVENT %s RANK %i AT %f USAGE %f: : " format " ===\n", name, laik_myid(laik_world(inst)), getTime(inst), getVSize(), __VA_ARGS__)
+#define TRACE_EVENT_S(name, format) printf("=== EVENT %s RANK %i AT %f MEM %fKB NET %fKB: " format " ===\n", name, laik_myid(laik_world(inst)), getTime(inst), getVSize(), getNSize(inst))
+
+
+
 #endif // LAIK_CORE_H
