@@ -4,7 +4,6 @@
 
 #include <laik-internal.h>
 #include <laik-backend-tcp.h>
-#include "glib.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
