@@ -10,7 +10,7 @@ EXAMPLES = vsum vsum2 spmv spmv2 \
     propagation1d propagation2d
 
 CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../include
-LAIKLIB = ../liblaik.so
+LAIKLIB = $(abspath ../liblaik.so)
 
 all: $(EXAMPLES)
 

@@ -7,7 +7,7 @@ OPT=-g
 TESTS = checkpoint checkpoint-jac2d checkpoint-jac2d-recovery checkpoint-mandelbrot-recovery checkpoint-partitioner
 
 CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../../include
-LAIKLIB = ../../liblaik.so
+LAIKLIB = $(abspath ../../liblaik.so)
 
 all: $(TESTS)
 
