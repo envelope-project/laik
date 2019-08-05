@@ -18,24 +18,24 @@ void test_laik_group_get_location(Laik_Instance* instance) {
 
     //Right now, the group should map to itself
     Laik_Group* g0 = laik_clone_group(laik_world(instance));
-    assert(0 == laik_group_location(g0, 0));
-    assert(1 == laik_group_location(g0, 1));
-    assert(2 == laik_group_location(g0, 2));
-    assert(3 == laik_group_location(g0, 3));
+    assert(0 == laik_group_locationid(g0, 0));
+    assert(1 == laik_group_locationid(g0, 1));
+    assert(2 == laik_group_locationid(g0, 2));
+    assert(3 == laik_group_locationid(g0, 3));
 
 
     // Create some shrinked groups
     int eliminate1[] =  {1};
     Laik_Group* g1 = laik_new_shrinked_group(world, 1, eliminate1);
 
-    assert(laik_group_location(g1, 0) == 0);
-    assert(laik_group_location(g1, 1) == 2);
-    assert(laik_group_location(g1, 2) == 3);
+    assert(laik_group_locationid(g1, 0) == 0);
+    assert(laik_group_locationid(g1, 1) == 2);
+    assert(laik_group_locationid(g1, 2) == 3);
 
     // Shrink the shrinked group
     Laik_Group* g2 = laik_new_shrinked_group(g1, 1, eliminate1);
-    assert(laik_group_location(g2, 0) == 0);
-    assert(laik_group_location(g2, 1) == 3);
+    assert(laik_group_locationid(g2, 0) == 0);
+    assert(laik_group_locationid(g2, 1) == 3);
 
 }
 
