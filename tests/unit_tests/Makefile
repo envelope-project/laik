@@ -7,7 +7,7 @@ OPT=-g
 UNIT_TESTS = core
 
 CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../include
-LAIKLIB = ../../liblaik.so
+LAIKLIB = $(abspath ../../liblaik.so)
 
 all: $(UNIT_TESTS)
 

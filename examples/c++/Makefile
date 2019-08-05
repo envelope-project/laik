@@ -7,7 +7,7 @@ OPT = -g
 EXAMPLES = raytracer
 
 CXXFLAGS = $(OPT) $(WARN) $(DEFS) -I$(SDIR)../../include
-LAIKLIB = ../../liblaik.so
+LAIKLIB = $(abspath ../../liblaik.so)
 
 all: $(EXAMPLES)
 
