@@ -52,7 +52,7 @@ Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
         backupPartitioner = data->activePartitioning->partitioner;
     }
 
-    if (rotationDistance != 0) {
+    if (redundancyCount != 0) {
         //TODO: This partitioner needs to be released at some point
         backupPartitioner = create_checkpoint_partitioner(backupPartitioner, redundancyCount, rotationDistance);
     }
@@ -282,13 +282,13 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
 
     // Duplicate slices to neighbor. Make sure to duplicate only the original ones, and not the ones we add in the
     // process
-    laik_log(LAIK_LL_Debug, "wrap partitioner: duplicating slices for redundant storage (%i times, %i distance",
+    laik_log(LAIK_LL_Info, "wrap partitioner: duplicating slices for redundant storage (%i times, %i distance)",
              checkpointPartitionerData->redundancyCounts, checkpointPartitionerData->rotationDistance);
     unsigned int originalCount = receiver->array->count;
     for (int redundancyCount = 0; redundancyCount < checkpointPartitionerData->redundancyCounts; ++redundancyCount) {
         for (unsigned int i = 0; i < originalCount; i++) {
             Laik_TaskSlice_Gen duplicateSlice = receiver->array->tslice[i];
-            int taskId = (duplicateSlice.task + redundancyCount * checkpointPartitionerData->redundancyCounts) % receiver->params->group->size;
+            int taskId = (duplicateSlice.task + (redundancyCount + 1) * checkpointPartitionerData->rotationDistance) % receiver->params->group->size;
             laik_append_slice(receiver, taskId, &duplicateSlice.s, duplicateSlice.tag, duplicateSlice.data);
         }
     }
@@ -320,6 +320,7 @@ create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundan
     checkpointPartitioner->data = partitionerData;
     partitionerData->rotationDistance = rotationDistance;
     partitionerData->redundancyCounts = redundancyCount;
+    partitionerData->originalPartitioner = currentPartitioner;
     return checkpointPartitioner;
 }
 
