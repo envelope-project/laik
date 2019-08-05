@@ -403,7 +403,7 @@ int main(int argc, char *argv[]) {
 
 void exportDataFile(char *label, Laik_Data *data) {//        if (iter == 25 && world->size == 4) {
 // export the data to an image
-    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, false, world,
+    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, 0, 0, world,
                                                                LAIK_RO_None);
     if (laik_myid(world) == 0) {
         char filenamePrefix[1024];
@@ -434,7 +434,7 @@ void restoreCheckpoints() {
 
 void createCheckpoints(int iter) {
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, true, world, LAIK_RO_None);
+    spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, 1, 1, world, LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 

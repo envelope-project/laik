@@ -58,7 +58,8 @@ int main(int argc, char *argv[]) {
 
     double localResiduum = 0;
     for (int iter = 0; iter < 50; ++iter) {
-        Laik_Checkpoint* exportCheckpoint = laik_checkpoint_create(instance, space, dataReal, laik_Master, true, world,
+        Laik_Checkpoint* exportCheckpoint = laik_checkpoint_create(instance, space, dataReal, laik_Master, 1,1,
+                                                                   world,
                                                                    LAIK_RO_None);
         if (laik_myid(world) == 0) {
             char filenamePrefix[1024];

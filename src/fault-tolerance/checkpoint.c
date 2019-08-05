@@ -8,27 +8,28 @@
 
 #define SLICE_ROTATE_DISTANCE 1
 
-Laik_Checkpoint* initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data);
+Laik_Checkpoint *initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data);
 
 void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
                  uint64_t *count, void **backupBase, uint64_t *backupCount);
 
 laik_run_partitioner_t wrapPartitionerRun(const Laik_Partitioner *currentPartitioner);
 
-Laik_Partitioner *create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner);
+Laik_Partitioner *
+create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance);
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning);
 
 void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget);
 
 Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
-                                        Laik_Partitioner *backupPartitioner, bool enableRedundancy,
+                                        Laik_Partitioner *backupPartitioner, int redundancyCount, int rotationDistance,
                                         Laik_Group *backupGroup, enum _Laik_ReductionOperation reductionOperation) {
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i for space %s data %s\n", iteration, space->name,
              data->name);
 
-    Laik_Checkpoint* checkpoint;
+    Laik_Checkpoint *checkpoint;
 
     checkpoint = initCheckpoint(laikInstance, space, data);
 
@@ -41,7 +42,7 @@ Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
 //    memcpy(backupBase, base, data_length);
     migrateData(data, checkpoint->data, data->activePartitioning);
 
-    if(backupGroup == NULL) {
+    if (backupGroup == NULL) {
         backupGroup = data->activePartitioning->group;
     }
 
@@ -51,9 +52,9 @@ Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
         backupPartitioner = data->activePartitioning->partitioner;
     }
 
-    if(enableRedundancy) {
+    if (rotationDistance != 0) {
         //TODO: This partitioner needs to be released at some point
-        backupPartitioner = create_checkpoint_partitioner(backupPartitioner);
+        backupPartitioner = create_checkpoint_partitioner(backupPartitioner, redundancyCount, rotationDistance);
     }
 
     laik_log(LAIK_LL_Debug, "Switching to backup partitioning\n");
@@ -212,13 +213,13 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
     }
 }
 
-Laik_Checkpoint* initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data) {
+Laik_Checkpoint *initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data) {
     //TODO: Temporarily unused
     (void) laikInstance;
     (void) data;
 
-    Laik_Checkpoint* checkpoint = malloc(sizeof(Laik_Checkpoint));
-    if(checkpoint == NULL) {
+    Laik_Checkpoint *checkpoint = malloc(sizeof(Laik_Checkpoint));
+    if (checkpoint == NULL) {
         laik_panic("Out of memory allocating checkpoint!");
         assert(0);
     }
@@ -231,9 +232,16 @@ Laik_Checkpoint* initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, 
     return checkpoint;
 }
 
+struct _LaikCheckpointPartitionerData {
+    int redundancyCounts;
+    int rotationDistance;
+    Laik_Partitioner *originalPartitioner;
+};
+typedef struct _LaikCheckpointPartitionerData LaikCheckpointPartitionerData;
 
 void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParams *params) {
-    Laik_Partitioner *originalPartitioner = (Laik_Partitioner *) params->partitioner->data;
+    LaikCheckpointPartitionerData *checkpointPartitionerData = params->partitioner->data;
+    Laik_Partitioner *originalPartitioner = checkpointPartitionerData->originalPartitioner;
     Laik_PartitionerParams modifiedParams = {
             .space = params->space,
             .group = params->group,
@@ -274,12 +282,15 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
 
     // Duplicate slices to neighbor. Make sure to duplicate only the original ones, and not the ones we add in the
     // process
-    laik_log(LAIK_LL_Debug, "wrap partitioner: duplicating slices for redundant storage");
+    laik_log(LAIK_LL_Debug, "wrap partitioner: duplicating slices for redundant storage (%i times, %i distance",
+             checkpointPartitionerData->redundancyCounts, checkpointPartitionerData->rotationDistance);
     unsigned int originalCount = receiver->array->count;
-    for (unsigned int i = 0; i < originalCount; i++) {
-        Laik_TaskSlice_Gen duplicateSlice = receiver->array->tslice[i];
-        int taskId = (duplicateSlice.task + LAIK_CHECKPOINT_SLICE_ROTATION_DISTANCE) % receiver->params->group->size;
-        laik_append_slice(receiver, taskId, &duplicateSlice.s, duplicateSlice.tag, duplicateSlice.data);
+    for (int redundancyCount = 0; redundancyCount < checkpointPartitionerData->redundancyCounts; ++redundancyCount) {
+        for (unsigned int i = 0; i < originalCount; i++) {
+            Laik_TaskSlice_Gen duplicateSlice = receiver->array->tslice[i];
+            int taskId = (duplicateSlice.task + redundancyCount * checkpointPartitionerData->redundancyCounts) % receiver->params->group->size;
+            laik_append_slice(receiver, taskId, &duplicateSlice.s, duplicateSlice.tag, duplicateSlice.data);
+        }
     }
 }
 
@@ -295,12 +306,22 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
 //}
 
 
-Laik_Partitioner *create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner) {
-    return laik_new_partitioner("checkpoint-partitioner", run_wrapped_partitioner, currentPartitioner,
-                                currentPartitioner->flags);
+Laik_Partitioner *
+create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance) {
+    Laik_Partitioner *checkpointPartitioner = laik_new_partitioner("checkpoint-partitioner", run_wrapped_partitioner,
+                                                                   currentPartitioner,
+                                                                   currentPartitioner->flags);
+    LaikCheckpointPartitionerData* partitionerData;
+    partitionerData = malloc(sizeof(Laik_Partitioner));
+    if (!partitionerData) {
+        laik_panic("Out of memory allocating LaikCheckpointPartitionerData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    checkpointPartitioner->data = partitionerData;
+    partitionerData->rotationDistance = rotationDistance;
+    partitionerData->redundancyCounts = redundancyCount;
+    return checkpointPartitioner;
 }
-
-int laik_location_get_world_offset(Laik_Group *group, int id);
 
 void set_slice_to_empty(Laik_Slice *slice);
 
@@ -321,7 +342,7 @@ void laik_checkpoint_remove_redundant_slices(Laik_Checkpoint *checkpoint) {
     Laik_SliceArray *sliceArray = backupPartitioning->saList->slices;
     for (unsigned int oldIndex = 0; oldIndex < sliceArray->count; ++oldIndex) {
         for (unsigned int newIndex = 0; newIndex < oldIndex; ++newIndex) {
-            if(laik_slice_isEqual(&sliceArray->tslice[oldIndex].s, &sliceArray->tslice[newIndex].s)) {
+            if (laik_slice_isEqual(&sliceArray->tslice[oldIndex].s, &sliceArray->tslice[newIndex].s)) {
                 set_slice_to_empty(&sliceArray->tslice[oldIndex].s);
             }
         }
@@ -361,7 +382,7 @@ bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int *node
 // For a specific group and id (offset into the group), find the offset into the top level group (should be world) equal
 // to the referenced rank
 int laik_location_get_world_offset(Laik_Group *group, int id) {
-    while(group->parent != NULL) {
+    while (group->parent != NULL) {
         // Ensure we don't go out of bounds
         assert(id >= 0 && id < group->size);
         // Ensure a mapping from this group's ids to the parent group's ids is provided
