@@ -3,7 +3,7 @@ foreach (test
         "checkpoint"
         "checkpoint-jac2d"
         "checkpoint-jac2d-recovery"
-        "checkpoint_partitioner"
+        "checkpoint-partitioner"
         "checkpoint-mandelbrot-recovery"
         )
 
