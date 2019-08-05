@@ -11,7 +11,7 @@ TESTS= \
 
 .PHONY: mpi tcp $(TESTS)
 
-all: clean testbins $(TESTS) $(TEST_SUBDIRS)
+all: clean testbins fault-tolerance $(TESTS) $(TEST_SUBDIRS)
 
 testbins:
 	$(MAKE) -C src
@@ -21,6 +21,9 @@ mpi:
 
 tcp:
 	+$(MAKE) -C tcp
+
+fault-tolerance:
+	+$(MAKE) -C fault-tolerance
 
 test-vsum:
 	$(SDIR)./test-vsum-single.sh
