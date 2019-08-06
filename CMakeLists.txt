@@ -7,6 +7,8 @@ project ("laik")
 # Enable testing with CMake's CTest
 enable_testing ()
 
+#set(CMAKE_VERBOSE_MAKEFILE ON)
+
 # Set some global defaults
 add_compile_options (
     "-pedantic"
@@ -89,4 +91,5 @@ add_subdirectory ("tests/tcp")
 add_subdirectory ("tests/src")
 
 add_subdirectory ("tests/fault-tolerance")
+add_subdirectory ("tests/fault-tolerance/osu")
 add_subdirectory ("tests/unit_tests/")

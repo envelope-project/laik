@@ -19,6 +19,7 @@
 
 int main (int argc, char *argv[])
 {
+    laik_set_loglevel(LAIK_LL_Debug);
     int myid, numprocs;
     size_t size, i;
 //    char *s_buf, *r_buf;
@@ -92,15 +93,15 @@ int main (int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    Laik_Space* space = laik_new_space_1d(inst, options.max_message_size);
-    Laik_Data* data = laik_new_data(space, laik_Char);
+//    Laik_Space* space = laik_new_space_1d(inst, options.max_message_size);
+//    Laik_Data* data = laik_new_data(space, laik_Char);
 
-    Laik_Partitioner* copyPartitioner = laik_new_copy_partitioner(1, 1);
-    Laik_Partitioning* t1Partitioning = laik_new_partitioning(laik_Master, world, space, NULL);
-    Laik_Partitioning* t2Partitioning = laik_new_partitioning(laik_Master, world, space, NULL);
+//    Laik_Partitioner* copyPartitioner = laik_new_copy_partitioner(1, 1);
+//    Laik_Partitioning* t1Partitioning = laik_new_partitioning(laik_Master, world, space, NULL);
+//    Laik_Partitioning* t2Partitioning = laik_new_partitioning(laik_Master, world, space, NULL);
 
     //Modify second partitioning, such that it resides on task 1 instead of task 0
-    t2Partitioning->saList->slices->tslice[0].task++;
+//    t2Partitioning->saList->slices->tslice[0].task++;
 
 //    uint64_t dCount;
 //    laik_map_def1(data, (void**)&s_buf, &dCount);
@@ -108,21 +109,37 @@ int main (int argc, char *argv[])
     print_header(myid, LAT);
 
 
+    size = options.min_message_size;
+    //Laik doesn't like a space with size <= 0
+    if(size <= 0) {
+        if(laik_myid(laik_world(inst))) {
+            printf("Start size %zu <= 0, setting to 1.\n", size);
+        }
+
+        size = 1;
+    }
     /* Latency test */
-    for(size = options.min_message_size; size <= options.max_message_size; size = (size ? size * 2 : 1)) {
-        Laik_Partitioning* newT1Partitioning = laik_new_partitioning(copyPartitioner, world, space, t1Partitioning);
-        Laik_Partitioning* newT2Partitioning = laik_new_partitioning(copyPartitioner, world, space, t2Partitioning);
+    for(/* Initialized above */; size <= options.max_message_size; size = (size ? size * 2 : 1)) {
+        Laik_Space* space = laik_new_space_1d(inst, size);
+        Laik_Data* data = laik_new_data(space, laik_Char);
+        Laik_Partitioning* newT1Partitioning = laik_new_partitioning(laik_Master, world, laik_data_get_space(data), NULL);
+        Laik_Partitioning* newT2Partitioning = laik_new_partitioning(laik_Master, world, laik_data_get_space(data), NULL);
 
-        newT1Partitioning->saList->slices->tslice[0].s.to.i[0] = size;
-        newT2Partitioning->saList->slices->tslice[0].s.to.i[0] = size;
+        //Modify second partitioning, such that it resides on task 1 instead of task 0
+        newT2Partitioning->saList->slices->tslice[0].task++;
 
-        assert(newT1Partitioning->saList->slices->tslice[0].task == t1Partitioning->saList->slices->tslice[0].task);
-        assert(newT2Partitioning->saList->slices->tslice[0].task == t2Partitioning->saList->slices->tslice[0].task);
+        assert(newT1Partitioning->saList->slices->tslice[0].task == 0);
+        assert(newT2Partitioning->saList->slices->tslice[0].task == 1);
 
         laik_switchto_partitioning(data, newT1Partitioning, LAIK_DF_None, LAIK_RO_None);
+//        laik_switchto_partitioning(data, newT2Partitioning, LAIK_DF_None, LAIK_RO_None);
 
-        laik_free_partitioning(t1Partitioning);
-        laik_free_partitioning(t2Partitioning);
+        char* base;
+        uint64_t count;
+        laik_map_def1(data, (void**)&base, &count);
+
+//        t1Partitioning = newT1Partitioning;
+//        t2Partitioning = newT2Partitioning;
 
         if(size > LARGE_MESSAGE_SIZE) {
             options.iterations = options.iterations_large;
@@ -133,12 +150,17 @@ int main (int argc, char *argv[])
 
         for(i = 0; i < options.iterations + options.skip; i++) {
             if (i == options.skip) {
-                t_start = MPI_Wtime();
+                t_start = laik_wtime();
             }
-            laik_switchto_partitioning(data, t1Partitioning, LAIK_DF_Preserve, LAIK_RO_None);
-            laik_switchto_partitioning(data, t2Partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+            printf("Switch to T1\n");
+            laik_switchto_partitioning(data, newT1Partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+            laik_map_def1(data, (void**)&base, &count);
+
+            printf("Switch to T2\n");
+            laik_switchto_partitioning(data, newT2Partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+            laik_map_def1(data, (void**)&base, &count);
         }
-        t_end = MPI_Wtime();
+        t_end = laik_wtime();
 
         if(myid == 0) {
             double latency = (t_end - t_start) * 1e6 / (2.0 * options.iterations);
@@ -149,7 +171,7 @@ int main (int argc, char *argv[])
         }
     }
 
-    laik_free(data);
+//    laik_free(data);
     laik_finalize(inst);
 
     if (NONE != options.accel) {
@@ -161,4 +183,3 @@ int main (int argc, char *argv[])
 
     return EXIT_SUCCESS;
 }
-
