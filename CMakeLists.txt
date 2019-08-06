@@ -92,4 +92,5 @@ add_subdirectory ("tests/src")
 
 add_subdirectory ("tests/fault-tolerance")
 add_subdirectory ("tests/fault-tolerance/osu")
+add_subdirectory ("tests/fault-tolerance/lulesh")
 add_subdirectory ("tests/unit_tests/")
