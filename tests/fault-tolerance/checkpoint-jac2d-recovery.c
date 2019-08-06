@@ -127,7 +127,7 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
 
 void errorHandler(void *errors) {
     (void) errors;
-    TRACE_EVENT_S("COMM_ERROR", "");
+    TRACE_EVENT_S("COMM-ERROR", "");
     TPRINTF("Received an error condition, attempting to continue.\n");
 }
 
@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
     if (argc > arg + 1) maxiter = atoi(argv[arg + 1]);
     if (argc > arg + 2) repart = atoi(argv[arg + 2]);
 
-    if (size == 0) size = 32; // 16Ki entries
+    if (size == 0) size = 1024; // entries
     if (maxiter == 0) maxiter = 50;
 
     TPRINTF("Jac_2d parallel with rank %i\n", laik_myid(world));
@@ -258,7 +258,7 @@ int main(int argc, char *argv[]) {
 
     int nodeStatuses[world->size];
 
-    TRACE_EVENT_S("INIT_END", "");
+    TRACE_EVENT_S("INIT-END", "");
 
     for (; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
@@ -272,15 +272,15 @@ int main(int argc, char *argv[]) {
 //            laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_None, LAIK_RO_None);
 //            TPRINTF("Switch OK.\n");
 
-            TRACE_EVENT_S("CHECKPOINT_START", "");
+            TRACE_EVENT_S("CHECKPOINT-START", "");
             createCheckpoints(iter);
-            TRACE_EVENT_S("CHECKPOINT_END", "");
+            TRACE_EVENT_S("CHECKPOINT-END", "");
         }
         if (iter % 10 == 5 && iter == 35) {
             TPRINTF("Attempting to determine global status.\n");
-            TRACE_EVENT_S("FAILURE_CHECK_START", "");
+            TRACE_EVENT_S("FAILURE-CHECK-START", "");
             int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
-            TRACE_EVENT_S("FAILURE_CHECK_END", "");
+            TRACE_EVENT_S("FAILURE-CHECK-END", "");
             if (numFailed == 0) {
                 TPRINTF("Could not detect a failed node.\n");
             } else {
@@ -294,10 +294,10 @@ int main(int argc, char *argv[]) {
                 world = laik_world_fault_tolerant(inst);
 //                world = smallWorld;
 
-                assert(world->size == 3);
+//                assert(world->size == 3);
                 TPRINTF("Attempting to restore with new world size %i\n", world->size);
 
-                TRACE_EVENT_S("RESTORE_START", "");
+                TRACE_EVENT_S("RESTORE-START", "");
                 pSum = laik_new_partitioning(laik_All, world, sp1, 0);
                 laik_partitioning_set_name(pSum, "pSum_new");
                 pWrite = laik_new_partitioning(prWrite, world, space, 0);
@@ -320,7 +320,7 @@ int main(int argc, char *argv[]) {
 
                 iter = restoreIteration;
                 laik_tcp_clear_errors();
-                TRACE_EVENT_S("RESTORE_END", "");
+                TRACE_EVENT_S("RESTORE-END", "");
                 TPRINTF("Restore complete, cleared errors.\n");
 
 //                TPRINTF("Special: Switching to all partitioning.\n");
@@ -345,10 +345,11 @@ int main(int argc, char *argv[]) {
 //            if (laik_myid(laik_world(inst)) != 1) {
 //                errorHandler(NULL);
 //            } else {
-            TRACE_EVENT_S("FAILURE_START", "");
+            TRACE_EVENT_S("FAILURE-START", "");
             TPRINTF("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
                     iter);
-            abort();
+//            abort();
+            exit(0);
 //            }
         }
         setBoundary(size, iter, pWrite, dWrite);
@@ -397,6 +398,7 @@ int main(int argc, char *argv[]) {
         TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
     }
 
+    TRACE_EVENT_S("FINALIZE", "");
     laik_finalize(inst);
     return 0;
 }
