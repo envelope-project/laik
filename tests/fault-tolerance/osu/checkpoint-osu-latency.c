@@ -13,14 +13,15 @@
  * This is a port of the OSU Latency benchmark to LAIK
  */
 
+#include <laik-internal.h>
 #include "osu_util_mpi.h"
+#include "laik.h"
 
 int main (int argc, char *argv[])
 {
-    int myid, numprocs, i;
-    int size;
-    MPI_Status reqstat;
-    char *s_buf, *r_buf;
+    int myid, numprocs;
+    size_t size, i;
+//    char *s_buf, *r_buf;
     double t_start = 0.0, t_end = 0.0;
     int po_ret = 0;
     options.bench = PT2PT;
@@ -38,9 +39,10 @@ int main (int argc, char *argv[])
         }
     }
 
-    MPI_CHECK(MPI_Init(&argc, &argv));
-    MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &numprocs));
-    MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &myid));
+    Laik_Instance* inst = laik_init(&argc, &argv);
+    Laik_Group *world = laik_world(inst);
+    numprocs = laik_size(world);
+    myid = laik_myid(world);
 
     if (0 == myid) {
         switch (po_ret) {
@@ -60,7 +62,7 @@ int main (int argc, char *argv[])
                 break;
             case PO_VERSION_MESSAGE:
                 print_version_message(myid);
-                MPI_CHECK(MPI_Finalize());
+                laik_finalize(inst);
                 exit(EXIT_SUCCESS);
             case PO_OKAY:
                 break;
@@ -71,11 +73,11 @@ int main (int argc, char *argv[])
         case PO_CUDA_NOT_AVAIL:
         case PO_OPENACC_NOT_AVAIL:
         case PO_BAD_USAGE:
-            MPI_CHECK(MPI_Finalize());
+            laik_finalize(inst);
             exit(EXIT_FAILURE);
         case PO_HELP_MESSAGE:
         case PO_VERSION_MESSAGE:
-            MPI_CHECK(MPI_Finalize());
+            laik_finalize(inst);
             exit(EXIT_SUCCESS);
         case PO_OKAY:
             break;
@@ -86,62 +88,69 @@ int main (int argc, char *argv[])
             fprintf(stderr, "This test requires exactly two processes\n");
         }
 
-        MPI_CHECK(MPI_Finalize());
+        laik_finalize(inst);
         exit(EXIT_FAILURE);
     }
 
-    if (allocate_memory_pt2pt(&s_buf, &r_buf, myid)) {
-        /* Error allocating memory */
-        MPI_CHECK(MPI_Finalize());
-        exit(EXIT_FAILURE);
-    }
+    Laik_Space* space = laik_new_space_1d(inst, options.max_message_size);
+    Laik_Data* data = laik_new_data(space, laik_Char);
+
+    Laik_Partitioner* copyPartitioner = laik_new_copy_partitioner(1, 1);
+    Laik_Partitioning* t1Partitioning = laik_new_partitioning(laik_Master, world, space, NULL);
+    Laik_Partitioning* t2Partitioning = laik_new_partitioning(laik_Master, world, space, NULL);
+
+    //Modify second partitioning, such that it resides on task 1 instead of task 0
+    t2Partitioning->saList->slices->tslice[0].task++;
+
+//    uint64_t dCount;
+//    laik_map_def1(data, (void**)&s_buf, &dCount);
 
     print_header(myid, LAT);
 
 
     /* Latency test */
     for(size = options.min_message_size; size <= options.max_message_size; size = (size ? size * 2 : 1)) {
-        set_buffer_pt2pt(s_buf, myid, options.accel, 'a', size);
-        set_buffer_pt2pt(r_buf, myid, options.accel, 'b', size);
+        Laik_Partitioning* newT1Partitioning = laik_new_partitioning(copyPartitioner, world, space, t1Partitioning);
+        Laik_Partitioning* newT2Partitioning = laik_new_partitioning(copyPartitioner, world, space, t2Partitioning);
+
+        newT1Partitioning->saList->slices->tslice[0].s.to.i[0] = size;
+        newT2Partitioning->saList->slices->tslice[0].s.to.i[0] = size;
+
+        assert(newT1Partitioning->saList->slices->tslice[0].task == t1Partitioning->saList->slices->tslice[0].task);
+        assert(newT2Partitioning->saList->slices->tslice[0].task == t2Partitioning->saList->slices->tslice[0].task);
+
+        laik_switchto_partitioning(data, newT1Partitioning, LAIK_DF_None, LAIK_RO_None);
+
+        laik_free_partitioning(t1Partitioning);
+        laik_free_partitioning(t2Partitioning);
 
         if(size > LARGE_MESSAGE_SIZE) {
             options.iterations = options.iterations_large;
             options.skip = options.skip_large;
         }
 
-        MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD));
+//        MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD));
 
-        if(myid == 0) {
-            for(i = 0; i < options.iterations + options.skip; i++) {
-                if(i == options.skip) {
-                    t_start = MPI_Wtime();
-                }
-
-                MPI_CHECK(MPI_Send(s_buf, size, MPI_CHAR, 1, 1, MPI_COMM_WORLD));
-                MPI_CHECK(MPI_Recv(r_buf, size, MPI_CHAR, 1, 1, MPI_COMM_WORLD, &reqstat));
+        for(i = 0; i < options.iterations + options.skip; i++) {
+            if (i == options.skip) {
+                t_start = MPI_Wtime();
             }
-
-            t_end = MPI_Wtime();
+            laik_switchto_partitioning(data, t1Partitioning, LAIK_DF_Preserve, LAIK_RO_None);
+            laik_switchto_partitioning(data, t2Partitioning, LAIK_DF_Preserve, LAIK_RO_None);
         }
-
-        else if(myid == 1) {
-            for(i = 0; i < options.iterations + options.skip; i++) {
-                MPI_CHECK(MPI_Recv(r_buf, size, MPI_CHAR, 0, 1, MPI_COMM_WORLD, &reqstat));
-                MPI_CHECK(MPI_Send(s_buf, size, MPI_CHAR, 0, 1, MPI_COMM_WORLD));
-            }
-        }
+        t_end = MPI_Wtime();
 
         if(myid == 0) {
             double latency = (t_end - t_start) * 1e6 / (2.0 * options.iterations);
 
-            fprintf(stdout, "%-*d%*.*f\n", 10, size, FIELD_WIDTH,
+            fprintf(stdout, "%-*zu%*.*f\n", 10, size, FIELD_WIDTH,
                     FLOAT_PRECISION, latency);
             fflush(stdout);
         }
     }
 
-    free_memory(s_buf, r_buf, myid);
-    MPI_CHECK(MPI_Finalize());
+    laik_free(data);
+    laik_finalize(inst);
 
     if (NONE != options.accel) {
         if (cleanup_accel()) {
