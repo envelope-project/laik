@@ -795,6 +795,7 @@ struct cmdLineOpts {
    Int_t balance; // -b
    Int_t repart; // -repart
    Int_t cycle; // -repart_cycle
+   Int_t faultTolerance; // Use fault tolerance instead of partitioned rescheduling
 };
 
 
@@ -898,5 +899,5 @@ void remove_partitionings_and_transitions(Laik_Partitioning *&exclusivePartition
  * @param removeList
  */
 void calculate_removing_list(Laik_Group* world, cmdLineOpts& opts, double side, double& newside, int& diffsize, int *&removeList);
-
+void calculate_removing_list_ft(Laik_Group* world, cmdLineOpts& opts, double side, double& newside, int& diffsize, int *&removeList, int* nodeStatuses);
 #endif
