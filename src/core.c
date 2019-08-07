@@ -958,6 +958,7 @@ double getNSize(Laik_Instance *inst) {
     return data / 1024.0;
 }
 
+int eventNum = 0;
 int getEventNum() {
     return eventNum++;
 }

@@ -1309,6 +1309,8 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
     return n;
 }
 
+LaikMPIErrorHandler abortErrorHandler;
+
 void laik_mpi_set_error_handler(LaikMPIErrorHandler newErrorHandler) {
     abortErrorHandler = newErrorHandler;
 }

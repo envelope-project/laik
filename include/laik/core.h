@@ -236,7 +236,6 @@ double getTime(Laik_Instance*);
 double getVSize();
 double getNSize(Laik_Instance *inst);
 int getEventNum();
-int eventNum;
 #define TRACE_EVENT(name, format, ...) printf("===,EVENT,%s,RANK,%i,AT,%f,USAGE,%f: : " format " ===\n", name, laik_myid(laik_world(inst)), getTime(inst), getVSize(), __VA_ARGS__)
 #define TRACE_EVENT_S(name, format) printf("===,EVENT,%i,%s,RANK,%i,AT,%f,MEM,%f,KB,NET,%f,KB,: " format " ===\n", getEventNum(), name, laik_myid(laik_world(inst)), getTime(inst), getVSize(), getNSize(inst))
 

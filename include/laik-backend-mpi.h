@@ -28,7 +28,6 @@
 Laik_Instance* laik_init_mpi(int* argc, char*** argv);
 
 typedef void (*LaikMPIErrorHandler)(void*);
-LaikMPIErrorHandler abortErrorHandler;
 void laik_mpi_set_error_handler(LaikMPIErrorHandler newErrorHandler);
 LaikMPIErrorHandler laik_mpi_get_error_handler();
 
