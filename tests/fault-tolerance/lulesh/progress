@@ -1,0 +1,80 @@
+first we target the partitioning of the domain
+
+we can ignore lulesh_tuple.h file
+as it is not used in compilation
+this file can be used as a reference
+for for porting the data structures
+
+in order to port the lulesh first we need to deal with the partitioning
+of the domain. at the moment the MPI code uses a domin decomposition scheme
+in function InitMeshDecomp. 
+this function assigns the location of the
+
+SetupElementConnectivities is for defining the local connectirvity of the elements
+
+I have written a partitioner for the elements to exclusively partition them now 
+I modify it to get the right partitioner
+
+we have implemented the halo partitioner and it works with different number of offsets
+
+next we have to implement the partitioner for the nodes, so far we have the same 
+partitioners for the nodes as well.
+
+Now we need to read the code to check wether other communications and partitioners
+are needed.
+
+the communication is happening in asynchronous way:
+receive/send/wait
+
+lulesh.cc
+    1-in CalcForceForNodes there is one set of asynchronous communication 
+    on the nodes for forces
+    fx, fy, fz
+
+    2-in LagrangeNodal there is one set of asynchronous communication
+    on the nodes for position and velocity
+    x, y, z, dx, dy, dz
+
+    3-in CalcQForElems there is one set of asynchronous communication 
+    on the elements for:
+    delv_xi, delv_eta, delv_zeta
+
+    4-in LagrangeLeapFrog there is one set of asynchronous communication
+    on the nodes for position and velocity
+    x, y, z, dx, dy, dz
+
+    5-in main there is one set of asynchronous communication
+    on the nodes for mass
+    nodalMass
+
+    Not much important
+    6- in TimeIncrement
+    MPI_Allreduce
+    gnewdt
+
+    7- in main
+    MPI_Reduce
+    elapsed_time
+
+
+data containers are std::vector
+what we do with these vectors are just
+allocation vec.resize() -> AllocateNodePersistent
+referencing vec[idx] -> Accessors
+
+we need to deligate this two tasks to laik.
+
+
+the above work flow is done for nodalMass (#5 in the list of the communications)
+reductions are used for that
+
+the above work flow is done for nodal forces (fx, fy, fz) (#1 in the list of the communications)
+reductions are used for that
+
+communications for x,y,z,dx,dy,dz are removed -> #define SEDOV_SYNC_POS_VEL_NONE 1
+since the nodes are replicated at the edges of the tasks, there is no need for
+such communication and synchronization -> one can also define a reduction operation
+that checks for the equality of the edges and leave them in case they are equal. 
+but for now, I just ignored them as removing this will have no effect on the 
+refenerce energy (correction check)
+

@@ -160,8 +160,17 @@ Additional BSD Notice
 # include <omp.h>
 #endif
 
-#include "lulesh.h"
+/*laik headers*/
+extern "C"{
+#include "laik.h"
+#include "laik-backend-mpi.h"
+}
 
+//porting to laik
+//#include "laik_vector.h" // includes lulesh.h
+#include <lulesh.h>
+#include <laik_partitioners.h>
+#include <laik_vector.h>
 
 /*********************************/
 /* Data structure implementation */
@@ -192,7 +201,7 @@ void Release(T **ptr)
 /* Work Routines */
 
 static inline
-void TimeIncrement(Domain& domain)
+void TimeIncrement(Domain& domain, Laik_Data* laikDt, Laik_Partitioning* allPartitioning, Real_t &gnewdt)
 {
    Real_t targetdt = domain.stoptime() - domain.time() ;
 
@@ -201,7 +210,7 @@ void TimeIncrement(Domain& domain)
       Real_t olddt = domain.deltatime() ;
 
       /* This will require a reduction in parallel */
-      Real_t gnewdt = Real_t(1.0e+20) ;
+      gnewdt = Real_t(1.0e+20) ;
       Real_t newdt ;
       if (domain.dtcourant() < gnewdt) {
          gnewdt = domain.dtcourant() / Real_t(2.0) ;
@@ -211,9 +220,15 @@ void TimeIncrement(Domain& domain)
       }
 
 #if USE_MPI      
+      /*
       MPI_Allreduce(&gnewdt, &newdt, 1,
                     ((sizeof(Real_t) == 4) ? MPI_FLOAT : MPI_DOUBLE),
                     MPI_MIN, MPI_COMM_WORLD) ;
+
+      */
+      laik_switchto_partitioning(laikDt, allPartitioning, LAIK_DF_Preserve, LAIK_RO_Min);
+      newdt = gnewdt;
+
 #else
       newdt = gnewdt;
 #endif
@@ -401,6 +416,8 @@ void CalcElemShapeFunctionDerivatives( Real_t const x[],
   b[2][7] = -b[2][1];
 
   /* calculate jacobian determinant (volume) */
+  //laik_log((Laik_LogLevel)2,"Debug %f\n", *volume);
+
   *volume = Real_t(8.) * ( fjxet * cjxet + fjyet * cjyet + fjzet * cjzet);
 }
 
@@ -1060,7 +1077,9 @@ void CalcHourglassControlForElems(Domain& domain,
 
       /* Do a check for negative volumes */
       if ( domain.v(i) <= Real_t(0.0) ) {
-#if USE_MPI         
+#if USE_MPI
+         laik_log((Laik_LogLevel)2,"Debug 1\n");
+         MPI_Barrier(MPI_COMM_WORLD);
          MPI_Abort(MPI_COMM_WORLD, VolumeError) ;
 #else
          exit(VolumeError);
@@ -1106,11 +1125,23 @@ void CalcVolumeForceForElems(Domain& domain)
                                sigxx, sigyy, sigzz, determ, numElem,
                                domain.numNode()) ;
 
+      /*
+      if (domain.cycle() == 6){
+          laik_log((Laik_LogLevel)2,"Debug: numNodes: %d\n",domain.numNode());
+          for (int k = 0; k < numElem; ++k) {
+              laik_log((Laik_LogLevel)2,"Debug: k: %d %f\n",k, determ[k]);
+          }
+      }
+      */
+
       // check for negative element volume
 #pragma omp parallel for firstprivate(numElem)
       for ( Index_t k=0 ; k<numElem ; ++k ) {
+         //laik_log((Laik_LogLevel)2,"Debug: %f\n", determ[k]);
          if (determ[k] <= Real_t(0.0)) {
 #if USE_MPI            
+            laik_log((Laik_LogLevel)2,"Debug 2\n");
+            MPI_Barrier(MPI_COMM_WORLD);
             MPI_Abort(MPI_COMM_WORLD, VolumeError) ;
 #else
             exit(VolumeError);
@@ -1134,10 +1165,14 @@ static inline void CalcForceForNodes(Domain& domain)
   Index_t numNode = domain.numNode() ;
 
 #if USE_MPI  
-  CommRecv(domain, MSG_COMM_SBN, 3,
-           domain.sizeX() + 1, domain.sizeY() + 1, domain.sizeZ() + 1,
-           true, false) ;
-#endif  
+  //CommRecv(domain, MSG_COMM_SBN, 3,
+  //         domain.sizeX() + 1, domain.sizeY() + 1, domain.sizeZ() + 1,
+  //         true, false) ;
+
+  domain.get_fx().switch_to_p1();
+  domain.get_fy().switch_to_p1();
+  domain.get_fz().switch_to_p1();
+#endif
 
 #pragma omp parallel for firstprivate(numNode)
   for (Index_t i=0; i<numNode; ++i) {
@@ -1149,7 +1184,15 @@ static inline void CalcForceForNodes(Domain& domain)
   /* Calcforce calls partial, force, hourq */
   CalcVolumeForceForElems(domain) ;
 
-#if USE_MPI  
+
+#if USE_MPI
+  domain.get_fx().switch_to_p2();
+  //domain.get_fx().switch_to_p1();
+  domain.get_fy().switch_to_p2();
+  //domain.get_fy().switch_to_p1();
+  domain.get_fz().switch_to_p2();
+  //domain.get_fz().switch_to_p1();
+/*
   Domain_member fieldData[3] ;
   fieldData[0] = &Domain::fx ;
   fieldData[1] = &Domain::fy ;
@@ -1159,6 +1202,7 @@ static inline void CalcForceForNodes(Domain& domain)
            domain.sizeX() + 1, domain.sizeY() + 1, domain.sizeZ() +  1,
            true, false) ;
   CommSBN(domain, 3, fieldData) ;
+*/
 #endif  
 }
 
@@ -1167,12 +1211,14 @@ static inline void CalcForceForNodes(Domain& domain)
 static inline
 void CalcAccelerationForNodes(Domain &domain, Index_t numNode)
 {
-   
+    //laik_log((Laik_LogLevel)1, "in calculation of the acceleration:");
+
 #pragma omp parallel for firstprivate(numNode)
    for (Index_t i = 0; i < numNode; ++i) {
       domain.xdd(i) = domain.fx(i) / domain.nodalMass(i);
       domain.ydd(i) = domain.fy(i) / domain.nodalMass(i);
       domain.zdd(i) = domain.fz(i) / domain.nodalMass(i);
+      //laik_log((Laik_LogLevel)1, "%d i, %f", i, domain.nodalMass(i));
    }
 }
 
@@ -1257,26 +1303,26 @@ void LagrangeNodal(Domain& domain)
 
    const Real_t delt = domain.deltatime() ;
    Real_t u_cut = domain.u_cut() ;
-
   /* time of boundary condition evaluation is beginning of step for force and
    * acceleration boundary conditions. */
   CalcForceForNodes(domain);
 
 #if USE_MPI  
 #ifdef SEDOV_SYNC_POS_VEL_EARLY
-   CommRecv(domain, MSG_SYNC_POS_VEL, 6,
-            domain.sizeX() + 1, domain.sizeY() + 1, domain.sizeZ() + 1,
-            false, false) ;
+   //CommRecv(domain, MSG_SYNC_POS_VEL, 6,
+   //         domain.sizeX() + 1, domain.sizeY() + 1, domain.sizeZ() + 1,
+   //         false, false) ;
 #endif
 #endif
    
    CalcAccelerationForNodes(domain, domain.numNode());
-   
+
    ApplyAccelerationBoundaryConditionsForNodes(domain);
 
    CalcVelocityForNodes( domain, delt, u_cut, domain.numNode()) ;
 
    CalcPositionForNodes( domain, delt, domain.numNode() );
+
 #if USE_MPI
 #ifdef SEDOV_SYNC_POS_VEL_EARLY
   fieldData[0] = &Domain::x ;
@@ -1286,13 +1332,18 @@ void LagrangeNodal(Domain& domain)
   fieldData[4] = &Domain::yd ;
   fieldData[5] = &Domain::zd ;
 
-   CommSend(domain, MSG_SYNC_POS_VEL, 6, fieldData,
-            domain.sizeX() + 1, domain.sizeY() + 1, domain.sizeZ() + 1,
-            false, false) ;
-   CommSyncPosVel(domain) ;
+   //CommSend(domain, MSG_SYNC_POS_VEL, 6, fieldData,
+   //         domain.sizeX() + 1, domain.sizeY() + 1, domain.sizeZ() + 1,
+   //         false, false) ;
+   //CommSyncPosVel(domain) ;
 #endif
 #endif
    
+   //laik_log((Laik_LogLevel)2, "new iteration");
+   //for (Index_t i=0; i<domain.numNode(); ++i) {
+   //    laik_log((Laik_LogLevel)2, "%f", domain.x(i));
+   //}
+
   return;
 }
 
@@ -1600,11 +1651,12 @@ void CalcKinematicsForElems( Domain &domain, Real_t *vnew,
 static inline
 void CalcLagrangeElements(Domain& domain, Real_t* vnew)
 {
+
    Index_t numElem = domain.numElem() ;
    if (numElem > 0) {
       const Real_t deltatime = domain.deltatime() ;
 
-      domain.AllocateStrains(numElem);
+      //domain.AllocateStrains(numElem);
 
       CalcKinematicsForElems(domain, vnew, deltatime, numElem) ;
 
@@ -1626,14 +1678,17 @@ void CalcLagrangeElements(Domain& domain, Real_t* vnew)
          if (vnew[k] <= Real_t(0.0))
         {
 #if USE_MPI           
+           laik_log((Laik_LogLevel)2,"Debug 3\n");
+           MPI_Barrier(MPI_COMM_WORLD);
            MPI_Abort(MPI_COMM_WORLD, VolumeError) ;
 #else
            exit(VolumeError);
 #endif
         }
       }
-      domain.DeallocateStrains();
+      //domain.DeallocateStrains();
    }
+
 }
 
 /******************************************/
@@ -1650,6 +1705,7 @@ void CalcMonotonicQGradientsForElems(Domain& domain, Real_t vnew[])
       Real_t dxv,dyv,dzv ;
 
       const Index_t *elemToNode = domain.nodelist(i);
+
       Index_t n0 = elemToNode[0] ;
       Index_t n1 = elemToNode[1] ;
       Index_t n2 = elemToNode[2] ;
@@ -1782,6 +1838,7 @@ void CalcMonotonicQGradientsForElems(Domain& domain, Real_t vnew[])
 
       domain.delv_eta(i) = ax*dxv + ay*dyv + az*dzv ;
    }
+
 }
 
 /******************************************/
@@ -1826,6 +1883,10 @@ void CalcMonotonicQRegionForElems(Domain &domain, Int_t r,
             delvp = 0; /* ERROR - but quiets the compiler */
             break;
       }
+
+      /*
+      laik_log((Laik_LogLevel)2, "r:%d, size:%d, ielem:%d, i:%d, lxim:%d, lxip:%d", r, domain.regElemSize(r), ielem, i, domain.lxim(i), domain.lxip(i));
+      */
 
       delvm = delvm * norm ;
       delvp = delvp * norm ;
@@ -1981,43 +2042,59 @@ void CalcQForElems(Domain& domain, Real_t vnew[])
    Index_t numElem = domain.numElem() ;
 
    if (numElem != 0) {
-      Int_t allElem = numElem +  /* local elem */
-            2*domain.sizeX()*domain.sizeY() + /* plane ghosts */
-            2*domain.sizeX()*domain.sizeZ() + /* row ghosts */
-            2*domain.sizeY()*domain.sizeZ() ; /* col ghosts */
 
-      domain.AllocateGradients(numElem, allElem);
+       //Int_t allElem = numElem +  /* local elem */
+       //     2*domain.sizeX()*domain.sizeY() + /* plane ghosts */
+       //     2*domain.sizeX()*domain.sizeZ() + /* row ghosts */
+       //     2*domain.sizeY()*domain.sizeZ() ; /* col ghosts */
+      //domain.AllocateGradients(numElem, numRanks, allElem);
 
 #if USE_MPI      
-      CommRecv(domain, MSG_MONOQ, 3,
-               domain.sizeX(), domain.sizeY(), domain.sizeZ(),
-               true, true) ;
+      //CommRecv(domain, MSG_MONOQ, 3,
+      //         domain.sizeX(), domain.sizeY(), domain.sizeZ(),
+      //         true, true) ;
+      domain.get_delv_xi().switch_to_p1();
+      domain.get_delv_eta().switch_to_p1();
+      domain.get_delv_zeta().switch_to_p1();
 #endif      
 
       /* Calculate velocity gradients */
       CalcMonotonicQGradientsForElems(domain, vnew);
 
 #if USE_MPI      
-      Domain_member fieldData[3] ;
+
+      domain.get_delv_xi().switch_to_p2();
+      domain.get_delv_eta().switch_to_p2();
+      domain.get_delv_zeta().switch_to_p2();
+
+      //Domain_member fieldData[3] ;
       
       /* Transfer veloctiy gradients in the first order elements */
       /* problem->commElements->Transfer(CommElements::monoQ) ; */
 
-      fieldData[0] = &Domain::delv_xi ;
-      fieldData[1] = &Domain::delv_eta ;
-      fieldData[2] = &Domain::delv_zeta ;
+      //fieldData[0] = &Domain::delv_xi ;
+      //fieldData[1] = &Domain::delv_eta ;
+      //fieldData[2] = &Domain::delv_zeta ;
 
-      CommSend(domain, MSG_MONOQ, 3, fieldData,
-               domain.sizeX(), domain.sizeY(), domain.sizeZ(),
-               true, true) ;
+      //CommSend(domain, MSG_MONOQ, 3, fieldData,
+      //         domain.sizeX(), domain.sizeY(), domain.sizeZ(),
+      //         true, true) ;
 
-      CommMonoQ(domain) ;
+      //CommMonoQ(domain) ;
 #endif      
+
 
       CalcMonotonicQForElems(domain, vnew) ;
 
       // Free up memory
-      domain.DeallocateGradients();
+      //domain.DeallocateGradients();
+
+      /*
+      for (Index_t i=0; i<20; ++i) {
+          laik_log((Laik_LogLevel)2, "i: %d, value: %f", i, domain.delv_xi(i));
+      }
+      */
+
 
       /* Don't allow excessive artificial viscosity */
       Index_t idx = -1; 
@@ -2029,7 +2106,9 @@ void CalcQForElems(Domain& domain, Real_t vnew[])
       }
 
       if(idx >= 0) {
-#if USE_MPI         
+#if USE_MPI
+         laik_log((Laik_LogLevel)2,"Debug 4\n");
+         MPI_Barrier(MPI_COMM_WORLD);
          MPI_Abort(MPI_COMM_WORLD, QStopError) ;
 #else
          exit(QStopError);
@@ -2046,7 +2125,7 @@ void CalcPressureForElems(Real_t* p_new, Real_t* bvc,
                           Real_t* compression, Real_t *vnewc,
                           Real_t pmin,
                           Real_t p_cut, Real_t eosvmax,
-                          Index_t length, Index_t *regElemList)
+                          Index_t length, std::vector<Index_t> regElemList)
 {
 #pragma omp parallel for firstprivate(length)
    for (Index_t i = 0; i < length ; ++i) {
@@ -2084,7 +2163,7 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
                         Real_t* qq_old, Real_t* ql_old,
                         Real_t rho0,
                         Real_t eosvmax,
-                        Index_t length, Index_t *regElemList)
+                        Index_t length, std::vector<Index_t> regElemList)
 {
    Real_t *pHalfStep = Allocate<Real_t>(length) ;
 
@@ -2211,7 +2290,7 @@ void CalcSoundSpeedForElems(Domain &domain,
                             Real_t *vnewc, Real_t rho0, Real_t *enewc,
                             Real_t *pnewc, Real_t *pbvc,
                             Real_t *bvc, Real_t ss4o3,
-                            Index_t len, Index_t *regElemList)
+                            Index_t len, std::vector<Index_t> regElemList)
 {
 #pragma omp parallel for firstprivate(rho0, ss4o3)
    for (Index_t i = 0; i < len ; ++i) {
@@ -2232,7 +2311,7 @@ void CalcSoundSpeedForElems(Domain &domain,
 
 static inline
 void EvalEOSForElems(Domain& domain, Real_t *vnewc,
-                     Int_t numElemReg, Index_t *regElemList, Int_t rep)
+                     Int_t numElemReg, std::vector<Index_t> regElemList, Int_t rep)
 {
    Real_t  e_cut = domain.e_cut() ;
    Real_t  p_cut = domain.p_cut() ;
@@ -2399,6 +2478,8 @@ void ApplyMaterialPropertiesForElems(Domain& domain, Real_t vnew[])
           }
           if (vc <= 0.) {
 #if USE_MPI             
+             laik_log((Laik_LogLevel)2,"Debug 5\n");
+             MPI_Barrier(MPI_COMM_WORLD);
              MPI_Abort(MPI_COMM_WORLD, VolumeError) ;
 #else
              exit(VolumeError);
@@ -2409,7 +2490,7 @@ void ApplyMaterialPropertiesForElems(Domain& domain, Real_t vnew[])
 
     for (Int_t r=0 ; r<domain.numReg() ; r++) {
        Index_t numElemReg = domain.regElemSize(r);
-       Index_t *regElemList = domain.regElemlist(r);
+       std::vector <Index_t> regElemList = domain.regElemlist(r);
        Int_t rep;
        //Determine load imbalance for this region
        //round down the number with lowest cost
@@ -2472,7 +2553,7 @@ void LagrangeElements(Domain& domain, Index_t numElem)
 
 static inline
 void CalcCourantConstraintForElems(Domain &domain, Index_t length,
-                                   Index_t *regElemlist,
+                                   std::vector<Index_t> regElemlist,
                                    Real_t qqc, Real_t& dtcourant)
 {
 #if _OPENMP   
@@ -2549,7 +2630,7 @@ void CalcCourantConstraintForElems(Domain &domain, Index_t length,
 
 static inline
 void CalcHydroConstraintForElems(Domain &domain, Index_t length,
-                                 Index_t *regElemlist, Real_t dvovmax, Real_t& dthydro)
+                                 std::vector<Index_t> regElemlist, Real_t dvovmax, Real_t& dthydro)
 {
 #if _OPENMP   
    Index_t threads = omp_get_max_threads();
@@ -2647,10 +2728,8 @@ void LagrangeLeapFrog(Domain& domain)
     * applied boundary conditions and slide surface considerations */
    LagrangeNodal(domain);
 
-
 #ifdef SEDOV_SYNC_POS_VEL_LATE
 #endif
-
    /* calculate element quantities (i.e. velocity gradient & q), and update
     * material states */
    LagrangeElements(domain, domain.numElem());
@@ -2683,7 +2762,6 @@ void LagrangeLeapFrog(Domain& domain)
 #endif   
 }
 
-
 /******************************************/
 
 int main(int argc, char *argv[])
@@ -2694,11 +2772,16 @@ int main(int argc, char *argv[])
    struct cmdLineOpts opts;
 
 #if USE_MPI   
-   Domain_member fieldData ;
+   //Domain_member fieldData ;
 
-   MPI_Init(&argc, &argv) ;
-   MPI_Comm_size(MPI_COMM_WORLD, &numRanks) ;
-   MPI_Comm_rank(MPI_COMM_WORLD, &myRank) ;
+   Laik_Instance* inst = laik_init_mpi(&argc, &argv); 
+   Laik_Group* world = laik_world(inst);
+
+   numRanks = laik_size(world);
+   myRank = laik_myid(world);
+
+   //MPI_Comm_size(MPI_COMM_WORLD, &numRanks) ;
+   //MPI_Comm_rank(MPI_COMM_WORLD, &myRank) ;
 #else
    numRanks = 1;
    myRank = 0;
@@ -2714,6 +2797,8 @@ int main(int argc, char *argv[])
    opts.viz = 0;
    opts.balance = 1;
    opts.cost = 1;
+   opts.repart = 0;
+   opts.cycle = 5;
 
    ParseCommandLineOptions(argc, argv, myRank, &opts);
 
@@ -2731,19 +2816,93 @@ int main(int argc, char *argv[])
       printf("To print out progress, use -p\n");
       printf("To write an output file for VisIt, use -v\n");
       printf("See help (-h) for more options\n\n");
+	   
+#ifdef PERFORMANCE
+      printf(" \n=== TESTS ON PERFORMANCE MODE === \n");
+#endif
+#ifdef REPARTITIONING
+      printf(" \n=== TESTS ON REPARTITIONING MODE === \n");
+#endif
    }
 
    // Set up the mesh and decompose. Assumes regular cubes for now
    Int_t col, row, plane, side;
    InitMeshDecomp(numRanks, myRank, &col, &row, &plane, &side);
 
+   // laik related code
+   int numElem = opts.nx * opts.nx * opts.nx;                           // local number of elements
+   int NumNodes=(opts.nx*side+1)*(opts.nx*side+1)*(opts.nx*side+1);     // global number of nodes
+
+   // index spaces used for partitioning of Element and Node data structures
+   Laik_Space *indexSpaceElements = nullptr;                            // Elements
+   Laik_Space *indexSpaceNodes = nullptr;                               // Nodes
+   Laik_Space* indexSapceDt = nullptr;                                  // for reduction of dt
+
+   // partitioning of Element and Node data structures
+   Laik_Partitioning *exclusivePartitioning = nullptr;
+   Laik_Partitioning *haloPartitioning = nullptr;
+   Laik_Partitioning *overlapingPartitioning = nullptr;
+   Laik_Partitioning *allPartitioning = nullptr;
+   // partitioning objects used after re-partitioning
+   Laik_Partitioning *exclusivePartitioning2 = nullptr;
+   Laik_Partitioning *haloPartitioning2 = nullptr;
+   Laik_Partitioning *overlapingPartitioning2 = nullptr;
+   Laik_Partitioning *allPartitioning2 = nullptr;
+
+   // transition objects among partitionings.
+   Laik_Transition *transitionToExclusive = nullptr;
+   Laik_Transition *transitionToHalo = nullptr;
+   Laik_Transition *transitionToOverlappingInit = nullptr;
+   Laik_Transition *transitionToOverlappingReduce = nullptr;
+   // transition objects used after repartitioning
+   Laik_Transition *transitionToExclusive2 = nullptr;
+   Laik_Transition *transitionToHalo2 = nullptr;
+   Laik_Transition *transitionToOverlappingInit2 = nullptr;
+   Laik_Transition *transitionToOverlappingReduce2 = nullptr;
+
+   // Laik data container for dt
+   Laik_Data* laikDt = nullptr;
+
+   // create index spaces for elements, nodes and dt
+   indexSpaceElements = laik_new_space_1d(inst, numRanks*numElem);
+   indexSpaceNodes = laik_new_space_1d(inst, NumNodes);
+   indexSapceDt = laik_new_space_1d(inst, 1);
+
+   // create partitionings and transition objects
+   create_partitionings_and_transitions(world,
+                                        indexSpaceElements, indexSpaceNodes, indexSapceDt,
+                                        exclusivePartitioning, haloPartitioning, overlapingPartitioning, allPartitioning,
+                                        transitionToExclusive, transitionToHalo, transitionToOverlappingInit, transitionToOverlappingReduce);
+
+   // create laik_data for dt
+   // Note the rest of containers are
+   // created inside inside Domain by
+   // initializing laik_vectors
+   laikDt = laik_new_data(indexSapceDt, laik_Double);
+
+   // for dt we need to get the base pointer to and
+   // send it to TimeIncrement function to
+   // perform the local updates and reduction
+   laik_switchto_partitioning(laikDt, allPartitioning, LAIK_DF_Init, LAIK_RO_Min);
+   uint64_t dt_count; double* dt_base;
+   laik_map_def1(laikDt, (void**) &dt_base, &dt_count);
+
    // Build the main data structure and initialize it
+   // pass the laik_inst and laik_world and partitionings
+   // and transitions to Domain since Domain contains
+   // all the data structures and inititlizes them.
    locDom = new Domain(numRanks, col, row, plane, opts.nx,
-                       side, opts.numReg, opts.balance, opts.cost) ;
+                       side, opts.numReg, opts.balance, opts.cost,
+                       inst, world,
+                       indexSpaceElements, indexSpaceNodes,
+                       exclusivePartitioning, haloPartitioning, overlapingPartitioning,
+                       transitionToExclusive, transitionToHalo, transitionToOverlappingInit,
+                       transitionToOverlappingReduce) ;
+#if USE_MPI
 
-
-#if USE_MPI   
+    /*
    fieldData = &Domain::nodalMass ;
+
 
    // Initial domain boundary communication 
    CommRecv(*locDom, MSG_COMM_SBN, 1,
@@ -2754,35 +2913,141 @@ int main(int argc, char *argv[])
             true, false) ;
    CommSBN(*locDom, 1, &fieldData) ;
 
+
    // End initialization
    MPI_Barrier(MPI_COMM_WORLD);
+    */
+
 #endif   
    
    // BEGIN timestep to solution */
 #if USE_MPI   
    double start = MPI_Wtime();
+   double start2 = MPI_Wtime();
+   int repart_iter = 0;
 #else
    timeval start;
    gettimeofday(&start, NULL) ;
 #endif
-//debug to see region sizes
-//   for(Int_t i = 0; i < locDom->numReg(); i++)
-//      std::cout << "region" << i + 1<< "size" << locDom->regElemSize(i) <<std::endl;
+
    while((locDom->time() < locDom->stoptime()) && (locDom->cycle() < opts.its)) {
 
-      TimeIncrement(*locDom) ;
-      LagrangeLeapFrog(*locDom) ;
+// TODO remove the following def
+#define USE_MPI 1
+#if USE_MPI
+       
+       // check if repartitioning has to be done in this iteration
+       // if so, do repartitoing before the actual iteration
+       // after repartitioning continue from the current iteration
+       if (opts.repart>0 && locDom->cycle() == opts.cycle)
+       {
+           double intermediate_timer = MPI_Wtime() - start2;
+           double itG;
+           MPI_Reduce(&intermediate_timer, &itG, 1, MPI_DOUBLE,
+                      MPI_MAX, 0, MPI_COMM_WORLD);
 
-      if ((opts.showProg != 0) && (opts.quiet == 0) && (myRank == 0)) {
-         printf("cycle = %d, time = %e, dt=%e\n",
-                locDom->cycle(), double(locDom->time()), double(locDom->deltatime()) ) ;
-      }
+           if ((myRank == 0) && (opts.quiet == 0)) {
+               printf("Starting Repartitioning, current runtime = %f s\n", itG);
+               printf("Previous Time per Iteration: %f s \n", itG/locDom->cycle());
+           }
+           
+           laik_log((Laik_LogLevel)2,"Before repart\n" );
+           laik_log((Laik_LogLevel)2,"My ID in main world: %d\n", laik_myid(world) );
+
+           double repart_start = MPI_Wtime();
+
+           // calculate number of removing tasks and a list of them
+           double newside; int diffsize; int *removeList=nullptr;
+           calculate_removing_list(world, opts, side, newside, diffsize, removeList);
+
+           // update number of local number of elements per edge in each task
+           opts.nx = opts.nx * side / (int) newside;
+
+           // create the shrinked group by removeing tasks in removeList
+           Laik_Group* shrinked_group = laik_new_shrinked_group(world, diffsize, removeList);
+
+           // create partitionings and transition objects
+           // on the target (shrinked) process group
+           // we switch to these partitionings and
+           // the old objects are not used anymore.
+           create_partitionings_and_transitions(shrinked_group,
+                                                indexSpaceElements, indexSpaceNodes, indexSapceDt,
+                                                exclusivePartitioning2, haloPartitioning2, overlapingPartitioning2, allPartitioning2,
+                                                transitionToExclusive2, transitionToHalo2, transitionToOverlappingInit2, transitionToOverlappingReduce2);
+
+           // migrate data for all the data structures
+           locDom->re_distribute_data_structures(shrinked_group, exclusivePartitioning2, haloPartitioning2, overlapingPartitioning2, transitionToExclusive2, transitionToHalo2, transitionToOverlappingInit2, transitionToOverlappingReduce2);
+
+           // processes that are not part of the new (shrinked)
+           // process group have to exit the main loop
+           if (laik_myid(shrinked_group)==-1) {
+               break ;
+           }
+
+           // repartition and geting the base pointer for only for dt
+           laik_switchto_partitioning(laikDt, allPartitioning2, LAIK_DF_None, LAIK_RO_Min);
+           laik_switchto_partitioning(laikDt, allPartitioning2, LAIK_DF_Preserve, LAIK_RO_Min);
+           laik_map_def1(laikDt, (void**) &dt_base, &dt_count);
+
+           // update the working process group in codes
+           world = shrinked_group;
+
+           // update required values according to the new process group
+           InitMeshDecomp(laik_size(world), laik_myid(world), &col, &row, &plane, &side);
+           // update Domain according to the new process group
+           locDom -> re_init_domain(laik_size(world), col, row, plane, opts.nx,
+                                    side, opts.numReg, opts.balance, opts.cost);
+
+           double duration = MPI_Wtime() - repart_start;
+
+           laik_log((Laik_LogLevel)2,"After repart\n");
+           if (opts.quiet == 0)
+                printf("Repartition Done in %f s on Rank %d\n", duration, laik_myid(world));
+
+           start2 = MPI_Wtime();
+           repart_iter = locDom->cycle();
+
+           // remove the old partitioning and transition objects
+           remove_partitionings_and_transitions(exclusivePartitioning, haloPartitioning, overlapingPartitioning, allPartitioning,
+                                                transitionToExclusive, transitionToHalo, transitionToOverlappingInit, transitionToOverlappingReduce);
+
+           // update the working allPartitioning used later in
+           // reduction for dt
+           allPartitioning = allPartitioning2;
+
+           free (removeList);
+       }
+#endif
+
+/*
+
+       if (locDom->cycle() == 5){
+            //locDom -> get_vdov().test_print();
+           int dbg=1;
+           if (laik_myid(world) == 0)
+              {
+                dbg = 0;
+                while (!dbg) {}
+              }
+               
+       }
+*/
+
+
+       TimeIncrement(*locDom, laikDt, allPartitioning, *dt_base) ;
+       LagrangeLeapFrog(*locDom) ;
+
+       if ((opts.showProg != 0) && (opts.quiet == 0) && (myRank == 0)) {
+           printf("cycle = %d, time = %e, dt=%e\n",
+                  locDom->cycle(), double(locDom->time()), double(locDom->deltatime()) ) ;
+       }
    }
 
    // Use reduced max elapsed time
    double elapsed_time;
 #if USE_MPI   
    elapsed_time = MPI_Wtime() - start;
+   double alternate_time = MPI_Wtime() - start2;
 #else
    timeval end;
    gettimeofday(&end, NULL) ;
@@ -2790,7 +3055,10 @@ int main(int argc, char *argv[])
 #endif
    double elapsed_timeG;
 #if USE_MPI   
+    double elapsed_timeG2;
    MPI_Reduce(&elapsed_time, &elapsed_timeG, 1, MPI_DOUBLE,
+              MPI_MAX, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&alternate_time, &elapsed_timeG2, 1, MPI_DOUBLE,
               MPI_MAX, 0, MPI_COMM_WORLD);
 #else
    elapsed_timeG = elapsed_time;
@@ -2803,10 +3071,23 @@ int main(int argc, char *argv[])
    
    if ((myRank == 0) && (opts.quiet == 0)) {
       VerifyAndWriteFinalOutput(elapsed_timeG, *locDom, opts.nx, numRanks);
+#ifdef USE_MPI
+      if (opts.repart>0){
+        printf("Time After Repartitioing: %f, per Iteration %f\n", elapsed_timeG2, elapsed_timeG2/(locDom->cycle() - repart_iter));
+      }
+#endif
    }
 
 #if USE_MPI
-   MPI_Finalize() ;
+   // free laik_objects
+   if (opts.repart>0)
+       remove_partitionings_and_transitions(exclusivePartitioning2, haloPartitioning2, overlapingPartitioning2, allPartitioning2,
+                                            transitionToExclusive2, transitionToHalo2, transitionToOverlappingInit2, transitionToOverlappingReduce2);
+   else
+       remove_partitionings_and_transitions(exclusivePartitioning, haloPartitioning, overlapingPartitioning, allPartitioning,
+                                            transitionToExclusive, transitionToHalo, transitionToOverlappingInit, transitionToOverlappingReduce);
+
+   laik_finalize(inst);
 #endif
 
    return 0 ;

@@ -40,6 +40,8 @@ static void PrintCommandLineOptions(char *execname, int myRank)
       printf(" -f <numfiles>   : Number of files to split viz dump into (def: (np+10)/9)\n");
       printf(" -p              : Print out progress\n");
       printf(" -v              : Output viz file (requires compiling with -DVIZ_MESH\n");
+      printf(" -repart         : enable repartitioning by defining the number of target group\n");
+      printf(" -repart_cycle   : cycle at which repartitioning happens\n");
       printf(" -h              : This message\n");
       printf("\n\n");
    }
@@ -147,6 +149,26 @@ void ParseCommandLineOptions(int argc, char *argv[],
             ParseError("Use of -v requires compiling with -DVIZ_MESH\n", myRank);
 #endif
             i++;
+         }
+         else if(strcmp(argv[i], "-repart") == 0) {
+            if (i+1 >= argc) {
+               ParseError("Missing integer argument to -repart\n", myRank);
+            }
+            ok = StrToInt(argv[i+1], &(opts->repart));
+            if(!ok) {
+               ParseError("Parse Error on option -repart integer value required after argument\n", myRank);
+            }
+            i+=2;
+         }
+         else if(strcmp(argv[i], "-repart_cycle") == 0) {
+            if (i+1 >= argc) {
+               ParseError("Missing integer argument to -repart_cycle\n", myRank);
+            }
+            ok = StrToInt(argv[i+1], &(opts->cycle));
+            if(!ok) {
+               ParseError("Parse Error on option -repart_cycle integer value required after argument\n", myRank);
+            }
+            i+=2;
          }
          /* -h */
          else if (strcmp(argv[i], "-h") == 0) {

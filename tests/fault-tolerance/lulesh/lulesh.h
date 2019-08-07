@@ -1,3 +1,6 @@
+#ifndef MY_LULESH_H
+#define MY_LULESH_H
+
 #if !defined(USE_MPI)
 # error "You should specify USE_MPI=0 or USE_MPI=1 on the compile line"
 #endif
@@ -18,11 +21,16 @@
    SEDOV_SYNC_POS_VEL_LATE
 */
 
-#define SEDOV_SYNC_POS_VEL_EARLY 1
+#define SEDOV_SYNC_POS_VEL_NONE 1
 #endif
 
 #include <math.h>
 #include <vector>
+#include <laik_vector.h>
+#include "laik_vector_comm_exclusive_halo.h"
+#include "laik_vector_comm_overlapping_overlapping.h"
+#include "laik_vector_repart_exclusive.h"
+#include "laik_vector_repart_overlapping.h"
 
 //**************************************************
 // Allow flexibility for arithmetic representations 
@@ -128,37 +136,109 @@ class Domain {
 
    public:
 
-   // Constructor
+    /**
+    * @brief Constructor Domain updated to use additional
+    *        parameters. The partitionings and transitions
+    *        are needed to construct the laik_vectors used
+    */
    Domain(Int_t numRanks, Index_t colLoc,
           Index_t rowLoc, Index_t planeLoc,
-          Index_t nx, Int_t tp, Int_t nr, Int_t balance, Int_t cost);
+          Index_t nx, Int_t tp, Int_t nr, Int_t balance, Int_t cost,
+          Laik_Instance *inst, Laik_Group* world,
+          Laik_Space* elems, Laik_Space* nodes,
+          Laik_Partitioning *exclusive, Laik_Partitioning *halo, Laik_Partitioning *overlapping,
+          Laik_Transition *transitionToExclusive, Laik_Transition *transitionToHalo, Laik_Transition *transitionToOverlappingInit,Laik_Transition * transitionToOverlappingReduce);
+
+   /**
+    * @brief this method is extracted from the constructor of Domain
+    *        The constructor only calls this and it does the initialization
+    *        The reason for this change is that after repartitioning
+    *        some parts of the constructor has to be re-executed (
+    *        of course not the zero initialization of data) to update
+    *        some parameters
+    * @param numRanks
+    * @param colLoc
+    * @param rowLoc
+    * @param planeLoc
+    * @param nx
+    * @param tp
+    * @param nr
+    * @param balance
+    * @param cost
+    */
+   void init_domain(Int_t numRanks, Index_t colLoc,
+                    Index_t rowLoc, Index_t planeLoc,
+                    Index_t nx, Int_t tp, Int_t nr, Int_t balance, Int_t cost);
+
+   /**
+    * @brief this method initializes the parameters that are
+    *        set in the controctor of Domain
+    *        similar to init_domain but it is only used for
+    *        repartitioning as it does not include all the
+    *        codes in the constructor of Domain in the ref-
+    *        erence implementation. For example it skips
+    *        initializing the fields to zero since this
+    *        initialization would remove the data and
+    *        leads to incorrect results after repartitioning.
+    * @param numRanks
+    * @param colLoc
+    * @param rowLoc
+    * @param planeLoc
+    * @param nx
+    * @param tp
+    * @param nr
+    * @param balance
+    * @param cost
+    */
+   void re_init_domain(Int_t numRanks, Index_t colLoc,
+                       Index_t rowLoc, Index_t planeLoc,
+                       Index_t nx, Int_t tp, Int_t nr, Int_t balance, Int_t cost);
 
    //
    // ALLOCATION
    //
 
-   void AllocateNodePersistent(Int_t numNode) // Node-centered
+   void AllocateNodePersistent(Int_t numNode, Int_t numRanks) // Node-centered
    {
-      m_x.resize(numNode);  // coordinates
-      m_y.resize(numNode);
-      m_z.resize(numNode);
+       int edgeElem = (int)(cbrt(numNode)+0.1)-1;
+       int side = cbrt (numRanks);
+       int globalNumNode=(edgeElem*side+1)*(edgeElem*side+1)*(edgeElem*side+1);
 
-      m_xd.resize(numNode); // velocities
-      m_yd.resize(numNode);
-      m_zd.resize(numNode);
+#ifdef REPARTITIONING
+       m_x.resize(globalNumNode);  // coordinates
+       m_y.resize(globalNumNode);
+       m_z.resize(globalNumNode);
 
-      m_xdd.resize(numNode); // accelerations
-      m_ydd.resize(numNode);
-      m_zdd.resize(numNode);
+       m_xd.resize(globalNumNode); // velocities
+       m_yd.resize(globalNumNode);
+       m_zd.resize(globalNumNode);
 
-      m_fx.resize(numNode);  // forces
-      m_fy.resize(numNode);
-      m_fz.resize(numNode);
+       m_xdd.resize(globalNumNode); // accelerations
+       m_ydd.resize(globalNumNode);
+       m_zdd.resize(globalNumNode);
+#endif
 
-      m_nodalMass.resize(numNode);  // mass
+#ifdef PERFORMANCE
+       m_x.resize(numNode);  // coordinates
+       m_y.resize(numNode);
+       m_z.resize(numNode);
+
+       m_xd.resize(numNode); // velocities
+       m_yd.resize(numNode);
+       m_zd.resize(numNode);
+
+       m_xdd.resize(numNode); // accelerations
+       m_ydd.resize(numNode);
+       m_zdd.resize(numNode);
+#endif
+       m_fx.resize(globalNumNode);  // forces
+       m_fy.resize(globalNumNode);
+       m_fz.resize(globalNumNode);
+
+       m_nodalMass.resize(globalNumNode);  // mass
    }
 
-   void AllocateElemPersistent(Int_t numElem) // Elem-centered
+   void AllocateElemPersistent(Int_t numElem, Int_t numRanks) // Elem-centered
    {
       m_nodelist.resize(8*numElem);
 
@@ -172,6 +252,28 @@ class Domain {
 
       m_elemBC.resize(numElem);
 
+#ifdef REPARTITIONING
+      m_e.resize(numRanks*numElem);
+      m_p.resize(numRanks*numElem);
+
+      m_q.resize(numRanks*numElem);
+      m_ql.resize(numRanks*numElem);
+      m_qq.resize(numRanks*numElem);
+
+      m_v.resize(numRanks*numElem);
+
+      m_volo.resize(numRanks*numElem);
+      m_delv.resize(numRanks*numElem);
+      m_vdov.resize(numRanks*numElem);
+
+      m_arealg.resize(numRanks*numElem);
+
+      m_ss.resize(numRanks*numElem);
+
+      m_elemMass.resize(numRanks*numElem);
+#endif
+
+#ifdef PERFORMANCE
       m_e.resize(numElem);
       m_p.resize(numElem);
 
@@ -190,19 +292,27 @@ class Domain {
       m_ss.resize(numElem);
 
       m_elemMass.resize(numElem);
+#endif
    }
 
-   void AllocateGradients(Int_t numElem, Int_t allElem)
+   void AllocateGradients(Int_t numElem, Int_t numRanks, Index_t allElem)
    {
+#ifdef REPARTITIONING
       // Position gradients
+      m_delx_xi.resize(numRanks*numElem) ;
+      m_delx_eta.resize(numRanks*numElem) ;
+      m_delx_zeta.resize(numRanks*numElem) ;
+#endif
+
+#ifdef PERFORMANCE
       m_delx_xi.resize(numElem) ;
       m_delx_eta.resize(numElem) ;
-      m_delx_zeta.resize(numElem) ;
-
+m_delx_zeta.resize(numElem) ;
+#endif
       // Velocity gradients
-      m_delv_xi.resize(allElem) ;
-      m_delv_eta.resize(allElem);
-      m_delv_zeta.resize(allElem) ;
+      m_delv_xi.resize(numRanks*numElem) ;
+      m_delv_eta.resize(numRanks*numElem);
+      m_delv_zeta.resize(numRanks*numElem) ;
    }
 
    void DeallocateGradients()
@@ -218,9 +328,17 @@ class Domain {
 
    void AllocateStrains(Int_t numElem)
    {
+#ifdef REPARTITIONING
+      m_dxx.resize(numRanks()*numElem) ;
+      m_dyy.resize(numRanks()*numElem) ;
+      m_dzz.resize(numRanks()*numElem) ;
+#endif
+
+#ifdef PERFORMANCE
       m_dxx.resize(numElem) ;
       m_dyy.resize(numElem) ;
       m_dzz.resize(numElem) ;
+#endif
    }
 
    void DeallocateStrains()
@@ -229,8 +347,21 @@ class Domain {
       m_dyy.clear() ;
       m_dxx.clear() ;
    }
-   
+
+   // GETTERS
+   // for accessing laik_vectors out of Domain
+   // this is not needed by lulesh as lulesh implements
+   // accessors to the data independent of the container.
+   // (only for debugging)
    //
+   laik_vector_comm_overlapping_overlapping<double>& get_fx() { return m_fx;}
+   laik_vector_comm_overlapping_overlapping<double>& get_fy() { return m_fy;}
+   laik_vector_comm_overlapping_overlapping<double>& get_fz() { return m_fz;}
+   laik_vector_comm_overlapping_overlapping<double>& get_nodalMass() { return m_nodalMass;}
+   laik_vector_comm_exclusive_halo<double>& get_delv_xi() { return m_delv_xi;}
+   laik_vector_comm_exclusive_halo<double>& get_delv_eta() { return m_delv_eta;}
+   laik_vector_comm_exclusive_halo<double>& get_delv_zeta() { return m_delv_zeta;}
+
    // ACCESSORS
    //
 
@@ -273,7 +404,7 @@ class Domain {
    Index_t&  regElemSize(Index_t idx) { return m_regElemSize[idx] ; }
    Index_t&  regNumList(Index_t idx) { return m_regNumList[idx] ; }
    Index_t*  regNumList()            { return &m_regNumList[0] ; }
-   Index_t*  regElemlist(Int_t r)    { return m_regElemlist[r] ; }
+   std::vector<Index_t>  regElemlist(Int_t r)    { return m_regElemlist[r] ; }
    Index_t&  regElemlist(Int_t r, Index_t idx) { return m_regElemlist[r][idx] ; }
 
    Index_t*  nodelist(Index_t idx)    { return &m_nodelist[Index_t(8)*idx] ; }
@@ -398,7 +529,7 @@ class Domain {
    
    Index_t&  maxPlaneSize()       { return m_maxPlaneSize ; }
    Index_t&  maxEdgeSize()        { return m_maxEdgeSize ; }
-   
+
    //
    // MPI-Related additional data
    //
@@ -411,7 +542,36 @@ class Domain {
    // Maximum number of block neighbors 
    MPI_Request recvRequest[26] ; // 6 faces + 12 edges + 8 corners 
    MPI_Request sendRequest[26] ; // 6 faces + 12 edges + 8 corners 
+
+
+   //laik communication
+   void communicateNodalMass(){
+       m_nodalMass.switch_to_p1();
+       m_nodalMass.switch_to_p2();
+   }
 #endif
+
+   // LAIK-related additional data
+   // the domain needs to
+   // know about the laik instance
+   // and laik group
+   Laik_Instance *inst;
+   Laik_Group *world;
+
+   // LAIK-related  method
+   /**
+    * @brief helper function for calling migration and data re-distribution
+    *        in all laik_vectors so they perfor re-distribution.
+    * @param new_group
+    * @param p_exclusive
+    * @param p_halo
+    * @param p_overlapping
+    * @param t_to_exclusive
+    * @param t_to_halo
+    * @param t_to_overlapping_init
+    * @param t_to_overlapping_reduce
+    */
+   void re_distribute_data_structures(Laik_Group* new_group, Laik_Partitioning* p_exclusive, Laik_Partitioning* p_halo, Laik_Partitioning* p_overlapping, Laik_Transition *t_to_exclusive, Laik_Transition *t_to_halo, Laik_Transition *t_to_overlapping_init, Laik_Transition *t_to_overlapping_reduce);
 
   private:
 
@@ -428,23 +588,40 @@ class Domain {
    //
 
    /* Node-centered */
-   std::vector<Real_t> m_x ;  /* coordinates */
-   std::vector<Real_t> m_y ;
-   std::vector<Real_t> m_z ;
+#ifdef REPARTITIONING
+   laik_vector_repart_overlapping<double> m_x ;  /* coordinates */
+   laik_vector_repart_overlapping<double> m_y ;
+   laik_vector_repart_overlapping<double> m_z ;
 
-   std::vector<Real_t> m_xd ; /* velocities */
-   std::vector<Real_t> m_yd ;
-   std::vector<Real_t> m_zd ;
+   laik_vector_repart_overlapping<double> m_xd ; /* velocities */
+   laik_vector_repart_overlapping<double> m_yd ;
+   laik_vector_repart_overlapping<double> m_zd ;
 
-   std::vector<Real_t> m_xdd ; /* accelerations */
-   std::vector<Real_t> m_ydd ;
-   std::vector<Real_t> m_zdd ;
+   laik_vector_repart_overlapping<double> m_xdd ; /* accelerations */
+   laik_vector_repart_overlapping<double> m_ydd ;
+   laik_vector_repart_overlapping<double> m_zdd ;
 
-   std::vector<Real_t> m_fx ;  /* forces */
-   std::vector<Real_t> m_fy ;
-   std::vector<Real_t> m_fz ;
+#endif
 
-   std::vector<Real_t> m_nodalMass ;  /* mass */
+#ifdef PERFORMANCE
+    std::vector<Real_t> m_x ;  /* coordinates */
+    std::vector<Real_t> m_y ;
+    std::vector<Real_t> m_z ;
+
+    std::vector<Real_t> m_xd ; /* velocities */
+    std::vector<Real_t> m_yd ;
+    std::vector<Real_t> m_zd ;
+
+    std::vector<Real_t> m_xdd ; /* accelerations */
+    std::vector<Real_t> m_ydd ;
+    std::vector<Real_t> m_zdd ;
+#endif
+
+   laik_vector_comm_overlapping_overlapping<double> m_fx ;  /* forces */
+   laik_vector_comm_overlapping_overlapping<double> m_fy ;
+   laik_vector_comm_overlapping_overlapping<double> m_fz ;
+
+   laik_vector_comm_overlapping_overlapping<double> m_nodalMass ;  /* mass */
 
    std::vector<Index_t> m_symmX ;  /* symmetry plane nodesets */
    std::vector<Index_t> m_symmY ;
@@ -455,9 +632,14 @@ class Domain {
    // Region information
    Int_t    m_numReg ;
    Int_t    m_cost; //imbalance cost
-   Index_t *m_regElemSize ;   // Size of region sets
-   Index_t *m_regNumList ;    // Region number per domain element
-   Index_t **m_regElemlist ;  // region indexset 
+
+   //Index_t *m_regElemSize ;   // Size of region sets
+   //Index_t *m_regNumList ;    // Region number per domain element
+   //Index_t **m_regElemlist ;  // region indexset
+
+   std::vector<Index_t> m_regElemSize; // Size of region sets
+   std::vector<Index_t> m_regNumList; // Region number per domain element
+   std::vector <std::vector <Index_t> > m_regElemlist; // region indexset
 
    std::vector<Index_t>  m_nodelist ;     /* elemToNode connectivity */
 
@@ -470,18 +652,52 @@ class Domain {
 
    std::vector<Int_t>    m_elemBC ;  /* symmetry/free-surface flags for each elem face */
 
+#ifdef REPARTITIONING
+   laik_vector_repart_exclusive<double> m_dxx ;  /* principal strains -- temporary */
+   laik_vector_repart_exclusive<double> m_dyy ;
+   laik_vector_repart_exclusive<double> m_dzz ;
+#endif
+
+#ifdef PERFORMANCE
    std::vector<Real_t> m_dxx ;  /* principal strains -- temporary */
    std::vector<Real_t> m_dyy ;
    std::vector<Real_t> m_dzz ;
+#endif
 
-   std::vector<Real_t> m_delv_xi ;    /* velocity gradient -- temporary */
-   std::vector<Real_t> m_delv_eta ;
-   std::vector<Real_t> m_delv_zeta ;
+   laik_vector_comm_exclusive_halo<double> m_delv_xi ;    /* velocity gradient -- temporary */
+   laik_vector_comm_exclusive_halo<double> m_delv_eta ;
+   laik_vector_comm_exclusive_halo<double> m_delv_zeta ;
 
+#ifdef REPARTITIONING
+   laik_vector_repart_exclusive<double> m_delx_xi ;    /* coordinate gradient -- temporary */
+   laik_vector_repart_exclusive<double> m_delx_eta ;
+   laik_vector_repart_exclusive<double> m_delx_zeta ;
+   
+   laik_vector_repart_exclusive<double> m_e ;   /* energy */
+
+   laik_vector_repart_exclusive<double> m_p ;   /* pressure */
+   laik_vector_repart_exclusive<double> m_q ;   /* q */
+   laik_vector_repart_exclusive<double> m_ql ;  /* linear term for q */
+   laik_vector_repart_exclusive<double> m_qq ;  /* quadratic term for q */
+
+   laik_vector_repart_exclusive<double> m_v ;     /* relative volume */
+   laik_vector_repart_exclusive<double> m_volo ;  /* reference volume */
+   std::vector<Real_t> m_vnew ;  /* new relative volume -- temporary */
+   laik_vector_repart_exclusive<double> m_delv ;  /* m_vnew - m_v */
+   laik_vector_repart_exclusive<double> m_vdov ;  /* volume derivative over volume */
+
+   laik_vector_repart_exclusive<double> m_arealg ;  /* characteristic length of an element */
+   
+   laik_vector_repart_exclusive<double> m_ss ;      /* "sound speed" */
+
+   laik_vector_repart_exclusive<double> m_elemMass ;  /* mass */
+#endif
+
+#ifdef PERFORMANCE
    std::vector<Real_t> m_delx_xi ;    /* coordinate gradient -- temporary */
    std::vector<Real_t> m_delx_eta ;
    std::vector<Real_t> m_delx_zeta ;
-   
+
    std::vector<Real_t> m_e ;   /* energy */
 
    std::vector<Real_t> m_p ;   /* pressure */
@@ -496,10 +712,11 @@ class Domain {
    std::vector<Real_t> m_vdov ;  /* volume derivative over volume */
 
    std::vector<Real_t> m_arealg ;  /* characteristic length of an element */
-   
+
    std::vector<Real_t> m_ss ;      /* "sound speed" */
 
    std::vector<Real_t> m_elemMass ;  /* mass */
+#endif
 
    // Cutoffs (treat as constants)
    const Real_t  m_e_cut ;             // energy tolerance 
@@ -562,7 +779,6 @@ class Domain {
    Index_t m_rowMin, m_rowMax;
    Index_t m_colMin, m_colMax;
    Index_t m_planeMin, m_planeMax ;
-
 } ;
 
 typedef Real_t &(Domain::* Domain_member )(Index_t) ;
@@ -577,6 +793,8 @@ struct cmdLineOpts {
    Int_t viz; // -v 
    Int_t cost; // -c
    Int_t balance; // -b
+   Int_t repart; // -repart
+   Int_t cycle; // -repart_cycle
 };
 
 
@@ -614,3 +832,71 @@ void CommMonoQ(Domain& domain);
 // lulesh-init
 void InitMeshDecomp(Int_t numRanks, Int_t myRank,
                     Int_t *col, Int_t *row, Int_t *plane, Int_t *side);
+
+// helper function for laik implementation
+// this function set six flags based to identify
+// if a domain locates on edges of the global domain
+void init_config_params(Laik_Group* group, int& b ,int& f, int& d,int& u, int& l, int& r);
+
+/**
+ * @brief helper functions for facilitating calculation of
+ *        partitionings and transitions
+ * @param world
+ * @param indexSpaceElements
+ * @param indexSpaceNodes
+ * @param indexSapceDt
+ * @param exclusivePartitioning
+ * @param haloPartitioning
+ * @param overlapingPartitioning
+ * @param allPartitioning
+ * @param transitionToExclusive
+ * @param transitionToHalo
+ * @param transitionToOverlappingInit
+ * @param transitionToOverlappingReduce
+ */
+void create_partitionings_and_transitions(  Laik_Group *&world,
+                                            Laik_Space *&indexSpaceElements,
+                                            Laik_Space *&indexSpaceNodes,
+                                            Laik_Space *&indexSapceDt,
+                                            Laik_Partitioning *&exclusivePartitioning,
+                                            Laik_Partitioning *&haloPartitioning,
+                                            Laik_Partitioning *&overlapingPartitioning,
+                                            Laik_Partitioning *&allPartitioning,
+                                            Laik_Transition *&transitionToExclusive,
+                                            Laik_Transition *&transitionToHalo,
+                                            Laik_Transition *&transitionToOverlappingInit,
+                                            Laik_Transition *&transitionToOverlappingReduce);
+
+/**
+ * @brief helper function to remove unusing
+ *        partitioning and transitions
+ * @param exclusivePartitioning
+ * @param haloPartitioning
+ * @param overlapingPartitioning
+ * @param allPartitioning
+ * @param transitionToExclusive
+ * @param transitionToHalo
+ * @param transitionToOverlappingInit
+ * @param transitionToOverlappingReduce
+ */
+void remove_partitionings_and_transitions(Laik_Partitioning *&exclusivePartitioning,
+                                          Laik_Partitioning *&haloPartitioning,
+                                          Laik_Partitioning *&overlapingPartitioning,
+                                          Laik_Partitioning *&allPartitioning,
+                                          Laik_Transition *&transitionToExclusive,
+                                          Laik_Transition *&transitionToHalo,
+                                          Laik_Transition *&transitionToOverlappingInit,
+                                          Laik_Transition *&transitionToOverlappingReduce);
+
+/**
+ * @brief helper function for calculation of removing list of processes from the process group
+ * @param world
+ * @param opts
+ * @param side
+ * @param newside
+ * @param diffsize
+ * @param removeList
+ */
+void calculate_removing_list(Laik_Group* world, cmdLineOpts& opts, double side, double& newside, int& diffsize, int *&removeList);
+
+#endif
