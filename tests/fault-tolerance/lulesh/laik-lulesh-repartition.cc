@@ -1,5 +1,5 @@
 #include "lulesh.h"
-#include <laik_partitioners.h>
+#include "laik_partitioners.h"
 #include <iostream>
 
 void Domain::re_distribute_data_structures(Laik_Group* new_group, Laik_Partitioning* p_exclusive, Laik_Partitioning* p_halo, Laik_Partitioning* p_overlapping, Laik_Transition *t_to_exclusive, Laik_Transition *t_to_halo, Laik_Transition *t_to_overlapping_init, Laik_Transition *t_to_overlapping_reduce){

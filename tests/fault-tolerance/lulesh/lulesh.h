@@ -26,7 +26,7 @@
 
 #include <math.h>
 #include <vector>
-#include <laik_vector.h>
+#include "laik_vector.h"
 #include "laik_vector_comm_exclusive_halo.h"
 #include "laik_vector_comm_overlapping_overlapping.h"
 #include "laik_vector_repart_exclusive.h"

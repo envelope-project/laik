@@ -1,5 +1,5 @@
-#include <laik_partitioners.h>
-#include <lulesh.h>
+#include "laik_partitioners.h"
+#include "lulesh.h"
 
 /** 
  * @brief  Exclusiv Partitioner

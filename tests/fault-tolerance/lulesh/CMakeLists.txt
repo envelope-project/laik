@@ -13,6 +13,12 @@ target_compile_options("lulesh"
         "-Wextra"
         )
 
+add_definitions("-DUSE_MPI=1" "-DREPARTITIONING")
+
+foreach(SOURCE ${SRCS} ${HEADERS})
+    set_source_files_properties( ${SOURCE} PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter -Wno-error=unknown-pragmas" )
+endforeach()
+
 target_link_libraries ("lulesh"
         PRIVATE "laik"
         PRIVATE "m"

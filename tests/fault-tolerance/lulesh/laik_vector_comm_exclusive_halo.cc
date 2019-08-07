@@ -1,6 +1,6 @@
 #include"laik_vector_comm_exclusive_halo.h"
-#include <laik_partitioners.h>
-#include <lulesh.h>
+#include "laik_partitioners.h"
+#include "lulesh.h"
 #include <limits.h>
 #include <type_traits>
 #include <string.h>

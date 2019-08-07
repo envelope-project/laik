@@ -168,9 +168,9 @@ extern "C"{
 
 //porting to laik
 //#include "laik_vector.h" // includes lulesh.h
-#include <lulesh.h>
-#include <laik_partitioners.h>
-#include <laik_vector.h>
+#include "lulesh.h"
+#include "laik_partitioners.h"
+#include "laik_vector.h"
 
 /*********************************/
 /* Data structure implementation */
