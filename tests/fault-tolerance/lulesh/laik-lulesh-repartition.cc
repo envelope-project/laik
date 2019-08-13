@@ -1,7 +1,6 @@
 #include "lulesh.h"
 #include "laik_partitioners.h"
 #include <iostream>
-#include <laik-internal.h>
 
 void
 Domain::re_distribute_data_structures(Laik_Group *new_group, Laik_Partitioning *p_exclusive, Laik_Partitioning *p_halo,
@@ -247,10 +246,10 @@ void calculate_removing_list_ft(Laik_Group *world, cmdLineOpts &opts, double sid
     int nodeStatusIndex = 0;
     int i = 0;
     while (i < diffsize) {
-        while (nodeStatusIndex < world->size && nodeStatuses[nodeStatusIndex] != LAIK_FT_NODE_FAULT) {
+        while (nodeStatusIndex < laik_size(world) && nodeStatuses[nodeStatusIndex] != LAIK_FT_NODE_FAULT) {
             nodeStatusIndex++;
         }
-        if (nodeStatusIndex < world->size) {
+        if (nodeStatusIndex < laik_size(world)) {
             removeList[i] = nodeStatusIndex;
             i++;
         } else {

@@ -447,6 +447,8 @@ Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
 
 Laik_Space* laik_partitioning_get_space(Laik_Partitioning* p);
 Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p);
+Laik_Partitioner* laik_partitioning_get_partitioner(Laik_Partitioning* p);
+
 int laik_partitioning_slicecount(Laik_Partitioning* p);
 Laik_TaskSlice* laik_partitioning_get_tslice(Laik_Partitioning* p, int n);
 

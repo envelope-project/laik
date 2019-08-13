@@ -9,7 +9,6 @@
 #include <limits.h>
 #include <type_traits>
 #include <string.h>
-#include <laik-internal.h>
 
 template <typename T>
 laik_vector<T>::laik_vector(Laik_Instance* inst, Laik_Group* world, Laik_Space* indexSpace, Laik_Partitioning *p1, Laik_Partitioning *p2, Laik_Transition* t1, Laik_Transition* t2, Laik_ReductionOperation operation):reduction_operation(operation){
@@ -75,7 +74,7 @@ void laik_vector<T>::copyVectorToLaikData(std::vector<T> &data_vector) {
 #ifdef FAULT_TOLERANCE
 template<typename T>
 Laik_Checkpoint * laik_vector<T>::checkpoint() {
-    return laik_checkpoint_create(inst, indexSpace, data, data->activePartitioning->partitioner, 1, 1, data->activePartitioning->group, LAIK_RO_None);
+    return laik_checkpoint_create(inst, indexSpace, data, laik_partitioning_get_partitioner(laik_data_get_partitioning(data)), 1, 1, laik_data_get_group(data), LAIK_RO_None);
 }
 
 template <typename T>

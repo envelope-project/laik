@@ -484,6 +484,13 @@ Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p)
     return p->group;
 }
 
+// public: return the partitioner a partitioning was created with
+Laik_Partitioner* laik_partitioning_get_partitioner(Laik_Partitioning* p)
+{
+    return p->partitioner;
+}
+
+
 // public/partitioner API: total number of slices in this partitioning
 // only allowed for offline partitioners, may be expensive
 int laik_partitioning_slicecount(Laik_Partitioning* p)

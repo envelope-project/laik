@@ -155,7 +155,6 @@ Additional BSD Notice
 #include <sys/time.h>
 #include <iostream>
 #include <unistd.h>
-#include <laik-internal.h>
 
 #if _OPENMP
 # include <omp.h>
@@ -2938,10 +2937,11 @@ int main(int argc, char *argv[]) {
         // after repartitioning continue from the current iteration
         if (opts.repart > 0 && locDom->cycle() == opts.cycle) {
             std::vector<int> nodeStatuses;
-            int failedCount;
+            int failedCount = -1;
+            // Check if a node has failed, then do restore. Else, do a checkpoint.
             if(opts.faultTolerance){
-                nodeStatuses.reserve(world->size);
-                failedCount = laik_failure_check_nodes(inst, world, &nodeStatuses[0])
+                nodeStatuses.reserve(laik_size(world));
+                failedCount = laik_failure_check_nodes(inst, world, &nodeStatuses[0]);
             }
             if (!opts.faultTolerance || failedCount > 0) {
                 double intermediate_timer = MPI_Wtime() - start2;
@@ -3041,6 +3041,10 @@ int main(int argc, char *argv[]) {
                 allPartitioning = allPartitioning2;
 
                 free(removeList);
+            } else if(failedCount == 0) {
+                std::cout<< "Creating checkpoints." << std::endl;
+                std::vector<Laik_Checkpoint*> checkpoints;
+                locDom->createCheckpoints(checkpoints);
             }
         }
 #endif
