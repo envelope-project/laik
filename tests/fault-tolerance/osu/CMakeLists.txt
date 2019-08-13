@@ -1,6 +1,7 @@
 # Build the C examples
 foreach (test
         "checkpoint-osu-latency"
+        "checkpoint-osu-latency-ring"
         )
 
     add_executable ("${test}"
