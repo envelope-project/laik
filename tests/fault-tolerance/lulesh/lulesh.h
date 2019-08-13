@@ -693,6 +693,11 @@ m_delx_zeta.resize(numElem) ;
    laik_vector_repart_exclusive<double> m_elemMass ;  /* mass */
 #endif
 
+#ifdef FAULT_TOLERANCE
+void createCheckpoints(std::vector<Laik_Checkpoint*>);
+void restore(Laik_Checkpoint[]);
+#endif
+
 #ifdef PERFORMANCE
    std::vector<Real_t> m_delx_xi ;    /* coordinate gradient -- temporary */
    std::vector<Real_t> m_delx_eta ;

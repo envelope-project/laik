@@ -54,6 +54,48 @@ Domain::re_distribute_data_structures(Laik_Group *new_group, Laik_Partitioning *
     this->world = new_group;
 }
 
+void Domain::createCheckpoints(std::vector<Laik_Checkpoint*> checkpoints) {
+#ifdef REPARTITIONING
+    checkpoints.push_back(m_x.checkpoint());
+    checkpoints.push_back(m_y.checkpoint());
+    checkpoints.push_back(m_z.checkpoint());
+    checkpoints.push_back(m_xd.checkpoint());
+    checkpoints.push_back(m_yd.checkpoint());
+    checkpoints.push_back(m_zd.checkpoint());
+    checkpoints.push_back(m_xdd.checkpoint());
+    checkpoints.push_back(m_ydd.checkpoint());
+    checkpoints.push_back(m_zdd.checkpoint());
+#endif
+    checkpoints.push_back(m_fx.checkpoint());
+    checkpoints.push_back(m_fy.checkpoint());
+    checkpoints.push_back(m_fz.checkpoint());
+    checkpoints.push_back(m_nodalMass.checkpoint());
+#ifdef REPARTITIONING
+    checkpoints.push_back(m_dxx.checkpoint());
+    checkpoints.push_back(m_dyy.checkpoint());
+    checkpoints.push_back(m_dzz.checkpoint());
+#endif
+    checkpoints.push_back(m_delv_xi.checkpoint());
+    checkpoints.push_back(m_delv_eta.checkpoint());
+    checkpoints.push_back(m_delv_zeta.checkpoint());
+#ifdef REPARTITIONING
+    checkpoints.push_back(m_delx_xi.checkpoint());
+    checkpoints.push_back(m_delx_eta.checkpoint());
+    checkpoints.push_back(m_delx_zeta.checkpoint());
+    checkpoints.push_back(m_e.checkpoint());
+    checkpoints.push_back(m_p.checkpoint());
+    checkpoints.push_back(m_q.checkpoint());
+    checkpoints.push_back(m_ql.checkpoint());
+    checkpoints.push_back(m_qq.checkpoint());
+    checkpoints.push_back(m_v.checkpoint());
+    checkpoints.push_back(m_volo.checkpoint());
+    checkpoints.push_back(m_delv.checkpoint());
+    checkpoints.push_back(m_vdov.checkpoint());
+    checkpoints.push_back(m_arealg.checkpoint());
+    checkpoints.push_back(m_ss.checkpoint());
+    checkpoints.push_back(m_elemMass.checkpoint());
+#endif
+}
 
 void init_config_params(Laik_Group *group, int &b, int &f, int &d, int &u, int &l, int &r) {
     int col, row, plane, side;
