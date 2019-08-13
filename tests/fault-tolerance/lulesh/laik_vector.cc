@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <type_traits>
 #include <string.h>
+#include <laik-internal.h>
 
 template <typename T>
 laik_vector<T>::laik_vector(Laik_Instance* inst, Laik_Group* world, Laik_Space* indexSpace, Laik_Partitioning *p1, Laik_Partitioning *p2, Laik_Transition* t1, Laik_Transition* t2, Laik_ReductionOperation operation):reduction_operation(operation){
@@ -44,6 +45,44 @@ void laik_vector<T>::test_print(){
 template <typename T>
 void laik_vector<T>::clear(){}
 
+template<typename T>
+void laik_vector<T>::copyLaikDataToVector(std::vector<T> &data_vector) {
+    uint64_t cnt;
+    T *base;
+    // copy the data back into the stl vecotrs
+    int nSlices = laik_my_slicecount(this->p1);
+    for (int n = 0; n < nSlices; n++) {
+        laik_map_def(this->data, n, (void **) &base, &cnt);
+        memcpy(&data_vector[0] + n * cnt, base, cnt * sizeof(T));
+        //std::copy(data_vector.begin() + n*count ,data_vector.begin() + (n+1)*count-1 , base);
+    }
+}
+
+template<typename T>
+void laik_vector<T>::copyVectorToLaikData(std::vector<T> &data_vector) {
+    uint64_t cnt;
+    T *base;
+    laik_switchto_partitioning(this->data, this->p1, LAIK_DF_Preserve, LAIK_RO_None);
+    // copy the data from stl vector into the laik container
+    int nSlices = laik_my_slicecount(this->p1);
+    for (int n = 0; n < nSlices; n++) {
+        laik_map_def(this->data, n, (void **) &base, &cnt);
+        memcpy(base, &data_vector[0] + n * cnt, cnt * sizeof(T));
+        //std::copy( base, base + cnt, data_vector.begin() + n*count );
+    }
+}
+
+#ifdef FAULT_TOLERANCE
+template<typename T>
+Laik_Checkpoint * laik_vector<T>::checkpoint() {
+    return laik_checkpoint_create(inst, indexSpace, data, data->activePartitioning->partitioner, 1, 1, data->activePartitioning->group, LAIK_RO_None);
+}
+
+template <typename T>
+void laik_vector<T>::restore(Laik_Checkpoint *checkpoint) {
+    laik_checkpoint_restore(inst, checkpoint, indexSpace, data);
+}
+#endif
 
 template class laik_vector<double>;
 

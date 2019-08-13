@@ -76,7 +76,7 @@ laik_vector_repart_exclusive<T>::migrate(Laik_Group *new_group, Laik_Partitionin
 
     this->state = 0;
 
-    copyVectorToLaikData();
+    this->copyVectorToLaikData(data_vector);
 
     // perform switches for communication
 
@@ -96,49 +96,22 @@ laik_vector_repart_exclusive<T>::migrate(Laik_Group *new_group, Laik_Partitionin
     int s = cnt * cnt * cnt;
     data_vector.resize(s);
 
-    copyLaikDataToVector();
+    this->copyLaikDataToVector(data_vector);
 }
 
-template<typename T>
-void laik_vector_repart_exclusive<T>::copyLaikDataToVector() {
-    uint64_t cnt;
-    T *base;
-    // copy the data back into the stl vecotrs
-    int nSlices = laik_my_slicecount(this->p1);
-    for (int n = 0; n < nSlices; n++) {
-        laik_map_def(this->data, n, (void **) &base, &cnt);
-        memcpy(&data_vector[0] + n * cnt, base, cnt * sizeof(T));
-        //std::copy(data_vector.begin() + n*count ,data_vector.begin() + (n+1)*count-1 , base);
-    }
-}
-
-template<typename T>
-void laik_vector_repart_exclusive<T>::copyVectorToLaikData() {
-    uint64_t cnt;
-    T *base;
-    laik_switchto_partitioning(this->data, this->p1, LAIK_DF_Preserve, LAIK_RO_None);
-    // copy the data from stl vector into the laik container
-    int nSlices = laik_my_slicecount(this->p1);
-    for (int n = 0; n < nSlices; n++) {
-        laik_map_def(this->data, n, (void **) &base, &cnt);
-        memcpy(base, &data_vector[0] + n * cnt, cnt * sizeof(T));
-        //std::copy( base, base + cnt, data_vector.begin() + n*count );
-    }
-}
 
 #ifdef FAULT_TOLERANCE
 template<typename T>
 Laik_Checkpoint* laik_vector_repart_exclusive<T>::checkpoint() {
-    this->copyVectorToLaikData();
-    return laik_checkpoint_create(this->inst, this->indexSpace, this->data, laik_All, 1, 1, this->world, LAIK_RO_Min);
+    this->copyVectorToLaikData(data_vector);
+    return laik_vector<T>::checkpoint();
 }
 
 template<typename T>
 void laik_vector_repart_exclusive<T>::restore(Laik_Checkpoint* checkpoint) {
-    laik_checkpoint_restore(this->inst, checkpoint, this->indexSpace, this->data);
-    this->copyLaikDataToVector();
+    laik_vector<T>::restore(checkpoint);
+    this->copyLaikDataToVector(data_vector);
 }
-
 #endif
 
 template

@@ -74,6 +74,14 @@ public:
      */
     void clear();
 
+    void copyLaikDataToVector(std::vector<T> &data_vector);
+    void copyVectorToLaikData(std::vector<T> &data_vector);
+
+#ifdef FAULT_TOLERANCE
+    virtual Laik_Checkpoint * checkpoint();
+    virtual void restore(Laik_Checkpoint *checkpoint);
+#endif
+
 protected:
     // members from laik
     Laik_Instance* inst;                            // laik context

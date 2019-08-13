@@ -27,16 +27,13 @@ public:
             Laik_Transition *t_new_2) override;
 
 #ifdef FAULT_TOLERANCE
-    Laik_Checkpoint* checkpoint();
-    void restore(Laik_Checkpoint* checkpoint);
+    Laik_Checkpoint* checkpoint() override;
+    void restore(Laik_Checkpoint* checkpoint) override;
 #endif
 
 private:
     std::vector<T> data_vector;
 
-    void copyVectorToLaikData();
-
-    void copyLaikDataToVector();
 };
 
 template<typename T>
