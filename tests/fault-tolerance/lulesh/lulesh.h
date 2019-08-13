@@ -574,7 +574,7 @@ m_delx_zeta.resize(numElem) ;
    void re_distribute_data_structures(Laik_Group* new_group, Laik_Partitioning* p_exclusive, Laik_Partitioning* p_halo, Laik_Partitioning* p_overlapping, Laik_Transition *t_to_exclusive, Laik_Transition *t_to_halo, Laik_Transition *t_to_overlapping_init, Laik_Transition *t_to_overlapping_reduce);
 
 #ifdef FAULT_TOLERANCE
-    void createCheckpoints(std::vector<Laik_Checkpoint*>);
+    void createCheckpoints(std::vector<Laik_Checkpoint*>&);
     void restore(Laik_Checkpoint[]);
 #endif
 

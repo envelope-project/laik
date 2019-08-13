@@ -2780,6 +2780,10 @@ int main(int argc, char *argv[]) {
    myRank = 0;
 #endif
 
+#ifdef FAULT_TOLERANCE
+    std::vector<Laik_Checkpoint*> checkpoints;
+#endif
+
     /* Set defaults that can be overridden by command line opts */
     opts.its = 9999999;
     opts.nx = 30;
@@ -2935,13 +2939,19 @@ int main(int argc, char *argv[]) {
         // check if repartitioning has to be done in this iteration
         // if so, do repartitoing before the actual iteration
         // after repartitioning continue from the current iteration
-        if (opts.repart > 0 && locDom->cycle() == opts.cycle) {
+        if ((opts.repart > 0 && locDom->cycle() == opts.cycle) || (opts.faultTolerance && locDom->cycle() % opts.cycle == 0)) {
             std::vector<int> nodeStatuses;
             int failedCount = -1;
             // Check if a node has failed, then do restore. Else, do a checkpoint.
             if(opts.faultTolerance){
+                if(myRank == 0) {
+                    std::cout << "Checking for failed nodes." << std::endl;
+                }
                 nodeStatuses.reserve(laik_size(world));
                 failedCount = laik_failure_check_nodes(inst, world, &nodeStatuses[0]);
+                if(myRank == 0) {
+                    std::cout << "Detected " << failedCount << " node failures on master." << std::endl;
+                }
             }
             if (!opts.faultTolerance || failedCount > 0) {
                 double intermediate_timer = MPI_Wtime() - start2;
@@ -2972,7 +2982,6 @@ int main(int argc, char *argv[]) {
 
                     // create the shrinked group by removing tasks in removeList
                     shrinked_group = laik_new_shrinked_group(world, diffsize, removeList);
-                    
                 } else {
                     calculate_removing_list_ft(world, opts, side, newside, diffsize, removeList, &nodeStatuses[0]);
                     
@@ -3042,9 +3051,22 @@ int main(int argc, char *argv[]) {
 
                 free(removeList);
             } else if(failedCount == 0) {
-                std::cout<< "Creating checkpoints." << std::endl;
-                std::vector<Laik_Checkpoint*> checkpoints;
+                if(myRank == 0) {
+                    std::cout << "Freeing " << checkpoints.size() << " checkpoints." << std::endl;
+                }
+
+                for (auto iter = checkpoints.begin(); iter != checkpoints.end(); iter++) {
+                    laik_checkpoint_free(*iter);
+                }
+                checkpoints.clear();
+
+                if(myRank == 0) {
+                    std::cout << "Creating checkpoints." << std::endl;
+                }
                 locDom->createCheckpoints(checkpoints);
+                if(myRank == 0) {
+                    std::cout << "Finished creating checkpoints." << std::endl;
+                }
             }
         }
 #endif

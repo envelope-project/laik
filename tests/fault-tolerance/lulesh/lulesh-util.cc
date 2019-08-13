@@ -16,7 +16,7 @@ int StrToInt(const char *token, int *retVal)
 
    if (token == NULL)
       return 0 ;
-   
+
    c = token ;
    *retVal = (int)strtol(c, &endptr, decimal_base) ;
    if((endptr != c) && ((*endptr == ' ') || (*endptr == '\0')))
@@ -42,6 +42,7 @@ static void PrintCommandLineOptions(char *execname, int myRank)
       printf(" -v              : Output viz file (requires compiling with -DVIZ_MESH\n");
       printf(" -repart         : enable repartitioning by defining the number of target group\n");
       printf(" -repart_cycle   : cycle at which repartitioning happens\n");
+      printf(" -fault_tolerance: activate fault tolerance\n");
       printf(" -h              : This message\n");
       printf("\n\n");
    }
@@ -51,7 +52,7 @@ static void ParseError(const char *message, int myRank)
 {
    if (myRank == 0) {
       printf("%s\n", message);
-#if USE_MPI      
+#if USE_MPI
       MPI_Abort(MPI_COMM_WORLD, -1);
 #else
       exit(-1);
@@ -143,7 +144,7 @@ void ParseCommandLineOptions(int argc, char *argv[],
          }
          /* -v */
          else if (strcmp(argv[i], "-v") == 0) {
-#if VIZ_MESH            
+#if VIZ_MESH
             opts->viz = 1;
 #else
             ParseError("Use of -v requires compiling with -DVIZ_MESH\n", myRank);
@@ -170,10 +171,14 @@ void ParseCommandLineOptions(int argc, char *argv[],
             }
             i+=2;
          }
+         else if(strcmp(argv[i], "-fault_tolerance") == 0) {
+             opts->faultTolerance = 1;
+             i+= 1;
+         }
          /* -h */
          else if (strcmp(argv[i], "-h") == 0) {
             PrintCommandLineOptions(argv[0], myRank);
-#if USE_MPI            
+#if USE_MPI
             MPI_Abort(MPI_COMM_WORLD, 0);
 #else
             exit(0);
@@ -198,7 +203,7 @@ void VerifyAndWriteFinalOutput(Real_t elapsed_time,
 {
    // GrindTime1 only takes a single domain into account, and is thus a good way to measure
    // processor speed indepdendent of MPI parallelism.
-   // GrindTime2 takes into account speedups from MPI parallelism 
+   // GrindTime2 takes into account speedups from MPI parallelism
    Real_t grindTime1 = ((elapsed_time*1e6)/locDom.cycle())/(nx*nx*nx);
    Real_t grindTime2 = ((elapsed_time*1e6)/locDom.cycle())/(nx*nx*nx*numRanks);
 

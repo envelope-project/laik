@@ -73,7 +73,7 @@ void laik_vector<T>::copyVectorToLaikData(std::vector<T> &data_vector) {
 #ifdef FAULT_TOLERANCE
 template<typename T>
 Laik_Checkpoint * laik_vector<T>::checkpoint() {
-    return laik_checkpoint_create(inst, indexSpace, data, laik_partitioning_get_partitioner(laik_data_get_partitioning(data)), 1, 1, laik_data_get_group(data), LAIK_RO_None);
+    return laik_checkpoint_create(inst, indexSpace, data, laik_Master, 1, 1, laik_data_get_group(data), LAIK_RO_Min);
 }
 
 template <typename T>

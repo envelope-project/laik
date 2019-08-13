@@ -53,7 +53,7 @@ Domain::re_distribute_data_structures(Laik_Group *new_group, Laik_Partitioning *
     this->world = new_group;
 }
 
-void Domain::createCheckpoints(std::vector<Laik_Checkpoint*> checkpoints) {
+void Domain::createCheckpoints(std::vector<Laik_Checkpoint*> &checkpoints) {
 #ifdef REPARTITIONING
     checkpoints.push_back(m_x.checkpoint());
     checkpoints.push_back(m_y.checkpoint());
