@@ -66,6 +66,7 @@ void exportDataFile(char *label, Laik_Data *data);
 
 void exportDataFiles();
 
+
 void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
     double *baseW;
     uint64_t ysizeW, ystrideW, xsizeW;
@@ -413,9 +414,8 @@ void exportDataFile(char *label, Laik_Data *data) {//        if (iter == 25 && w
 //            writeDataToFile(filenamePrefix, ".pgm", exportCheckpoint->data);
         writeColorDataToFile(filenamePrefix, ".ppm", exportCheckpoint->data, data->activePartitioning, colors);
     }
-    laik_free(exportCheckpoint->data);
-    free(exportCheckpoint);
-//        }
+    laik_checkpoint_free(exportCheckpoint);
+    //        }
 
 }
 

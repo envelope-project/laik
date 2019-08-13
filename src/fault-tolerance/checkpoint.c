@@ -395,3 +395,8 @@ int laik_location_get_world_offset(Laik_Group *group, int id) {
     assert(id >= 0 && id < group->size);
     return id;
 }
+
+void laik_checkpoint_free(Laik_Checkpoint *checkpoint) {
+    laik_free(checkpoint->data);
+    free(checkpoint);
+}

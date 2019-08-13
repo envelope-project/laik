@@ -33,4 +33,6 @@ Laik_Group* laik_world_fault_tolerant(Laik_Instance* instance);
 
 int laik_location_get_world_offset(Laik_Group *group, int id);
 
+void laik_checkpoint_free(Laik_Checkpoint *checkpoint);
+
 #endif //LAIK_LAIK_FAULT_TOLERANCE_H
