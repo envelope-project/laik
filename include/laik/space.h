@@ -484,6 +484,7 @@ extern Laik_Partitioner *laik_All;
 // factory methods to create built-in simple partitioners
 Laik_Partitioner* laik_new_all_partitioner(void);
 Laik_Partitioner* laik_new_master_partitioner(void);
+Laik_Partitioner* laik_new_single_partitioner(int);
 Laik_Partitioner* laik_new_copy_partitioner(int fromDim, int toDim);
 Laik_Partitioner* laik_new_cornerhalo_partitioner(int depth);
 Laik_Partitioner* laik_new_halo_partitioner(int depth);

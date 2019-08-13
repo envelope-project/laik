@@ -178,6 +178,27 @@ Laik_Partitioner* laik_new_master_partitioner()
     return laik_new_partitioner("master", runMasterPartitioner, 0, 0);
 }
 
+// like master-partitioner, but using a configurable task id.
+struct _Laik_SinglePartitionerData {
+    int task;
+};
+typedef struct _Laik_SinglePartitionerData Laik_SinglePartitionerData;
+
+void runSinglePartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p) {
+    laik_append_slice(r, ((Laik_SinglePartitionerData*)p->partitioner->data)->task, &(p->space->s), 0, 0);
+}
+
+Laik_Partitioner* laik_new_single_partitioner(int task) {
+    Laik_SinglePartitionerData* data;
+    data = malloc(sizeof(Laik_SinglePartitionerData));
+    if (!data) {
+        laik_panic("Out of memory allocating Laik_SinglePartitionerData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    data->task = task;
+    return laik_new_partitioner("single", runSinglePartitioner, data, 0);
+}
+
 // copy-partitioner: copy the borders from base partitioning
 //
 // we assume 1d partitioning on spaces with multiple dimensions.
