@@ -8,15 +8,19 @@ label(output.Var4, output.Var8, output.Var6 + 1, output.Var6);
 title('Timeline');
 
 figure();
-for rank = 1 : numel(unique(output.Var6))    
-    plot(output.Var8(output.Var6 == rank, :), output.Var10(output.Var6 == rank, :));
+hold on;
+legend();
+for rank = 0 : numel(unique(output.Var6)) -1
+    plot(output.Var8(output.Var6 == rank, :), output.Var10(output.Var6 == rank, :), 'DisplayName', sprintf("Rank %i", rank));
     label(output.Var4(output.Var6 == rank, :), output.Var8(output.Var6 == rank, :), output.Var10(output.Var6 == rank, :), output.Var6(output.Var6 == rank, :));
 end
 title('MEM Usage');
 
 figure();
-for rank = 1 : numel(unique(output.Var6))    
-    plot(output.Var8(output.Var6 == rank, :), output.Var13(output.Var6 == rank, :));
+hold on;
+legend();
+for rank = 0 : numel(unique(output.Var6)) -1
+    plot(output.Var8(output.Var6 == rank, :), output.Var13(output.Var6 == rank, :), 'DisplayName', sprintf("Rank %i", rank));
     label(output.Var4(output.Var6 == rank, :), output.Var8(output.Var6 == rank, :), output.Var13(output.Var6 == rank, :), output.Var6(output.Var6 == rank, :));
 end
 title('NET Usage');
