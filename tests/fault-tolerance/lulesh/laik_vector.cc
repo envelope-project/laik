@@ -61,7 +61,6 @@ template<typename T>
 void laik_vector<T>::copyVectorToLaikData(std::vector<T> &data_vector) {
     uint64_t cnt;
     T *base;
-    laik_switchto_partitioning(this->data, this->p1, LAIK_DF_Preserve, LAIK_RO_None);
     // copy the data from stl vector into the laik container
     int nSlices = laik_my_slicecount(this->p1);
     for (int n = 0; n < nSlices; n++) {

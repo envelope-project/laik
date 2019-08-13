@@ -86,7 +86,7 @@ void laik_vector_repart_overlapping<T>::migrate(Laik_Group* new_group, Laik_Part
     int s = cnt*cnt*cnt;
     data_vector.resize(s);
 
-    this->copyVectorToLaikData(data_vector);
+    this->copyLaikDataToVector(data_vector);
 
 }
 
