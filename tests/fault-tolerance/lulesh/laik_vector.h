@@ -20,6 +20,7 @@ extern "C"{
 template <typename T>
 class laik_vector
 {
+
 public:
     /**
      * @brief laik_vector constructor
@@ -76,6 +77,8 @@ public:
 
     void copyLaikDataToVector(std::vector<T> &data_vector);
     void copyVectorToLaikData(std::vector<T> &data_vector);
+
+    void resizeVector(std::vector<T>);
 
 #ifdef FAULT_TOLERANCE
     virtual Laik_Checkpoint * checkpoint();

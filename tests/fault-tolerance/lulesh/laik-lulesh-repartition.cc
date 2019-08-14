@@ -96,6 +96,51 @@ void Domain::createCheckpoints(std::vector<Laik_Checkpoint*> &checkpoints) {
 #endif
 }
 
+int Domain::restore(std::vector<Laik_Checkpoint*> &checkpoints) {
+    int index = 0;
+#ifdef REPARTITIONING
+    m_x.restore(checkpoints[index++]);
+    m_y.restore(checkpoints[index++]);
+    m_z.restore(checkpoints[index++]);
+    m_xd.restore(checkpoints[index++]);
+    m_yd.restore(checkpoints[index++]);
+    m_zd.restore(checkpoints[index++]);
+    m_xdd.restore(checkpoints[index++]);
+    m_ydd.restore(checkpoints[index++]);
+    m_zdd.restore(checkpoints[index++]);
+#endif
+    m_fx.restore(checkpoints[index++]);
+    m_fy.restore(checkpoints[index++]);
+    m_fz.restore(checkpoints[index++]);
+    m_nodalMass.restore(checkpoints[index++]);
+#ifdef REPARTITIONING
+    m_dxx.restore(checkpoints[index++]);
+    m_dyy.restore(checkpoints[index++]);
+    m_dzz.restore(checkpoints[index++]);
+#endif
+    m_delv_xi.restore(checkpoints[index++]);
+    m_delv_eta.restore(checkpoints[index++]);
+    m_delv_zeta.restore(checkpoints[index++]);
+#ifdef REPARTITIONING
+    m_delx_xi.restore(checkpoints[index++]);
+    m_delx_eta.restore(checkpoints[index++]);
+    m_delx_zeta.restore(checkpoints[index++]);
+    m_e.restore(checkpoints[index++]);
+    m_p.restore(checkpoints[index++]);
+    m_q.restore(checkpoints[index++]);
+    m_ql.restore(checkpoints[index++]);
+    m_qq.restore(checkpoints[index++]);
+    m_v.restore(checkpoints[index++]);
+    m_volo.restore(checkpoints[index++]);
+    m_delv.restore(checkpoints[index++]);
+    m_vdov.restore(checkpoints[index++]);
+    m_arealg.restore(checkpoints[index++]);
+    m_ss.restore(checkpoints[index++]);
+    m_elemMass.restore(checkpoints[index++]);
+#endif
+    return index;
+}
+
 void init_config_params(Laik_Group *group, int &b, int &f, int &d, int &u, int &l, int &r) {
     int col, row, plane, side;
     InitMeshDecomp(laik_size(group), laik_myid(group), &col, &row, &plane, &side);
@@ -251,11 +296,19 @@ void calculate_removing_list_ft(Laik_Group *world, cmdLineOpts &opts, double sid
         }
         if (nodeStatusIndex < laik_size(world)) {
             removeList[i] = nodeStatusIndex;
+            nodeStatusIndex++;
             i++;
         } else {
             removeList[i] = i + opts.repart;
+            i++;
         }
     }
+
+    std::cout << "Remove list:";
+    for (i = 0; i < diffsize; i++) {
+        std::cout << " " << removeList[i];
+    }
+    std::cout << std::endl;
 
     // check if the repartitioning scenario is valid (the target process group is a cubic int and
     // the total size of elements in domain still valid)

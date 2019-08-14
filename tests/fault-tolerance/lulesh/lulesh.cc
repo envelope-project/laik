@@ -164,6 +164,7 @@ Additional BSD Notice
 extern "C" {
 #include "laik.h"
 #include "laik-backend-mpi.h"
+#include "laik-backend-tcp.h"
 }
 
 //porting to laik
@@ -2756,6 +2757,10 @@ void LagrangeLeapFrog(Domain &domain) {
 #endif
 }
 
+void errorHandler(void* data) {
+    std::cout << "Error handler triggered." << std::endl;
+}
+
 /******************************************/
 
 int main(int argc, char *argv[]) {
@@ -2936,6 +2941,12 @@ int main(int argc, char *argv[]) {
 #define USE_MPI 1
 #if USE_MPI
 
+        // *RANDOMLY* fail on a node
+        if(myRank == 1 && locDom->cycle() == 39) {
+            std::cout << "*Random* failure on rank " << myRank << " cycle " << locDom->cycle() << std::endl;
+            abort();
+        }
+
         // check if repartitioning has to be done in this iteration
         // if so, do repartitoing before the actual iteration
         // after repartitioning continue from the current iteration
@@ -2949,9 +2960,7 @@ int main(int argc, char *argv[]) {
                 }
                 nodeStatuses.reserve(laik_size(world));
                 failedCount = laik_failure_check_nodes(inst, world, &nodeStatuses[0]);
-                if(myRank == 0) {
-                    std::cout << "Detected " << failedCount << " node failures on master." << std::endl;
-                }
+                std::cout << "Detected " << failedCount << " node failures on rank " << myRank << "." << std::endl;
             }
             if (!opts.faultTolerance || failedCount > 0) {
                 double intermediate_timer = MPI_Wtime() - start2;
@@ -2977,17 +2986,38 @@ int main(int argc, char *argv[]) {
                 int *removeList = nullptr;
                 Laik_Group *shrinked_group;
 
-                if (!opts.faultTolerance) {
-                    calculate_removing_list(world, opts, side, newside, diffsize, removeList);
+                if (opts.faultTolerance) {
+                    std::cout << "Fault tolerance recovery repartitioning pre-step initiated" << std::endl;
+//                    calculate_removing_list_ft(world, opts, side, newside, diffsize, removeList, &nodeStatuses[0]);
 
-                    // create the shrinked group by removing tasks in removeList
-                    shrinked_group = laik_new_shrinked_group(world, diffsize, removeList);
-                } else {
-                    calculate_removing_list_ft(world, opts, side, newside, diffsize, removeList, &nodeStatuses[0]);
-                    
+                    // Only remove the actually failed before restoring
                     laik_failure_eliminate_nodes(inst, failedCount, &nodeStatuses[0]);
                     shrinked_group = laik_world_fault_tolerant(inst);
+
+                    // temporary partitioings for restoring
+//                    create_partitionings_and_transitions(shrinked_group,
+//                                                         indexSpaceElements, indexSpaceNodes, indexSapceDt,
+//                                                         exclusivePartitioning2, haloPartitioning2, overlapingPartitioning2,
+//                                                         allPartitioning2,
+//                                                         transitionToExclusive2, transitionToHalo2,
+//                                                         transitionToOverlappingInit2, transitionToOverlappingReduce2);
+
+                    for(auto& checkpoint : checkpoints) {
+                        laik_checkpoint_remove_failed_slices(checkpoint, &nodeStatuses[0]);
+                    }
+
+                    int restored = locDom->restore(checkpoints);
+                    std::cout << "Restored " << restored << " checkpoints." << std::endl;
+
+                    // Fake new temporary world
+                    world = shrinked_group;
+                    std::cout << "Installed fake world." << std::endl;
                 }
+
+                calculate_removing_list(world, opts, side, newside, diffsize, removeList);
+
+                // create the shrinked group by removing tasks in removeList
+                shrinked_group = laik_new_shrinked_group(world, diffsize, removeList);
 
                 // update number of local number of elements per edge in each task
                 opts.nx = opts.nx * side / (int) newside;
@@ -2997,6 +3027,7 @@ int main(int argc, char *argv[]) {
                 // on the target (shrinked) process group
                 // we switch to these partitionings and
                 // the old objects are not used anymore.
+                std::cout << "Creating partitionings and transitions." << std::endl;
                 create_partitionings_and_transitions(shrinked_group,
                                                      indexSpaceElements, indexSpaceNodes, indexSapceDt,
                                                      exclusivePartitioning2, haloPartitioning2, overlapingPartitioning2,
@@ -3005,6 +3036,7 @@ int main(int argc, char *argv[]) {
                                                      transitionToOverlappingInit2, transitionToOverlappingReduce2);
 
                 // migrate data for all the data structures
+                std::cout << "Redistributing data structures." << std::endl;
                 locDom->re_distribute_data_structures(shrinked_group, exclusivePartitioning2, haloPartitioning2,
                                                       overlapingPartitioning2, transitionToExclusive2,
                                                       transitionToHalo2, transitionToOverlappingInit2,
@@ -3013,6 +3045,7 @@ int main(int argc, char *argv[]) {
                 // processes that are not part of the new (shrinked)
                 // process group have to exit the main loop
                 if (laik_myid(shrinked_group) == -1) {
+                    std::cout << "Rank " << myRank << " eliminated. Good bye." << std::endl;
                     break;
                 }
 
@@ -3023,6 +3056,7 @@ int main(int argc, char *argv[]) {
 
                 // update the working process group in codes
                 world = shrinked_group;
+                std::cout << "New world size: " << laik_size(world) << std::endl;
 
                 // update required values according to the new process group
                 InitMeshDecomp(laik_size(world), laik_myid(world), &col, &row, &plane, &side);
@@ -3055,8 +3089,8 @@ int main(int argc, char *argv[]) {
                     std::cout << "Freeing " << checkpoints.size() << " checkpoints." << std::endl;
                 }
 
-                for (auto iter = checkpoints.begin(); iter != checkpoints.end(); iter++) {
-                    laik_checkpoint_free(*iter);
+                for (auto & checkpoint : checkpoints) {
+                    laik_checkpoint_free(checkpoint);
                 }
                 checkpoints.clear();
 
@@ -3067,6 +3101,10 @@ int main(int argc, char *argv[]) {
                 if(myRank == 0) {
                     std::cout << "Finished creating checkpoints." << std::endl;
                 }
+
+                // Make sure error handler is installed so we can make use of the checkpoints
+                laik_mpi_set_error_handler(errorHandler);
+                laik_tcp_set_error_handler(errorHandler);
             }
         }
 #endif

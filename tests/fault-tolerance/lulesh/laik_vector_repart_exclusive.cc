@@ -71,8 +71,6 @@ template<typename T>
 void
 laik_vector_repart_exclusive<T>::migrate(Laik_Group *new_group, Laik_Partitioning *p_new_1, Laik_Partitioning *p_new_2,
                                          Laik_Transition *t_new_1, Laik_Transition *t_new_2) {
-    uint64_t cnt;
-    T *base;
 
     this->state = 0;
 
@@ -91,11 +89,7 @@ laik_vector_repart_exclusive<T>::migrate(Laik_Group *new_group, Laik_Partitionin
     this->p2 = p_new_2;
     this->t1 = t_new_1;
     this->t2 = t_new_2;
-
-    // resize vector
-    laik_map_def(this->data, 0, (void **) &base, &cnt);
-    int s = cnt * cnt * cnt;
-    data_vector.resize(s);
+    this->resizeVector(data_vector);
 
     this->copyLaikDataToVector(data_vector);
 }
@@ -111,6 +105,7 @@ Laik_Checkpoint* laik_vector_repart_exclusive<T>::checkpoint() {
 template<typename T>
 void laik_vector_repart_exclusive<T>::restore(Laik_Checkpoint* checkpoint) {
     laik_vector<T>::restore(checkpoint);
+    this->resizeVector(data_vector);
     this->copyLaikDataToVector(data_vector);
 }
 #endif

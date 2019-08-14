@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <type_traits>
 #include <string.h>
+#include <assert.h>
 
 template <typename T>
 laik_vector<T>::laik_vector(Laik_Instance* inst, Laik_Group* world, Laik_Space* indexSpace, Laik_Partitioning *p1, Laik_Partitioning *p2, Laik_Transition* t1, Laik_Transition* t2, Laik_ReductionOperation operation):reduction_operation(operation){
@@ -48,9 +49,13 @@ template<typename T>
 void laik_vector<T>::copyLaikDataToVector(std::vector<T> &data_vector) {
     uint64_t cnt;
     T *base;
-    // copy the data back into the stl vecotrs
-    int nSlices = laik_my_slicecount(this->p1);
+    // copy the data back into the stl vectors
+//    int nSlices = laik_my_slicecount(this->p1);
+    int nSlices = laik_my_slicecount(laik_data_get_partitioning(this->data));
     for (int n = 0; n < nSlices; n++) {
+        assert(this->data != NULL);
+        assert(laik_data_get_partitioning(this->data) != nullptr);
+        assert(laik_my_slicecount(laik_data_get_partitioning(this->data)) == nSlices);
         laik_map_def(this->data, n, (void **) &base, &cnt);
         memcpy(&data_vector[0] + n * cnt, base, cnt * sizeof(T));
         //std::copy(data_vector.begin() + n*count ,data_vector.begin() + (n+1)*count-1 , base);
@@ -70,6 +75,15 @@ void laik_vector<T>::copyVectorToLaikData(std::vector<T> &data_vector) {
     }
 }
 
+template <typename T>
+void laik_vector<T>::resizeVector(std::vector<T> data_vector) {// resize vector
+    uint64_t cnt;
+    T* base;
+    laik_map_def(this->data, 0, (void **)&base, &cnt);
+    int s = cnt*cnt*cnt;
+    data_vector.resize(s);
+}
+
 #ifdef FAULT_TOLERANCE
 template<typename T>
 Laik_Checkpoint * laik_vector<T>::checkpoint() {
@@ -78,8 +92,12 @@ Laik_Checkpoint * laik_vector<T>::checkpoint() {
 
 template <typename T>
 void laik_vector<T>::restore(Laik_Checkpoint *checkpoint) {
+    // Set partitioning to backup partitioning so that it can be migrated later
+    assert(checkpoint->data != nullptr && laik_data_get_partitioning(checkpoint->data) != nullptr);
+    laik_switchto_partitioning(data, laik_data_get_partitioning(checkpoint->data), LAIK_DF_None, LAIK_RO_Min);
     laik_checkpoint_restore(inst, checkpoint, indexSpace, data);
 }
+
 #endif
 
 template class laik_vector<double>;

@@ -575,7 +575,7 @@ m_delx_zeta.resize(numElem) ;
 
 #ifdef FAULT_TOLERANCE
     void createCheckpoints(std::vector<Laik_Checkpoint*>&);
-    void restore(Laik_Checkpoint[]);
+    int restore(std::vector<Laik_Checkpoint*> &);
 #endif
 
 private:
@@ -784,6 +784,7 @@ private:
    Index_t m_rowMin, m_rowMax;
    Index_t m_colMin, m_colMax;
    Index_t m_planeMin, m_planeMax ;
+
 } ;
 
 typedef Real_t &(Domain::* Domain_member )(Index_t) ;
