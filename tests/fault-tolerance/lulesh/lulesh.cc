@@ -2769,6 +2769,8 @@ int main(int argc, char *argv[]) {
     Int_t myRank;
     struct cmdLineOpts opts;
 
+    laik_set_loglevel(LAIK_LL_Info);
+
 #if USE_MPI
     //Domain_member fieldData ;
 
@@ -2964,7 +2966,7 @@ int main(int argc, char *argv[]) {
             }
             if (!opts.faultTolerance || failedCount > 0) {
                 double intermediate_timer = MPI_Wtime() - start2;
-                double itG;
+                double itG = -1;
                 if (!opts.faultTolerance) {
                     MPI_Reduce(&intermediate_timer, &itG, 1, MPI_DOUBLE,
                                MPI_MAX, 0, MPI_COMM_WORLD);
