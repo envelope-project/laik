@@ -95,7 +95,7 @@ Laik_Checkpoint* laik_vector_repart_overlapping<T>::checkpoint() {
 template<typename T>
 void laik_vector_repart_overlapping<T>::restore(Laik_Checkpoint* checkpoint) {
     laik_vector<T>::restore(checkpoint);
-    this->resizeVector(data_vector);
+    this->resizeVectorToLaikData(data_vector);
     this->copyLaikDataToVector(data_vector);
 }
 #endif

@@ -78,7 +78,8 @@ public:
     void copyLaikDataToVector(std::vector<T> &data_vector);
     void copyVectorToLaikData(std::vector<T> &data_vector);
 
-    void resizeVector(std::vector<T>);
+    void resizeVector(std::vector<T>&);
+    void resizeVectorToLaikData(std::vector<T>&);
 
 #ifdef FAULT_TOLERANCE
     virtual Laik_Checkpoint * checkpoint();
@@ -122,6 +123,7 @@ protected:
      * @brief test_print printing laik_vector for debug
      */
     void test_print();
+
 };
 
 #endif // LAIK_VECTOR

@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <string.h>
 #include <assert.h>
+#include <iostream>
 
 template <typename T>
 laik_vector<T>::laik_vector(Laik_Instance* inst, Laik_Group* world, Laik_Space* indexSpace, Laik_Partitioning *p1, Laik_Partitioning *p2, Laik_Transition* t1, Laik_Transition* t2, Laik_ReductionOperation operation):reduction_operation(operation){
@@ -57,7 +58,11 @@ void laik_vector<T>::copyLaikDataToVector(std::vector<T> &data_vector) {
         assert(laik_data_get_partitioning(this->data) != nullptr);
         assert(laik_my_slicecount(laik_data_get_partitioning(this->data)) == nSlices);
         laik_map_def(this->data, n, (void **) &base, &cnt);
-        memcpy(&data_vector[0] + n * cnt, base, cnt * sizeof(T));
+        uint64_t elemOffset = n * cnt;
+        laik_log(LAIK_LL_Info, "Copy LAIK data to vector: vector (capacity) %lu data %lu offset %lu length %lu", data_vector.capacity(), cnt,
+                 elemOffset, cnt);
+        assert(elemOffset >= 0 && elemOffset + cnt <= data_vector.capacity());
+        memcpy(&data_vector[0] + elemOffset, base, cnt * sizeof(T));
         //std::copy(data_vector.begin() + n*count ,data_vector.begin() + (n+1)*count-1 , base);
     }
 }
@@ -70,13 +75,15 @@ void laik_vector<T>::copyVectorToLaikData(std::vector<T> &data_vector) {
     int nSlices = laik_my_slicecount(this->p1);
     for (int n = 0; n < nSlices; n++) {
         laik_map_def(this->data, n, (void **) &base, &cnt);
+//        laik_log(LAIK_LL_Info, "Copy vector to LAIK data: vector (size) %lu data %lu", data_vector.size(), cnt);
+        assert(n * cnt >= 0 && n * cnt + cnt <= data_vector.capacity());
         memcpy(base, &data_vector[0] + n * cnt, cnt * sizeof(T));
         //std::copy( base, base + cnt, data_vector.begin() + n*count );
     }
 }
 
 template <typename T>
-void laik_vector<T>::resizeVector(std::vector<T> data_vector) {// resize vector
+void laik_vector<T>::resizeVector(std::vector<T> &data_vector) {// resize vector
     uint64_t cnt;
     T* base;
     laik_map_def(this->data, 0, (void **)&base, &cnt);
@@ -84,9 +91,20 @@ void laik_vector<T>::resizeVector(std::vector<T> data_vector) {// resize vector
     data_vector.resize(s);
 }
 
+template <typename T>
+void laik_vector<T>::resizeVectorToLaikData(std::vector<T> &data_vector) {// resize vector
+    uint64_t cnt = 0;
+    for (int i = 0; i < laik_my_slicecount(laik_data_get_partitioning(data)); ++i) {
+        cnt += laik_slice_size(laik_taskslice_get_slice(laik_my_slice(laik_data_get_partitioning(data), i)));
+    }
+    laik_log(LAIK_LL_Info, "Resizing vector from %lu to %lu", data_vector.capacity(), cnt);
+    data_vector.resize(cnt);
+}
+
 #ifdef FAULT_TOLERANCE
 template<typename T>
 Laik_Checkpoint * laik_vector<T>::checkpoint() {
+    std::cout << "Creating checkpoint of " << laik_my_slicecount(laik_data_get_partitioning(data)) << " slices." << std::endl;
     return laik_checkpoint_create(inst, indexSpace, data, laik_Master, 1, 1, laik_data_get_group(data), LAIK_RO_Min);
 }
 
