@@ -1182,8 +1182,12 @@ static void laik_mpi_sync(Laik_KVStore* kvs)
 
 static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup, int* nodeStatuses) {
     (void) oldGroup; (void)newGroup; (void)nodeStatuses;
+    int err;
     MPI_Comm oldComm = ((MPIGroupData *) oldGroup->backend_data)->comm;
-    MPIX_Comm_revoke(oldComm);
+    err = MPIX_Comm_revoke(oldComm);
+    if(err != MPI_SUCCESS) {
+        laik_mpi_panic(err);
+    }
 
     MPIGroupData* gd = (MPIGroupData*) newGroup->backend_data;
     assert(gd == 0); // must not be updated yet
@@ -1194,8 +1198,14 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
     }
     newGroup->backend_data = gd;
 
-    assert(oldComm != NULL && gd->comm != NULL);
-    MPIX_Comm_shrink(oldComm, &gd->comm);
+    // Was this assertion wrong?
+//    assert(oldComm != NULL && gd->comm != NULL);
+    assert(oldComm != NULL);
+    err = MPIX_Comm_shrink(oldComm, &gd->comm);
+    if(err != MPI_SUCCESS) {
+        laik_mpi_panic(err);
+    }
+    assert(gd->comm != NULL);
 
     int newSize;
     MPI_Comm_size(gd->comm, &newSize);
