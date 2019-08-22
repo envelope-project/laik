@@ -83,7 +83,7 @@ public:
 
 #ifdef FAULT_TOLERANCE
     virtual Laik_Checkpoint * checkpoint();
-    virtual void restore(Laik_Checkpoint *checkpoint);
+    virtual void restore(Laik_Checkpoint *checkpoint, Laik_Group *newGroup);
 #endif
 
 protected:

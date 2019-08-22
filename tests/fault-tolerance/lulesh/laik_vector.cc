@@ -109,10 +109,12 @@ Laik_Checkpoint * laik_vector<T>::checkpoint() {
 }
 
 template <typename T>
-void laik_vector<T>::restore(Laik_Checkpoint *checkpoint) {
+void laik_vector<T>::restore(Laik_Checkpoint *checkpoint, Laik_Group *newGroup) {
     // Set partitioning to backup partitioning so that it can be migrated later
     assert(checkpoint->data != nullptr && laik_data_get_partitioning(checkpoint->data) != nullptr);
-    laik_switchto_partitioning(data, laik_data_get_partitioning(checkpoint->data), LAIK_DF_None, LAIK_RO_Min);
+    Laik_Partitioning* newPartitioning = laik_new_partitioning(laik_Master, newGroup, indexSpace, nullptr);
+    laik_switchto_partitioning(data, newPartitioning, LAIK_DF_None, LAIK_RO_None);
+//    laik_partitioning_migrate(laik_data_get_partitioning(checkpoint->data), newGroup);
     laik_checkpoint_restore(inst, checkpoint, indexSpace, data);
 }
 

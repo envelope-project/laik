@@ -96,47 +96,49 @@ void Domain::createCheckpoints(std::vector<Laik_Checkpoint*> &checkpoints) {
 #endif
 }
 
-int Domain::restore(std::vector<Laik_Checkpoint*> &checkpoints) {
+int Domain::restore(std::vector<Laik_Checkpoint *> &checkpoints, Laik_Group *newGroup) {
     int index = 0;
 #ifdef REPARTITIONING
-    m_x.restore(checkpoints[index++]);
-    m_y.restore(checkpoints[index++]);
-    m_z.restore(checkpoints[index++]);
-    m_xd.restore(checkpoints[index++]);
-    m_yd.restore(checkpoints[index++]);
-    m_zd.restore(checkpoints[index++]);
-    m_xdd.restore(checkpoints[index++]);
-    m_ydd.restore(checkpoints[index++]);
-    m_zdd.restore(checkpoints[index++]);
+    m_x.restore(checkpoints[index++], newGroup);
+    m_y.restore(checkpoints[index++], newGroup);
+    m_z.restore(checkpoints[index++], newGroup);
+    m_xd.restore(checkpoints[index++], newGroup);
+    m_yd.restore(checkpoints[index++], newGroup);
+    std::cout << "Restored m_yd." << std::endl;
+    m_zd.restore(checkpoints[index++], newGroup);
+    std::cout << "Restored m_zd." << std::endl;
+    m_xdd.restore(checkpoints[index++], newGroup);
+    m_ydd.restore(checkpoints[index++], newGroup);
+    m_zdd.restore(checkpoints[index++], newGroup);
 #endif
-    m_fx.restore(checkpoints[index++]);
-    m_fy.restore(checkpoints[index++]);
-    m_fz.restore(checkpoints[index++]);
-    m_nodalMass.restore(checkpoints[index++]);
+    m_fx.restore(checkpoints[index++], newGroup);
+    m_fy.restore(checkpoints[index++], newGroup);
+    m_fz.restore(checkpoints[index++], newGroup);
+    m_nodalMass.restore(checkpoints[index++], newGroup);
 #ifdef REPARTITIONING
-    m_dxx.restore(checkpoints[index++]);
-    m_dyy.restore(checkpoints[index++]);
-    m_dzz.restore(checkpoints[index++]);
+    m_dxx.restore(checkpoints[index++], newGroup);
+    m_dyy.restore(checkpoints[index++], newGroup);
+    m_dzz.restore(checkpoints[index++], newGroup);
 #endif
-    m_delv_xi.restore(checkpoints[index++]);
-    m_delv_eta.restore(checkpoints[index++]);
-    m_delv_zeta.restore(checkpoints[index++]);
+    m_delv_xi.restore(checkpoints[index++], newGroup);
+    m_delv_eta.restore(checkpoints[index++], newGroup);
+    m_delv_zeta.restore(checkpoints[index++], newGroup);
 #ifdef REPARTITIONING
-    m_delx_xi.restore(checkpoints[index++]);
-    m_delx_eta.restore(checkpoints[index++]);
-    m_delx_zeta.restore(checkpoints[index++]);
-    m_e.restore(checkpoints[index++]);
-    m_p.restore(checkpoints[index++]);
-    m_q.restore(checkpoints[index++]);
-    m_ql.restore(checkpoints[index++]);
-    m_qq.restore(checkpoints[index++]);
-    m_v.restore(checkpoints[index++]);
-    m_volo.restore(checkpoints[index++]);
-    m_delv.restore(checkpoints[index++]);
-    m_vdov.restore(checkpoints[index++]);
-    m_arealg.restore(checkpoints[index++]);
-    m_ss.restore(checkpoints[index++]);
-    m_elemMass.restore(checkpoints[index++]);
+    m_delx_xi.restore(checkpoints[index++], newGroup);
+    m_delx_eta.restore(checkpoints[index++], newGroup);
+    m_delx_zeta.restore(checkpoints[index++], newGroup);
+    m_e.restore(checkpoints[index++], newGroup);
+    m_p.restore(checkpoints[index++], newGroup);
+    m_q.restore(checkpoints[index++], newGroup);
+    m_ql.restore(checkpoints[index++], newGroup);
+    m_qq.restore(checkpoints[index++], newGroup);
+    m_v.restore(checkpoints[index++], newGroup);
+    m_volo.restore(checkpoints[index++], newGroup);
+    m_delv.restore(checkpoints[index++], newGroup);
+    m_vdov.restore(checkpoints[index++], newGroup);
+    m_arealg.restore(checkpoints[index++], newGroup);
+    m_ss.restore(checkpoints[index++], newGroup);
+    m_elemMass.restore(checkpoints[index++], newGroup);
 #endif
     return index;
 }

@@ -575,7 +575,7 @@ m_delx_zeta.resize(numElem) ;
 
 #ifdef FAULT_TOLERANCE
     void createCheckpoints(std::vector<Laik_Checkpoint*>&);
-    int restore(std::vector<Laik_Checkpoint*> &);
+    int restore(std::vector<Laik_Checkpoint *> &checkpoints, Laik_Group *newGroup);
 #endif
 
 private:

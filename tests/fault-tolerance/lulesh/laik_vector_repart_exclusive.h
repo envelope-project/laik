@@ -28,7 +28,7 @@ public:
 
 #ifdef FAULT_TOLERANCE
     Laik_Checkpoint* checkpoint() override;
-    void restore(Laik_Checkpoint* checkpoint) override;
+    void restore(Laik_Checkpoint *checkpoint, Laik_Group *newGroup) override;
 #endif
 
 private:

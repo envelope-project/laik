@@ -3008,7 +3008,8 @@ int main(int argc, char *argv[]) {
                         laik_checkpoint_remove_failed_slices(checkpoint, &nodeStatuses[0]);
                     }
 
-                    int restored = locDom->restore(checkpoints);
+                    std::cout << "Restoring checkpoints." << std::endl;
+                    int restored = locDom->restore(checkpoints, shrinked_group);
                     std::cout << "Restored " << restored << " checkpoints." << std::endl;
 
                     // Fake new temporary world
