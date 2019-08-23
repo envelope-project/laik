@@ -112,7 +112,7 @@ void laik_vector<T>::prepareMigration(bool suppressDataSwitchToP1) {
 template<typename T>
 Laik_Checkpoint * laik_vector<T>::checkpoint() {
     std::cout << "Creating checkpoint of " << laik_my_slicecount(laik_data_get_partitioning(data)) << " slices." << std::endl;
-    return laik_checkpoint_create(inst, indexSpace, data, laik_Master, 1, 1, laik_data_get_group(data), LAIK_RO_Min);
+    return laik_checkpoint_create(inst, indexSpace, data, laik_Master, 0, 0, laik_data_get_group(data), LAIK_RO_Min);
 }
 
 template <typename T>
