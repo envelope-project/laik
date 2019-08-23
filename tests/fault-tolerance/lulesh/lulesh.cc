@@ -3008,13 +3008,13 @@ int main(int argc, char *argv[]) {
                         laik_checkpoint_remove_failed_slices(checkpoint, &nodeStatuses[0]);
                     }
 
-                    std::cout << "Restoring checkpoints." << std::endl;
+                    laik_log(LAIK_LL_Info, "Restoring checkpoints.");
                     int restored = locDom->restore(checkpoints, shrinked_group);
-                    std::cout << "Restored " << restored << " checkpoints." << std::endl;
+                    laik_log(LAIK_LL_Info, "Restored %i checkpoints.", restored);
 
                     // Fake new temporary world
                     world = shrinked_group;
-                    std::cout << "Installed fake world." << std::endl;
+                    laik_log(LAIK_LL_Info, "Installed fake world.");
                 }
 
                 calculate_removing_list(world, opts, side, newside, diffsize, removeList);
@@ -3030,7 +3030,7 @@ int main(int argc, char *argv[]) {
                 // on the target (shrinked) process group
                 // we switch to these partitionings and
                 // the old objects are not used anymore.
-                std::cout << "Creating partitionings and transitions." << std::endl;
+                laik_log(LAIK_LL_Info, "Creating partitionings and transitions.");
                 create_partitionings_and_transitions(shrinked_group,
                                                      indexSpaceElements, indexSpaceNodes, indexSapceDt,
                                                      exclusivePartitioning2, haloPartitioning2, overlapingPartitioning2,
@@ -3039,7 +3039,7 @@ int main(int argc, char *argv[]) {
                                                      transitionToOverlappingInit2, transitionToOverlappingReduce2);
 
                 // migrate data for all the data structures
-                std::cout << "Redistributing data structures." << std::endl;
+                laik_log(LAIK_LL_Info, "Redistributing data structures.");
                 locDom->re_distribute_data_structures(shrinked_group, exclusivePartitioning2, haloPartitioning2,
                                                       overlapingPartitioning2, transitionToExclusive2,
                                                       transitionToHalo2, transitionToOverlappingInit2,
@@ -3048,7 +3048,7 @@ int main(int argc, char *argv[]) {
                 // processes that are not part of the new (shrinked)
                 // process group have to exit the main loop
                 if (laik_myid(shrinked_group) == -1) {
-                    std::cout << "Rank " << myRank << " eliminated. Good bye." << std::endl;
+                    laik_log(LAIK_LL_Info, "Rank %i eliminated. Good bye.", myRank);
                     break;
                 }
 
