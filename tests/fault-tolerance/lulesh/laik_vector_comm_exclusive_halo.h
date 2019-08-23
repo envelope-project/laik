@@ -14,7 +14,8 @@ public:
     void resize(int count) override;
     void switch_to_p1() override;
     void switch_to_p2() override;
-    void migrate(Laik_Group* new_group, Laik_Partitioning* p_new_1, Laik_Partitioning* p_new_2, Laik_Transition* t_new_1, Laik_Transition* t_new_2) override;
+    void migrate(Laik_Group* new_group, Laik_Partitioning* p_new_1, Laik_Partitioning* p_new_2, Laik_Transition* t_new_1, Laik_Transition* t_new_2,
+                 bool suppressSwitchToP1) override;
 };
 
 template <typename T>

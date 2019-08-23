@@ -59,7 +59,7 @@ void laik_vector<T>::copyLaikDataToVector(std::vector<T> &data_vector) {
         assert(laik_my_slicecount(laik_data_get_partitioning(this->data)) == nSlices);
         laik_map_def(this->data, n, (void **) &base, &cnt);
         uint64_t elemOffset = n * cnt;
-        laik_log(LAIK_LL_Info, "Copy LAIK data to vector: vector (capacity) %lu data %lu offset %lu length %lu", data_vector.capacity(), cnt,
+        laik_log(LAIK_LL_Debug, "Copy LAIK data to vector: vector (capacity) %lu data %lu offset %lu length %lu", data_vector.capacity(), cnt,
                  elemOffset, cnt);
         assert(elemOffset >= 0 && elemOffset + cnt <= data_vector.capacity());
         memcpy(&data_vector[0] + elemOffset, base, cnt * sizeof(T));
@@ -99,6 +99,13 @@ void laik_vector<T>::resizeVectorToLaikData(std::vector<T> &data_vector) {// res
     }
     laik_log(LAIK_LL_Info, "Resizing vector from %lu to %lu", data_vector.capacity(), cnt);
     data_vector.resize(cnt);
+}
+
+template <typename T>
+void laik_vector<T>::prepareMigration(bool suppressDataSwitchToP1) {
+    if(!suppressDataSwitchToP1) {
+        laik_switchto_partitioning(this->data, this->p1, LAIK_DF_None, LAIK_RO_None);
+    }
 }
 
 #ifdef FAULT_TOLERANCE

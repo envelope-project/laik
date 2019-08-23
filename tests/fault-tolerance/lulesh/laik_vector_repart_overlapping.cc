@@ -60,7 +60,9 @@ void laik_vector_repart_overlapping<T>::switch_to_p2(){
 }
 
 template <typename T>
-void laik_vector_repart_overlapping<T>::migrate(Laik_Group* new_group, Laik_Partitioning* p_new_1, Laik_Partitioning* p_new_2, Laik_Transition* t_new_1, Laik_Transition* t_new_2){
+void laik_vector_repart_overlapping<T>::migrate(Laik_Group *new_group, Laik_Partitioning *p_new_1,
+                                                Laik_Partitioning *p_new_2, Laik_Transition *t_new_1,
+                                                Laik_Transition *t_new_2, bool suppressSwitchToP1) {
 
     this -> state = 0;
 

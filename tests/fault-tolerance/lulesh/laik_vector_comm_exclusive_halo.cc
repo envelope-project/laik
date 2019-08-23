@@ -248,12 +248,13 @@ void laik_vector_comm_exclusive_halo<T>::switch_to_p2(){
 }
 
 template <typename T>
-void laik_vector_comm_exclusive_halo<T>::migrate(Laik_Group* new_group, Laik_Partitioning* p_new_1, Laik_Partitioning* p_new_2, Laik_Transition* t_new_1, Laik_Transition* t_new_2){
+void laik_vector_comm_exclusive_halo<T>::migrate(Laik_Group* new_group, Laik_Partitioning* p_new_1, Laik_Partitioning* p_new_2, Laik_Transition* t_new_1, Laik_Transition* t_new_2,
+                                                 bool suppressSwitchToP1){
     uint64_t cnt;
     int* base;
     //int slice = 0;
 
-    laik_switchto_partitioning(this->data, this->p1, LAIK_DF_None, LAIK_RO_None);
+    this->prepareMigration(suppressSwitchToP1);
 
     // use the reservation API to precalculate the pointers
     Laik_Reservation* reservation = laik_reservation_new(this->data);

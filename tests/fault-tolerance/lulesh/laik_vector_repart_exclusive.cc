@@ -70,7 +70,7 @@ void laik_vector_repart_exclusive<T>::switch_to_p2() {
 template<typename T>
 void
 laik_vector_repart_exclusive<T>::migrate(Laik_Group *new_group, Laik_Partitioning *p_new_1, Laik_Partitioning *p_new_2,
-                                         Laik_Transition *t_new_1, Laik_Transition *t_new_2) {
+                                         Laik_Transition *t_new_1, Laik_Transition *t_new_2, bool suppressSwitchToP1) {
 
     this->state = 0;
 
@@ -79,7 +79,7 @@ laik_vector_repart_exclusive<T>::migrate(Laik_Group *new_group, Laik_Partitionin
     this->copyVectorToLaikData(data_vector);
 
     // perform switches for communication
-    laik_switchto_partitioning(this->data, p_new_1, LAIK_DF_Preserve, LAIK_RO_None);
+    this->prepareMigration(suppressSwitchToP1);
 
     this->world = new_group;
     if (laik_myid(this->world) < 0)

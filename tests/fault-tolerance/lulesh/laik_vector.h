@@ -68,7 +68,9 @@ public:
      * @param t_new_1 transition to p_new_1
      * @param t_new_2 transition to p_new_2
      */
-    virtual void migrate(Laik_Group* new_group, Laik_Partitioning* p_new_1, Laik_Partitioning* p_new_2, Laik_Transition* t_new_1, Laik_Transition* t_new_2) = 0;
+    virtual void
+    migrate(Laik_Group *new_group, Laik_Partitioning *p_new_1, Laik_Partitioning *p_new_2, Laik_Transition *t_new_1,
+            Laik_Transition *t_new_2, bool suppressSwitchToP1) = 0;
 
     /**
      * @brief clearing laik_vectors
@@ -124,6 +126,7 @@ protected:
      */
     void test_print();
 
+    void prepareMigration(bool suppressDataSwitchToP1);
 };
 
 #endif // LAIK_VECTOR

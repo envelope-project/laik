@@ -2803,6 +2803,7 @@ int main(int argc, char *argv[]) {
     opts.cost = 1;
     opts.repart = 0;
     opts.cycle = 5;
+    opts.faultTolerance = 0;
 
     ParseCommandLineOptions(argc, argv, myRank, &opts);
 
@@ -2944,13 +2945,13 @@ int main(int argc, char *argv[]) {
 #if USE_MPI
 
         // *RANDOMLY* fail on a node
-        if(myRank == 1 && locDom->cycle() == 39) {
-            std::cout << "*Random* failure on rank " << myRank << " cycle " << locDom->cycle() << std::endl;
+        if(opts.faultTolerance && myRank == 1 && locDom->cycle() == 39) {
+            laik_log(LAIK_LL_Error, "*Random* failure on rank %i cycle %i", myRank, locDom->cycle());
             abort();
         }
 
         // check if repartitioning has to be done in this iteration
-        // if so, do repartitoing before the actual iteration
+        // if so, do repartitioning before the actual iteration
         // after repartitioning continue from the current iteration
         if ((opts.repart > 0 && locDom->cycle() == opts.cycle) || (opts.faultTolerance && locDom->cycle() % opts.cycle == 0)) {
             std::vector<int> nodeStatuses;
@@ -3041,7 +3042,8 @@ int main(int argc, char *argv[]) {
                 locDom->re_distribute_data_structures(shrinked_group, exclusivePartitioning2, haloPartitioning2,
                                                       overlapingPartitioning2, transitionToExclusive2,
                                                       transitionToHalo2, transitionToOverlappingInit2,
-                                                      transitionToOverlappingReduce2);
+                                                      transitionToOverlappingReduce2,
+                                                      opts.faultTolerance);
 
                 // processes that are not part of the new (shrinked)
                 // process group have to exit the main loop

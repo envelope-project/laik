@@ -60,6 +60,10 @@ static void ParseError(const char *message, int myRank)
    }
 }
 
+void printOptions(cmdLineOpts* opts) {
+    laik_log(LAIK_LL_Info, "LAIK LULESH Options:\nQuiet: %i, %i iterations, size %i, %i regions, balance %i, cost %i, %i files, %i progress, %i viz output, %i repartitioning (at cycle %i), %i fault tolerance.\n", opts->quiet, opts->its, opts->nx, opts->numReg, opts->balance, opts->cost, opts->numFiles, opts->showProg, opts->viz, opts->repart, opts->cycle, opts->faultTolerance);
+}
+
 void ParseCommandLineOptions(int argc, char *argv[],
                              int myRank, struct cmdLineOpts *opts)
 {
@@ -192,6 +196,8 @@ void ParseCommandLineOptions(int argc, char *argv[],
          }
       }
    }
+
+   printOptions(opts);
 }
 
 /////////////////////////////////////////////////////////////////////
