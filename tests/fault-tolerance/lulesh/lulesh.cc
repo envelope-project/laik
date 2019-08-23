@@ -2996,13 +2996,6 @@ int main(int argc, char *argv[]) {
                     laik_failure_eliminate_nodes(inst, failedCount, &nodeStatuses[0]);
                     shrinked_group = laik_world_fault_tolerant(inst);
 
-                    // temporary partitioings for restoring
-//                    create_partitionings_and_transitions(shrinked_group,
-//                                                         indexSpaceElements, indexSpaceNodes, indexSapceDt,
-//                                                         exclusivePartitioning2, haloPartitioning2, overlapingPartitioning2,
-//                                                         allPartitioning2,
-//                                                         transitionToExclusive2, transitionToHalo2,
-//                                                         transitionToOverlappingInit2, transitionToOverlappingReduce2);
 
                     for(auto& checkpoint : checkpoints) {
                         laik_checkpoint_remove_failed_slices(checkpoint, &nodeStatuses[0]);
@@ -3011,6 +3004,11 @@ int main(int argc, char *argv[]) {
                     laik_log(LAIK_LL_Info, "Restoring checkpoints.");
                     int restored = locDom->restore(checkpoints, shrinked_group);
                     laik_log(LAIK_LL_Info, "Restored %i checkpoints.", restored);
+
+                    // Make sure the dt container is also switched to the temporary world before doing the second switch.
+                    laik_log(LAIK_LL_Debug, "Switching the dt container to temporary group.");
+                    laik_switchto_new_partitioning(laikDt, shrinked_group, laik_All, LAIK_DF_None, LAIK_RO_None);
+                    laik_log(LAIK_LL_Debug, "Switched the dt container to temporary group.");
 
                     // Fake new temporary world
                     world = shrinked_group;
