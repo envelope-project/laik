@@ -605,6 +605,9 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
     }
     else {
         // other cases not supported
+        laik_log(LAIK_LL_Error, "Error while migrating partitioning: "
+                                "group with id %i is not a parent or a child of new group %i.",
+                                p->group->gid, newg->gid);
         assert(0);
     }
 
