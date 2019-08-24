@@ -679,7 +679,7 @@ void laik_slicearray_migrate(Laik_SliceArray* sa, int* idmap, unsigned int new_c
         if (idmap[i] < 0) {
             if(sa->off[i] != sa->off[i + 1]) {
                 laik_log_begin(LAIK_LL_Error);
-                laik_log_append("Attempted to migrate slicearray to new group (mapping %i to %i) but found slice from removed task id", i, idmap[i]);
+                laik_log_append("Attempted to migrate slicearray to new group (mapping %i to %i) but found slice from removed task id.\n", i, idmap[i]);
                 laik_log_SliceArray(sa);
                 laik_log_flush("");
                 assert(0);
