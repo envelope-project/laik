@@ -1184,10 +1184,12 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
     (void) oldGroup; (void)newGroup; (void)nodeStatuses;
     int err;
     MPI_Comm oldComm = ((MPIGroupData *) oldGroup->backend_data)->comm;
-    err = MPIX_Comm_revoke(oldComm);
-    if(err != MPI_SUCCESS) {
-        laik_mpi_panic(err);
-    }
+
+    // We still need the old communicator to recover the checkpoints, don't invalidate it.
+//    err = MPIX_Comm_revoke(oldComm);
+//    if(err != MPI_SUCCESS) {
+//        laik_mpi_panic(err);
+//    }
 
     MPIGroupData* gd = (MPIGroupData*) newGroup->backend_data;
     assert(gd == 0); // must not be updated yet

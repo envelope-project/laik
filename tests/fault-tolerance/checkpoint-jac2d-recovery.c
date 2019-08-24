@@ -430,6 +430,7 @@ void exportDataFiles() {
 
 void restoreCheckpoints() {
     TPRINTF("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
+//    laik_partitioning_migrate(spaceCheckpoint->data->activePartitioning, world);
     laik_checkpoint_restore(inst, spaceCheckpoint, space, dWrite);
     TPRINTF("Restore successful\n");
 }
