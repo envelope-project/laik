@@ -1,5 +1,5 @@
 
-output = readtable('output.txt');
+output = readtable('out/out_stat.txt');
 output = sortrows(output, [6, 8]);
 
 figure();
