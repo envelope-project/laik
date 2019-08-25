@@ -58,7 +58,7 @@ double calculateGlobalResiduum(double localResiduum, double **sumPtr);
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
                                        int64_t gy1);
 
-void createCheckpoints(int iter);
+void createCheckpoints(int iter, int redundancyCount, int rotationDistance);
 
 void restoreCheckpoints();
 
@@ -148,14 +148,15 @@ Laik_Data *dWrite, *dRead;
 Laik_Checkpoint *spaceCheckpoint;
 
 int main(int argc, char *argv[]) {
-    laik_set_loglevel(LAIK_LL_Info);
+    laik_set_loglevel(LAIK_LL_Error);
 //    laik_set_loglevel(LAIK_LL_Debug);
     inst = laik_init(&argc, &argv);
     world = laik_world(inst);
 
-    printf("Preparing shrinked world, eliminating rank 1 (world size %i)\n", world->size);
-    int elimination[] = {1};
-    smallWorld = laik_new_shrinked_group(world, 1, elimination);
+
+//    printf("Preparing shrinked world, eliminating rank 1 (world size %i)\n", world->size);
+//    int elimination[] = {1};
+//    smallWorld = laik_new_shrinked_group(world, 1, elimination);
 
     // Set the error handler to be able to recover from
     laik_tcp_set_error_handler(errorHandler);
@@ -165,6 +166,8 @@ int main(int argc, char *argv[]) {
     int repart = 0; // enforce repartitioning after <repart> iterations
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
+    int redundancyCount = 1;
+    int rotationDistance = 1;
 
 
     int arg = 1;
@@ -172,7 +175,7 @@ int main(int argc, char *argv[]) {
         if (argv[arg][1] == 'n') use_cornerhalo = false;
         if (argv[arg][1] == 'p') do_profiling = true;
         if (argv[arg][1] == 'h') {
-            printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
+            printf("Usage: %s [options] <side width> <maxiter> <repart> <redundancy count> <rotation distance>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac2d_profiling.txt'\n"
@@ -185,9 +188,14 @@ int main(int argc, char *argv[]) {
     if (argc > arg) size = atoi(argv[arg]);
     if (argc > arg + 1) maxiter = atoi(argv[arg + 1]);
     if (argc > arg + 2) repart = atoi(argv[arg + 2]);
+    if (argc > arg + 3) redundancyCount = atoi(argv[arg + 3]);
+    if (argc > arg + 4) rotationDistance = atoi(argv[arg + 4]);
 
     if (size == 0) size = 1024; // entries
     if (maxiter == 0) maxiter = 50;
+
+    TRACE_INIT(laik_myid(world), maxiter, (size * size * sizeof(double)) / 1024.0);
+    TRACE_EVENT_START("INIT", "");
 
     TPRINTF("Jac_2d parallel with rank %i\n", laik_myid(world));
     if (laik_myid(world) == 0) {
@@ -259,10 +267,11 @@ int main(int argc, char *argv[]) {
 
     int nodeStatuses[world->size];
 
-    TRACE_EVENT_S("INIT-END", "");
+    TRACE_EVENT_END("INIT", "");
 
     for (; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
+        TRACE_EVENT_S("ITER", "");
 
         // At every 10 iterations, do a checkpoint
         if (iter == 5) {
@@ -273,18 +282,19 @@ int main(int argc, char *argv[]) {
 //            laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_None, LAIK_RO_None);
 //            TPRINTF("Switch OK.\n");
 
-            TRACE_EVENT_S("CHECKPOINT-START", "");
-            createCheckpoints(iter);
-            TRACE_EVENT_S("CHECKPOINT-END", "");
+            TRACE_EVENT_START("CHECKPOINT", "");
+            createCheckpoints(iter, redundancyCount, rotationDistance);
+            TRACE_EVENT_END("CHECKPOINT", "");
         }
         if (iter % 10 == 5 && iter == 35) {
             TPRINTF("Attempting to determine global status.\n");
-            TRACE_EVENT_S("FAILURE-CHECK-START", "");
+            TRACE_EVENT_START("FAILURE-CHECK", "");
             int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
-            TRACE_EVENT_S("FAILURE-CHECK-END", "");
+            TRACE_EVENT_END("FAILURE-CHECK", "");
             if (numFailed == 0) {
                 TPRINTF("Could not detect a failed node.\n");
             } else {
+                TRACE_EVENT_S("FAILURE-DETECT","");
                 // Don't allow any failures while and after recovery
                 laik_log(LAIK_LL_Warning, "Deactivating error handler!");
                 laik_tcp_set_error_handler(NULL);
@@ -298,7 +308,7 @@ int main(int argc, char *argv[]) {
 //                assert(world->size == 3);
                 TPRINTF("Attempting to restore with new world size %i\n", world->size);
 
-                TRACE_EVENT_S("RESTORE-START", "");
+                TRACE_EVENT_START("RESTORE", "");
                 pSum = laik_new_partitioning(laik_All, world, sp1, 0);
                 laik_partitioning_set_name(pSum, "pSum_new");
                 pWrite = laik_new_partitioning(prWrite, world, space, 0);
@@ -321,7 +331,7 @@ int main(int argc, char *argv[]) {
 
                 iter = restoreIteration;
                 laik_tcp_clear_errors();
-                TRACE_EVENT_S("RESTORE-END", "");
+                TRACE_EVENT_END("RESTORE", "");
                 TPRINTF("Restore complete, cleared errors.\n");
 
 //                TPRINTF("Special: Switching to all partitioning.\n");
@@ -346,7 +356,7 @@ int main(int argc, char *argv[]) {
 //            if (laik_myid(laik_world(inst)) != 1) {
 //                errorHandler(NULL);
 //            } else {
-            TRACE_EVENT_S("FAILURE-START", "");
+            TRACE_EVENT_S("FAILURE-GENERATE", "");
             TPRINTF("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
                     iter);
 //            abort();
@@ -399,8 +409,9 @@ int main(int argc, char *argv[]) {
         TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
     }
 
-    TRACE_EVENT_S("FINALIZE", "");
+    TRACE_EVENT_START("FINALIZE", "");
     laik_finalize(inst);
+    TRACE_EVENT_END("FINALIZE", "");
     return 0;
 }
 
@@ -435,9 +446,9 @@ void restoreCheckpoints() {
     TPRINTF("Restore successful\n");
 }
 
-void createCheckpoints(int iter) {
+void createCheckpoints(int iter, int redundancyCount, int rotationDistance) {
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, 1, 1, world, LAIK_RO_None);
+    spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount, rotationDistance, world, LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 
