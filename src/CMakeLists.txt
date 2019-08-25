@@ -47,6 +47,7 @@ if (mpi-backend)
     # If pkg-config didn't find MPI above, also try CMake's native FindMPI
     # module since we really want to enable MPI support whenever possible!
     if (NOT TARGET "mpi")
+        message(STATUS "Pkgconfig find mpi failed, trying fallback")
         find_package (MPI)
         if (MPI_C_FOUND)
             # MPI_C_COMPILE_FLAGS and MPI_C_LINK_FLAGS really ought to be be
