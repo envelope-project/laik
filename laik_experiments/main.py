@@ -3,32 +3,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-def loadMultipleDataFrames(fileNames, perFileMapper = None):
-    data = pd.read_csv(fileNames[0])
-    data = pd.DataFrame(columns=data.columns)
 
-    data['FILE'] = ''
-    data['FILE_ID'] = -1
-    data['TEST_NAME'] = ''
+data = pd.read_csv("data/experiment_mpi_strong_scale_04_trace.csv")
+ranks = len(data['RANK'].unique())
 
-    for fileId in range(len(fileNames)):
-        filename = fileNames[fileId]
-        fileData = pd.read_csv(filename)
-        fileData['FILE'] = filename
-        fileData['TEST_NAME'] = fileData['FILE'].replace(
-            {'data/':'', 'experiment_':'', '_trace.csv':'', '_header.csv':''},
-            regex=True
-        )
-        fileData['FILE_ID'] = fileId
-
-        if perFileMapper is not None:
-            fileData = perFileMapper(fileData)
-
-        data = data.append(fileData, ignore_index=True)
-
-    return data
-
-def drawTimeline(data):
+def drawTimeline():
     fig, ax = plt.subplots()
     eventColorMap = {
         'INIT': 'blue',
@@ -85,7 +64,7 @@ def drawTimeline(data):
                    s=300)
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Rank')
-    ax.set_yticks(data['RANK'].unique())
+    ax.set_yticks(range(ranks))
     ax.set_title("Timeline of Run")
     plt.show()
 
@@ -104,16 +83,41 @@ def linePlot(data, title, xlabel, ylabel, valueColumn, lineSeparator='RANK', leg
     ax.legend([legendLabel.format(str(x)) for x in unique])
     plt.show()
 
+drawTimeline()
+linePlot(data, 'Network Usage', 'Data transferred (KB)', 'Network usage (KB)', 'NET')
+linePlot(data, 'Memory Usage', 'Allocated memory (KB)', 'Memory usage (KB)', 'MEM')
 
-data = loadMultipleDataFrames(["data/experiment_mpi_strong_scale_04_trace.csv"])
-drawTimeline(data)
-linePlot(data, 'Network Usage: {}'.format(data['TEST_NAME'][0]), 'Data transferred (KB)', 'Network usage (KB)', 'NET')
-linePlot(data, 'Memory Usage: {}'.format(data['TEST_NAME'][0]), 'Allocated memory (KB)', 'Memory usage (KB)', 'MEM')
+
+def loadMultipleDataFrames(fileNames, perFileMapper = None):
+    data = pd.read_csv(fileNames[0])
+    data = pd.DataFrame(columns=data.columns)
+
+    data['FILE'] = ''
+    data['FILE_ID'] = -1
+    data['TEST_NAME'] = ''
+
+    for fileId in range(len(fileNames)):
+        filename = fileNames[fileId]
+        fileData = pd.read_csv(filename)
+        fileData['FILE'] = filename
+        fileData['TEST_NAME'] = fileData['FILE'].replace(
+            {'data/':'', 'experiment_':'', '_trace.csv':'', '_header.csv':''},
+            regex=True
+        )
+        fileData['FILE_ID'] = fileId
+
+        if perFileMapper is not None:
+            fileData = perFileMapper(fileData)
+
+        data = data.append(fileData, ignore_index=True)
+
+    return data
 
 
 def maxNormalizeColumn(data, columnName):
     data[columnName] = data[columnName] / np.max(data[columnName])
     return data
+
 
 
 def aggregate(data: pd.DataFrame, groupcolumns, aggregatecolumns, operation) -> pd.DataFrame:
@@ -174,8 +178,8 @@ def drawBarPlot2(startEvent, stopEvent):
     fig, ax = plt.subplots()
     ax.bar(range(len(entries)), entries)
     ax.set_xlabel('Experiment ID')
-    ax.set_ylabel('Time from failure to detection (s)')
-    ax.set_title('Time from failure to detection')
+    ax.set_ylabel('Time from detection to resumption (s)')
+    ax.set_title('Time from detection to resumption')
     plt.show()
 
-drawBarPlot('FAILURE-DETECT', 'RESTORE-STOP')
+drawBarPlot2('FAILURE-DETECT', 'RESTORE-STOP')
