@@ -3106,8 +3106,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 // Make sure error handler is installed so we can make use of the checkpoints
-                laik_mpi_set_error_handler(errorHandler);
-                laik_tcp_set_error_handler(errorHandler);
+                laik_error_handler_set(inst, errorHandler);
             }
         }
 #endif

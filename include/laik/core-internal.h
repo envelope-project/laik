@@ -77,7 +77,10 @@ struct _Laik_Instance {
 
     // External Control Related
     Laik_RepartitionControl* repart_ctrl;
-    
+
+    // LAIK backend error handler. Gives backends the chance to pass errors back to the user instead of aborting the
+    // application
+    Laik_Backend_Error_Handler* errorHandler;
 };
 
 // add/remove space to/from instance

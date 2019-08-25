@@ -287,7 +287,7 @@ void laik_mpi_panic(int err)
 
     assert(err != MPI_SUCCESS);
 
-    if(laik_mpi_get_error_handler() != NULL) {
+    if(laik_error_handler_get(mpi_instance) != NULL) {
 
         laik_log(LAIK_LL_Info, "Error handler found, attempting to handle error.\n");
         if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
@@ -295,7 +295,7 @@ void laik_mpi_panic(int err)
         } else {
             laik_log(LAIK_LL_Warning, "MPI error: %s", str);
         }
-        laik_mpi_get_error_handler()(0);
+        laik_error_handler_get(mpi_instance)(0);
         fprintf(stderr, "[LAIK MPI Backend] Error handler exited, attempting to continue\n");
         return;
     }
@@ -1321,15 +1321,6 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
     return n;
 }
 
-LaikMPIErrorHandler abortErrorHandler;
-
-void laik_mpi_set_error_handler(LaikMPIErrorHandler newErrorHandler) {
-    abortErrorHandler = newErrorHandler;
-}
-
-LaikMPIErrorHandler laik_mpi_get_error_handler() {
-    return abortErrorHandler;
-}
 
 
 #endif // USE_MPI

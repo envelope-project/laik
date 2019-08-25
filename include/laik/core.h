@@ -32,6 +32,9 @@ typedef struct _Laik_Backend Laik_Backend;
 // a task group over which a index space gets distributed
 typedef struct _Laik_Group Laik_Group;
 
+// An error handler to allow the backend to pass errors back to the user instead of aborting the application
+typedef void (Laik_Backend_Error_Handler)(void*);
+
 /*********************************************************************/
 /* Core LAIK API: task groups and elasticity
  *********************************************************************/
@@ -230,13 +233,27 @@ unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size);
 // sort KVS entries for faster access (done after sync)
 void laik_kvs_sort(Laik_KVStore* kvs);
 
+/*********************************************************************/
+/* Backend Error Handling
+ *********************************************************************/
+
+// Set and retrieve an error handler
+Laik_Backend_Error_Handler* laik_error_handler_get(Laik_Instance* instance);
+void laik_error_handler_set(Laik_Instance* instance, Laik_Backend_Error_Handler* errorHandler);
 
 #include <stddef.h>
 double getTime(Laik_Instance*);
 double getVSize();
 double getNSize(Laik_Instance *inst);
 int getEventNum();
+#define TRACE_INIT(myRank, iter, size) if(myRank == 0) printf("!!!,NAME,ITERATIONS,DATA_SIZE\n!!!,%s,%i,%f\n===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,ITER,MEM,NET,EXTRA\n", getenv("TEST_NAME"), iter, size)
 #define TRACE_EVENT(name, format, ...) printf("===,EVENT,%s,RANK,%i,AT,%f,USAGE,%f: : " format " ===\n", name, laik_myid(laik_world(inst)), getTime(inst), getVSize(), __VA_ARGS__)
-#define TRACE_EVENT_S(name, format) printf("===,EVENT,%i,%s,RANK,%i,AT,%f,MEM,%f,KB,NET,%f,KB,: " format " ===\n", getEventNum(), name, laik_myid(laik_world(inst)), getTime(inst), getVSize(), getNSize(inst))
+//#define TRACE_EVENT_S(name, format) printf("===,EVENT,%i,%s,RANK,%i,AT,%f,MEM,%f,KB,NET,%f,KB,: " format " ===\n", getEventNum(), name, laik_myid(laik_world(inst)), getTime(inst), getVSize(), getNSize(inst))
+#define TRACE_EVENT_S(name, format) printf("===,%i,%s,%i,%f,%f,%i,%f,%f," format " ===\n", getEventNum(), name, laik_myid(laik_world(inst)), getTime(inst), 0.0f, laik_get_iteration(inst), getVSize(), getNSize(inst))
+#define TRACE_EVENT_DURATION(name, format, duration) printf("===,%i,%s,%i,%f,%f,%i,%f,%f," format " ===\n", getEventNum(), name, laik_myid(laik_world(inst)), getTime(inst), duration, laik_get_iteration(inst), getVSize(), getNSize(inst))
+
+double startTime;
+#define TRACE_EVENT_START(name, format) {startTime = getTime(inst); TRACE_EVENT_S(name "-START", format);}
+#define TRACE_EVENT_END(name, format) {TRACE_EVENT_S(name "-STOP", format); TRACE_EVENT_DURATION(name, format, getTime(inst) - startTime);}
 
 #endif // LAIK_CORE_H

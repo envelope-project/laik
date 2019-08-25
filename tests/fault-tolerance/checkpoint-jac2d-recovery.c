@@ -159,7 +159,7 @@ int main(int argc, char *argv[]) {
 //    smallWorld = laik_new_shrinked_group(world, 1, elimination);
 
     // Set the error handler to be able to recover from
-    laik_tcp_set_error_handler(errorHandler);
+    laik_error_handler_set(inst, errorHandler);
 
     int size = 0;
     int maxiter = 0;
@@ -297,7 +297,7 @@ int main(int argc, char *argv[]) {
                 TRACE_EVENT_S("FAILURE-DETECT","");
                 // Don't allow any failures while and after recovery
                 laik_log(LAIK_LL_Warning, "Deactivating error handler!");
-                laik_tcp_set_error_handler(NULL);
+                laik_error_handler_set(inst, NULL);
 
                 laik_failure_eliminate_nodes(inst, numFailed, nodeStatuses);
 

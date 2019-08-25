@@ -104,7 +104,7 @@ void laik_tcp_panic(int err)
 
     assert(err != MPI_SUCCESS);
 
-    if(laik_tcp_get_error_handler() != NULL) {
+    if(laik_error_handler_get(tcp_instance) != NULL) {
 
         laik_log(LAIK_LL_Info, "Error handler found, attempting to handle error.\n");
         if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
@@ -113,7 +113,8 @@ void laik_tcp_panic(int err)
             laik_log(LAIK_LL_Warning, "Mini-MPI error: %s", str);
         }
         laik_tcp_set_errors(err, NULL);
-        laik_tcp_get_error_handler()(0);
+        laik_error_handler_get(tcp_instance)(0);
+        laik_tcp_clear_errors();
         fprintf(stderr, "[LAIK TCP Backend] Error handler exited, attempting to continue\n");
         return;
     }

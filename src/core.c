@@ -924,6 +924,14 @@ void laik_kvs_sort(Laik_KVStore* kvs)
     kvs->sorted_upto = kvs->used;
 }
 
+Laik_Backend_Error_Handler* laik_error_handler_get(Laik_Instance* instance) {
+    return instance->errorHandler;
+}
+
+void laik_error_handler_set(Laik_Instance* instance, Laik_Backend_Error_Handler* errorHandler) {
+    instance->errorHandler = errorHandler;
+}
+
 #include <sys/time.h>
 
 double getTime(Laik_Instance* inst) {
