@@ -16,3 +16,4 @@ log*
 .idea
 /lib/
 /cmake-build-*
+*.asv
