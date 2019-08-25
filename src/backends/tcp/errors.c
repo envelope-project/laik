@@ -23,7 +23,6 @@
 #include <laik-backend-tcp.h>
 #include "debug.h"   // for laik_tcp_always
 
-LaikTCPErrorHandler abortErrorHandler;
 int statusFlag = 0;
 Laik_Tcp_Errors *errorTrace;
 
@@ -44,17 +43,11 @@ void laik_tcp_errors_abort(Laik_Tcp_Errors *this) {
     statusFlag = -1;
     errorTrace = this;
 
-    if (abortErrorHandler != NULL) {
-        fprintf(stderr, "[LAIK TCP Backend] Error handler found, attempting to handle error.\n");
-        abortErrorHandler(this);
-        fprintf(stderr, "[LAIK TCP Backend] Error handler exited, attempting to continue\n");
-    } else {
-        fprintf(stderr, "[LAIK TCP Backend] Error occurred with no handler set. "
-                "Aborting, the contents of the error stack follow:\n%s",
-                laik_tcp_errors_show(this));
-        fflush(stderr);
-        abort();
-    }
+    fprintf(stderr, "[LAIK TCP Backend] Error occurred, bypass of error handler requested. "
+            "Aborting, the contents of the error stack follow:\n%s",
+            laik_tcp_errors_show(this));
+    fflush(stderr);
+    abort();
 }
 
 void laik_tcp_errors_clear(Laik_Tcp_Errors *this) {

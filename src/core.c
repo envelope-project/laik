@@ -195,6 +195,7 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     instance->profiling = laik_init_profiling();
 
     instance->repart_ctrl = 0;
+    instance->errorHandler = NULL;
 
     // logging (TODO: multiple instances)
     laik_loginst = instance;
