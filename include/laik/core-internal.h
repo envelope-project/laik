@@ -26,9 +26,6 @@
 // dynamically generated revision/opt flags information, in info.c
 void laik_log_append_info(void);
 
-// key-value store (see below)
-typedef struct _Laik_KVNode Laik_KVNode;
-
 struct _Laik_Task {
     int rank;
 };
@@ -103,8 +100,19 @@ struct _Laik_Error {
 struct _Laik_KVS_Entry {
     char* key;
     char* data;
-    unsigned int size;
+    unsigned int dlen;
     bool updated;
+};
+
+// LAIK-internal KVS change journal
+typedef struct _Laik_KVS_Changes Laik_KVS_Changes;
+struct _Laik_KVS_Changes {
+    int offSize, offUsed;
+    int* off;
+    int dataSize, dataUsed;
+    char* data;
+    int entrySize, entryUsed;
+    Laik_KVS_Entry* entry;
 };
 
 struct _Laik_KVStore {
@@ -117,14 +125,26 @@ struct _Laik_KVStore {
     // new entries are unsorted, call laik_kvs_sort to enable binary search
     unsigned int sorted_upto;
 
-    // arrays collecting new/change data to send at next sync
-    unsigned int myOffSize, myOffUsed;
-    unsigned int* myOff;
-    unsigned int myDataSize, myDataUsed;
-    char* myData;
+    // new/changed data to send at next sync
+    Laik_KVS_Changes changes;
+
     // if true, setting values will not be propagated for next sync
     bool in_sync;
 };
 
+// internal API for KVS change journal
+Laik_KVS_Changes* laik_kvs_changes_new();
+void laik_kvs_changes_init(Laik_KVS_Changes* c);
+void laik_kvs_changes_free(Laik_KVS_Changes* c);
+void laik_kvs_changes_ensure_size(Laik_KVS_Changes* c, int n, int dlen);
+void laik_kvs_changes_set_size(Laik_KVS_Changes* c, int n, int dlen);
+void laik_kvs_changes_add(Laik_KVS_Changes* c, char* key, int dlen, char* data,
+                          bool do_alloc, bool append_sorted);
+void laik_kvs_changes_sort(Laik_KVS_Changes* c);
+void laik_kvs_changes_sort(Laik_KVS_Changes* c);
+void laik_kvs_changes_sort(Laik_KVS_Changes* c);
+void laik_kvs_changes_merge(Laik_KVS_Changes* dst,
+                            Laik_KVS_Changes* src1, Laik_KVS_Changes* src2);
+void laik_kvs_changes_apply(Laik_KVS_Changes* c, Laik_KVStore* kvs);
 
 #endif // LAIK_CORE_INTERNAL_H

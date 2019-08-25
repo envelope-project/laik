@@ -1065,99 +1065,106 @@ static void laik_mpi_cleanup(Laik_ActionSeq* as)
 //----------------------------------------------------------------------------
 // KV store
 
-// helper struct for first step in sync
-typedef struct _CountEntry {
-    unsigned int offCount;
-    unsigned int dataCount;
-} CountEntry;
-static CountEntry* cespace = 0; // size array of local data for each MPI rank
-static unsigned int cespace_size = 0;
 
 static void laik_mpi_sync(Laik_KVStore* kvs)
 {
     assert(kvs->inst == mpi_instance);
     MPI_Comm comm = mpiData(mpi_instance)->comm;
-
-    // step 1:
-    // all-to-all exchange number of updates from each process
-
-    unsigned int count = (unsigned int) kvs->inst->size;
-    if (cespace == 0) {
-        cespace = (CountEntry*) malloc(count * sizeof(CountEntry));
-        cespace_size = count;
-    }
-    else
-        assert(cespace_size >= count);
-
-    CountEntry se;
-    if (kvs->myOffUsed > 0) {
-        se.offCount = kvs->myOffUsed + 1;
-        assert(kvs->myDataUsed > 0);
-        se.dataCount = kvs->myDataUsed;
-    }
-    else {
-        se.offCount = 0;
-        se.dataCount = 0;
-    }
-    MPI_Allgather(&se, 2, MPI_INTEGER, cespace, 2, MPI_INTEGER, comm);
-
-    // (2) allocate space (maximum of what each rank announces)
-    unsigned int maxOffCount = 0, maxDataCount = 0;
-    unsigned int i, offCount = 0;
     int myid = kvs->inst->myid;
-    for(i = 0; i < count; i++) {
-        if (myid == (int) i) continue;
-        offCount += (cespace[i].offCount - 1);
-        if (maxOffCount < cespace[i].offCount) maxOffCount = cespace[i].offCount;
-        if (maxDataCount < cespace[i].dataCount) maxDataCount = cespace[i].dataCount;
-    }
+    MPI_Status status;
+    int count[2] = {0,0};
 
-    laik_log(1, "MPI sync: getting %d entries (max %d from one)",
-             offCount / 2, maxOffCount / 2);
+    if (myid > 0) {
+        // send to master, receive from master
+        count[0] = (int) kvs->changes.offUsed;
+        assert((count[0] == 0) || ((count[0] & 1) == 1)); // 0 or odd number of offsets
+        count[1] = (int) kvs->changes.dataUsed;
+        laik_log(1, "MPI sync: sending %d changes (total %d chars) to T0",
+                 count[0] / 2, count[1]);
+        MPI_Send(count, 2, MPI_INTEGER, 0, 0, comm);
+        if (count[0] > 0) {
+            assert(count[1] > 0);
+            MPI_Send(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm);
+            MPI_Send(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm);
+        }
+        else assert(count[1] == 0);
 
-    // nothing to exchange?
-    if (maxOffCount == 0) {
-        assert(maxDataCount == 0);
+        MPI_Recv(count, 2, MPI_INTEGER, 0, 0, comm, &status);
+        laik_log(1, "MPI sync: getting %d changes (total %d chars) from T0",
+                 count[0] / 2, count[1]);
+        if (count[0] > 0) {
+            assert(count[1] > 0);
+            laik_kvs_changes_ensure_size(&(kvs->changes), count[0], count[1]);
+            MPI_Recv(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm, &status);
+            MPI_Recv(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm, &status);
+            laik_kvs_changes_set_size(&(kvs->changes), count[0], count[1]);
+            // TODO: opt - remove own changes from received ones
+            laik_kvs_changes_apply(&(kvs->changes), kvs);
+        }
+        else
+            assert(count[1] == 0);
+
         return;
     }
 
-    unsigned int* offArray = (unsigned int*) malloc(maxOffCount * sizeof(int));
-    char* dataArray = (char*) malloc(maxDataCount);
+    // master: receive changes from all others, sort, merge, send back
 
-    // (3) rank-by-rank: if non-zero-length data is to be send, broadcast to all other,
-    //     directly update local KV entries
-    for(i = 0; i < count; i++) {
-        CountEntry* ce = &(cespace[i]);
-        if (ce->offCount == 0) continue;
-        assert(ce->dataCount > 0);
+    // first sort own changes, as preparation for merging
+    laik_kvs_changes_sort(&(kvs->changes));
 
-        if (myid == (int) i) {
-            // I am sender
-            MPI_Bcast(kvs->myOff, (int) ce->offCount, MPI_INTEGER, (int) i, comm);
-            MPI_Bcast(kvs->myData, (int) ce->dataCount, MPI_CHAR, (int) i, comm);
-            // skip own entries
+    Laik_KVS_Changes recvd, changes;
+    laik_kvs_changes_init(&changes); // temporary changes struct
+    laik_kvs_changes_init(&recvd);
+
+    Laik_KVS_Changes *src, *dst, *tmp;
+    // after merging, result should be in dst;
+    dst = &(kvs->changes);
+    src = &changes;
+
+    for(int i = 1; i < kvs->inst->size; i++) {
+        MPI_Recv(count, 2, MPI_INTEGER, i, 0, comm, &status);
+        laik_log(1, "MPI sync: getting %d changes (total %d chars) from T%d",
+                 count[0] / 2, count[1], i);
+        laik_kvs_changes_set_size(&recvd, 0, 0); // fresh reuse
+        laik_kvs_changes_ensure_size(&recvd, count[0], count[1]);
+        if (count[0] == 0) {
+            assert(count[1] == 0);
             continue;
         }
-        else {
-            // I am receiver: receive into off/data arrays
-            MPI_Bcast(offArray, (int) ce->offCount, MPI_INTEGER, (int) i, comm);
-            MPI_Bcast(dataArray, (int) ce->dataCount, MPI_CHAR, (int) i, comm);
-        }
 
-        offCount = ce->offCount;
-        assert((offCount & 1) == 1); // must be odd number of entries
-        offCount--;
+        assert(count[1] > 0);
+        MPI_Recv(recvd.off, count[0], MPI_INTEGER, i, 0, comm, &status);
+        MPI_Recv(recvd.data, count[1], MPI_CHAR, i, 0, comm, &status);
+        laik_kvs_changes_set_size(&recvd, count[0], count[1]);
 
-        laik_log(1, "  got %d entries from T%d", offCount / 2, i);
+        // for merging, both inputs need to be sorted
+        laik_kvs_changes_sort(&recvd);
 
-        for(unsigned int j = 0; j < offCount; j += 2)
-            laik_kvs_set(kvs, dataArray + offArray[j],
-                         offArray[j+2] - offArray[j+1], // data size
-                         dataArray + offArray[j+1]);
+        // swap src/dst: now merging can overwrite dst
+        tmp = src; src = dst; dst = tmp;
+
+        laik_kvs_changes_merge(dst, src, &recvd);
     }
 
-    free(offArray);
-    free(dataArray);
+    // send merged changes to all others: may be 0 entries
+    count[0] = dst->offUsed;
+    count[1] = dst->dataUsed;
+    assert(count[1] > count[0]); // more byte than offsets
+    for(int i = 1; i < kvs->inst->size; i++) {
+        laik_log(1, "MPI sync: sending %d changes (total %d chars) to T%d",
+                 count[0] / 2, count[1], i);
+        MPI_Send(count, 2, MPI_INTEGER, i, 0, comm);
+        if (count[0] == 0) continue;
+
+        MPI_Send(dst->off, count[0], MPI_INTEGER, i, 0, comm);
+        MPI_Send(dst->data, count[1], MPI_CHAR, i, 0, comm);
+    }
+
+    // TODO: opt - remove own changes from received ones
+    laik_kvs_changes_apply(dst, kvs);
+
+    laik_kvs_changes_free(&recvd);
+    laik_kvs_changes_free(&changes);
 }
 
 
