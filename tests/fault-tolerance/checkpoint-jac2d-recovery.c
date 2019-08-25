@@ -26,7 +26,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
-#include <laik-backend-tcp.h>
 #include "fault_tolerance_test_output.h"
 #include "fault_tolerance_test.h"
 #include "fault_tolerance_test_hash.h"
@@ -330,7 +329,6 @@ int main(int argc, char *argv[]) {
                 restoreCheckpoints();
 
                 iter = restoreIteration;
-                laik_tcp_clear_errors();
                 TRACE_EVENT_END("RESTORE", "");
                 TPRINTF("Restore complete, cleared errors.\n");
 
