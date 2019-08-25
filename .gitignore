@@ -17,3 +17,5 @@ log*
 /lib/
 /cmake-build-*
 *.asv
+out/
+output/
