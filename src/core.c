@@ -132,10 +132,13 @@ void laik_finalize(Laik_Instance* inst)
         Laik_SwitchStat* ss = laik_newSwitchStat();
         for(int i=0; i<inst->data_count; i++) {
             Laik_Data* d = inst->data[i];
-            laik_addSwitchStat(ss, d->stat);
+            // Bugfix by VB: Check whether d was previously freed
+            if(d) {
+                laik_addSwitchStat(ss, d->stat);
 
-            laik_log_append("  data '%s': ", d->name);
-            laik_log_SwitchStat(d->stat);
+                laik_log_append("  data '%s': ", d->name);
+                laik_log_SwitchStat(d->stat);
+            }
         }
         if (inst->data_count > 1) {
             laik_log_append("  summary: ");
@@ -960,9 +963,12 @@ double getNSize(Laik_Instance *inst) {
     size_t data = 0;
     for(int i=0; i<inst->data_count; i++) {
         Laik_Data* d = inst->data[i];
-        data += d->stat->byteRecvCount;
-        data += d->stat->byteSendCount;
-        data += d->stat->byteReduceCount;
+        // This data may have been freed, so check that it still exists
+        if(d) {
+            data += d->stat->byteRecvCount;
+            data += d->stat->byteSendCount;
+            data += d->stat->byteReduceCount;
+        }
     }
     return data / 1024.0;
 }

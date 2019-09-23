@@ -147,7 +147,7 @@ Laik_Data *dWrite, *dRead;
 Laik_Checkpoint *spaceCheckpoint = NULL;
 
 int main(int argc, char *argv[]) {
-    laik_set_loglevel(LAIK_LL_Error);
+    laik_set_loglevel(LAIK_LL_Info);
 //    laik_set_loglevel(LAIK_LL_Debug);
     inst = laik_init(&argc, &argv);
     world = laik_world(inst);
@@ -486,19 +486,21 @@ void restoreCheckpoints() {
 
 void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool delayCheckpointRelease) {
     if(spaceCheckpoint != NULL && !delayCheckpointRelease) {
-        TPRINTF("Freeing previous checkpoint from iteration %i", restoreIteration);
+        TPRINTF("Freeing previous checkpoint from iteration %i\n", restoreIteration);
         laik_free(spaceCheckpoint->data);
     }
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount, rotationDistance, world,
-                                             LAIK_RO_None);
-    restoreIteration = iter;
+    Laik_Checkpoint* newCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount,
+            rotationDistance, world,LAIK_RO_None);
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 
     if(spaceCheckpoint != NULL && delayCheckpointRelease) {
-        TPRINTF("Freeing previous checkpoint from iteration %i", restoreIteration);
+        TPRINTF("Freeing previous checkpoint from iteration %i\n", restoreIteration);
         laik_free(spaceCheckpoint->data);
     }
+
+    spaceCheckpoint = newCheckpoint;
+    restoreIteration = iter;
 }
 
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
