@@ -118,8 +118,8 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
 
     // Create a spinning dot
     double angle = 0.3 * iteration;
-    int64_t xOffset = (int64_t)(cos(angle) * (size / 4) + (size / 2));
-    int64_t yOffset = (int64_t)(sin(angle) * (size / 4) + (size / 2));
+    int64_t xOffset = (int64_t) (cos(angle) * (size / 4) + (size / 2));
+    int64_t yOffset = (int64_t) (sin(angle) * (size / 4) + (size / 2));
     if (laik_global2local_2d(dWrite, xOffset, yOffset, &lx, &ly) != NULL) {
         baseW[ly * ystrideW + lx] = centerValue;
     }
@@ -167,6 +167,10 @@ int main(int argc, char *argv[]) {
     bool do_profiling = false;
     int redundancyCount = 1;
     int rotationDistance = 1;
+    int failIteration = -1;
+    int checkpointFrequency = -1;
+    int failureCheckFrequency = -1;
+    bool skipCheckpointRecovery = false;
 
 
     int arg = 1;
@@ -178,9 +182,38 @@ int main(int argc, char *argv[]) {
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac2d_profiling.txt'\n"
-                   " -h : print this help text and exit\n",
+                   " -h : print this help text and exit\n"
+                   " Fault tolerance options:\n"
+                   "  --plannedFailure <rank> <iteration> (default no failure, can be used once per rank)\n "
+                   "  --checkpointFrequency <numIterations> (default -1, no checkpoints)\n"
+                   "  --failureCheckFrequency <numIterations> (defaults to checkpoint frequency)\n"
+                   "  --skipCheckpointRecovery (default off, turn on to keep working with broken data after failure)\n",
                    argv[0]);
             exit(1);
+        }
+        if (strcmp("--plannedFailure", argv[arg]) == 0) {
+            if (laik_myid(world) == atoi(argv[arg + 1])) {
+                failIteration = atoi(argv[arg + 2]);
+                laik_log(LAIK_LL_Info, "Rank %i will fail at iteration %i", laik_myid(world), failIteration);
+            }
+        }
+        if (strcmp("--checkpointFrequency", argv[arg]) == 0) {
+            checkpointFrequency = atoi(argv[arg + 1]);
+            if (laik_myid(world) == 0) {
+                laik_log(LAIK_LL_Info, "Setting checkpoint frequency to %i.", checkpointFrequency);
+            }
+        }
+        if (strcmp("--checkpointFrequency", argv[arg]) == 0) {
+            failureCheckFrequency = atoi(argv[arg + 1]);
+            if (laik_myid(world) == 0) {
+                laik_log(LAIK_LL_Info, "Setting failure check frequency to %i.", failureCheckFrequency);
+            }
+        }
+        if (strcmp("--skipCheckpointRecovery", argv[arg]) == 0) {
+            skipCheckpointRecovery = true;
+            if (laik_myid(world) == 0) {
+                laik_log(LAIK_LL_Info, "Will skip recovering from checkpoints.");
+            }
         }
         arg++;
     }
@@ -192,6 +225,7 @@ int main(int argc, char *argv[]) {
 
     if (size == 0) size = 1024; // entries
     if (maxiter == 0) maxiter = 50;
+    if (failureCheckFrequency == -1) failureCheckFrequency = checkpointFrequency;
 
     TRACE_INIT(laik_myid(world), maxiter, (size * size * sizeof(double)) / 1024.0);
     TRACE_EVENT_START("INIT", "");
@@ -272,20 +306,7 @@ int main(int argc, char *argv[]) {
         laik_set_iteration(inst, iter + 1);
         TRACE_EVENT_S("ITER", "");
 
-        // At every 10 iterations, do a checkpoint
-        if (iter == 5) {
-//            Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
-//            TPRINTF("Switching READ.\n");
-//            laik_switchto_partitioning(dRead, pMaster, LAIK_DF_None, LAIK_RO_None);
-//            TPRINTF("Switching WRITE.\n");
-//            laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_None, LAIK_RO_None);
-//            TPRINTF("Switch OK.\n");
-
-            TRACE_EVENT_START("CHECKPOINT", "");
-            createCheckpoints(iter, redundancyCount, rotationDistance);
-            TRACE_EVENT_END("CHECKPOINT", "");
-        }
-        if (iter % 10 == 5 && iter == 35) {
+        if (failureCheckFrequency > 0 && iter % failureCheckFrequency == 0) {
             TPRINTF("Attempting to determine global status.\n");
             TRACE_EVENT_START("FAILURE-CHECK", "");
             int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
@@ -293,7 +314,7 @@ int main(int argc, char *argv[]) {
             if (numFailed == 0) {
                 TPRINTF("Could not detect a failed node.\n");
             } else {
-                TRACE_EVENT_S("FAILURE-DETECT","");
+                TRACE_EVENT_S("FAILURE-DETECT", "");
                 // Don't allow any failures while and after recovery
                 laik_log(LAIK_LL_Warning, "Deactivating error handler!");
                 laik_error_handler_set(inst, NULL);
@@ -343,23 +364,28 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // *Randomly* fail on one node
-        // Make sure to always use the real world here
-//        if (laik_myid(laik_world(inst)) == 1 && iter == 35) {
-//            printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
-//                   iter);
-//            abort();
-//        }
-        if (iter == 34 && laik_myid(laik_world(inst)) == 1) {
-//            if (laik_myid(laik_world(inst)) != 1) {
-//                errorHandler(NULL);
-//            } else {
+        // At every checkpointFrequency iterations, do a checkpoint
+        if (checkpointFrequency > 0 && iter % checkpointFrequency == 0) {
+//            Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
+//            TPRINTF("Switching READ.\n");
+//            laik_switchto_partitioning(dRead, pMaster, LAIK_DF_None, LAIK_RO_None);
+//            TPRINTF("Switching WRITE.\n");
+//            laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_None, LAIK_RO_None);
+//            TPRINTF("Switch OK.\n");
+
+            TRACE_EVENT_START("CHECKPOINT", "");
+            createCheckpoints(iter, redundancyCount, rotationDistance);
+            TRACE_EVENT_END("CHECKPOINT", "");
+        }
+
+
+        // If we have reached the fail iteration on this process (only set for the requested processes), then abort the
+        // program.
+        if (iter == failIteration) {
             TRACE_EVENT_S("FAILURE-GENERATE", "");
             TPRINTF("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
                     iter);
-//            abort();
             exit(0);
-//            }
         }
         setBoundary(size, iter, pWrite, dWrite);
 
@@ -446,7 +472,8 @@ void restoreCheckpoints() {
 
 void createCheckpoints(int iter, int redundancyCount, int rotationDistance) {
     TPRINTF("Creating checkpoint of data\n");
-    spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount, rotationDistance, world, LAIK_RO_None);
+    spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount, rotationDistance, world,
+                                             LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 
