@@ -178,7 +178,7 @@ int main(int argc, char *argv[]) {
         if (argv[arg][1] == 'n') use_cornerhalo = false;
         if (argv[arg][1] == 'p') do_profiling = true;
         if (argv[arg][1] == 'h') {
-            printf("Usage: %s [options] <side width> <maxiter> <repart> <redundancy count> <rotation distance>\n\n"
+            printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac2d_profiling.txt'\n"
@@ -186,6 +186,8 @@ int main(int argc, char *argv[]) {
                    " Fault tolerance options:\n"
                    "  --plannedFailure <rank> <iteration> (default no failure, can be used once per rank)\n"
                    "  --checkpointFrequency <numIterations> (default -1, no checkpoints)\n"
+                   "  --redundancyCount <count> (set number of redundant data slices to keep in checkpoints, default 1)\n"
+                   "  --rotationDistance <distance> (set the distance between a process the process holding the same data redundantly)\n"
                    "  --failureCheckFrequency <numIterations> (defaults to checkpoint frequency)\n"
                    "  --skipCheckpointRecovery (default off, turn on to keep working with broken data after failure)\n"
                    "  --delayCheckpointRelease (release old checkpoint only after creating a new one, has higher memory usage but can tolerate failure during checkpointing)\n",
@@ -203,6 +205,20 @@ int main(int argc, char *argv[]) {
             checkpointFrequency = atoi(argv[arg + 1]);
             if (laik_myid(world) == 0) {
                 laik_log(LAIK_LL_Info, "Setting checkpoint frequency to %i.", checkpointFrequency);
+            }
+            arg++;
+        }
+        else if (strcmp("--redundancyCount", argv[arg]) == 0) {
+            redundancyCount = atoi(argv[arg + 1]);
+            if (laik_myid(world) == 0) {
+                laik_log(LAIK_LL_Info, "Setting redundancy count to %i.", redundancyCount);
+            }
+            arg++;
+        }
+        else if (strcmp("--rotationDistance", argv[arg]) == 0) {
+            rotationDistance = atoi(argv[arg + 1]);
+            if (laik_myid(world) == 0) {
+                laik_log(LAIK_LL_Info, "Setting rotation distance to %i.", rotationDistance);
             }
             arg++;
         }
@@ -230,8 +246,6 @@ int main(int argc, char *argv[]) {
     if (argc > arg) size = atoi(argv[arg]);
     if (argc > arg + 1) maxiter = atoi(argv[arg + 1]);
     if (argc > arg + 2) repart = atoi(argv[arg + 2]);
-    if (argc > arg + 3) redundancyCount = atoi(argv[arg + 3]);
-    if (argc > arg + 4) rotationDistance = atoi(argv[arg + 4]);
 
     if (size == 0) size = 1024; // entries
     if (maxiter == 0) maxiter = 50;

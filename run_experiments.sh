@@ -23,6 +23,8 @@ run_experiment () {
 
 PREFIX="."
 #PREFIX=cmake-build-debug_wsl
+
+# JAC2D Options [options] <side width> <maxiter> <repart>
 JAC2D=$PREFIX/tests/fault-tolerance/checkpoint-jac2d-recovery
 
 if [ ! -f "$JAC2D" ]
