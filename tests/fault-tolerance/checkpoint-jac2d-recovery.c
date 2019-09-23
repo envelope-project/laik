@@ -57,7 +57,7 @@ double calculateGlobalResiduum(double localResiduum, double **sumPtr);
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
                                        int64_t gy1);
 
-void createCheckpoints(int iter, int redundancyCount, int rotationDistance);
+void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool delayCheckpointRelease);
 
 void restoreCheckpoints();
 
@@ -144,7 +144,7 @@ Laik_Data *dWrite, *dRead;
 
 
 // Always dWrite
-Laik_Checkpoint *spaceCheckpoint;
+Laik_Checkpoint *spaceCheckpoint = NULL;
 
 int main(int argc, char *argv[]) {
     laik_set_loglevel(LAIK_LL_Error);
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
     int checkpointFrequency = -1;
     int failureCheckFrequency = -1;
     bool skipCheckpointRecovery = false;
-
+    bool delayCheckpointRelease = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
@@ -187,32 +187,42 @@ int main(int argc, char *argv[]) {
                    "  --plannedFailure <rank> <iteration> (default no failure, can be used once per rank)\n "
                    "  --checkpointFrequency <numIterations> (default -1, no checkpoints)\n"
                    "  --failureCheckFrequency <numIterations> (defaults to checkpoint frequency)\n"
-                   "  --skipCheckpointRecovery (default off, turn on to keep working with broken data after failure)\n",
+                   "  --skipCheckpointRecovery (default off, turn on to keep working with broken data after failure)\n"
+                   "  --delayCheckpointRelease (release old checkpoint only after creating a new one, has higher memory usage but can tolerate failure during checkpointing)\n",
                    argv[0]);
             exit(1);
         }
-        if (strcmp("--plannedFailure", argv[arg]) == 0) {
+        else if (strcmp("--plannedFailure", argv[arg]) == 0) {
             if (laik_myid(world) == atoi(argv[arg + 1])) {
                 failIteration = atoi(argv[arg + 2]);
                 laik_log(LAIK_LL_Info, "Rank %i will fail at iteration %i", laik_myid(world), failIteration);
             }
+            arg += 2;
         }
-        if (strcmp("--checkpointFrequency", argv[arg]) == 0) {
+        else if (strcmp("--checkpointFrequency", argv[arg]) == 0) {
             checkpointFrequency = atoi(argv[arg + 1]);
             if (laik_myid(world) == 0) {
                 laik_log(LAIK_LL_Info, "Setting checkpoint frequency to %i.", checkpointFrequency);
             }
+            arg++;
         }
-        if (strcmp("--checkpointFrequency", argv[arg]) == 0) {
+        else if (strcmp("--failureCheckFrequency", argv[arg]) == 0) {
             failureCheckFrequency = atoi(argv[arg + 1]);
             if (laik_myid(world) == 0) {
                 laik_log(LAIK_LL_Info, "Setting failure check frequency to %i.", failureCheckFrequency);
             }
+            arg++;
         }
-        if (strcmp("--skipCheckpointRecovery", argv[arg]) == 0) {
+        else if (strcmp("--skipCheckpointRecovery", argv[arg]) == 0) {
             skipCheckpointRecovery = true;
             if (laik_myid(world) == 0) {
                 laik_log(LAIK_LL_Info, "Will skip recovering from checkpoints.");
+            }
+        }
+        else if (strcmp("--delayCheckpointRelease", argv[arg]) == 0) {
+            delayCheckpointRelease = true;
+            if (laik_myid(world) == 0) {
+                laik_log(LAIK_LL_Info, "Using delayed checkpoint release.");
             }
         }
         arg++;
@@ -347,7 +357,11 @@ int main(int argc, char *argv[]) {
                     abort();
                 }
 
-                restoreCheckpoints();
+                if (!skipCheckpointRecovery) {
+                    restoreCheckpoints();
+                } else {
+                    laik_log(LAIK_LL_Info, "Skipping checkpoint restore.");
+                }
 
                 iter = restoreIteration;
                 TRACE_EVENT_END("RESTORE", "");
@@ -374,7 +388,7 @@ int main(int argc, char *argv[]) {
 //            TPRINTF("Switch OK.\n");
 
             TRACE_EVENT_START("CHECKPOINT", "");
-            createCheckpoints(iter, redundancyCount, rotationDistance);
+            createCheckpoints(iter, redundancyCount, rotationDistance, delayCheckpointRelease);
             TRACE_EVENT_END("CHECKPOINT", "");
         }
 
@@ -470,13 +484,21 @@ void restoreCheckpoints() {
     TPRINTF("Restore successful\n");
 }
 
-void createCheckpoints(int iter, int redundancyCount, int rotationDistance) {
+void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool delayCheckpointRelease) {
+    if(spaceCheckpoint != NULL && !delayCheckpointRelease) {
+        TPRINTF("Freeing previous checkpoint from iteration %i", restoreIteration);
+        laik_free(spaceCheckpoint->data);
+    }
     TPRINTF("Creating checkpoint of data\n");
     spaceCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount, rotationDistance, world,
                                              LAIK_RO_None);
     restoreIteration = iter;
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 
+    if(spaceCheckpoint != NULL && delayCheckpointRelease) {
+        TPRINTF("Freeing previous checkpoint from iteration %i", restoreIteration);
+        laik_free(spaceCheckpoint->data);
+    }
 }
 
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
