@@ -184,7 +184,7 @@ int main(int argc, char *argv[]) {
                    " -p : write profiling data to 'jac2d_profiling.txt'\n"
                    " -h : print this help text and exit\n"
                    " Fault tolerance options:\n"
-                   "  --plannedFailure <rank> <iteration> (default no failure, can be used once per rank)\n "
+                   "  --plannedFailure <rank> <iteration> (default no failure, can be used once per rank)\n"
                    "  --checkpointFrequency <numIterations> (default -1, no checkpoints)\n"
                    "  --failureCheckFrequency <numIterations> (defaults to checkpoint frequency)\n"
                    "  --skipCheckpointRecovery (default off, turn on to keep working with broken data after failure)\n"
