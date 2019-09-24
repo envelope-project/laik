@@ -89,9 +89,9 @@ void laik_vector_repart_overlapping<T>::migrate(Laik_Group *new_group, Laik_Part
 
 #ifdef FAULT_TOLERANCE
 template<typename T>
-Laik_Checkpoint* laik_vector_repart_overlapping<T>::checkpoint() {
+Laik_Checkpoint * laik_vector_repart_overlapping<T>::checkpoint(int redundancyCount, int rotationDistance) {
     this->copyVectorToLaikData(data_vector);
-    return laik_vector<T>::checkpoint();
+    return laik_vector<T>::checkpoint(redundancyCount, rotationDistance);
 }
 
 template<typename T>

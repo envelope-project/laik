@@ -84,7 +84,7 @@ public:
     void resizeVectorToLaikData(std::vector<T>&);
 
 #ifdef FAULT_TOLERANCE
-    virtual Laik_Checkpoint * checkpoint();
+    virtual Laik_Checkpoint *checkpoint(int redundancyCount, int rotationDistance);
     virtual void restore(Laik_Checkpoint *checkpoint, Laik_Group *newGroup);
 #endif
 

@@ -97,9 +97,9 @@ laik_vector_repart_exclusive<T>::migrate(Laik_Group *new_group, Laik_Partitionin
 
 #ifdef FAULT_TOLERANCE
 template<typename T>
-Laik_Checkpoint* laik_vector_repart_exclusive<T>::checkpoint() {
+Laik_Checkpoint * laik_vector_repart_exclusive<T>::checkpoint(int redundancyCount, int rotationDistance) {
     this->copyVectorToLaikData(data_vector);
-    return laik_vector<T>::checkpoint();
+    return laik_vector<T>::checkpoint(redundancyCount, rotationDistance);
 }
 
 template<typename T>

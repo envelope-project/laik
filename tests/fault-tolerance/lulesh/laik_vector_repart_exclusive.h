@@ -27,7 +27,7 @@ public:
             Laik_Transition *t_new_1, Laik_Transition *t_new_2, bool suppressSwitchToP1) override;
 
 #ifdef FAULT_TOLERANCE
-    Laik_Checkpoint* checkpoint() override;
+    Laik_Checkpoint *checkpoint(int redundancyCount, int rotationDistance) override;
     void restore(Laik_Checkpoint *checkpoint, Laik_Group *newGroup) override;
 #endif
 

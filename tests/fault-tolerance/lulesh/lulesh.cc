@@ -3109,7 +3109,7 @@ int main(int argc, char *argv[]) {
                     std::cout << "Creating checkpoints." << std::endl;
                 }
                 std::vector<Laik_Checkpoint*> newCheckpoints;
-                locDom->createCheckpoints(newCheckpoints);
+                locDom->createCheckpoints(newCheckpoints, opts.redundancyCount, opts.rotationDistance);
                 if(myRank == 0) {
                     std::cout << "Finished creating checkpoints." << std::endl;
                 }

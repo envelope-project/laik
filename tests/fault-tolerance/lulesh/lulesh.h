@@ -577,7 +577,7 @@ m_delx_zeta.resize(numElem) ;
                                       Laik_Transition *t_to_overlapping_reduce, bool suppressSwitchToP1);
 
 #ifdef FAULT_TOLERANCE
-    void createCheckpoints(std::vector<Laik_Checkpoint*>&);
+    void createCheckpoints(std::vector<Laik_Checkpoint *> &checkpoints, int redundancyCount, int rotationDistance);
     int restore(std::vector<Laik_Checkpoint *> &checkpoints, Laik_Group *newGroup);
 #endif
 
