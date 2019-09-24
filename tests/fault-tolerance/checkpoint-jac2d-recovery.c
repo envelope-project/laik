@@ -118,8 +118,8 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
 
     // Create a spinning dot
     double angle = 0.3 * iteration;
-    int64_t xOffset = (int64_t) (cos(angle) * (size / 4) + (size / 2));
-    int64_t yOffset = (int64_t) (sin(angle) * (size / 4) + (size / 2));
+    int64_t xOffset = (int64_t) (cos(angle) * (size / 4.0) + (size / 2.0));
+    int64_t yOffset = (int64_t) (sin(angle) * (size / 4.0) + (size / 2.0));
     if (laik_global2local_2d(dWrite, xOffset, yOffset, &lx, &ly) != NULL) {
         baseW[ly * ystrideW + lx] = centerValue;
     }
@@ -336,7 +336,8 @@ int main(int argc, char *argv[]) {
         if (failureCheckFrequency > 0 && iter % failureCheckFrequency == 0) {
             TPRINTF("Attempting to determine global status.\n");
             TRACE_EVENT_START("FAILURE-CHECK", "");
-            int numFailed = laik_failure_check_nodes(inst, world, nodeStatuses);
+            Laik_Group *checkGroup = world;
+            int numFailed = laik_failure_check_nodes(inst, checkGroup, nodeStatuses);
             TRACE_EVENT_END("FAILURE-CHECK", "");
             if (numFailed == 0) {
                 TPRINTF("Could not detect a failed node.\n");
@@ -370,7 +371,7 @@ int main(int argc, char *argv[]) {
 
                 if (!skipCheckpointRecovery) {
                     TPRINTF("Removing failed slices from checkpoints\n");
-                    if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, nodeStatuses)) {
+                    if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, checkGroup, nodeStatuses)) {
                         TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
                         abort();
                     }

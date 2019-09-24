@@ -27,7 +27,7 @@ void laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *check
 int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup, int (*failedNodes));
 int laik_failure_eliminate_nodes(Laik_Instance *instance, int count, int (*nodeStatuses));
 
-bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int *nodeStatuses);
+bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, Laik_Group *checkGroup, int *nodeStatuses);
 
 Laik_Group* laik_world_fault_tolerant(Laik_Instance* instance);
 

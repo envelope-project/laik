@@ -81,6 +81,8 @@ int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup
             }
         }
     }
+
+    laik_log(LAIK_LL_Warning, "Failures found: %i", failuresFound);
     return failuresFound;
 }
 
@@ -133,19 +135,19 @@ int laik_failure_eliminate_nodes(Laik_Instance *instance, int count, int *nodeSt
 //
 //    laik_log(LAIK_LL_Info, "Changed own rank to %d", world->myid);
 
-    Laik_Group *world = laik_world(instance);
+    Laik_Group *currentWorld = laik_world_fault_tolerant(instance);
 
-    Laik_Group *newGroup = laik_clone_group(world);
+    Laik_Group *newGroup = laik_clone_group(currentWorld);
 
     int newRank = 0;
-    for (int worldRank = 0; worldRank < world->size; ++worldRank) {
+    for (int worldRank = 0; worldRank < currentWorld->size; ++worldRank) {
         if (nodeStatuses[worldRank] != LAIK_FT_NODE_OK) {
             newGroup->fromParent[worldRank] = -1;
         } else {
             newGroup->fromParent[worldRank] = newRank;
             newGroup->toParent[newRank] = worldRank;
 
-            if (worldRank == world->myid) {
+            if (worldRank == currentWorld->myid) {
                 newGroup->myid = newRank;
             }
 
@@ -154,7 +156,7 @@ int laik_failure_eliminate_nodes(Laik_Instance *instance, int count, int *nodeSt
     }
     newGroup->size = newRank;
 
-    instance->backend->eliminateNodes(world, newGroup, nodeStatuses);
+    instance->backend->eliminateNodes(currentWorld, newGroup, nodeStatuses);
 
     laik_log(LAIK_LL_Warning, "New world size: %i", newGroup->size);
     laik_set_fault_tolerant_world(newGroup);

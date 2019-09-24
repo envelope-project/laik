@@ -45,13 +45,13 @@ if [ $BACKEND_TYPE == "tcp" ]
 then
 	for i in `seq 1 $NUM_LAUNCH`
 	do
-	        $EXECUTABLE "$@" &
+	        $EXECUTABLE $@ &
 	done
 	wait
 fi
 if [ $BACKEND_TYPE == "mpi" ]
 then
-	mpirun --oversubscribe $MPI_OPTIONS -n $NUM_LAUNCH $EXECUTABLE "$@"
+	mpirun --oversubscribe $MPI_OPTIONS -n $NUM_LAUNCH $EXECUTABLE $@
 fi
 
 if [ $BACKEND_TYPE == "tcp" ]

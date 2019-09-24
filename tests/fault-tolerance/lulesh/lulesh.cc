@@ -2999,7 +2999,7 @@ int main(int argc, char *argv[]) {
 
 
                     for(auto& checkpoint : checkpoints) {
-                        laik_checkpoint_remove_failed_slices(checkpoint, &nodeStatuses[0]);
+                        laik_checkpoint_remove_failed_slices(checkpoint, world, &nodeStatuses[0]);
                     }
 
                     laik_log(LAIK_LL_Info, "Restoring checkpoints.");

@@ -350,17 +350,19 @@ void laik_checkpoint_remove_redundant_slices(Laik_Checkpoint *checkpoint) {
     }
 }
 
-bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, int *nodeStatuses) {
+bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, Laik_Group *checkGroup, int *nodeStatuses) {
     Laik_Partitioning *backupPartitioning = checkpoint->data->activePartitioning;
 
     assert(backupPartitioning->saList->next == NULL && backupPartitioning->saList->info == LAIK_AI_FULL);
+
+    assert(backupPartitioning->group->gid == checkGroup->gid);
     Laik_SliceArray *sliceArray = backupPartitioning->saList->slices;
     for (unsigned int oldIndex = 0; oldIndex < sliceArray->count; ++oldIndex) {
         Laik_TaskSlice_Gen *taskSlice = &sliceArray->tslice[oldIndex];
         //TODO: export this to some sort of constant
         int taskIdInGroup = taskSlice->task;
-        int taskIdInWorld = laik_location_get_world_offset(backupPartitioning->group, taskIdInGroup);
-        if (nodeStatuses[taskIdInWorld] != LAIK_FT_NODE_OK) {
+//        int taskIdInWorld = laik_location_get_world_offset(backupPartitioning->group, taskIdInGroup);
+        if (nodeStatuses[taskIdInGroup] != LAIK_FT_NODE_OK) {
             // Set this task slice's size to zero (don't get any data from here)
             set_slice_to_empty(&taskSlice->s);
         }
