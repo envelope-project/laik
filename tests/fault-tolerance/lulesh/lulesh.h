@@ -804,7 +804,13 @@ struct cmdLineOpts {
    Int_t balance; // -b
    Int_t repart; // -repart
    Int_t cycle; // -repart_cycle
-   Int_t faultTolerance; // Use fault tolerance instead of partitioned rescheduling
+   Int_t plannedFailure; // If the current rank should fail at a given iteration
+   Int_t checkpointFrequency; // How often checkpoints are taken (default -1)
+   Int_t redundancyCount; //
+   Int_t rotationDistance;
+   Int_t failureCheckFrequency;
+   bool skipCheckpointRecovery;
+   bool delayCheckpointRelease;
 };
 
 

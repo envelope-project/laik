@@ -175,9 +175,52 @@ void ParseCommandLineOptions(int argc, char *argv[],
             }
             i+=2;
          }
-         else if(strcmp(argv[i], "-fault_tolerance") == 0) {
-             opts->faultTolerance = 1;
-             i+= 1;
+         else if (strcmp("--plannedFailure", argv[i]) == 0) {
+             if (myRank == atoi(argv[i + 1])) {
+                 opts->plannedFailure = atoi(argv[i + 2]);
+                 laik_log(LAIK_LL_Info, "Rank %i will fail at iteration %i", myRank, opts->plannedFailure);
+             }
+             i += 2;
+         }
+         else if (strcmp("--checkpointFrequency", argv[i]) == 0) {
+             opts->checkpointFrequency = atoi(argv[i + 1]);
+             if (myRank == 0) {
+                 laik_log(LAIK_LL_Info, "Setting checkpoint frequency to %i.", opts->checkpointFrequency);
+             }
+             i++;
+         }
+         else if (strcmp("--redundancyCount", argv[i]) == 0) {
+             opts->redundancyCount = atoi(argv[i + 1]);
+             if (myRank == 0) {
+                 laik_log(LAIK_LL_Info, "Setting redundancy count to %i.", opts->redundancyCount);
+             }
+             i++;
+         }
+         else if (strcmp("--rotationDistance", argv[i]) == 0) {
+             opts->rotationDistance = atoi(argv[i + 1]);
+             if (myRank == 0) {
+                 laik_log(LAIK_LL_Info, "Setting rotation distance to %i.", opts->rotationDistance);
+             }
+             i++;
+         }
+         else if (strcmp("--failureCheckFrequency", argv[i]) == 0) {
+             opts->failureCheckFrequency = atoi(argv[i + 1]);
+             if (myRank == 0) {
+                 laik_log(LAIK_LL_Info, "Setting failure check frequency to %i.", opts->failureCheckFrequency);
+             }
+             i++;
+         }
+         else if (strcmp("--skipCheckpointRecovery", argv[i]) == 0) {
+             opts->skipCheckpointRecovery = true;
+             if (myRank == 0) {
+                 laik_log(LAIK_LL_Info, "Will skip recovering from checkpoints.");
+             }
+         }
+         else if (strcmp("--delayCheckpointRelease", argv[i]) == 0) {
+             opts->delayCheckpointRelease = true;
+             if (myRank == 0) {
+                 laik_log(LAIK_LL_Info, "Using delayed checkpoint release.");
+             }
          }
          /* -h */
          else if (strcmp(argv[i], "-h") == 0) {
