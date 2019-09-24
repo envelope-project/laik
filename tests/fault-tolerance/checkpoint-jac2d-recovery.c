@@ -175,9 +175,9 @@ int main(int argc, char *argv[]) {
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
-        if (argv[arg][1] == 'n') use_cornerhalo = false;
-        if (argv[arg][1] == 'p') do_profiling = true;
-        if (argv[arg][1] == 'h') {
+        if (strcmp("-n", argv[arg]) == 0) use_cornerhalo = false;
+        else if (strcmp("-p", argv[arg]) == 0) do_profiling = true;
+        else if (strcmp("-h", argv[arg]) == 0) {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
@@ -240,6 +240,9 @@ int main(int argc, char *argv[]) {
             if (laik_myid(world) == 0) {
                 laik_log(LAIK_LL_Info, "Using delayed checkpoint release.");
             }
+        } else {
+            printf("Argument %s was not understood.", argv[arg]);
+            exit(1);
         }
         arg++;
     }
@@ -339,8 +342,8 @@ int main(int argc, char *argv[]) {
                 TPRINTF("Could not detect a failed node.\n");
             } else {
                 TRACE_EVENT_S("FAILURE-DETECT", "");
-                // Don't allow any failures while and after recovery
-                laik_log(LAIK_LL_Warning, "Deactivating error handler!");
+                // Don't allow any failures while recovery
+                laik_log(LAIK_LL_Info, "Deactivating error handler!");
                 laik_error_handler_set(inst, NULL);
 
                 laik_failure_eliminate_nodes(inst, numFailed, nodeStatuses);
@@ -365,19 +368,19 @@ int main(int argc, char *argv[]) {
                 laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
                 laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
-                TPRINTF("Removing failed slices from checkpoints\n");
-                if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, nodeStatuses)) {
-                    TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
-                    abort();
-                }
-
                 if (!skipCheckpointRecovery) {
+                    TPRINTF("Removing failed slices from checkpoints\n");
+                    if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, nodeStatuses)) {
+                        TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
+                        abort();
+                    }
+
                     restoreCheckpoints();
+                    iter = restoreIteration;
                 } else {
                     laik_log(LAIK_LL_Info, "Skipping checkpoint restore.");
                 }
 
-                iter = restoreIteration;
                 TRACE_EVENT_END("RESTORE", "");
                 TPRINTF("Restore complete, cleared errors.\n");
 
@@ -389,6 +392,9 @@ int main(int argc, char *argv[]) {
 //
 //                TPRINTF("Special: Switched to all partitioning.\n");
 
+                // Restored normal state, errors are allowed now
+                laik_log(LAIK_LL_Info, "Reactivating error handler!");
+                laik_error_handler_set(inst, errorHandler);
             }
         }
 
@@ -503,9 +509,11 @@ void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool
         TPRINTF("Freeing previous checkpoint from iteration %i\n", restoreIteration);
         laik_free(spaceCheckpoint->data);
     }
+    TRACE_EVENT_S("CHECKPOINT-PRE-NEW", "");
     TPRINTF("Creating checkpoint of data\n");
     Laik_Checkpoint* newCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount,
             rotationDistance, world,LAIK_RO_None);
+    TRACE_EVENT_S("CHECKPOINT-POST-NEW", "");
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 
     if(spaceCheckpoint != NULL && delayCheckpointRelease) {
