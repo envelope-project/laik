@@ -1211,7 +1211,10 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
 
     int newSize;
     MPI_Comm_size(gd->comm, &newSize);
-    assert(newSize == newGroup->size);
+    if(newSize != newGroup->size) {
+        laik_log(LAIK_LL_Panic, "The size of the new mpi group (%i) is different to the new group size (%i).", newSize, newGroup->size);
+        assert(0);
+    }
 }
 
 static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
@@ -1237,13 +1240,13 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
 
     MPI_Comm originalComm = ((MPIGroupData *) group->backend_data)->comm;
 //    MPI_Comm testComm;
-//    MPI_Group worldGroup, originalGroup, shrinkedGroup;
+//    MPI_Group checkGroup, originalGroup, shrinkedGroup;
 //
 //    MPIX_Comm_shrink(originalComm, &testComm);
 //
 //    MPI_Comm_group(originalComm, &originalGroup);
 //    MPI_Comm_group(testComm, &shrinkedGroup);
-//    MPI_Comm_group(MPI_COMM_WORLD, &worldGroup);
+//    MPI_Comm_group(MPI_COMM_WORLD, &checkGroup);
 //
 //    MPI_Group difference;
 //
@@ -1252,7 +1255,7 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
 //    int n = -1;
 //    MPI_Group_size(shrinkedGroup, &n);
 //    int ranks[n];
-//    int worldRanks[n];
+//    int checkGroupRanks[n];
 //
 //    laik_log(LAIK_LL_Warning, "Shrinked MPI_Group size is %i", n);
 //
@@ -1260,7 +1263,7 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
 //        ranks[i] = i;
 //    }
 //
-//    MPI_Group_translate_ranks(shrinkedGroup, n, ranks, worldGroup, worldRanks);
+//    MPI_Group_translate_ranks(shrinkedGroup, n, ranks, checkGroup, checkGroupRanks);
 //
 //    if(nodeStatuses != NULL) {
 //        for (int i = 0; i < group->size; ++i) {
@@ -1268,13 +1271,13 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
 //        }
 //
 //        for (int i = 0; i < n; ++i) {
-//            nodeStatuses[worldRanks[i]] = LAIK_FT_NODE_OK;
+//            nodeStatuses[checkGroupRanks[i]] = LAIK_FT_NODE_OK;
 //        }
 //    }
 //
 //    MPI_Group_free(&originalGroup);
 //    MPI_Group_free(&shrinkedGroup);
-//    MPI_Group_free(&worldGroup);
+//    MPI_Group_free(&checkGroup);
 //
 //    MPI_Comm_free(&testComm);
 
@@ -1287,15 +1290,15 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
         result = MPIX_Comm_agree(originalComm, &reduceFlag);
     } while (result != MPI_SUCCESS);
 
-    MPI_Group failedGroup, worldGroup;
+    MPI_Group failedGroup, checkGroup;
     MPIX_Comm_failure_get_acked(originalComm, &failedGroup);
 
     int n = -1;
     MPI_Group_size(failedGroup, &n);
     int ranks[n];
-    int worldRanks[n];
+    int checkGroupRanks[n];
 
-    MPI_Comm_group(MPI_COMM_WORLD, &worldGroup);
+    MPI_Comm_group(originalComm, &checkGroup);
 
     laik_log(LAIK_LL_Warning, "Failed MPI_Group size is %i", n);
 
@@ -1304,19 +1307,20 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
     }
 
     // WARNING: Different from above, this group contains only failed ones, not the survivors
-    MPI_Group_translate_ranks(failedGroup, n, ranks, worldGroup, worldRanks);
+    MPI_Group_translate_ranks(failedGroup, n, ranks, checkGroup, checkGroupRanks);
     if (nodeStatuses != NULL) {
         for (int i = 0; i < group->size; ++i) {
             nodeStatuses[i] = LAIK_FT_NODE_OK;
         }
 
         for (int i = 0; i < n; ++i) {
-            nodeStatuses[worldRanks[i]] = LAIK_FT_NODE_FAULT;
+            laik_log(LAIK_LL_Debug, "Failed node %i translated to check group rank %i.", i, checkGroupRanks[i]);
+            nodeStatuses[checkGroupRanks[i]] = LAIK_FT_NODE_FAULT;
         }
     }
 
     MPI_Group_free(&failedGroup);
-    MPI_Group_free(&worldGroup);
+    MPI_Group_free(&checkGroup);
 
     return n;
 }
