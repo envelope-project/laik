@@ -53,7 +53,7 @@ int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup
         laik_switchto_partitioning(nodeData, all, LAIK_DF_Preserve, LAIK_RO_None);
         laik_map_def1(nodeData, (void **) &nodeBase, &nodeCount);
 
-        for (unsigned int i = 0; i < nodeCount; ++i) {
+        for (unsigned long i = 0; i < nodeCount; ++i) {
             if (nodeBase[i] != LAIK_FT_NODE_OK) {
                 if (failedNodes != NULL) {
                     failedNodes[i] = LAIK_FT_NODE_FAULT;
