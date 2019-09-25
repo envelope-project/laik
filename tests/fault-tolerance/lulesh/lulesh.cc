@@ -3187,7 +3187,7 @@ int main(int argc, char *argv[]) {
         VerifyAndWriteFinalOutput(elapsed_timeG, *locDom, opts.nx, numRanks);
 #ifdef USE_MPI
         if (opts.repart > 0) {
-            printf("Time After Repartitioing: %f, per Iteration %f\n", elapsed_timeG2,
+            printf("Time After Repartitioning: %f, per Iteration %f\n", elapsed_timeG2,
                    elapsed_timeG2 / (locDom->cycle() - repart_iter));
         }
 #endif
@@ -3195,7 +3195,7 @@ int main(int argc, char *argv[]) {
 
 #if USE_MPI
     // free laik_objects
-    if (opts.repart > 0)
+    if (exclusivePartitioning2 != nullptr)
         remove_partitionings_and_transitions(exclusivePartitioning2, haloPartitioning2, overlapingPartitioning2,
                                              allPartitioning2,
                                              transitionToExclusive2, transitionToHalo2, transitionToOverlappingInit2,
