@@ -46,12 +46,14 @@ then
 	for i in `seq 1 $NUM_LAUNCH`
 	do
 	        $EXECUTABLE $@ &
+	        EXIT_CODE=$?
 	done
 	wait
 fi
 if [ $BACKEND_TYPE == "mpi" ]
 then
 	mpirun --oversubscribe $MPI_OPTIONS -n $NUM_LAUNCH $EXECUTABLE $@
+  EXIT_CODE=$?
 fi
 
 if [ $BACKEND_TYPE == "tcp" ]
@@ -59,3 +61,5 @@ then
 	rm "$TCP_CONFIG"
 fi
 
+echo "Exit code: $EXIT_CODE"
+exit $EXIT_CODE

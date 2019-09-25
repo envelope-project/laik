@@ -72,7 +72,7 @@ Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
     partitioning->name = "Backup partitioning";
 
     laik_switchto_partitioning(checkpoint->data, partitioning, LAIK_DF_Preserve, reductionOperation);
-    laik_log_begin(LAIK_LL_Warning);
+    laik_log_begin(LAIK_LL_Debug);
     laik_log_append("Active partitioning: \n");
     laik_log_Partitioning(data->activePartitioning);
 
@@ -132,7 +132,7 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
 }
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
-    laik_log_begin(LAIK_LL_Warning);
+    laik_log_begin(LAIK_LL_Debug);
     laik_log_append("Migrate source partitioning:\n");
     laik_log_Partitioning(sourceData->activePartitioning);
     laik_log_append("\nto target partitioning:\n");
@@ -367,14 +367,14 @@ bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, Laik_Grou
             set_slice_to_empty(&taskSlice->s);
         }
     }
-    laik_log_begin(LAIK_LL_Warning);
+    laik_log_begin(LAIK_LL_Debug);
     laik_log_append("Eliminated partitioning:\n");
     laik_log_Partitioning(backupPartitioning);
     laik_log_flush("\n");
 
     laik_checkpoint_remove_redundant_slices(checkpoint);
 
-    laik_log_begin(LAIK_LL_Warning);
+    laik_log_begin(LAIK_LL_Debug);
     laik_log_append("Non-redundant partitioning:\n");
     laik_log_Partitioning(backupPartitioning);
     laik_log_flush("\n");

@@ -73,16 +73,16 @@ int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup
     if(failedNodes != NULL) {
         for (int i = 0; i < checkGroup->size; ++i) {
             if (failedNodes[i] != LAIK_FT_NODE_OK) {
-                laik_log(LAIK_LL_Warning, "Node %i (global %i) has abnormal status %d", i,
+                laik_log(LAIK_LL_Debug, "Node %i (global %i) has abnormal status %d", i,
                          laik_location_get_world_offset(checkGroup, i), failedNodes[i]);
             } else {
-                laik_log(LAIK_LL_Warning, "Node %i (global %i) has normal status %d", i,
+                laik_log(LAIK_LL_Debug, "Node %i (global %i) has normal status %d", i,
                          laik_location_get_world_offset(checkGroup, i), failedNodes[i]);
             }
         }
     }
 
-    laik_log(LAIK_LL_Warning, "Failures found: %i", failuresFound);
+    laik_log(LAIK_LL_Info, "Failures found: %i", failuresFound);
     return failuresFound;
 }
 
@@ -158,7 +158,7 @@ int laik_failure_eliminate_nodes(Laik_Instance *instance, int count, int *nodeSt
 
     instance->backend->eliminateNodes(currentWorld, newGroup, nodeStatuses);
 
-    laik_log(LAIK_LL_Warning, "New world size: %i", newGroup->size);
+    laik_log(LAIK_LL_Info, "New world size: %i", newGroup->size);
     laik_set_fault_tolerant_world(newGroup);
     return 0;
 }

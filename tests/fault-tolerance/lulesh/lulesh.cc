@@ -2769,7 +2769,7 @@ int main(int argc, char *argv[]) {
     Int_t myRank;
     struct cmdLineOpts opts;
 
-    laik_set_loglevel(LAIK_LL_Info);
+    laik_set_loglevel(LAIK_LL_Warning);
 
 #if USE_MPI
     //Domain_member fieldData ;

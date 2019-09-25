@@ -1218,7 +1218,7 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
 }
 
 static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
-    laik_log(LAIK_LL_Warning, "Starting agreement protocol\n");
+    laik_log(LAIK_LL_Debug, "Starting agreement protocol\n");
 
 //    // Make sure my position fits into the integer
 //    assert((unsigned long) group->myid < sizeof(int) * 8);
@@ -1300,7 +1300,7 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
 
     MPI_Comm_group(originalComm, &checkGroup);
 
-    laik_log(LAIK_LL_Warning, "Failed MPI_Group size is %i", n);
+    laik_log(LAIK_LL_Debug, "Failed MPI_Group size is %i", n);
 
     for (int i = 0; i < n; ++i) {
         ranks[i] = i;
