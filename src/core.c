@@ -973,6 +973,15 @@ double getNSize(Laik_Instance *inst) {
     return data / 1024.0;
 }
 
+double start;
+
+void setStartTime(double startTime) {
+    start = startTime;
+}
+double getStartTime() {
+    return start;
+}
+
 int eventNum = 0;
 int getEventNum() {
     return eventNum++;
