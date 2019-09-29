@@ -17,7 +17,7 @@ TESTS = \
         spmv_4000 \
         vsum2 \
         vsum \
-	kvstest
+	kvstest locationtest
 
 all: $(TESTS)
 
@@ -77,3 +77,6 @@ vsum:
 
 kvstest:
 	$(SDIR)./kvstest.sh
+
+locationtest:
+	$(SDIR)unit/locationtest.sh

@@ -338,10 +338,11 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     if (err != MPI_SUCCESS) laik_mpi_panic(err);
 
     // Get the name of the processor
-    char processor_name[MPI_MAX_PROCESSOR_NAME];
+    char processor_name[MPI_MAX_PROCESSOR_NAME + 15];
     int name_len;
     err = MPI_Get_processor_name(processor_name, &name_len);
     if (err != MPI_SUCCESS) laik_mpi_panic(err);
+    snprintf(processor_name + name_len, 15, ":%d", getpid());
 
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_mpi, size, rank,
@@ -349,9 +350,8 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
 
     sprintf(inst->guid, "%d", rank);
 
-    laik_log(2, "MPI backend initialized (at %s:%d, rank %d/%d)\n",
-             inst->mylocation, (int) getpid(),
-             rank, size);
+    laik_log(2, "MPI backend initialized (at '%s', rank %d/%d)\n",
+             inst->mylocation, rank, size);
 
     // do own reduce algorithm?
     char* str = getenv("LAIK_MPI_REDUCE");

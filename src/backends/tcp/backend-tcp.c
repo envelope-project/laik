@@ -172,9 +172,8 @@ Laik_Instance* laik_init_tcp(int* argc, char*** argv)
 
     sprintf(inst->guid, "%d", rank);
 
-    laik_log(2, "TCP backend initialized (at %s:%d, rank %d/%d)\n",
-             inst->mylocation, (int) getpid(),
-             rank, size);
+    laik_log(2, "TCP backend initialized (at '%s', rank %d/%d)\n",
+             inst->mylocation, rank, size);
 
     // do own reduce algorithm?
     char* str = getenv("LAIK_TCP_REDUCE");

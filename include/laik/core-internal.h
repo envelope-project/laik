@@ -32,16 +32,15 @@ struct _Laik_Task {
 
 struct _Laik_Group {
     Laik_Instance* inst;
-    int gid;
-    int size;
-    int myid;
+    int gid;         // group ID
+    int size;        // number of processes in group
+    int myid;        // index of this process (in [0;size[ or -1 if not in group)
     void* backend_data;
 
     Laik_Group* parent;
-    int* toParent;   // mapping local task IDs to parent task IDs
-    int* fromParent; // mapping parent task IDs to local task IDs
-
-    int* toLocation;
+    int* toParent;   // maps process indexes in this group to indexes in parent
+    int* fromParent; // maps parent process indexes to indexes in this group
+    int* toLocation; // maps process indexes to location IDs they are bound to
 };
 
 
@@ -83,8 +82,8 @@ void laik_removeSpaceFromInstance(Laik_Instance* inst, Laik_Space* s);
 
 void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d);
 
-// synchronize location identifiers
-void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup);
+// synchronize location strings via KVS among processes in current world
+void laik_sync_location(Laik_Instance *instance);
 
 
 struct _Laik_Error {

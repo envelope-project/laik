@@ -178,6 +178,7 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     instance->size = size;
     instance->myid = myid;
     instance->mylocation = strdup(location);
+    instance->locationStore = 0;
 
     // for logging wall-clock time since LAIK initialization
     gettimeofday(&(instance->init_time), NULL);
@@ -393,6 +394,8 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
         laik_log_IntList(g->size, g2->fromParent);
         laik_log_append("\n  toParent   (from shrinked): ");
         laik_log_IntList(g2->size, g2->toParent);
+        laik_log_append("\n  toLocation (in shrinked): ");
+        laik_log_IntList(g2->size, g2->toLocation);
         laik_log_flush(0);
     }
 
@@ -405,37 +408,36 @@ int laik_group_locationid(Laik_Group *group, int id)
     return group->toLocation[id];
 }
 
-#define LAIK_LOCATION_STORE_MAX_KEY_SIZE 128
-#define LAIK_LOCATION_GET_KEY(x,y) snprintf(x, LAIK_LOCATION_STORE_MAX_KEY_SIZE, "location_%i", y)
+static char* locationkey(int loc) {
+    static char key[10];
+    snprintf(key, 10, "%i", loc);
+    return key;
+}
 
-// Synchronizes location identifiers across all nodes in the group. Call this with world to synchronize location data
-// with everyone
-void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup)
+// synchronize location strings via KVS among processes in current world
+void laik_sync_location(Laik_Instance *instance)
 {
-    if(instance->locationStore == NULL) {
-        instance->locationStore = laik_kvs_new("Laik_Location_Data", instance);
-    }
+    if (instance->locationStore == NULL)
+        instance->locationStore = laik_kvs_new("location", instance);
 
-    char *mylocation = laik_mylocation(instance);
-    char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
-    LAIK_LOCATION_GET_KEY(myKey, laik_group_locationid(synchronizationGroup, laik_myid(synchronizationGroup)));
+    Laik_Group* world = laik_world(instance);
+    char* mylocation = laik_mylocation(instance);
+    char* myKey = locationkey(laik_group_locationid(world, laik_myid(world)));
 
     laik_kvs_sets(instance->locationStore, myKey, mylocation);
     laik_kvs_sync(instance->locationStore);
 }
 
-// get location string identifier from process ID in given group
+// get location string identifier from process index in given group
 char* laik_group_location(Laik_Group *group, int id)
 {
-    if (group->inst->locationStore == NULL) {
+    if (group->inst->locationStore == NULL)
         return NULL;
-    }
 
-    char myKey[LAIK_LOCATION_STORE_MAX_KEY_SIZE];
-    LAIK_LOCATION_GET_KEY(myKey, laik_group_locationid(group, id));
-
+    char* myKey = locationkey(laik_group_locationid(group, id));
     return laik_kvs_get(group->inst->locationStore, myKey, NULL);
 }
+
 
 // Utilities
 
@@ -443,8 +445,8 @@ char* laik_get_guid(Laik_Instance* i){
     return i->guid;
 }
 
-// Logging
 
+// Logging
 
 
 // to overwrite environment variable LAIK_LOG
