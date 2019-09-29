@@ -53,6 +53,7 @@ static void laik_tcp_prepare(Laik_ActionSeq*);
 static void laik_tcp_cleanup(Laik_ActionSeq*);
 static void laik_tcp_exec(Laik_ActionSeq* as);
 static void laik_tcp_updateGroup(Laik_Group*);
+static void laik_tcp_sync(Laik_KVStore* kvs);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_tcp = {
@@ -61,7 +62,8 @@ static Laik_Backend laik_backend_tcp = {
     .prepare     = laik_tcp_prepare,
     .cleanup     = laik_tcp_cleanup,
     .exec        = laik_tcp_exec,
-    .updateGroup = laik_tcp_updateGroup
+    .updateGroup = laik_tcp_updateGroup,
+    .sync        = laik_tcp_sync
 };
 
 static Laik_Instance* tcp_instance = 0;
@@ -790,4 +792,122 @@ static void laik_tcp_cleanup(Laik_ActionSeq* as)
     }
 
     assert(as->backend == &laik_backend_tcp);
+}
+
+//----------------------------------------------------------------------------
+// KV store
+
+
+static void laik_tcp_sync(Laik_KVStore* kvs)
+{
+    assert(kvs->inst == tcp_instance);
+    MPI_Comm comm = tcpData(tcp_instance)->comm;
+    int myid = kvs->inst->myid;
+    MPI_Status status;
+    int count[2] = {0,0};
+    int err;
+
+    if (myid > 0) {
+        // send to master, receive from master
+        count[0] = (int) kvs->changes.offUsed;
+        assert((count[0] == 0) || ((count[0] & 1) == 1)); // 0 or odd number of offsets
+        count[1] = (int) kvs->changes.dataUsed;
+        laik_log(1, "MPI sync: sending %d changes (total %d chars) to T0",
+                 count[0] / 2, count[1]);
+        err = MPI_Send(count, 2, MPI_INTEGER, 0, 0, comm);
+        if (err != MPI_SUCCESS) laik_tcp_panic(err);
+        if (count[0] > 0) {
+            assert(count[1] > 0);
+            err = MPI_Send(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm);
+            if (err != MPI_SUCCESS) laik_tcp_panic(err);
+            err = MPI_Send(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm);
+            if (err != MPI_SUCCESS) laik_tcp_panic(err);
+        }
+        else assert(count[1] == 0);
+
+        err = MPI_Recv(count, 2, MPI_INTEGER, 0, 0, comm, &status);
+        if (err != MPI_SUCCESS) laik_tcp_panic(err);
+        laik_log(1, "MPI sync: getting %d changes (total %d chars) from T0",
+                 count[0] / 2, count[1]);
+        if (count[0] > 0) {
+            assert(count[1] > 0);
+            laik_kvs_changes_ensure_size(&(kvs->changes), count[0], count[1]);
+            err = MPI_Recv(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm, &status);
+            if (err != MPI_SUCCESS) laik_tcp_panic(err);
+            err = MPI_Recv(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm, &status);
+            if (err != MPI_SUCCESS) laik_tcp_panic(err);
+            laik_kvs_changes_set_size(&(kvs->changes), count[0], count[1]);
+            // TODO: opt - remove own changes from received ones
+            laik_kvs_changes_apply(&(kvs->changes), kvs);
+        }
+        else
+            assert(count[1] == 0);
+
+        return;
+    }
+
+    // master: receive changes from all others, sort, merge, send back
+
+    // first sort own changes, as preparation for merging
+    laik_kvs_changes_sort(&(kvs->changes));
+
+    Laik_KVS_Changes recvd, changes;
+    laik_kvs_changes_init(&changes); // temporary changes struct
+    laik_kvs_changes_init(&recvd);
+
+    Laik_KVS_Changes *src, *dst, *tmp;
+    // after merging, result should be in dst;
+    dst = &(kvs->changes);
+    src = &changes;
+
+    for(int i = 1; i < kvs->inst->size; i++) {
+        err = MPI_Recv(count, 2, MPI_INTEGER, i, 0, comm, &status);
+        if (err != MPI_SUCCESS) laik_tcp_panic(err);
+        laik_log(1, "MPI sync: getting %d changes (total %d chars) from T%d",
+                 count[0] / 2, count[1], i);
+        laik_kvs_changes_set_size(&recvd, 0, 0); // fresh reuse
+        laik_kvs_changes_ensure_size(&recvd, count[0], count[1]);
+        if (count[0] == 0) {
+            assert(count[1] == 0);
+            continue;
+        }
+
+        assert(count[1] > 0);
+        err = MPI_Recv(recvd.off, count[0], MPI_INTEGER, i, 0, comm, &status);
+        if (err != MPI_SUCCESS) laik_tcp_panic(err);
+        err = MPI_Recv(recvd.data, count[1], MPI_CHAR, i, 0, comm, &status);
+        if (err != MPI_SUCCESS) laik_tcp_panic(err);
+        laik_kvs_changes_set_size(&recvd, count[0], count[1]);
+
+        // for merging, both inputs need to be sorted
+        laik_kvs_changes_sort(&recvd);
+
+        // swap src/dst: now merging can overwrite dst
+        tmp = src; src = dst; dst = tmp;
+
+        laik_kvs_changes_merge(dst, src, &recvd);
+    }
+
+    // send merged changes to all others: may be 0 entries
+    count[0] = dst->offUsed;
+    count[1] = dst->dataUsed;
+    assert(count[1] > count[0]); // more byte than offsets
+    for(int i = 1; i < kvs->inst->size; i++) {
+        laik_log(1, "MPI sync: sending %d changes (total %d chars) to T%d",
+                 count[0] / 2, count[1], i);
+        err = MPI_Send(count, 2, MPI_INTEGER, i, 0, comm);
+        if (err != MPI_SUCCESS) laik_tcp_panic(err);
+        if (count[0] == 0) continue;
+
+        err = MPI_Send(dst->off, count[0], MPI_INTEGER, i, 0, comm);
+        if (err != MPI_SUCCESS) laik_tcp_panic(err);
+        err = MPI_Send(dst->data, count[1], MPI_CHAR, i, 0, comm);
+        if (err != MPI_SUCCESS) laik_tcp_panic(err);
+    }
+
+    // TODO: opt - remove own changes from received ones
+    laik_kvs_changes_apply(dst, kvs);
+
+    laik_kvs_changes_free(&recvd);
+    laik_kvs_changes_free(&changes);
 }

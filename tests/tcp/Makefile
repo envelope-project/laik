@@ -16,7 +16,8 @@ TESTS = \
         spmv2_-s_2_-i_10_3000 \
         spmv_4000 \
         vsum2 \
-        vsum
+        vsum \
+	kvstest
 
 all: $(TESTS)
 
@@ -73,3 +74,6 @@ vsum2:
 
 vsum:
 	$(SDIR)./vsum.sh
+
+kvstest:
+	$(SDIR)./kvstest.sh

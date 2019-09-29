@@ -1073,6 +1073,7 @@ static void laik_mpi_sync(Laik_KVStore* kvs)
     int myid = kvs->inst->myid;
     MPI_Status status;
     int count[2] = {0,0};
+    int err;
 
     if (myid > 0) {
         // send to master, receive from master
@@ -1081,22 +1082,28 @@ static void laik_mpi_sync(Laik_KVStore* kvs)
         count[1] = (int) kvs->changes.dataUsed;
         laik_log(1, "MPI sync: sending %d changes (total %d chars) to T0",
                  count[0] / 2, count[1]);
-        MPI_Send(count, 2, MPI_INTEGER, 0, 0, comm);
+        err = MPI_Send(count, 2, MPI_INTEGER, 0, 0, comm);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
         if (count[0] > 0) {
             assert(count[1] > 0);
-            MPI_Send(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm);
-            MPI_Send(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm);
+            err = MPI_Send(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
+            err = MPI_Send(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
         }
         else assert(count[1] == 0);
 
-        MPI_Recv(count, 2, MPI_INTEGER, 0, 0, comm, &status);
+        err = MPI_Recv(count, 2, MPI_INTEGER, 0, 0, comm, &status);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
         laik_log(1, "MPI sync: getting %d changes (total %d chars) from T0",
                  count[0] / 2, count[1]);
         if (count[0] > 0) {
             assert(count[1] > 0);
             laik_kvs_changes_ensure_size(&(kvs->changes), count[0], count[1]);
-            MPI_Recv(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm, &status);
-            MPI_Recv(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm, &status);
+            err = MPI_Recv(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm, &status);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
+            err = MPI_Recv(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm, &status);
+            if (err != MPI_SUCCESS) laik_mpi_panic(err);
             laik_kvs_changes_set_size(&(kvs->changes), count[0], count[1]);
             // TODO: opt - remove own changes from received ones
             laik_kvs_changes_apply(&(kvs->changes), kvs);
@@ -1122,7 +1129,8 @@ static void laik_mpi_sync(Laik_KVStore* kvs)
     src = &changes;
 
     for(int i = 1; i < kvs->inst->size; i++) {
-        MPI_Recv(count, 2, MPI_INTEGER, i, 0, comm, &status);
+        err = MPI_Recv(count, 2, MPI_INTEGER, i, 0, comm, &status);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
         laik_log(1, "MPI sync: getting %d changes (total %d chars) from T%d",
                  count[0] / 2, count[1], i);
         laik_kvs_changes_set_size(&recvd, 0, 0); // fresh reuse
@@ -1133,8 +1141,10 @@ static void laik_mpi_sync(Laik_KVStore* kvs)
         }
 
         assert(count[1] > 0);
-        MPI_Recv(recvd.off, count[0], MPI_INTEGER, i, 0, comm, &status);
-        MPI_Recv(recvd.data, count[1], MPI_CHAR, i, 0, comm, &status);
+        err = MPI_Recv(recvd.off, count[0], MPI_INTEGER, i, 0, comm, &status);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
+        err = MPI_Recv(recvd.data, count[1], MPI_CHAR, i, 0, comm, &status);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
         laik_kvs_changes_set_size(&recvd, count[0], count[1]);
 
         // for merging, both inputs need to be sorted
@@ -1153,11 +1163,14 @@ static void laik_mpi_sync(Laik_KVStore* kvs)
     for(int i = 1; i < kvs->inst->size; i++) {
         laik_log(1, "MPI sync: sending %d changes (total %d chars) to T%d",
                  count[0] / 2, count[1], i);
-        MPI_Send(count, 2, MPI_INTEGER, i, 0, comm);
+        err = MPI_Send(count, 2, MPI_INTEGER, i, 0, comm);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
         if (count[0] == 0) continue;
 
-        MPI_Send(dst->off, count[0], MPI_INTEGER, i, 0, comm);
-        MPI_Send(dst->data, count[1], MPI_CHAR, i, 0, comm);
+        err = MPI_Send(dst->off, count[0], MPI_INTEGER, i, 0, comm);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
+        err = MPI_Send(dst->data, count[1], MPI_CHAR, i, 0, comm);
+        if (err != MPI_SUCCESS) laik_mpi_panic(err);
     }
 
     // TODO: opt - remove own changes from received ones
