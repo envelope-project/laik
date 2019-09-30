@@ -80,3 +80,6 @@ kvstest:
 
 locationtest:
 	$(SDIR)unit/locationtest.sh
+
+clean:
+	rm -rf *.out

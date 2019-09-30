@@ -11,7 +11,7 @@ TESTS= \
 
 .PHONY: mpi tcp $(TESTS)
 
-all: clean testbins $(TESTS) $(TEST_SUBDIRS)
+all: testbins $(TESTS) $(TEST_SUBDIRS)
 
 testbins:
 	$(MAKE) -C src
@@ -72,4 +72,6 @@ test-kvstest:
 
 clean:
 	rm -rf *.out
-
+	$(MAKE) clean -C src
+	$(MAKE) clean -C mpi
+	$(MAKE) clean -C tcp
