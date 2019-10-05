@@ -167,6 +167,7 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     instance->myid = myid;
     instance->mylocation = strdup(location);
     instance->locationStore = 0;
+    instance->location = 0; // set at location sync
 
     // for logging wall-clock time since LAIK initialization
     gettimeofday(&(instance->init_time), NULL);
@@ -202,7 +203,7 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
 
     // Assign default location mappings
     for(int i = 0; i <first_group->size; i++) {
-        first_group->toLocation[i] = i;
+        first_group->locationid[i] = i;
     }
 
     return instance;
@@ -263,7 +264,7 @@ Laik_Group* laik_create_group(Laik_Instance* i)
     // space after struct
     g->toParent   = (int*) (((char*)g) + sizeof(Laik_Group));
     g->fromParent = g->toParent + i->size;
-    g->toLocation = g->fromParent + i->size;
+    g->locationid = g->fromParent + i->size;
 
     i->group_count++;
     return g;
@@ -298,7 +299,7 @@ Laik_Group* laik_clone_group(Laik_Group* g)
     for(int i=0; i < g->size; i++) {
         g2->toParent[i] = i;
         g2->fromParent[i] = i;
-        g2->toLocation[i] = g->toLocation[i];
+        g2->locationid[i] = g->locationid[i];
     }
 
     return g2;
@@ -322,7 +323,7 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
         if (g2->fromParent[i] < 0) continue;
         g2->fromParent[i] = o;
         g2->toParent[o] = i;
-        g2->toLocation[o] = g->toLocation[i];
+        g2->locationid[o] = g->locationid[i];
         o++;
     }
     g2->size = o;
@@ -340,7 +341,7 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
         laik_log_append("\n  toParent   (from shrinked): ");
         laik_log_IntList(g2->size, g2->toParent);
         laik_log_append("\n  toLocation (in shrinked): ");
-        laik_log_IntList(g2->size, g2->toLocation);
+        laik_log_IntList(g2->size, g2->locationid);
         laik_log_flush(0);
     }
 
@@ -350,7 +351,7 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
 int laik_group_locationid(Laik_Group *group, int id)
 {
     assert(id >= 0 && id < group->size);
-    return group->toLocation[id];
+    return group->locationid[id];
 }
 
 static char* locationkey(int loc) {
@@ -359,11 +360,40 @@ static char* locationkey(int loc) {
     return key;
 }
 
+static void update_location(Laik_KVStore* s, Laik_KVS_Entry* e)
+{
+    int lid = atoi(e->key);
+    assert((lid >= 0) && (lid < s->inst->size));
+    s->inst->location[lid] = e->data;
+    laik_log(1, "location for locID %d (key '%s') updated to '%s'",
+             lid, e->key, e->data);
+}
+
+static void remove_location(Laik_KVStore* s, char* key)
+{
+    int lid = atoi(key);
+    assert((lid >= 0) && (lid < s->inst->size));
+    laik_log(1, "location for locID %d (key '%s') removed (was '%s')",
+             lid, key, s->inst->location[lid]);
+    s->inst->location[lid] = 0;
+}
+
+
 // synchronize location strings via KVS among processes in current world
+// TODO: only sync new locations after growth of instance
 void laik_sync_location(Laik_Instance *instance)
 {
-    if (instance->locationStore == NULL)
+    if (instance->locationStore == NULL) {
         instance->locationStore = laik_kvs_new("location", instance);
+        instance->location = (char**) malloc((unsigned)instance->size * sizeof(char*));
+        assert(instance->location != 0);
+        for(int i = 0; i < instance->size; i++)
+            instance->location[i] = 0;
+
+        // register function to update direct access to location
+        laik_kvs_reg_callbacks(instance->locationStore,
+                               update_location, update_location, remove_location);
+    }
 
     Laik_Group* world = laik_world(instance);
     char* mylocation = laik_mylocation(instance);
@@ -376,11 +406,12 @@ void laik_sync_location(Laik_Instance *instance)
 // get location string identifier from process index in given group
 char* laik_group_location(Laik_Group *group, int id)
 {
-    if (group->inst->locationStore == NULL)
+    if (group->inst->location == NULL)
         return NULL;
 
-    char* myKey = locationkey(laik_group_locationid(group, id));
-    return laik_kvs_get(group->inst->locationStore, myKey, NULL);
+    int lid = laik_group_locationid(group, id);
+    assert(lid >= 0 && lid < group->inst->size);
+    return group->inst->location[lid];
 }
 
 

@@ -186,13 +186,18 @@ Laik_Instance* laik_init (int* argc, char*** argv);
 //
 // current restrictions:
 // - flat
-// - sync only among all processues of current world
+// - sync only among all processes of current world
 
 // a flat KV store
 typedef struct _Laik_KVStore Laik_KVStore;
 
 // an entry in a KV Store
 typedef struct _Laik_KVS_Entry Laik_KVS_Entry;
+
+// functions optionally called on KVS changes (see laik_kvs_reg_callbacks)
+typedef void (*laik_kvs_created_func)(Laik_KVStore*, Laik_KVS_Entry*);
+typedef void (*laik_kvs_changed_func)(Laik_KVStore*, Laik_KVS_Entry*);
+typedef void (*laik_kvs_removed_func)(Laik_KVStore*, char*);
 
 // create KVS among processes of current world in instance
 Laik_KVStore* laik_kvs_new(const char *name, Laik_Instance* inst);
@@ -205,6 +210,12 @@ bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data);
 
 // set a null-terminated string as value for key
 bool laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str);
+
+// remove all entries
+void laik_kvs_clean(Laik_KVStore* kvs);
+
+// remove entry for key
+bool laik_kvs_remove(Laik_KVStore* kvs, char* key);
 
 // synchronize KV store
 void laik_kvs_sync(Laik_KVStore* kvs);
@@ -235,5 +246,11 @@ unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size);
 
 // sort KVS entries for faster access (done after sync)
 void laik_kvs_sort(Laik_KVStore* kvs);
+
+// register functions to be called when entries are created/changed/removed
+void laik_kvs_reg_callbacks(Laik_KVStore* kvs,
+                            laik_kvs_created_func fc,
+                            laik_kvs_changed_func fu,
+                            laik_kvs_removed_func fr);
 
 #endif // LAIK_CORE_H

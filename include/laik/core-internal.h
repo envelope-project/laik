@@ -40,7 +40,7 @@ struct _Laik_Group {
     Laik_Group* parent;
     int* toParent;   // maps process indexes in this group to indexes in parent
     int* fromParent; // maps parent process indexes to indexes in this group
-    int* toLocation; // maps process indexes to location IDs they are bound to
+    int* locationid; // maps process indexes to location IDs they are bound to
 };
 
 
@@ -50,8 +50,11 @@ struct _Laik_Instance {
     char* mylocation;
     char guid[64];
 
-    // Stores exchanged location information if user requested it using synchronize.
+    // KV store for exchanging location information
     Laik_KVStore* locationStore;
+    // direct access to synchronized location strings (array of size <size>)
+    // null if not synced yet; for removed processes entries are null
+    char** location;
 
     // for time logging
     struct timeval init_time;
@@ -123,6 +126,10 @@ struct _Laik_KVStore {
     unsigned int size, used;
     // new entries are unsorted, call laik_kvs_sort to enable binary search
     unsigned int sorted_upto;
+
+    laik_kvs_created_func created_func;
+    laik_kvs_changed_func changed_func;
+    laik_kvs_removed_func removed_func;
 
     // new/changed data to send at next sync
     Laik_KVS_Changes changes;

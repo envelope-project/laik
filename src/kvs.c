@@ -299,6 +299,10 @@ Laik_KVStore* laik_kvs_new(const char* name, Laik_Instance *inst)
     kvs->used = 0;
     kvs->sorted_upto = 0;
 
+    kvs->created_func = 0;
+    kvs->changed_func = 0;
+    kvs->removed_func = 0;
+
     laik_kvs_changes_init(&(kvs->changes));
     laik_kvs_changes_ensure_size(&(kvs->changes), 10, 1000);
     kvs->in_sync = false;
@@ -315,30 +319,81 @@ void laik_kvs_free(Laik_KVStore* kvs)
     free(kvs);
 }
 
+static void remove_entry(Laik_KVStore* kvs, Laik_KVS_Entry* e)
+{
+    assert(e);
+    if (kvs->removed_func)
+        (kvs->removed_func)(kvs, e->key);
+
+    // key of removed entry still exists but with empty data
+    free(e->data);
+    e->data = 0;
+    e->dlen = 0;
+
+    if (!kvs->in_sync)
+        laik_kvs_changes_add(&(kvs->changes), e->key, 0, 0, true, false);
+}
+
+// remove all entries
+void laik_kvs_clean(Laik_KVStore* kvs)
+{
+    for(unsigned i = 0; i < kvs->used; i++) {
+        Laik_KVS_Entry* e = &(kvs->entry[i]);
+        if (e->data == 0) continue;
+        remove_entry(kvs, e);
+    }
+}
+
+// remove entry for key
+bool laik_kvs_remove(Laik_KVStore* kvs, char* key)
+{
+    Laik_KVS_Entry* e = laik_kvs_entry(kvs, key);
+    if (!e) return false;
+    remove_entry(kvs, e);
+    return true;
+}
+
+
 // set a binary data blob as value for key (deep copy, overwrites if key exists)
 // returns false if key is already set to given value
 bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
 {
-    assert(data != 0);
-
-    Laik_KVS_Entry* e = laik_kvs_entry(kvs, key);
-    if (e && (memcmp(e->data, data, (size_t) size) == 0)) {
-        laik_log(1, "in KVS '%s' set entry '%s' (size %d, '%.20s'): already existing",
-                 kvs->name, key, size, data);
-        return false;
+    if (data == 0) {
+        // remove entry
+        return laik_kvs_remove(kvs, key);
     }
 
-    if (!e) {
-        assert(kvs->used < kvs->size);
+    Laik_KVS_Entry* e = laik_kvs_entry(kvs, key);
+    bool created;
+    if (e) {
+        if (e->data) {
+            if (memcmp(e->data, data, (size_t) size) == 0) {
+                laik_log(1, "KVS '%s': setting entry '%s' (size %d, '%.20s'), already existing",
+                         kvs->name, key, size, data);
+                return false;
+            }
+            free(e->data);
+            created = false;
+        }
+        else {
+            // existing key with empty data: was removed, gets new created
+            created = true;
+        }
+    }
+    else {
+        // new entry
+        if (kvs->used == kvs->size) {
+            kvs->size = kvs->size * 2;
+            kvs->entry = (Laik_KVS_Entry*) realloc(kvs->entry,
+                                                    kvs->size * sizeof(Laik_KVS_Entry));
+        }
         e = &kvs->entry[kvs->used];
         kvs->used++;
         e->key = strdup(key);
         e->data = 0;
         e->updated = false;
+        created = true;
     }
-
-    laik_log(1, "in KVS '%s' set %s entry '%s' (size %d) to '%.20s'",
-             kvs->name, (e->data == 0) ? "new" : "changed", key, size, data);
 
     if (e->updated && kvs->in_sync) {
         // update from other process and updated ourself differently
@@ -348,11 +403,23 @@ bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
         exit(1);
     }
 
-    free(e->data);
     e->data = (char*) malloc(size);
     assert(e->data);
     memcpy(e->data, data, size);
     e->dlen = size;
+
+    if (created) {
+        laik_log(1, "KVS '%s': new entry '%s' (size %d) to '%.20s'",
+                 kvs->name, key, size, data);
+
+        if (kvs->created_func) (kvs->created_func)(kvs, e);
+    }
+    else {
+        laik_log(1, "KVS '%s': changed entry '%s' (size %d) to '%.20s'",
+                 kvs->name, key, size, data);
+
+        if (kvs->changed_func) (kvs->changed_func)(kvs, e);
+    }
 
     if (kvs->in_sync) return true;
     e->updated = true;
@@ -472,9 +539,18 @@ unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size)
     return size;
 }
 
-
 void laik_kvs_sort(Laik_KVStore* kvs)
 {
     qsort(kvs->entry, kvs->used, sizeof(Laik_KVS_Entry), entrycmp);
     kvs->sorted_upto = kvs->used;
+}
+
+void laik_kvs_reg_callbacks(Laik_KVStore* kvs,
+                            laik_kvs_created_func fc,
+                            laik_kvs_changed_func fu,
+                            laik_kvs_removed_func fr)
+{
+    kvs->created_func = fc;
+    kvs->changed_func = fu;
+    kvs->removed_func = fr;
 }
