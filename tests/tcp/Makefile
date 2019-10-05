@@ -17,7 +17,7 @@ TESTS = \
         spmv_4000 \
         vsum2 \
         vsum \
-	kvstest locationtest
+	kvstest locationtest spacestest
 
 all: $(TESTS)
 
@@ -80,6 +80,9 @@ kvstest:
 
 locationtest:
 	$(SDIR)unit/locationtest.sh
+
+spacestest:
+	$(SDIR)unit/spacestest.sh
 
 clean:
 	rm -rf *.out

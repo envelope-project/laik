@@ -213,6 +213,12 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i, int64_t s1, int64_t s2);
 Laik_Space* laik_new_space_3d(Laik_Instance* i,
                               int64_t s1, int64_t s2, int64_t s3);
 
+void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1);
+void laik_change_space_2d(Laik_Space* s,
+                          int64_t from1, int64_t to1, int64_t from2, int64_t to2);
+void laik_change_space_3d(Laik_Space* s, int64_t from1, int64_t to1,
+                          int64_t from2, int64_t to2, int64_t from3, int64_t to3);
+
 // free a space with all resources depending on it (e.g. paritionings)
 void laik_free_space(Laik_Space* s);
 

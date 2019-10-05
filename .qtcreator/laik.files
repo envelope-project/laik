@@ -105,3 +105,4 @@
 ../tests/src/Makefile
 ../tests/src/kvstest.c
 ../tests/src/locationtest.c
+../tests/src/spacestest.c

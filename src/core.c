@@ -169,6 +169,8 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     instance->locationStore = 0;
     instance->location = 0; // set at location sync
 
+    instance->spaceStore = 0;
+
     // for logging wall-clock time since LAIK initialization
     gettimeofday(&(instance->init_time), NULL);
 
@@ -366,9 +368,9 @@ static void update_location(Laik_KVStore* s, Laik_KVS_Entry* e)
 {
     int lid = atoi(e->key);
     assert((lid >= 0) && (lid < s->inst->locations));
-    s->inst->location[lid] = e->data;
+    s->inst->location[lid] = e->value;
     laik_log(1, "location for locID %d (key '%s') updated to '%s'",
-             lid, e->key, e->data);
+             lid, e->key, e->value);
 }
 
 static void remove_location(Laik_KVStore* s, char* key)
@@ -399,8 +401,11 @@ void laik_sync_location(Laik_Instance *instance)
 
     Laik_Group* world = laik_world(instance);
     char* mylocation = laik_mylocation(instance);
-    char* myKey = locationkey(laik_group_locationid(world, laik_myid(world)));
+    int mylocationid = laik_group_locationid(world, laik_myid(world));
+    // update location array directly with own location
+    instance->location[mylocationid] = mylocation;
 
+    char* myKey = locationkey(mylocationid);
     laik_kvs_sets(instance->locationStore, myKey, mylocation);
     laik_kvs_sync(instance->locationStore);
 }

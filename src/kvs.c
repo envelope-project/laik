@@ -170,8 +170,8 @@ void laik_kvs_changes_add(Laik_KVS_Changes* c,
     Laik_KVS_Entry* e = &(c->entry[c->entryUsed]);
     c->entryUsed++;
     e->key = newkey;
-    e->data = newdata;
-    e->dlen = (unsigned) dlen;
+    e->value = newdata;
+    e->vlen = (unsigned) dlen;
     e->updated = false;
 }
 
@@ -206,8 +206,8 @@ void laik_kvs_changes_sort(Laik_KVS_Changes* c)
         assert(c->data[c->off[off + 1] - 1] == 0);
 
         e->key = c->data + c->off[off];
-        e->data = c->data + c->off[off + 1];
-        e->dlen = (unsigned) (c->off[off + 2] - c->off[off + 1]);
+        e->value = c->data + c->off[off + 1];
+        e->vlen = (unsigned) (c->off[off + 2] - c->off[off + 1]);
         e->updated = false;
 
         off += 2;
@@ -233,33 +233,33 @@ void laik_kvs_changes_merge(Laik_KVS_Changes* dst,
         Laik_KVS_Entry* e2 = src2->entry + off2;
         int res = strcmp(e1->key, e2->key);
         if (res < 0) {
-            laik_kvs_changes_add(dst, e1->key, e1->dlen, e1->data, false, true);
+            laik_kvs_changes_add(dst, e1->key, e1->vlen, e1->value, false, true);
             off1++;
         }
         else if (res > 0) {
-            laik_kvs_changes_add(dst, e2->key, e2->dlen, e2->data, false, true);
+            laik_kvs_changes_add(dst, e2->key, e2->vlen, e2->value, false, true);
             off2++;
         }
         else {
-            if ((e1->dlen != e2->dlen) || (strncmp(e1->data, e2->data, e1->dlen) != 0)) {
+            if ((e1->vlen != e2->vlen) || (strncmp(e1->value, e2->value, e1->vlen) != 0)) {
                 laik_log(LAIK_LL_Panic,
                          "Merging KV changes at key '%s': update inconsistency\n",
                          e1->key);
                 exit(1);
             }
-            laik_kvs_changes_add(dst, e1->key, e1->dlen, e1->data, false, true);
+            laik_kvs_changes_add(dst, e1->key, e1->vlen, e1->value, false, true);
             off1++;
             off2++;
         }
     }
     while(off1 < src1->entryUsed) {
         Laik_KVS_Entry* e = src1->entry + off1;
-        laik_kvs_changes_add(dst, e->key, e->dlen, e->data, false, true);
+        laik_kvs_changes_add(dst, e->key, e->vlen, e->value, false, true);
         off1++;
     }
     while(off2 < src2->entryUsed) {
         Laik_KVS_Entry* e = src2->entry + off2;
-        laik_kvs_changes_add(dst, e->key, e->dlen, e->data, false, true);
+        laik_kvs_changes_add(dst, e->key, e->vlen, e->value, false, true);
         off2++;
     }
 }
@@ -322,13 +322,14 @@ void laik_kvs_free(Laik_KVStore* kvs)
 static void remove_entry(Laik_KVStore* kvs, Laik_KVS_Entry* e)
 {
     assert(e);
-    if (kvs->removed_func)
+    if (kvs->in_sync && kvs->removed_func)
         (kvs->removed_func)(kvs, e->key);
 
     // key of removed entry still exists but with empty data
-    free(e->data);
+    free(e->value);
+    e->value = 0;
+    e->vlen = 0;
     e->data = 0;
-    e->dlen = 0;
 
     if (!kvs->in_sync)
         laik_kvs_changes_add(&(kvs->changes), e->key, 0, 0, true, false);
@@ -339,7 +340,7 @@ void laik_kvs_clean(Laik_KVStore* kvs)
 {
     for(unsigned i = 0; i < kvs->used; i++) {
         Laik_KVS_Entry* e = &(kvs->entry[i]);
-        if (e->data == 0) continue;
+        if (e->value == 0) continue;
         remove_entry(kvs, e);
     }
 }
@@ -355,24 +356,25 @@ bool laik_kvs_remove(Laik_KVStore* kvs, char* key)
 
 
 // set a binary data blob as value for key (deep copy, overwrites if key exists)
-// returns false if key is already set to given value
-bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
+// returns new/updated entry
+Laik_KVS_Entry* laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* value)
 {
-    if (data == 0) {
+    if (value == 0) {
         // remove entry
-        return laik_kvs_remove(kvs, key);
+        laik_kvs_remove(kvs, key);
+        return 0;
     }
 
     Laik_KVS_Entry* e = laik_kvs_entry(kvs, key);
     bool created;
     if (e) {
-        if (e->data) {
-            if (memcmp(e->data, data, (size_t) size) == 0) {
-                laik_log(1, "KVS '%s': setting entry '%s' (size %d, '%.20s'), already existing",
-                         kvs->name, key, size, data);
-                return false;
+        if (e->value) {
+            if (memcmp(e->value, value, (size_t) size) == 0) {
+                laik_log(1, "KVS '%s': entry '%s' (size %d, '%.20s') already existing",
+                         kvs->name, key, size, value);
+                return e;
             }
-            free(e->data);
+            free(e->value);
             created = false;
         }
         else {
@@ -390,6 +392,7 @@ bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
         e = &kvs->entry[kvs->used];
         kvs->used++;
         e->key = strdup(key);
+        e->value = 0;
         e->data = 0;
         e->updated = false;
         created = true;
@@ -403,34 +406,34 @@ bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data)
         exit(1);
     }
 
-    e->data = (char*) malloc(size);
-    assert(e->data);
-    memcpy(e->data, data, size);
-    e->dlen = size;
+    e->value = (char*) malloc(size);
+    assert(e->value);
+    memcpy(e->value, value, size);
+    e->vlen = size;
 
     if (created) {
-        laik_log(1, "KVS '%s': new entry '%s' (size %d) to '%.20s'",
-                 kvs->name, key, size, data);
+        laik_log(1, "KVS '%s': set new entry '%s' (size %d) to '%.20s'",
+                 kvs->name, key, size, value);
 
-        if (kvs->created_func) (kvs->created_func)(kvs, e);
+        if (kvs->in_sync && kvs->created_func) (kvs->created_func)(kvs, e);
     }
     else {
         laik_log(1, "KVS '%s': changed entry '%s' (size %d) to '%.20s'",
-                 kvs->name, key, size, data);
+                 kvs->name, key, size, value);
 
-        if (kvs->changed_func) (kvs->changed_func)(kvs, e);
+        if (kvs->in_sync && kvs->changed_func) (kvs->changed_func)(kvs, e);
     }
 
-    if (kvs->in_sync) return true;
+    if (kvs->in_sync) return e;
     e->updated = true;
 
-    laik_kvs_changes_add(&(kvs->changes), key, size, data, true, false);
+    laik_kvs_changes_add(&(kvs->changes), key, size, value, true, false);
 
-    return true;
+    return e;
 }
 
 // set a null-terminated string as value for key
-bool laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str)
+Laik_KVS_Entry* laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str)
 {
     unsigned int len = strlen(str) + 1; // include null at end
     return laik_kvs_set(kvs, key, len, str);
@@ -493,8 +496,8 @@ Laik_KVS_Entry* laik_kvs_entry(Laik_KVStore* kvs, char* key)
 char* laik_kvs_data(Laik_KVS_Entry* e, unsigned int *psize)
 {
     assert(e);
-    if (psize) *psize = e->dlen;
-    return e->data;
+    if (psize) *psize = e->vlen;
+    return e->value;
 }
 
 char* laik_kvs_get(Laik_KVStore* kvs, char* key, unsigned int* psize)
@@ -527,15 +530,15 @@ char* laik_kvs_key(Laik_KVS_Entry* e)
 unsigned int laik_kvs_size(Laik_KVS_Entry* e)
 {
     assert(e);
-    return e->dlen;
+    return e->vlen;
 }
 
 
 unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size)
 {
     assert(e);
-    if (e->dlen < size) size = e->dlen;
-    memcpy(mem, e->data, size);
+    if (e->vlen < size) size = e->vlen;
+    memcpy(mem, e->value, size);
     return size;
 }
 

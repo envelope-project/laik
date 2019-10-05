@@ -14,6 +14,8 @@ foreach (test
     "test-vsum-log-single.sh"
     "test-vsum-single.sh"
     "test-kvstest-single.sh"
+    "test-locationtest-single.sh"
+    "test-spacestest-single.sh"
 )
     add_test ("single/${test}" "${CMAKE_CURRENT_SOURCE_DIR}/${test}")
 endforeach ()

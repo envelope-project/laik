@@ -209,10 +209,10 @@ Laik_KVStore* laik_kvs_new(const char *name, Laik_Instance* inst);
 void laik_kvs_free(Laik_KVStore* kvs);
 
 // set a binary data blob as value for key (deep copy, overwrites if key exists)
-bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data);
+Laik_KVS_Entry* laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data);
 
 // set a null-terminated string as value for key
-bool laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str);
+Laik_KVS_Entry* laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str);
 
 // remove all entries
 void laik_kvs_clean(Laik_KVStore* kvs);
@@ -250,7 +250,7 @@ unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size);
 // sort KVS entries for faster access (done after sync)
 void laik_kvs_sort(Laik_KVStore* kvs);
 
-// register functions to be called when entries are created/changed/removed
+// register functions to be called when entries are created/changed/removed in sync
 void laik_kvs_reg_callbacks(Laik_KVStore* kvs,
                             laik_kvs_created_func fc,
                             laik_kvs_changed_func fu,

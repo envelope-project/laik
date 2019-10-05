@@ -61,6 +61,9 @@ struct _Laik_Instance {
     // null if not synced yet; for removed processes entries are null
     char** location;
 
+    // KV stores for LAIK objects
+    Laik_KVStore* spaceStore;
+
     // for time logging
     struct timeval init_time;
 
@@ -106,9 +109,11 @@ struct _Laik_Error {
 
 struct _Laik_KVS_Entry {
     char* key;
-    char* data;
-    unsigned int dlen;
+    char* value;
+    unsigned int vlen;
     bool updated;
+
+    void* data; // custom user data attached to this entry
 };
 
 // LAIK-internal KVS change journal

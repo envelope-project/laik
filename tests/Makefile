@@ -70,6 +70,12 @@ test-propagation2d:
 test-kvstest:
 	$(SDIR)./test-kvstest-single.sh
 
+test-locationtest:
+	$(SDIR)./test-locationtest-single.sh
+
+test-spacestest:
+	$(SDIR)./test-spacestest-single.sh
+
 clean:
 	rm -rf *.out
 	$(MAKE) clean -C src
