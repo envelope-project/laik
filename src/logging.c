@@ -146,8 +146,8 @@ bool laik_log_begin(int l)
     if (laik_log_fromtask >= 0) {
         assert(laik_loginst != 0);
         assert(laik_log_totask >= laik_log_fromtask);
-        if ((laik_loginst->myid < laik_log_fromtask) ||
-            (laik_loginst->myid > laik_log_totask)) {
+        if ((laik_loginst->mylocationid < laik_log_fromtask) ||
+            (laik_loginst->mylocationid > laik_log_totask)) {
             current_logLevel = LAIK_LL_None;
             return false;
         }
@@ -263,11 +263,11 @@ static
         line_counter++;
         off2 = sprintf(buf2, "%s ", (line_counter == 1) ? "==" : "..");
         if (laik_logprefix == 1)
-            off2 += sprintf(buf2+off2, "T%02d | ", laik_loginst->myid);
+            off2 += sprintf(buf2+off2, "T%02d | ", laik_loginst->mylocationid);
         else if (laik_logprefix == 2)
             off2 += sprintf(buf2+off2,
                             "LAIK-%04d-T%02d %04d.%02d %2d:%06.3f | ",
-                            laik_logctr, laik_loginst->myid,
+                            laik_logctr, laik_loginst->mylocationid,
                             counter, line_counter,
                             wtime_min, wtime_s);
         if (lstr)

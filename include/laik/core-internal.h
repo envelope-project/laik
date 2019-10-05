@@ -38,6 +38,7 @@ struct _Laik_Group {
     void* backend_data;
 
     Laik_Group* parent;
+    int maxsize;     // size of allocation for following 3 arrays
     int* toParent;   // maps process indexes in this group to indexes in parent
     int* fromParent; // maps parent process indexes to indexes in this group
     int* locationid; // maps process indexes to location IDs they are bound to
@@ -45,10 +46,14 @@ struct _Laik_Group {
 
 
 struct _Laik_Instance {
-    int size;
-    int myid;
+    // number of process locations, can only grow
+    int locations;
+    int mylocationid;
     char* mylocation;
     char guid[64];
+
+    // current world, may change
+    Laik_Group* world;
 
     // KV store for exchanging location information
     Laik_KVStore* locationStore;

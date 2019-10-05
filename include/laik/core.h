@@ -47,12 +47,15 @@ void laik_finalize(Laik_Instance* inst);
 char* laik_mylocation(Laik_Instance*);
 
 //! create a group to be used in this LAIK instance
-Laik_Group* laik_create_group(Laik_Instance*);
+Laik_Group* laik_create_group(Laik_Instance*, int maxsize);
 
-//! get default group with all tasks within this LAIK instance
+//! get default group with all active processes in this instance
 Laik_Group* laik_world(Laik_Instance* i);
 
-//! get instance the group is coming from
+//! set new default group of active processes for this instance
+void laik_set_world(Laik_Instance* i, Laik_Group* world);
+
+//! get instance the group is created in
 Laik_Instance* laik_inst(Laik_Group*);
 
 //! return number of LAIK tasks available (within this instance)

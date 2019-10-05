@@ -801,7 +801,8 @@ static void laik_tcp_sync(Laik_KVStore* kvs)
 {
     assert(kvs->inst == tcp_instance);
     MPI_Comm comm = tcpData(tcp_instance)->comm;
-    int myid = kvs->inst->myid;
+    Laik_Group* world = kvs->inst->world;
+    int myid = world->myid;
     MPI_Status status;
     int count[2] = {0,0};
     int err;
@@ -859,7 +860,7 @@ static void laik_tcp_sync(Laik_KVStore* kvs)
     dst = &(kvs->changes);
     src = &changes;
 
-    for(int i = 1; i < kvs->inst->size; i++) {
+    for(int i = 1; i < world->size; i++) {
         err = MPI_Recv(count, 2, MPI_INTEGER, i, 0, comm, &status);
         if (err != MPI_SUCCESS) laik_tcp_panic(err);
         laik_log(1, "MPI sync: getting %d changes (total %d chars) from T%d",
@@ -891,7 +892,7 @@ static void laik_tcp_sync(Laik_KVStore* kvs)
     count[0] = dst->offUsed;
     count[1] = dst->dataUsed;
     assert(count[1] > count[0]); // more byte than offsets
-    for(int i = 1; i < kvs->inst->size; i++) {
+    for(int i = 1; i < world->size; i++) {
         laik_log(1, "MPI sync: sending %d changes (total %d chars) to T%d",
                  count[0] / 2, count[1], i);
         err = MPI_Send(count, 2, MPI_INTEGER, i, 0, comm);

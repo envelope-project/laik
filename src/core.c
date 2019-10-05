@@ -86,7 +86,7 @@ Laik_Instance* laik_init (int* argc, char*** argv)
     char* rstr = getenv("LAIK_DEBUG_RANK");
     if (rstr) {
         int wrank = atoi(rstr);
-        if ((wrank < 0) || (wrank == inst->myid)) {
+        if ((wrank < 0) || (wrank == inst->mylocationid)) {
             // as long as "wait" is 1, wait in loop for debugger
             volatile int wait = 1;
             while(wait) { usleep(10000); }
@@ -163,8 +163,8 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
 
     instance->backend = b;
     instance->backend_data = data;
-    instance->size = size;
-    instance->myid = myid;
+    instance->locations = size;    // initial number of locations
+    instance->mylocationid = myid; // initially, myid is my locationid
     instance->mylocation = strdup(location);
     instance->locationStore = 0;
     instance->location = 0; // set at location sync
@@ -194,17 +194,15 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
         laik_log_flush(0);
     }
 
-    // Create a group in this instance with same parameters as the instance.
-    // Since it's the first group, this is what laik_world() will return.
-    Laik_Group* first_group = laik_create_group (instance);
-    first_group->size         = size;
-    first_group->myid         = myid;
-    first_group->backend_data = gdata;
-
-    // Assign default location mappings
-    for(int i = 0; i <first_group->size; i++) {
-        first_group->locationid[i] = i;
-    }
+    // Create 'world' group with same parameters as the instance.
+    Laik_Group* world = laik_create_group(instance, size);
+    world->size = size;
+    world->myid = myid;
+    world->backend_data = gdata;
+    instance->world = world;
+    // initial location IDs are the same as process IDs in initial world
+    for(int i = 0; i < size; i++)
+        world->locationid[i] = i;
 
     return instance;
 }
@@ -242,13 +240,14 @@ void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d)
 
 
 // create a group to be used in this LAIK instance
-Laik_Group* laik_create_group(Laik_Instance* i)
+Laik_Group* laik_create_group(Laik_Instance* i, int maxsize)
 {
     assert(i->group_count < MAX_GROUPS);
 
     Laik_Group* g;
 
-    g = malloc(sizeof(Laik_Group) + 3 * (i->size) * sizeof(int));
+    // with 3 arrays, 2 with number of processes as size, other with parent size
+    g = malloc(sizeof(Laik_Group) + (3 * maxsize) * sizeof(int));
     if (!g) {
         laik_panic("Out of memory allocating Laik_Group object");
         exit(1); // not actually needed, laik_panic never returns
@@ -257,14 +256,15 @@ Laik_Group* laik_create_group(Laik_Instance* i)
 
     g->inst = i;
     g->gid = i->group_count;
-    g->size = 0; // yet invalid
+    g->size = 0; // yet invalid;
+    g->maxsize = maxsize;
     g->backend_data = 0;
     g->parent = 0;
 
     // space after struct
     g->toParent   = (int*) (((char*)g) + sizeof(Laik_Group));
-    g->fromParent = g->toParent + i->size;
-    g->locationid = g->fromParent + i->size;
+    g->fromParent = g->toParent + maxsize;
+    g->locationid = g->fromParent + maxsize;
 
     i->group_count++;
     return g;
@@ -277,21 +277,22 @@ Laik_Instance* laik_inst(Laik_Group* g)
 
 Laik_Group* laik_world(Laik_Instance* i)
 {
-    // world must have been added by backend
-    assert(i->group_count > 0);
+    return i->world;
+}
 
-    Laik_Group* g = i->group[0];
-    assert(g->gid == 0);
-    assert(g->inst == i);
-    assert(g->size == i->size);
+void laik_set_world(Laik_Instance* i, Laik_Group* world)
+{
+    // TODO: check that removed processes do not appear in any
+    //       active group of this instance
 
-    return g;
+    assert(world->inst == i);
+    i->world = world;
 }
 
 // create a clone of <g>, derived from <g>.
 Laik_Group* laik_clone_group(Laik_Group* g)
 {
-    Laik_Group* g2 = laik_create_group(g->inst);
+    Laik_Group* g2 = laik_create_group(g->inst, g->size);
     g2->parent = g;
     g2->size = g->size;
     g2->myid = g->myid;
@@ -354,7 +355,8 @@ int laik_group_locationid(Laik_Group *group, int id)
     return group->locationid[id];
 }
 
-static char* locationkey(int loc) {
+static char* locationkey(int loc)
+{
     static char key[10];
     snprintf(key, 10, "%i", loc);
     return key;
@@ -363,7 +365,7 @@ static char* locationkey(int loc) {
 static void update_location(Laik_KVStore* s, Laik_KVS_Entry* e)
 {
     int lid = atoi(e->key);
-    assert((lid >= 0) && (lid < s->inst->size));
+    assert((lid >= 0) && (lid < s->inst->locations));
     s->inst->location[lid] = e->data;
     laik_log(1, "location for locID %d (key '%s') updated to '%s'",
              lid, e->key, e->data);
@@ -372,7 +374,7 @@ static void update_location(Laik_KVStore* s, Laik_KVS_Entry* e)
 static void remove_location(Laik_KVStore* s, char* key)
 {
     int lid = atoi(key);
-    assert((lid >= 0) && (lid < s->inst->size));
+    assert((lid >= 0) && (lid < s->inst->locations));
     laik_log(1, "location for locID %d (key '%s') removed (was '%s')",
              lid, key, s->inst->location[lid]);
     s->inst->location[lid] = 0;
@@ -385,9 +387,9 @@ void laik_sync_location(Laik_Instance *instance)
 {
     if (instance->locationStore == NULL) {
         instance->locationStore = laik_kvs_new("location", instance);
-        instance->location = (char**) malloc((unsigned)instance->size * sizeof(char*));
+        instance->location = (char**) malloc((unsigned)instance->locations * sizeof(char*));
         assert(instance->location != 0);
-        for(int i = 0; i < instance->size; i++)
+        for(int i = 0; i < instance->locations; i++)
             instance->location[i] = 0;
 
         // register function to update direct access to location
@@ -410,7 +412,7 @@ char* laik_group_location(Laik_Group *group, int id)
         return NULL;
 
     int lid = laik_group_locationid(group, id);
-    assert(lid >= 0 && lid < group->inst->size);
+    assert(lid >= 0 && lid < group->inst->locations);
     return group->inst->location[lid];
 }
 
