@@ -19,6 +19,7 @@
 ../src/data.c
 ../src/debug.c
 ../src/external.c
+../src/kvs.c
 ../src/logging.c
 ../src/partitioner.c
 ../src/partitioning.c
