@@ -139,6 +139,12 @@ typedef enum _Laik_LogLevel {
     LAIK_LL_Panic    // prefix with "Panic" and immediately exit
 } Laik_LogLevel;
 
+// initialize logging for instance <i>
+void laik_log_init(Laik_Instance* i);
+
+// cleanup logging of instance <i>
+void laik_log_cleanup(Laik_Instance* i);
+
 // increment logging counter used in logging prefix
 void laik_log_inc(void);
 
