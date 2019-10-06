@@ -5,6 +5,8 @@ FILE(GLOB HEADERS *.h)
 add_executable ("lulesh"
         ${SRCS}
         ${HEADERS}
+        "../util/fault-tolerance-options.h"
+        "../util/fault-tolerance-options.c"
         )
 
 target_compile_options("lulesh"

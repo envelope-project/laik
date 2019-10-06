@@ -9,6 +9,7 @@
  */
 
 #include "osu_util.h"
+#include "../util/fault-tolerance-options.h"
 
 #ifdef _ENABLE_OPENACC_
 #include <openacc.h>
@@ -314,7 +315,7 @@ void enable_accel_support (void)
     accel_enabled = (CUDA_ENABLED || OPENACC_ENABLED);
 }
 
-int process_options (int argc, char *argv[])
+int process_options(int argc, char **argv, int rank, FaultToleranceOptions *ftOptions)
 {
     extern char * optarg;
     extern int optind, optopt;
@@ -633,6 +634,10 @@ int process_options (int argc, char *argv[])
                 bad_usage.opt = optopt;
                 return PO_BAD_USAGE;
             default:
+                if(parseFaultToleranceOptions(argv, &option_index, rank, ftOptions)) {
+                    // Parse successfull
+                    break;
+                }
                 bad_usage.message = "Invalid option";
                 bad_usage.opt = optopt;
                 return PO_BAD_USAGE;

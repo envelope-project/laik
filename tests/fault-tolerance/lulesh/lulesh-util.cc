@@ -7,6 +7,7 @@
 #endif
 #include "lulesh.h"
 
+
 /* Helper function for converting strings to ints, with error checking */
 int StrToInt(const char *token, int *retVal)
 {
@@ -42,9 +43,9 @@ static void PrintCommandLineOptions(char *execname, int myRank)
       printf(" -v              : Output viz file (requires compiling with -DVIZ_MESH\n");
       printf(" -repart         : enable repartitioning by defining the number of target group\n");
       printf(" -repart_cycle   : cycle at which repartitioning happens\n");
-      printf(" -fault_tolerance: activate fault tolerance\n");
       printf(" -h              : This message\n");
-      printf("\n\n");
+       printf(FAULT_TOLERANCE_OPTIONS_HELP);
+       printf("\n\n");
    }
 }
 
@@ -64,8 +65,8 @@ void printOptions(cmdLineOpts* opts) {
     laik_log(LAIK_LL_Info, "LAIK LULESH Options:\nQuiet: %i, %i iterations, size %i, %i regions, balance %i, cost %i, %i files, %i progress, %i viz output, %i repartitioning (at cycle %i).\n", opts->quiet, opts->its, opts->nx, opts->numReg, opts->balance, opts->cost, opts->numFiles, opts->showProg, opts->viz, opts->repart, opts->cycle);
 }
 
-void ParseCommandLineOptions(int argc, char *argv[],
-                             int myRank, struct cmdLineOpts *opts)
+void
+ParseCommandLineOptions(int argc, char *argv[], int myRank, struct cmdLineOpts *opts, FaultToleranceOptions *ftOptions)
 {
    if(argc > 1) {
       int i = 1;
@@ -175,54 +176,8 @@ void ParseCommandLineOptions(int argc, char *argv[],
             }
             i+=2;
          }
-         else if (strcmp("--plannedFailure", argv[i]) == 0) {
-             if (myRank == atoi(argv[i + 1])) {
-                 opts->plannedFailure = atoi(argv[i + 2]);
-                 laik_log(LAIK_LL_Info, "Rank %i will fail at iteration %i", myRank, opts->plannedFailure);
-             }
-             i += 3;
-         }
-         else if (strcmp("--checkpointFrequency", argv[i]) == 0) {
-             opts->checkpointFrequency = atoi(argv[i + 1]);
-             if (myRank == 0) {
-                 laik_log(LAIK_LL_Info, "Setting checkpoint frequency to %i.", opts->checkpointFrequency);
-             }
-             i += 2;
-         }
-         else if (strcmp("--redundancyCount", argv[i]) == 0) {
-             opts->redundancyCount = atoi(argv[i + 1]);
-             if (myRank == 0) {
-                 laik_log(LAIK_LL_Info, "Setting redundancy count to %i.", opts->redundancyCount);
-             }
-             i += 2;
-         }
-         else if (strcmp("--rotationDistance", argv[i]) == 0) {
-             opts->rotationDistance = atoi(argv[i + 1]);
-             if (myRank == 0) {
-                 laik_log(LAIK_LL_Info, "Setting rotation distance to %i.", opts->rotationDistance);
-             }
-             i += 2;
-         }
-         else if (strcmp("--failureCheckFrequency", argv[i]) == 0) {
-             opts->failureCheckFrequency = atoi(argv[i + 1]);
-             if (myRank == 0) {
-                 laik_log(LAIK_LL_Info, "Setting failure check frequency to %i.", opts->failureCheckFrequency);
-             }
-             i += 2;
-         }
-         else if (strcmp("--skipCheckpointRecovery", argv[i]) == 0) {
-             opts->skipCheckpointRecovery = true;
-             if (myRank == 0) {
-                 laik_log(LAIK_LL_Info, "Will skip recovering from checkpoints.");
-             }
-             i++;
-         }
-         else if (strcmp("--delayCheckpointRelease", argv[i]) == 0) {
-             opts->delayCheckpointRelease = true;
-             if (myRank == 0) {
-                 laik_log(LAIK_LL_Info, "Using delayed checkpoint release.");
-             }
-             i++;
+         else if (parseFaultToleranceOptionsProxy(argv, &i, myRank, ftOptions)) {
+             // Successfully parsed arg, do nothing
          }
          /* -h */
          else if (strcmp(argv[i], "-h") == 0) {

@@ -358,6 +358,7 @@ void print_help_message (int rank)
 
     fprintf(stdout, "  -h, --help                  print this help\n");
     fprintf(stdout, "  -v, --version               print version info\n");
+    fprintf(stdout, FAULT_TOLERANCE_OPTIONS_HELP);
     fprintf(stdout, "\n");
     fflush(stdout);
 }

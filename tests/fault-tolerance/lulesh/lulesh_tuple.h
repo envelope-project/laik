@@ -25,6 +25,7 @@
 
 #include <math.h>
 #include <vector>
+#include "../util/fault-tolerance-options.h"
 
 //**************************************************
 // Allow flexibility for arithmetic representations 
@@ -583,8 +584,8 @@ Real_t CalcElemVolume( const Real_t x[8],
                        const Real_t z[8]);
 
 // lulesh-util
-void ParseCommandLineOptions(int argc, char *argv[],
-                             Int_t myRank, struct cmdLineOpts *opts);
+void
+ParseCommandLineOptions(int argc, char *argv[], int myRank, struct cmdLineOpts *opts, FaultToleranceOptions *ftOptions);
 void VerifyAndWriteFinalOutput(Real_t elapsed_time,
                                Domain& locDom,
                                Int_t nx,

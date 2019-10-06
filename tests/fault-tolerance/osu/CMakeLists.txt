@@ -10,6 +10,8 @@ foreach (test
             "osu_util.c"
             "osu_util_mpi.h"
             "osu_util_mpi.c"
+            "../util/fault-tolerance-options.h"
+            "../util/fault-tolerance-options.c"
             )
 
 #    get_source_file_property( MYPROPS osu_util.c COMPILE_FLAGS )

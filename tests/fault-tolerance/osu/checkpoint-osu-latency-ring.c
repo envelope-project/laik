@@ -33,7 +33,14 @@ int main (int argc, char *argv[])
     set_header(HEADER);
     set_benchmark_name("osu_latency");
 
-    po_ret = process_options(argc, argv);
+    FaultToleranceOptions faultToleranceOptions = FaultToleranceOptionsDefault;
+
+    Laik_Instance* inst = laik_init(&argc, &argv);
+    Laik_Group *world = laik_world(inst);
+    numprocs = laik_size(world);
+    myid = laik_myid(world);
+
+    po_ret = process_options(argc, argv, myid, &faultToleranceOptions);
 
     if (PO_OKAY == po_ret && NONE != options.accel) {
         if (init_accel()) {
@@ -41,11 +48,6 @@ int main (int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
     }
-
-    Laik_Instance* inst = laik_init(&argc, &argv);
-    Laik_Group *world = laik_world(inst);
-    numprocs = laik_size(world);
-    myid = laik_myid(world);
 
     TRACE_INIT(myid);
     TRACE_EVENT_START("INIT", "");
@@ -178,6 +180,8 @@ int main (int argc, char *argv[])
             laik_switchto_partitioning(data, singlePartitionings[nextId], LAIK_DF_Preserve, LAIK_RO_None);
             laik_map_def1(data, (void**)&base, &count);
 
+            // Execute any pre planned failures
+            exitIfFailureIteration(i, &faultToleranceOptions, inst);
         }
         t_end = laik_wtime();
 

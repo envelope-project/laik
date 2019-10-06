@@ -31,6 +31,7 @@
 #include "laik_vector_comm_overlapping_overlapping.h"
 #include "laik_vector_repart_exclusive.h"
 #include "laik_vector_repart_overlapping.h"
+#include "../util/fault-tolerance-options.h"
 
 //**************************************************
 // Allow flexibility for arithmetic representations 
@@ -804,13 +805,6 @@ struct cmdLineOpts {
    Int_t balance; // -b
    Int_t repart; // -repart
    Int_t cycle; // -repart_cycle
-   Int_t plannedFailure; // If the current rank should fail at a given iteration
-   Int_t checkpointFrequency; // How often checkpoints are taken (default -1)
-   Int_t redundancyCount; //
-   Int_t rotationDistance;
-   Int_t failureCheckFrequency;
-   bool skipCheckpointRecovery;
-   bool delayCheckpointRelease;
 };
 
 
@@ -823,8 +817,8 @@ Real_t CalcElemVolume( const Real_t x[8],
                        const Real_t z[8]);
 
 // lulesh-util
-void ParseCommandLineOptions(int argc, char *argv[],
-                             Int_t myRank, struct cmdLineOpts *opts);
+void
+ParseCommandLineOptions(int argc, char *argv[], int myRank, struct cmdLineOpts *opts, FaultToleranceOptions *ftOptions);
 void VerifyAndWriteFinalOutput(Real_t elapsed_time,
                                Domain& locDom,
                                Int_t nx,
@@ -915,4 +909,6 @@ void remove_partitionings_and_transitions(Laik_Partitioning *&exclusivePartition
  */
 void calculate_removing_list(Laik_Group* world, cmdLineOpts& opts, double side, double& newside, int& diffsize, int *&removeList);
 void calculate_removing_list_ft(Laik_Group* world, cmdLineOpts& opts, double side, double& newside, int& diffsize, int *&removeList, int* nodeStatuses);
+
+bool parseFaultToleranceOptionsProxy(char** argv, int *arg, int rank, FaultToleranceOptions* ftOptions);
 #endif

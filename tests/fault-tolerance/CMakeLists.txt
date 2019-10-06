@@ -9,6 +9,8 @@ foreach (test
 
     add_executable ("${test}"
             "${test}.c"
+            "util/fault-tolerance-options.h"
+            "util/fault-tolerance-options.c"
             )
 
     target_link_libraries ("${test}"

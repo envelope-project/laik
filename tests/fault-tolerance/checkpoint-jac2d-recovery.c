@@ -29,6 +29,7 @@
 #include "fault_tolerance_test_output.h"
 #include "fault_tolerance_test.h"
 #include "fault_tolerance_test_hash.h"
+#include "util/fault-tolerance-options.h"
 
 // Red is hard to see, so make it the last slice
 unsigned char colors[][3] = {
@@ -162,13 +163,7 @@ int main(int argc, char *argv[]) {
     int repart = 0; // enforce repartitioning after <repart> iterations
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
-    int redundancyCount = 1;
-    int rotationDistance = 1;
-    int failIteration = -1;
-    int checkpointFrequency = -1;
-    int failureCheckFrequency = -1;
-    bool skipCheckpointRecovery = false;
-    bool delayCheckpointRelease = false;
+    FaultToleranceOptions faultToleranceOptions = FaultToleranceOptionsDefault;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
@@ -180,63 +175,12 @@ int main(int argc, char *argv[]) {
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac2d_profiling.txt'\n"
                    " -h : print this help text and exit\n"
-                   " Fault tolerance options:\n"
-                   "  --plannedFailure <rank> <iteration> (default no failure, can be used once per rank)\n"
-                   "  --checkpointFrequency <numIterations> (default -1, no checkpoints)\n"
-                   "  --redundancyCount <count> (set number of redundant data slices to keep in checkpoints, default 1)\n"
-                   "  --rotationDistance <distance> (set the distance between a process the process holding the same data redundantly)\n"
-                   "  --failureCheckFrequency <numIterations> (defaults to checkpoint frequency)\n"
-                   "  --skipCheckpointRecovery (default off, turn on to keep working with broken data after failure)\n"
-                   "  --delayCheckpointRelease (release old checkpoint only after creating a new one, has higher memory usage but can tolerate failure during checkpointing)\n",
+                   FAULT_TOLERANCE_OPTIONS_HELP,
                    argv[0]);
             exit(1);
         }
-        else if (strcmp("--plannedFailure", argv[arg]) == 0) {
-            if (laik_myid(world) == atoi(argv[arg + 1])) {
-                failIteration = atoi(argv[arg + 2]);
-                laik_log(LAIK_LL_Info, "Rank %i will fail at iteration %i", laik_myid(world), failIteration);
-            }
-            arg += 2;
-        }
-        else if (strcmp("--checkpointFrequency", argv[arg]) == 0) {
-            checkpointFrequency = atoi(argv[arg + 1]);
-            if (laik_myid(world) == 0) {
-                laik_log(LAIK_LL_Info, "Setting checkpoint frequency to %i.", checkpointFrequency);
-            }
-            arg++;
-        }
-        else if (strcmp("--redundancyCount", argv[arg]) == 0) {
-            redundancyCount = atoi(argv[arg + 1]);
-            if (laik_myid(world) == 0) {
-                laik_log(LAIK_LL_Info, "Setting redundancy count to %i.", redundancyCount);
-            }
-            arg++;
-        }
-        else if (strcmp("--rotationDistance", argv[arg]) == 0) {
-            rotationDistance = atoi(argv[arg + 1]);
-            if (laik_myid(world) == 0) {
-                laik_log(LAIK_LL_Info, "Setting rotation distance to %i.", rotationDistance);
-            }
-            arg++;
-        }
-        else if (strcmp("--failureCheckFrequency", argv[arg]) == 0) {
-            failureCheckFrequency = atoi(argv[arg + 1]);
-            if (laik_myid(world) == 0) {
-                laik_log(LAIK_LL_Info, "Setting failure check frequency to %i.", failureCheckFrequency);
-            }
-            arg++;
-        }
-        else if (strcmp("--skipCheckpointRecovery", argv[arg]) == 0) {
-            skipCheckpointRecovery = true;
-            if (laik_myid(world) == 0) {
-                laik_log(LAIK_LL_Info, "Will skip recovering from checkpoints.");
-            }
-        }
-        else if (strcmp("--delayCheckpointRelease", argv[arg]) == 0) {
-            delayCheckpointRelease = true;
-            if (laik_myid(world) == 0) {
-                laik_log(LAIK_LL_Info, "Using delayed checkpoint release.");
-            }
+        else if (parseFaultToleranceOptions(argv, &arg, laik_myid(world), &faultToleranceOptions)) {
+            // Successfully parsed argument, do nothing else
         } else {
             printf("Argument %s was not understood.", argv[arg]);
             exit(1);
@@ -249,10 +193,10 @@ int main(int argc, char *argv[]) {
 
     if (size == 0) size = 1024; // entries
     if (maxiter == 0) maxiter = 50;
-    if (failureCheckFrequency == -1) failureCheckFrequency = checkpointFrequency;
+    if (faultToleranceOptions.failureCheckFrequency == -1) faultToleranceOptions.failureCheckFrequency = faultToleranceOptions.checkpointFrequency;
 
     // Set the error handler to be able to recover from if failures are being checked
-    if(failureCheckFrequency > -1) {
+    if(faultToleranceOptions.failureCheckFrequency > -1) {
         laik_error_handler_set(inst, errorHandler);
     }
 
@@ -336,7 +280,7 @@ int main(int argc, char *argv[]) {
         laik_set_iteration(inst, iter + 1);
         TRACE_EVENT_S("ITER", "");
 
-        if (failureCheckFrequency > 0 && iter % failureCheckFrequency == 0) {
+        if (faultToleranceOptions.failureCheckFrequency > 0 && iter % faultToleranceOptions.failureCheckFrequency == 0) {
             TPRINTF("Attempting to determine global status.\n");
             TRACE_EVENT_START("FAILURE-CHECK", "");
             Laik_Group *checkGroup = world;
@@ -372,7 +316,7 @@ int main(int argc, char *argv[]) {
                 laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
                 laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
-                if (!skipCheckpointRecovery) {
+                if (!faultToleranceOptions.skipCheckpointRecovery) {
                     TPRINTF("Removing failed slices from checkpoints\n");
                     if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, checkGroup, nodeStatuses)) {
                         TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
@@ -403,7 +347,7 @@ int main(int argc, char *argv[]) {
         }
 
         // At every checkpointFrequency iterations, do a checkpoint
-        if (checkpointFrequency > 0 && iter % checkpointFrequency == 0) {
+        if (faultToleranceOptions.checkpointFrequency > 0 && iter % faultToleranceOptions.checkpointFrequency == 0) {
 //            Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
 //            TPRINTF("Switching READ.\n");
 //            laik_switchto_partitioning(dRead, pMaster, LAIK_DF_None, LAIK_RO_None);
@@ -412,19 +356,15 @@ int main(int argc, char *argv[]) {
 //            TPRINTF("Switch OK.\n");
 
             TRACE_EVENT_START("CHECKPOINT", "");
-            createCheckpoints(iter, redundancyCount, rotationDistance, delayCheckpointRelease);
+            createCheckpoints(iter, faultToleranceOptions.redundancyCount, faultToleranceOptions.rotationDistance, faultToleranceOptions.delayCheckpointRelease);
             TRACE_EVENT_END("CHECKPOINT", "");
         }
 
 
         // If we have reached the fail iteration on this process (only set for the requested processes), then abort the
         // program.
-        if (iter == failIteration) {
-            TRACE_EVENT_S("FAILURE-GENERATE", "");
-            TPRINTF("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(world),
-                    iter);
-            exit(0);
-        }
+        exitIfFailureIteration(iter, &faultToleranceOptions, inst);
+
         setBoundary(size, iter, pWrite, dWrite);
 
 //        exportDataFiles();

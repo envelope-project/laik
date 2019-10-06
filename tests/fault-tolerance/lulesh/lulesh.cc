@@ -165,6 +165,7 @@ extern "C" {
 #include "laik.h"
 #include "laik-backend-mpi.h"
 #include "laik-backend-tcp.h"
+#include "../util/fault-tolerance-options.h"
 }
 
 //porting to laik
@@ -2806,15 +2807,10 @@ int main(int argc, char *argv[]) {
     opts.cost = 1;
     opts.repart = 0;
     opts.cycle = 5;
-    opts.plannedFailure = -1;
-    opts.checkpointFrequency = -1;
-    opts.redundancyCount = 0;
-    opts.rotationDistance = 0;
-    opts.failureCheckFrequency = 0;
-    opts.skipCheckpointRecovery = false;
-    opts.delayCheckpointRelease = false;
 
-    ParseCommandLineOptions(argc, argv, myRank, &opts);
+    FaultToleranceOptions ftOptions = FaultToleranceOptionsDefault;
+
+    ParseCommandLineOptions(argc, argv, myRank, &opts, &ftOptions);
 
     if ((myRank == 0) && (opts.quiet == 0)) {
         printf("Running problem size %d^3 per domain until completion\n", opts.nx);
@@ -2955,20 +2951,17 @@ int main(int argc, char *argv[]) {
 #define USE_MPI 1
 #if USE_MPI
 
-        // *RANDOMLY* fail on a node
-        if(locDom->cycle() == opts.plannedFailure) {
-            laik_log(LAIK_LL_Error, "*Random* failure on rank %i cycle %i", myRank, locDom->cycle());
-            abort();
-        }
+        // Execute any pre planned failures
+        exitIfFailureIteration(locDom->cycle(), &ftOptions, inst);
 
         // check if repartitioning has to be done in this iteration
         // if so, do repartitioning before the actual iteration
         // after repartitioning continue from the current iteration
-        if ((opts.repart > 0 && locDom->cycle() == opts.cycle) || (opts.failureCheckFrequency > 0 && locDom->cycle() % opts.failureCheckFrequency == 0)) {
+        if ((opts.repart > 0 && locDom->cycle() == opts.cycle) || (ftOptions.failureCheckFrequency > 0 && locDom->cycle() % ftOptions.failureCheckFrequency == 0)) {
             std::vector<int> nodeStatuses;
             int failedCount = -1;
             // Check if a node has failed, then do restore. Else, do a checkpoint.
-            if(opts.failureCheckFrequency > 0){
+            if(ftOptions.failureCheckFrequency > 0){
                 if(myRank == 0) {
                     std::cout << "Checking for failed nodes." << std::endl;
                 }
@@ -2976,10 +2969,10 @@ int main(int argc, char *argv[]) {
                 failedCount = laik_failure_check_nodes(inst, world, &nodeStatuses[0]);
                 std::cout << "Detected " << failedCount << " node failures on rank " << myRank << "." << std::endl;
             }
-            if (opts.failureCheckFrequency <= 0 || failedCount > 0) {
+            if (ftOptions.failureCheckFrequency <= 0 || failedCount > 0) {
                 double intermediate_timer = MPI_Wtime() - start2;
                 double itG = -1;
-                if (opts.failureCheckFrequency <= 0) {
+                if (ftOptions.failureCheckFrequency <= 0) {
                     MPI_Reduce(&intermediate_timer, &itG, 1, MPI_DOUBLE,
                                MPI_MAX, 0, MPI_COMM_WORLD);
                 }
@@ -3000,7 +2993,7 @@ int main(int argc, char *argv[]) {
                 int *removeList = nullptr;
                 Laik_Group *shrinked_group;
 
-                if (opts.failureCheckFrequency <= 0) {
+                if (ftOptions.failureCheckFrequency <= 0) {
                     std::cout << "Fault tolerance recovery repartitioning pre-step initiated" << std::endl;
 //                    calculate_removing_list_ft(world, opts, side, newside, diffsize, removeList, &nodeStatuses[0]);
 
@@ -3054,7 +3047,7 @@ int main(int argc, char *argv[]) {
                                                       overlapingPartitioning2, transitionToExclusive2,
                                                       transitionToHalo2, transitionToOverlappingInit2,
                                                       transitionToOverlappingReduce2,
-                                                      opts.failureCheckFrequency <= 0);
+                                                      ftOptions.failureCheckFrequency <= 0);
 
                 // processes that are not part of the new (shrinked)
                 // process group have to exit the main loop
@@ -3099,7 +3092,7 @@ int main(int argc, char *argv[]) {
 
                 free(removeList);
             } else if(failedCount == 0) {
-                if(!opts.delayCheckpointRelease) {
+                if(!ftOptions.delayCheckpointRelease) {
                     if(myRank == 0) {
                         std::cout << "Freeing " << checkpoints.size() << " checkpoints." << std::endl;
                     }
@@ -3114,12 +3107,12 @@ int main(int argc, char *argv[]) {
                     std::cout << "Creating checkpoints." << std::endl;
                 }
                 std::vector<Laik_Checkpoint*> newCheckpoints;
-                locDom->createCheckpoints(newCheckpoints, opts.redundancyCount, opts.rotationDistance);
+                locDom->createCheckpoints(newCheckpoints, ftOptions.redundancyCount, ftOptions.rotationDistance);
                 if(myRank == 0) {
                     std::cout << "Finished creating checkpoints." << std::endl;
                 }
 
-                if(opts.delayCheckpointRelease) {
+                if(ftOptions.delayCheckpointRelease) {
                     if(myRank == 0) {
                         std::cout << "Freeing " << checkpoints.size() << " checkpoints." << std::endl;
                     }
@@ -3218,4 +3211,8 @@ int main(int argc, char *argv[]) {
 
     TRACE_EVENT_END("FINALIZE", "");
     return 0;
+}
+
+bool parseFaultToleranceOptionsProxy(char** argv, int *arg, int rank, FaultToleranceOptions* ftOptions) {
+    return parseFaultToleranceOptions(argv, arg, rank, ftOptions);
 }

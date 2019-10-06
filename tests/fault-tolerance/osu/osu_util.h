@@ -27,7 +27,7 @@
 #include <inttypes.h>
 #include <sys/time.h>
 #include <limits.h>
-
+#include "../util/fault-tolerance-options.h"
 
 
 #ifdef _ENABLE_CUDA_
@@ -281,7 +281,7 @@ extern struct bad_usage_t bad_usage;
  * Option Processing
  */
 extern int process_one_sided_options (int opt, char *arg);
-int process_options (int argc, char *argv[]);
+int process_options(int argc, char **argv, int rank, FaultToleranceOptions *ftOptions);
 int setAccel(char);
 
 /*
