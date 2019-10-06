@@ -14,6 +14,6 @@ case "$1" in
     rsync -av -e "ssh bodev@lxhalle.in.tum.de ssh" ga26poh3@skx.supermuc.lrz.de:/dss/dsshome1/08/ga26poh3/laik/laik_experiments/data ./laik_experiments/
   ;;
   "sh")
-    echo "Not implemented"
+    ssh -o ProxyCommand="ssh -W %h:%p bodev@lxhalle.in.tum.de"  ga26poh3@skx.supermuc.lrz.de
   ;;
 esac

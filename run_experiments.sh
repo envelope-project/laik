@@ -78,21 +78,33 @@ then
   exit 255
 fi
 
-OSU_CONF_A="-m 4096:4096 -i 10000"
-JAC2D_CONF_A="20000 100 -1"
-LULESH_CONF_A="-i 50 -s 8"
+OSU_CONF_A="-m 32768:32768 -i 250000"
+JAC2D_CONF_A="20000 50 -1"
+LULESH_CONF_A="-i 280 -s 14"
 
 case "$1" in
   "runtime_time")
-    for i in {1..20} ; do
+    for i in {0..9} ; do
       run_experiment "runtime_time_mpi_osu_$i" "mpi" "$OSU" "$OSU_CONF_A" "48"
       run_experiment "runtime_time_mpi_jac2d_$i" "mpi" "$JAC2D" "$JAC2D_CONF_A" "48"
       run_experiment "runtime_time_mpi_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27"
     done
   ;;
   "restart_time")
-    for i in {1..5} ; do
-      run_experiment "runtime_time_mpi_jac2d_$i" "mpi" "$JAC2D" "$JAC2D_CONF_A" "48"
+    FAILURE_RANKS=(22 39  9  8  4 33 10 30 33 4)
+    FAILURE_ITERATIONS=(148718 5046 96469 169485 73560 97777 122117 75460 120029 42470)
+    for i in {0..9} ; do
+      run_experiment "runtime_time_mpi_osu_$i" "mpi" "$OSU" "$OSU_CONF_A --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
+    done
+
+    FAILURE_ITERATIONS=(17 23 27 44 13 21 6 43 35 10)
+    for i in {0..9} ; do
+      run_experiment "runtime_time_mpi_jac2d_$i" "mpi" "$JAC2D" "$JAC2D_CONF_A --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
+    done
+
+    FAILURE_ITERATIONS=(207 218 142 273 256 165 168 254 113 172)
+    for i in {0..9} ; do
+      run_experiment "runtime_time_mpi_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
     done
   ;;
 
