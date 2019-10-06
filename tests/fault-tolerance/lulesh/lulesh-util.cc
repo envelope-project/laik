@@ -177,7 +177,8 @@ ParseCommandLineOptions(int argc, char *argv[], int myRank, struct cmdLineOpts *
             i+=2;
          }
          else if (parseFaultToleranceOptionsProxy(argv, &i, myRank, ftOptions)) {
-             // Successfully parsed arg, do nothing
+             // Successfully parsed arg, need to shift by one more arg since lulesh doesn't do any shifting on its own
+             i++;
          }
          /* -h */
          else if (strcmp(argv[i], "-h") == 0) {
