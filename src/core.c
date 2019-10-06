@@ -945,6 +945,12 @@ double getTime(Laik_Instance* inst) {
            0.000001 * (now.tv_usec - inst->init_time.tv_usec);
 }
 
+double getWallTime() {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (double)(now.tv_sec) + 0.000001 * (now.tv_usec);
+}
+
 double getVSize() {
     long rss = 0L;
     FILE* fp = NULL;

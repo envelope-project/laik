@@ -2777,6 +2777,9 @@ int main(int argc, char *argv[]) {
     Laik_Instance *inst = laik_init_mpi(&argc, &argv);
     Laik_Group *world = laik_world(inst);
 
+    TRACE_INIT(laik_myid(world));
+    TRACE_EVENT_START("INIT", "");
+
     numRanks = laik_size(world);
     myRank = laik_myid(world);
 
@@ -2943,6 +2946,8 @@ int main(int argc, char *argv[]) {
                                                                                                                             timeval start;
    gettimeofday(&start, NULL) ;
 #endif
+
+    TRACE_EVENT_END("INIT", "");
 
     while ((locDom->time() < locDom->stoptime()) && (locDom->cycle() < opts.its)) {
 
@@ -3157,6 +3162,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    TRACE_EVENT_START("FINALIZE", "");
+
     // Use reduced max elapsed time
     double elapsed_time;
 #if USE_MPI
@@ -3209,5 +3216,6 @@ int main(int argc, char *argv[]) {
     laik_finalize(inst);
 #endif
 
+    TRACE_EVENT_END("FINALIZE", "");
     return 0;
 }

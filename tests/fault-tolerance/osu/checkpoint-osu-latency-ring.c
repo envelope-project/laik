@@ -47,6 +47,9 @@ int main (int argc, char *argv[])
     numprocs = laik_size(world);
     myid = laik_myid(world);
 
+    TRACE_INIT(myid);
+    TRACE_EVENT_START("INIT", "");
+
     if (0 == myid) {
         switch (po_ret) {
             case PO_CUDA_NOT_AVAIL:
@@ -86,14 +89,17 @@ int main (int argc, char *argv[])
             break;
     }
 
-    if(numprocs != 2) {
-        if(myid == 0) {
-            fprintf(stderr, "This test requires exactly two processes\n");
-        }
-
-        laik_finalize(inst);
-        exit(EXIT_FAILURE);
+    if(myid == 0) {
+        printf("Running OSU Latency Ring benchmark on %i processes\n", numprocs);
     }
+//    if(numprocs != 2) {
+//        if(myid == 0) {
+//            fprintf(stderr, "This test requires exactly two processes\n");
+//        }
+//
+//        laik_finalize(inst);
+//        exit(EXIT_FAILURE);
+//    }
 
 //    Laik_Space* space = laik_new_space_1d(inst, options.max_message_size);
 //    Laik_Data* data = laik_new_data(space, laik_Char);
@@ -127,6 +133,7 @@ int main (int argc, char *argv[])
         singlePartitioners[task] = laik_new_single_partitioner(task);
     }
 
+    TRACE_EVENT_END("INIT", "");
     /* Latency test */
     for(/* Initialized above */; size <= options.max_message_size; size = (size ? size * 2 : 1)) {
         Laik_Space* space = laik_new_space_1d(inst, size);
@@ -189,6 +196,7 @@ int main (int argc, char *argv[])
         }
     }
 
+    TRACE_EVENT_START("FINALIZE", "");
 //    laik_free(data);
     laik_finalize(inst);
 
@@ -199,5 +207,6 @@ int main (int argc, char *argv[])
         }
     }
 
+    TRACE_EVENT_END("FINALIZE", "");
     return EXIT_SUCCESS;
 }

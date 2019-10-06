@@ -52,7 +52,7 @@ then
 fi
 if [ $BACKEND_TYPE == "mpi" ]
 then
-	mpirun --oversubscribe $MPI_OPTIONS -n $NUM_LAUNCH $EXECUTABLE $@
+	$MPI_RUN $MPI_OPTIONS -n $NUM_LAUNCH $EXECUTABLE $@
   EXIT_CODE=$?
 fi
 

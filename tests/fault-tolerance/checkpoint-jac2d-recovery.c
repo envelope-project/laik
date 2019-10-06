@@ -254,7 +254,7 @@ int main(int argc, char *argv[]) {
     if (maxiter == 0) maxiter = 50;
     if (failureCheckFrequency == -1) failureCheckFrequency = checkpointFrequency;
 
-    TRACE_INIT(laik_myid(world), maxiter, (size * size * sizeof(double)) / 1024.0);
+    TRACE_INIT(laik_myid(world));
     TRACE_EVENT_START("INIT", "");
 
     TPRINTF("Jac_2d parallel with rank %i\n", laik_myid(world));
