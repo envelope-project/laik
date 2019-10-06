@@ -157,9 +157,6 @@ int main(int argc, char *argv[]) {
 //    int elimination[] = {1};
 //    smallWorld = laik_new_shrinked_group(world, 1, elimination);
 
-    // Set the error handler to be able to recover from
-    laik_error_handler_set(inst, errorHandler);
-
     int size = 0;
     int maxiter = 0;
     int repart = 0; // enforce repartitioning after <repart> iterations
@@ -253,6 +250,12 @@ int main(int argc, char *argv[]) {
     if (size == 0) size = 1024; // entries
     if (maxiter == 0) maxiter = 50;
     if (failureCheckFrequency == -1) failureCheckFrequency = checkpointFrequency;
+
+    // Set the error handler to be able to recover from if failures are being checked
+    if(failureCheckFrequency > -1) {
+        laik_error_handler_set(inst, errorHandler);
+    }
+
 
     TRACE_INIT(laik_myid(world));
     TRACE_EVENT_START("INIT", "");
