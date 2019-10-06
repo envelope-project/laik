@@ -14,7 +14,6 @@
  */
 
 #include <laik-internal.h>
-#include <mpif.h>
 #include "osu_util_mpi.h"
 #include "laik.h"
 
