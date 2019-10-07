@@ -25,15 +25,41 @@ def draw_runtime_boxplot():
         jac2d.append(calculate_runtime(load_experiment("experiment_runtime_time_mpi_jac2d_{0}_trace.csv".format(experiment))))
         lulesh.append(calculate_runtime(load_experiment("experiment_runtime_time_mpi_lulesh_{0}_trace.csv".format(experiment))))
 
-    fig, ax = plt.subplots(figsize=(4,2.5))
-    ax.boxplot([osu, jac2d, lulesh])
-    ax.set_title('Original Runtime of Benchmarks')
-    ax.set_xlabel('Benchmark')
-#    ax.set_xticks(np.arange(1,4))
-    ax.set_xticklabels(['OSU', 'Jacobi', 'LULESH'])
-    ax.set_ylabel('Runtime (s)')
+    data = [osu, jac2d, lulesh]
+    boxPlot(data, 'Original Runtime of Benchmarks', 'Runtime (s)', 'graphs/original-runtime.pdf')
 
+def draw_restart_boxplot():
+    osu = []
+    jac2d = []
+    lulesh = []
+    for experiment in range(0,8):
+        # osu.append(calculate_restart_time(
+        #     load_experiment("experiment_restart_time_mpi_osu_{0}_trace.csv".format(experiment)),
+        #     load_experiment("experiment_restart_time_mpi_osu_{0}_trace.csv".format(experiment+1))
+        # ))
+        jac2d.append(calculate_restart_time(
+            load_experiment("experiment_restart_time_mpi_jac2d_{0}_trace.csv".format(experiment)),
+            load_experiment("experiment_restart_time_mpi_jac2d_{0}_trace.csv".format(experiment+1))
+        ))
+        # lulesh.append(calculate_restart_time(
+        #     load_experiment("experiment_restart_time_mpi_lulesh_{0}_trace.csv".format(experiment)),
+        #     load_experiment("experiment_restart_time_mpi_lulesh_{0}_trace.csv".format(experiment+1))
+        # ))
+    data = [osu, jac2d, lulesh]
+    boxPlot(data, 'Restart Time of Benchmarks', 'Time (s)', 'graphs/restart-time.pdf')
+
+
+def boxPlot(data, title, y_label, export):
+    fig, ax = plt.subplots(figsize=(4, 2.5))
+    ax.boxplot(data)
+    ax.set_title(title)
+    ax.set_xlabel('Benchmark')
+    #    ax.set_xticks(np.arange(1,4))
+    ax.set_xticklabels(['OSU', 'Jacobi', 'LULESH'])
+    ax.set_ylabel(y_label)
     plt.show()
-    fig.savefig('graphs/original-runtime.pdf', format='pdf')
+    fig.savefig(export, format='pdf')
+
 
 draw_runtime_boxplot()
+draw_restart_boxplot()
