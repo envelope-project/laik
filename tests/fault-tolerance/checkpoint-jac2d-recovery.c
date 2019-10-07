@@ -65,6 +65,7 @@ void restoreCheckpoints();
 void exportDataFile(char *label, Laik_Data *data);
 
 void exportDataFiles();
+void exportDataForVisualization();
 
 
 void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
@@ -365,6 +366,11 @@ int main(int argc, char *argv[]) {
         // program.
         exitIfFailureIteration(iter, &faultToleranceOptions, inst);
 
+        //TODO: Comment back out
+        if(iter % 5000 == 0) {
+            exportDataForVisualization();
+        }
+
         setBoundary(size, iter, pWrite, dWrite);
 
 //        exportDataFiles();
@@ -425,11 +431,16 @@ void exportDataFile(char *label, Laik_Data *data) {//        if (iter == 25 && w
         char filenamePrefix[1024];
         snprintf(filenamePrefix, 1024, "output/data_%s_%i_", label, dataFileCounter);
 //            writeDataToFile(filenamePrefix, ".pgm", exportCheckpoint->data);
-        writeColorDataToFile(filenamePrefix, ".ppm", exportCheckpoint->data, data->activePartitioning, colors);
+        writeColorDataToFile(filenamePrefix, ".ppm", exportCheckpoint->data, data->activePartitioning, colors, true);
     }
     laik_checkpoint_free(exportCheckpoint);
     //        }
 
+}
+
+void exportDataForVisualization() {
+    dataFileCounter = 0;
+    exportDataFile("live", dWrite);
 }
 
 void exportDataFiles() {

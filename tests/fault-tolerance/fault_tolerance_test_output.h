@@ -65,7 +65,9 @@ int laik_point_find_slice(int64_t gx, int64_t gy, int64_t gz, Laik_Partitioning*
     return -1;
 }
 
-void writeColorDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *data, Laik_Partitioning *partitioning, unsigned char colors[][3]) {
+void
+writeColorDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *data, Laik_Partitioning *partitioning,
+                     unsigned char colors[][3], bool binaryPPM) {
     char debugOutputFileName[1024];
     snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, data->space->inst->myid,
              fileNameExtension);
@@ -84,18 +86,31 @@ void writeColorDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Da
     uint64_t count = mapping->count;
     assert(dim0Size * dim1Size == count);
 
-    fprintf(myOutput, "P3\n%lu %lu\n%i", dim0Size, dim1Size, 255);
+    if(binaryPPM) {
+        fprintf(myOutput, "P6\n");
+    } else {
+        fprintf(myOutput, "P3\n");
+    }
+    fprintf(myOutput, "%lu %lu\n%i\n", dim0Size, dim1Size, 255);
 
     for (unsigned long y = 0; y < dim1Size; ++y) {
-        fprintf(myOutput, "\n");
+
         for (unsigned long x = 0; x < dim0Size; ++x) {
             int colorIndex = laik_point_find_slice(x, y, 0, partitioning);
             double value = base[y * stride + x];
 
             for (int i = 0; i < 3; ++i) {
                 unsigned char colorValue = (unsigned char)(colors[colorIndex][i] * value);
-                fprintf(myOutput, "%i ", colorValue);
+                if(binaryPPM) {
+                    fwrite(&colorValue, sizeof(unsigned char), 1, myOutput);
+                } else {
+                    fprintf(myOutput, "%i ", colorValue);
+                }
             }
+        }
+        //TODO: This was moved from up above, is it not allowed to have a trailing newline?
+        if(!binaryPPM) {
+            fprintf(myOutput, "\n");
         }
     }
 //    if(fwrite(base, data->type->size, data->activeMappings->map[0].count, myOutput)) {
