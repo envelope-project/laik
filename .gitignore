@@ -12,3 +12,10 @@ log*
 /build/
 *.so.dSYM/
 /messungen/
+*.exe
+.idea
+/lib/
+/cmake-build-*
+*.asv
+out/
+output/
