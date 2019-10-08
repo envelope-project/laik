@@ -692,7 +692,7 @@ void print_stats (int rank, int size, double avg_time, double min_time, double m
     }
 
     if (options.show_full) {
-        fprintf(stdout, "%*.*f%*.*f%*lu\n",
+        fprintf(stdout, "%*.*f%*.*f%*zu\n",
                 FIELD_WIDTH, FLOAT_PRECISION, min_time,
                 FIELD_WIDTH, FLOAT_PRECISION, max_time,
                 12, options.iterations);
