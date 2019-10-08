@@ -434,7 +434,7 @@ void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
     a->map = fromMap;
     a->slc = slc;
     a->rank = to;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -451,7 +451,7 @@ void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
     a->slc = slc;
     a->bufID = toBufID;
     a->offset = toByteOffset;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -466,7 +466,7 @@ void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
     a->map = fromMap;
     a->slc = slc;
     a->toBuf = toBuf;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -483,7 +483,7 @@ void laik_aseq_addMapPackAndSend(Laik_ActionSeq* as, int round,
     a->fromMapNo = fromMapNo;
     a->slc = slc;
     a->to_rank = to;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -500,7 +500,7 @@ void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
     a->slc = slc;
     a->bufID = toBufID;
     a->offset = toByteOffset;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -515,7 +515,7 @@ void laik_aseq_addMapPackToBuf(Laik_ActionSeq* as, int round,
     a->fromMapNo = fromMapNo;
     a->slc = slc;
     a->toBuf = toBuf;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1)<<32));
     a->count = (unsigned int) count;
 }
 
@@ -530,7 +530,7 @@ void laik_aseq_addRecvAndUnpack(Laik_ActionSeq* as, int round,
     a->map = toMap;
     a->slc = slc;
     a->rank = from;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1)<<32));
     a->count = (unsigned int) count;
 }
 
@@ -547,7 +547,7 @@ void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
     a->offset = fromByteOffset;
     a->map = toMap;
     a->slc = slc;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1)<<32));
     a->count = (unsigned int) count;
 }
 
@@ -562,7 +562,7 @@ void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
     a->fromBuf = fromBuf;
     a->map = toMap;
     a->slc = slc;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1)<<32));
     a->count = (unsigned int) count;
 }
 
@@ -579,7 +579,7 @@ void laik_aseq_addMapRecvAndUnpack(Laik_ActionSeq* as, int round,
     a->toMapNo = toMapNo;
     a->slc = slc;
     a->from_rank = from;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -596,7 +596,7 @@ void laik_aseq_addMapUnpackFromRBuf(Laik_ActionSeq* as, int round,
     a->offset = fromByteOffset;
     a->toMapNo = toMapNo;
     a->slc = slc;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -611,7 +611,7 @@ void laik_aseq_addMapUnpackFromBuf(Laik_ActionSeq* as, int round,
     a->fromBuf = fromBuf;
     a->toMapNo = toMapNo;
     a->slc = slc;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -663,7 +663,7 @@ void laik_aseq_addMapGroupReduce(Laik_ActionSeq* as, int round,
     a->toMapNo = myOutputMapNo;
     a->slc = slc;
     a->redOp = redOp;
-    assert(count < (1ul<<32));
+    assert(count < (UINT64_C(1) <<32));
     a->count = (unsigned int) count;
 }
 
@@ -1913,7 +1913,7 @@ bool laik_aseq_flattenPacking(Laik_ActionSeq* as)
                                          fromMap->base + from * elemsize,
                                          count, aa->to_rank);
                 else {
-                    assert(from * elemsize < (1l<<32));
+                    assert(from * elemsize < (INT64_C(1) <<32));
                     unsigned int offset = (unsigned int) from * elemsize;
                     laik_aseq_addMapSend(as, 3 * a->round + 1,
                                          aa->fromMapNo, offset,
@@ -1960,7 +1960,7 @@ bool laik_aseq_flattenPacking(Laik_ActionSeq* as)
                                          toMap->base + from * elemsize,
                                          count, aa->from_rank);
                 else {
-                    assert(from * elemsize < (1l<<32));
+                    assert(from * elemsize < (INT64_C(1) <<32));
                     unsigned int offset = (unsigned int) from * elemsize;
                     laik_aseq_addMapRecv(as, 3 * a->round + 1,
                                          aa->toMapNo, offset,
