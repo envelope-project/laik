@@ -93,7 +93,7 @@ void laik_aseq_free(Laik_ActionSeq* as)
     for(int i = 0; i < as->bufferCount; i++) {
         if (as->bufSize[i] == 0) continue;
 
-        laik_log(1, "    free buffer %d: %lu bytes\n", i, as->bufSize[i]);
+        laik_log(1, "    free buffer %d: %zu bytes\n", i, as->bufSize[i]);
         free(as->buf[i]);
 
         // update allocation statistics
