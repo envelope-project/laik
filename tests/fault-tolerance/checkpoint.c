@@ -8,9 +8,9 @@
 #include <laik-fault-tolerance.h>
 #include <stdio.h>
 #include <string.h>
-#include <openssl/sha.h>
 #include <laik-internal.h>
 #include "fault_tolerance_test.h"
+#include "fault_tolerance_test_hash.h"
 
 
 
@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
     test_apply_original_partitioner();
     uint64_t length = count * originalData->elemsize;
 
-    unsigned char hash1[SHA_DIGEST_LENGTH];
+    unsigned char hash1[HASH_DIGEST_LENGTH];
     test_hexHash("Memory hash before checkpoint creation", base, length, hash1);
 
     Laik_Checkpoint* checkpoint = laik_checkpoint_create(inst, space, originalData, originalPartitioner, 1, 1, world,
@@ -34,10 +34,10 @@ int main(int argc, char *argv[]) {
     laik_switchto_partitioning(checkpoint->data, backupPartitioning, LAIK_DF_Preserve, LAIK_RO_None);
     laik_map_def1(checkpoint->data, (void **) &backupBase, &backupCount);
 
-    unsigned char hash2[SHA_DIGEST_LENGTH];
+    unsigned char hash2[HASH_DIGEST_LENGTH];
     test_hexHash("Memory hash of checkpoint", backupBase, length, hash2);
 
-    if (memcmp(hash1, hash2, SHA_DIGEST_LENGTH) != 0) {
+    if (memcmp(hash1, hash2, HASH_DIGEST_LENGTH) != 0) {
         printf("Hashes different, checkpoint failed\n");
         return -1;
     }
@@ -45,10 +45,10 @@ int main(int argc, char *argv[]) {
     // Write garbage over the original data and then restore
     for (uint64_t i = 0; i < count; i++) base[i] = (double) i + 1;
 
-    unsigned char hash3[SHA_DIGEST_LENGTH];
+    unsigned char hash3[HASH_DIGEST_LENGTH];
     test_hexHash("Memory hash of garbage data", base, length, hash3);
 
-    if (memcmp(hash2, hash3, SHA_DIGEST_LENGTH) == 0) {
+    if (memcmp(hash2, hash3, HASH_DIGEST_LENGTH) == 0) {
         printf("Checkpoint hash equal to garbage hash, error.\n");
         return -1;
     }
@@ -56,10 +56,10 @@ int main(int argc, char *argv[]) {
     // Restore useful data from checkpoint over the garbage data
     laik_checkpoint_restore(inst, checkpoint, space, originalData);
 
-    unsigned char hash4[SHA_DIGEST_LENGTH];
+    unsigned char hash4[HASH_DIGEST_LENGTH];
     test_hexHash("Memory hash of restored data", base, length, hash4);
 
-    if (memcmp(hash1, hash4, SHA_DIGEST_LENGTH) != 0) {
+    if (memcmp(hash1, hash4, HASH_DIGEST_LENGTH) != 0) {
         printf("Original hash not equal to restored hash, error.\n");
         return -1;
     }
