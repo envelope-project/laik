@@ -9,6 +9,7 @@
 #include "laik-internal.h"
 #include <stdio.h>
 #include <assert.h>
+#include <inttypes.h>
 
 void writeDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *data) {
     char debugOutputFileName[1024];
@@ -29,7 +30,7 @@ void writeDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *d
     uint64_t count = mapping->count;
     assert(dim0Size * dim1Size == count);
 
-    fprintf(myOutput, "P2\n%lu %lu\n%i", dim0Size, dim1Size, 255);
+    fprintf(myOutput, "P2\n%" PRIu64" %" PRIu64 "\n%i", dim0Size, dim1Size, 255);
 
     for (unsigned long y = 0; y < dim1Size; ++y) {
         fprintf(myOutput, "\n");
@@ -91,7 +92,7 @@ writeColorDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *d
     } else {
         fprintf(myOutput, "P3\n");
     }
-    fprintf(myOutput, "%lu %lu\n%i\n", dim0Size, dim1Size, 255);
+    fprintf(myOutput, "%" PRIu64 " %" PRIu64 "\n%i\n", dim0Size, dim1Size, 255);
 
     for (unsigned long y = 0; y < dim1Size; ++y) {
 

@@ -5,6 +5,7 @@
 #include <laik-internal.h>
 #include <assert.h>
 #include <string.h>
+#include <inttypes.h>
 
 #define SLICE_ROTATE_DISTANCE 1
 
@@ -126,7 +127,7 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
     *base = activeMapping.base;
     *count = activeMapping.count;
 
-    laik_log(LAIK_LL_Debug, "Preparing buffer for %lu elements of size %i (%lu)\n", *count, data->elemsize,
+    laik_log(LAIK_LL_Debug, "Preparing buffer for %" PRIu64 " elements of size %i (%" PRIu64 ")\n", *count, data->elemsize,
              *backupCount);
     assert(*count == *backupCount);
 }
@@ -171,7 +172,9 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
     Laik_Type *type = mappingTarget->data->type;
 
     laik_log(LAIK_LL_Debug,
-             "Copying mapping of type %s (size %i) with strides z:%lu y:%lu x:%lu and size z:%lu y:%lu x:%lu to mapping with strides z:%lu y:%lu x:%lu",
+             "Copying mapping of type %s (size %i) with strides z:%" PRIu64
+             " y:%" PRIu64 " x:%" PRIu64 " and size z:%" PRIu64 " y:%" PRIu64
+             " x:%" PRIu64 " to mapping with strides z:%" PRIu64 " y:%" PRIu64 " x:%" PRIu64,
              type->name, type->size,
              strideSource[2], strideSource[1], strideSource[0],
              sizeSource[2], sizeSource[1], sizeSource[0],

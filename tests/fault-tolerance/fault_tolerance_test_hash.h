@@ -6,6 +6,7 @@
 #define LAIK_FAULT_TOLERANCE_TEST_HASH_H
 
 #include <stdio.h>
+#include <inttypes.h>
 
 #define HASH_DIGEST_LENGTH 1
 
@@ -20,7 +21,7 @@ void test_hexHash(char *msg, void *baseAddress, uint64_t length, unsigned char *
     for (int i = 0; i < HASH_DIGEST_LENGTH; ++i) {
         printf("%02x", hash[i]);
     }
-    printf(" (%lu bytes)\n", length);
+    printf(" (%" PRIu64 " bytes)\n", length);
 }
 
 void test_hexHash_noKeep(char *msg, void* baseAddress, uint64_t length) {
