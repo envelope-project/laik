@@ -6,6 +6,7 @@ OPT=-g
 
 TESTBINS = kvstest locationtest anytest spacestest
 
+LDFLAGS = $(OPT)
 CFLAGS = $(OPT) $(WARN) $(DEFS) -std=gnu99 -I$(SDIR)../../include
 LAIKLIB = $(abspath ../../liblaik.so)
 
