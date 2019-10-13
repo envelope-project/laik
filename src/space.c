@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -417,14 +418,15 @@ char* laik_space_serialize(Laik_Space* s, unsigned* psize)
 
     int off = -1;
     if (s->dims == 1)
-        off = sprintf(buf, "1(%ld/%ld)",
+        off = sprintf(buf, "1(%" PRId64 "/%" PRId64 ")",
                       s->s.from.i[0], s->s.to.i[0]);
     else if (s->dims == 2)
-        off = sprintf(buf, "2(%ld,%ld/%ld,%ld)",
+        off = sprintf(buf, "2(%" PRId64 ",%" PRId64 "/%" PRId64 ",%" PRId64 ")",
                       s->s.from.i[0], s->s.from.i[1],
                       s->s.to.i[0], s->s.to.i[1]);
     else if (s->dims == 3)
-        off = sprintf(buf, "3(%ld,%ld,%ld/%ld,%ld,%ld)",
+        off = sprintf(buf, "3(%" PRId64 ",%" PRId64 ",%" PRId64
+                      "/%" PRId64 ",%" PRId64 ",%" PRId64 ")",
                       s->s.from.i[0], s->s.from.i[1], s->s.from.i[2],
                       s->s.to.i[0], s->s.to.i[1], s->s.to.i[2]);
     assert(off > 0);
@@ -437,16 +439,17 @@ bool laik_space_set(Laik_Space* s, char* v)
     if ((v[0] < '1') || (v[0] > '3')) return false;
     s->dims = v[0] - '0';
     if (s->dims == 1) {
-        if (sscanf(v+1, "(%ld/%ld)",
+        if (sscanf(v+1, "(%" SCNd64 "/%" SCNd64 ")",
                    &(s->s.from.i[0]), &(s->s.to.i[0]) ) != 2) return false;
     }
     else if (s->dims == 2) {
-        if (sscanf(v+1, "(%ld,%ld/%ld,%ld)",
+        if (sscanf(v+1, "(%" SCNd64 ",%" SCNd64 "/%" SCNd64 ",%" SCNd64 ")",
                    &(s->s.from.i[0]), &(s->s.from.i[1]),
                    &(s->s.to.i[0]), &(s->s.to.i[1]) ) != 4) return false;
     }
     else if (s->dims == 3) {
-        if (sscanf(v+1, "(%ld,%ld,%ld/%ld,%ld,%ld)",
+        if (sscanf(v+1, "(%" SCNd64 ",%" SCNd64 ",%" SCNd64
+                   "/%" SCNd64 ",%" SCNd64 ",%" SCNd64 ")",
                    &(s->s.from.i[0]), &(s->s.from.i[1]), &(s->s.from.i[2]),
                    &(s->s.to.i[0]), &(s->s.to.i[1]), &(s->s.to.i[2]) ) != 6) return false;
     }
