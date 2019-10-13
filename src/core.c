@@ -21,6 +21,9 @@
 #include <laik-backend-single.h>
 #include <laik-backend-tcp.h>
 
+// for string.h to declare strdup
+#define __STDC_WANT_LIB_EXT2__ 1
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

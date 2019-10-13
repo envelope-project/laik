@@ -18,10 +18,12 @@
 
 #include <laik-internal.h>
 
+// for string.h to declare strdup
+#define __STDC_WANT_LIB_EXT2__ 1
+
 #include <assert.h>
 #include <string.h>
 
-char *strdup(const char *s);
 
 //--------------------------------------------------------
 // KV Store
