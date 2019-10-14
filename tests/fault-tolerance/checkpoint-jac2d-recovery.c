@@ -227,6 +227,8 @@ int main(int argc, char *argv[]) {
     if (laik_myid(world) == 0) {
         TPRINTF("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks",
                 size, size, .000016 * size * size, maxiter, laik_size(world));
+        printf("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks.\n",
+                size, size, .000016 * size * size, maxiter, laik_size(world));
         if (!use_cornerhalo) TPRINTF(" (halo without corners)");
         if (repart > 0) TPRINTF("\n  with repartitioning every %d iterations\n", repart);
         TPRINTF("\n");
@@ -387,8 +389,8 @@ int main(int argc, char *argv[]) {
         setBoundary(size, iter, pWrite, dWrite);
 
         //TODO: Comment back out
-        exportDataForVisualization();
-        exportDataFiles();
+//        exportDataForVisualization();
+//        exportDataFiles();
 
         // switch roles: data written before now is read
         if (dRead == data1) {
