@@ -61,5 +61,6 @@ then
 	rm "$TCP_CONFIG"
 fi
 
+#rm -v ./output/data_live_0_0.ppm
 echo "Exit code: $EXIT_CODE"
 exit $EXIT_CODE

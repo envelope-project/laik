@@ -72,6 +72,8 @@ writeColorDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *d
     char debugOutputFileName[1024];
     snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, data->space->inst->myid,
              fileNameExtension);
+//    snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, 0,
+//             fileNameExtension);
 
     FILE *myOutput;
     myOutput = fopen(debugOutputFileName, "wb");

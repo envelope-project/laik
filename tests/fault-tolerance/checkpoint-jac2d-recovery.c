@@ -32,15 +32,27 @@
 #include "util/fault-tolerance-options.h"
 
 // Red is hard to see, so make it the last slice
+//unsigned char colors[][3] = {
+//        {128, 255, 0},
+//        {0,   255, 255},
+//        {0,   128, 255},
+//        {255, 0,   0},
+//};
+
 unsigned char colors[][3] = {
-        {128, 255, 0},
-        {0,   255, 255},
-        {0,   128, 255},
-        {255, 0,   0},
+        {255, 255, 255},
+        {255, 255, 255},
+        {255, 255, 255},
+        {255, 255, 255},
+        {255, 255, 255},
+        {255, 255, 255},
+        {255, 255, 255},
+        {255, 255, 255},
+        {255, 255, 255},
 };
 
 // boundary values
-double loRowValue = 0.0, hiRowValue = 0.0;
+double loRowValue = 1.0, hiRowValue = 1.0;
 double loColValue = 1.0, hiColValue = 1.0;
 double centerValue = 1.0;
 double initVal = 0.1;
@@ -62,7 +74,7 @@ void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool
 
 void restoreCheckpoints();
 
-void exportDataFile(char *label, Laik_Data *data);
+void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCounter);
 
 void exportDataFiles();
 void exportDataForVisualization();
@@ -118,13 +130,14 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
         baseW[ly * ystrideW + lx] = centerValue;
     }
 
-    // Create a spinning dot
-    double angle = 0.3 * iteration;
-    int64_t xOffset = (int64_t) (cos(angle) * (size / 4.0) + (size / 2.0));
-    int64_t yOffset = (int64_t) (sin(angle) * (size / 4.0) + (size / 2.0));
-    if (laik_global2local_2d(dWrite, xOffset, yOffset, &lx, &ly) != NULL) {
-        baseW[ly * ystrideW + lx] = centerValue;
-    }
+    (void)iteration;
+//    // Create a spinning dot
+//    double angle = 0.3 * iteration;
+//    int64_t xOffset = (int64_t) (cos(angle) * (size / 4.0) + (size / 2.0));
+//    int64_t yOffset = (int64_t) (sin(angle) * (size / 4.0) + (size / 2.0));
+//    if (laik_global2local_2d(dWrite, xOffset, yOffset, &lx, &ly) != NULL) {
+//        baseW[ly * ystrideW + lx] = centerValue;
+//    }
 }
 
 void errorHandler(void *errors) {
@@ -150,11 +163,15 @@ Laik_Checkpoint *spaceCheckpoint = NULL;
 
 int main(int argc, char *argv[]) {
     laik_set_loglevel(LAIK_LL_Warning);
+    laik_set_loglevel(LAIK_LL_Info);
 //    laik_set_loglevel(LAIK_LL_Debug);
     inst = laik_init(&argc, &argv);
     world = laik_world(inst);
 
 
+//    colors[laik_myid(world)][0] = 128;
+//    colors[laik_myid(world)][1] = 255;
+//    colors[laik_myid(world)][2] = 0;
 //    printf("Preparing shrinked world, eliminating rank 1 (world size %i)\n", world->size);
 //    int elimination[] = {1};
 //    smallWorld = laik_new_shrinked_group(world, 1, elimination);
@@ -373,7 +390,9 @@ int main(int argc, char *argv[]) {
 
         setBoundary(size, iter, pWrite, dWrite);
 
-//        exportDataFiles();
+        //TODO: Comment back out
+        exportDataForVisualization();
+        exportDataFiles();
 
         // switch roles: data written before now is read
         if (dRead == data1) {
@@ -415,6 +434,9 @@ int main(int argc, char *argv[]) {
         double localResiduum = do_jacobi_iteration(baseR, baseW, ystrideR, ystrideW, x1, x2, y1, y2);
         double globalResiduum = calculateGlobalResiduum(localResiduum, &sumPtr);
         TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
+        if(laik_myid(world) == 0) {
+            printf("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
+        }
     }
 
     TRACE_EVENT_START("FINALIZE", "");
@@ -423,11 +445,13 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void exportDataFile(char *label, Laik_Data *data) {//        if (iter == 25 && world->size == 4) {
+void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCounter) {//        if (iter == 25 && world->size == 4) {
 // export the data to an image
-    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, 0, 0, world,
+//    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, 0, 0, world,
+//                                                               LAIK_RO_None);
+    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_All, 0, 0, world,
                                                                LAIK_RO_None);
-    if (laik_myid(world) == 0) {
+    if (laik_myid(world) == 0 || allRanks) {
         char filenamePrefix[1024];
         snprintf(filenamePrefix, 1024, "output/data_%s_%i_", label, dataFileCounter);
 //            writeDataToFile(filenamePrefix, ".pgm", exportCheckpoint->data);
@@ -444,10 +468,10 @@ void exportDataForVisualization() {
 }
 
 void exportDataFiles() {
-    exportDataFile("dW", dWrite);
+    exportDataFile("dW", dWrite, 0, dataFileCounter);
 //    exportDataFile("d2", data2);
     if (spaceCheckpoint != NULL) {
-        exportDataFile("c1", spaceCheckpoint->data);
+        exportDataFile("c1", spaceCheckpoint->data, 0, dataFileCounter);
     }
     dataFileCounter++;
 }

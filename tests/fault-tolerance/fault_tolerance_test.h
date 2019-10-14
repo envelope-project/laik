@@ -60,5 +60,6 @@ void test_create_sample_data() {
 //}
 
 #define TPRINTF(...) { printf("## TEST %i: ", laik_myid(laik_world(inst))); printf(__VA_ARGS__); }
+//#define TPRINTF(...) {}
 
 #endif //LAIK_FAULT_TOLERANCE_TEST_H

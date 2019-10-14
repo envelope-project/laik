@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ $# -ne 1 ]
+if [ $# -lt 1 ]
 then
   echo "Need to pass which tool to run"
   exit 255

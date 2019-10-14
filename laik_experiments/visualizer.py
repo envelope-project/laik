@@ -2,40 +2,97 @@ import numpy as np
 import imageio
 import matplotlib.pyplot as plt
 import pyinotify
+import logging
+import os
+import os.path
+import matplotlib.animation as animation
+import glob
+
+format=logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
+    level=logging.DEBUG,
+    datefmt='%Y-%m-%d %H:%M:%S')
 
 
-path="/home/vincent_bode/Desktop/VTStuff/GitSync/Projects/CPP/laik/output/"
-file= path + "data_live_0_0.ppm"
+# path="../output/data_live_0_0.ppm"
+# file= path + "data_live_0_0.ppm"
+file = "/home/pi/ga26poh/laik/output/data_live_0_0.ppm"
 
-plt.ion()
-fig, ax = plt.subplots()
-image = np.array(imageio.imread(file), dtype=np.uint8)
-ax.imshow(image)
+# plt.ion()
+# fig, ax = plt.subplots()
+# image = np.array(imageio.imread(file), dtype=np.uint8)
+# imageHandle = ax.imshow(image)
+# plt.show()
+#
+#
+# class FSEventHandler(pyinotify.ProcessEvent):
+#     def process_default(self, event):
+#         """
+#         Eventually, this method is called for all others types of events.
+#         This method can be useful when an action fits all events.
+#         """
+#         logging.info("Received event")
+#         try:
+#             image = np.array(imageio.imread(file), dtype=np.uint8)
+#             imageHandle.set_data(image)
+#             plt.draw()
+#         except ValueError:
+#             print('Failed to read file')
+#             return
+#
+# # Instanciate a new WatchManager (will be used to store watches).
+# wm = pyinotify.WatchManager()
+# # Associate this WatchManager with a Notifier (will be used to report and
+# # process events).
+# notifier = pyinotify.Notifier(wm, FSEventHandler())
+# # Add a new watch on /tmp for ALL_EVENTS.
+# wm.add_watch(path, pyinotify.IN_CLOSE_WRITE)
+#
+# logging.info("Ready to receive events")
+#
+# # Loop forever and handle events.
+# notifier.loop()
+
+fig = plt.figure()
+dataSetSize = 32
+data = np.array(np.zeros([dataSetSize, dataSetSize], dtype=np.uint8), dtype=np.uint8)
+image = plt.imshow(data, animated=True)
+modified = 0
+
+numUpdates = 0
+numIter = 0
+
+def draw(*args):
+    global modified, numUpdates, numIter
+    if os.path.isfile(file):
+    # if os.path.isfile(file):
+        mtime = os.stat(file).st_mtime
+        if mtime > modified:
+            data = np.array(imageio.imread(file), dtype=np.uint8)
+            image.set_data(data)
+            modified = mtime
+            logging.info("Reloaded image")
+            numUpdates += 1
+        else:
+            logging.info("Unmodified")
+            modified = mtime
+    else:
+        logging.info("Not exists")
+        data = np.array(np.zeros([dataSetSize, dataSetSize]), dtype=np.uint8)
+        image.set_data(data)
+
+    # logging.info("Updated animation")
+    numIter += 1
+    if numIter > 10:
+        logging.info("Posted %i updates in %i iterations.", numUpdates, numIter)
+        numUpdates = 0
+        numIter = 0
+    return image,
+
+
+animation = animation.FuncAnimation(fig, draw, interval=500, blit=True)
+
+mng = plt.get_current_fig_manager()
+mng.full_screen_toggle()
+
+logging.info("Showing animation")
 plt.show()
-
-
-class FSEventHandler(pyinotify.ProcessEvent):
-    def process_default(self, event):
-        """
-        Eventually, this method is called for all others types of events.
-        This method can be useful when an action fits all events.
-        """
-        print("Received event")
-        try:
-            image = np.array(imageio.imread(file), dtype=np.uint8)
-        except ValueError:
-            print('Failed to read file')
-            return
-        ax.imshow(image)
-        plt.show()
-
-
-# Instanciate a new WatchManager (will be used to store watches).
-wm = pyinotify.WatchManager()
-# Associate this WatchManager with a Notifier (will be used to report and
-# process events).
-notifier = pyinotify.Notifier(wm, FSEventHandler())
-# Add a new watch on /tmp for ALL_EVENTS.
-wm.add_watch(path, pyinotify.ALL_EVENTS)
-# Loop forever and handle events.
-notifier.loop()

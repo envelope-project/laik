@@ -256,6 +256,12 @@ int getEventNum();
 #define TRACE_EVENT_S(name, format) printf("===,%i,%s,%i,%f,%f,%f,%i,%f,%f," format " ===\n", getEventNum(), name, laik_myid(laik_world(inst)), getTime(inst), 0.0f, getWallTime(), laik_get_iteration(inst), getVSize(), getNSize(inst))
 #define TRACE_EVENT_DURATION(name, format, duration) printf("===,%i,%s,%i,%f,%f,%f,%i,%f,%f," format " ===\n", getEventNum(), name, laik_myid(laik_world(inst)), getTime(inst), duration, getWallTime(), laik_get_iteration(inst), getVSize(), getNSize(inst))
 
+//#define TRACE_INIT(myRank)
+//#define TRACE_EVENT(name, format, ...)
+//#define TRACE_EVENT_S(name, format)
+//#define TRACE_EVENT_DURATION(name, format, duration)
+
+
 #define TRACE_EVENT_START(name, format) {setStartTime(getTime(inst)); TRACE_EVENT_S(name "-START", format);}
 #define TRACE_EVENT_END(name, format) {TRACE_EVENT_S(name "-STOP", format); TRACE_EVENT_DURATION(name, format, getTime(inst) - getStartTime());}
 
