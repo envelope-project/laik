@@ -102,7 +102,7 @@ else:
         print("  Detected Open MPI")
         # required for tests with OpenMPI, otherwise tests may fail
         # with "not enough slots" error on small machines
-        exports = "export MPIEXEC=mpiexec --oversubscribe"
+        exports = "export MPIEXEC=mpiexec --oversubscribe --mca btl_base_warn_component_unused 0"
 
 #------------------------------------
 # TCP backend support
