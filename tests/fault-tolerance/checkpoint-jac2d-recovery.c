@@ -30,6 +30,7 @@
 #include "fault_tolerance_test.h"
 #include "fault_tolerance_test_hash.h"
 #include "util/fault-tolerance-options.h"
+#include <unistd.h>
 
 // Red is hard to see, so make it the last slice
 //unsigned char colors[][3] = {
@@ -383,11 +384,6 @@ int main(int argc, char *argv[]) {
         // program.
         exitIfFailureIteration(iter, &faultToleranceOptions, inst);
 
-        //TODO: Comment back out
-        if(iter % 5000 == 0) {
-            exportDataForVisualization();
-        }
-
         setBoundary(size, iter, pWrite, dWrite);
 
         //TODO: Comment back out
@@ -463,8 +459,8 @@ void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCou
 }
 
 void exportDataForVisualization() {
-    dataFileCounter = 0;
-    exportDataFile("live", dWrite);
+    exportDataFile("live", dWrite, 1, 0);
+    sleep(1);
 }
 
 void exportDataFiles() {
