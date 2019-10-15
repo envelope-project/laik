@@ -30,7 +30,7 @@ struct _FaultToleranceOptions {
 typedef struct _FaultToleranceOptions FaultToleranceOptions;
 extern const FaultToleranceOptions FaultToleranceOptionsDefault;
 
-bool parseFaultToleranceOptions(char** argv, int *arg, int rank, FaultToleranceOptions* ftOptions);
+bool parseFaultToleranceOptions(int argc, char **argv, int *arg, int rank, FaultToleranceOptions *ftOptions);
 void exitIfFailureIteration(int iter, FaultToleranceOptions* faultToleranceOptions, Laik_Instance* inst);
 
 #endif //LAIK_FAULT_TOLERANCE_OPTIONS_H
