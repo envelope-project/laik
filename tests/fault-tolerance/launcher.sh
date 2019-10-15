@@ -1,4 +1,7 @@
 #!/bin/bash
+
+set -x
+
 if [ $# -lt 5 ]
 then
 	echo "Usage: launcher.sh [tcp|mpi] [numLaunch] [numProcs] [debug|release] [executable] [args]"

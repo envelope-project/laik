@@ -33,18 +33,18 @@ def draw_restart_boxplot():
     jac2d = []
     lulesh = []
     for experiment in range(0,8):
-        # osu.append(calculate_restart_time(
-        #     load_experiment("experiment_restart_time_mpi_osu_{0}_trace.csv".format(experiment)),
-        #     load_experiment("experiment_restart_time_mpi_osu_{0}_trace.csv".format(experiment+1))
-        # ))
+        osu.append(calculate_restart_time(
+            load_experiment("experiment_restart_time_mpi_osu_{0}_trace.csv".format(experiment)),
+            load_experiment("experiment_restart_time_mpi_osu_{0}_trace.csv".format(experiment+1))
+        ))
         jac2d.append(calculate_restart_time(
             load_experiment("experiment_restart_time_mpi_jac2d_{0}_trace.csv".format(experiment)),
             load_experiment("experiment_restart_time_mpi_jac2d_{0}_trace.csv".format(experiment+1))
         ))
-        # lulesh.append(calculate_restart_time(
-        #     load_experiment("experiment_restart_time_mpi_lulesh_{0}_trace.csv".format(experiment)),
-        #     load_experiment("experiment_restart_time_mpi_lulesh_{0}_trace.csv".format(experiment+1))
-        # ))
+        lulesh.append(calculate_restart_time(
+            load_experiment("experiment_restart_time_mpi_lulesh_{0}_trace.csv".format(experiment)),
+            load_experiment("experiment_restart_time_mpi_lulesh_{0}_trace.csv".format(experiment+1))
+        ))
     data = [osu, jac2d, lulesh]
     boxPlot(data, 'Restart Time of Benchmarks', 'Time (s)', 'graphs/restart-time.pdf')
 

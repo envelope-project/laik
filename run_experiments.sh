@@ -32,7 +32,7 @@
 module load slurm_setup
 
 
-#set -x
+set -x
 
 export PATH="/u/home/bodev/lib/bin:$PATH"
 if [ -x "/dss/dsshome1/08/ga26poh3/lib/bin/mpirun" ]
@@ -49,7 +49,7 @@ fi
 run_experiment () {
 	echo "Running experiment $1"
 	export MPI_OPTIONS="--output-filename out --merge-stderr-to-stdout --stdin none"
-	export MPI_OPTIONS="$MPI_OPTIONS --oversubscribe"
+#	export MPI_OPTIONS="$MPI_OPTIONS --oversubscribe"
 	export TEST_NAME="$1"
 	rm -r out/
 	tests/fault-tolerance/launcher.sh "$2" "$5" "$5" release "$3" "$4"
@@ -103,17 +103,17 @@ case "$1" in
     FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
     FAILURE_ITERATIONS=(148718 5046 96469 169485 73560 97777 122117 75460 120029 42470)
     for i in {0..9} ; do
-      run_experiment "restart_time_mpi_osu_$i" "mpi" "$OSU" "$OSU_CONF_A --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
+      run_experiment "restart_time_mpi_osu_$i" "mpi" "$OSU" "$OSU_CONF_A -- --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
     done
 
     FAILURE_ITERATIONS=(17 23 27 44 13 21 6 43 35 10)
     for i in {0..9} ; do
-      run_experiment "restart_time_mpi_jac2d_$i" "mpi" "$JAC2D" "$JAC2D_CONF_A --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
+      run_experiment "restart_time_mpi_jac2d_$i" "mpi" "$JAC2D" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $JAC2D_CONF_A" "48"
     done
 
     FAILURE_ITERATIONS=(207 218 142 273 256 165 168 254 113 172)
     for i in {0..9} ; do
-      run_experiment "restart_time_mpi_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "27"
+      run_experiment "restart_time_mpi_lulesh_$i" "mpi" "$LULESH" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $LULESH_CONF_A" "27"
     done
   ;;
 
