@@ -81,7 +81,7 @@ tidy-clean: clean
 	rm -f compile_commands.json
 
 # clean targets
-SUBDIRS_CLEAN=$(addprefix clean_, $(SUBDIRS))
+SUBDIRS_CLEAN=$(addprefix clean_, $(SUBDIRS)) clean_tests
 .PHONY: $(SUBDIRS_CLEAN)
 
 clean: clean_laik $(SUBDIRS_CLEAN)
