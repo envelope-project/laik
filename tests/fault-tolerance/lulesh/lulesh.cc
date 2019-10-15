@@ -3213,6 +3213,6 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-bool parseFaultToleranceOptionsProxy(char** argv, int *arg, int rank, FaultToleranceOptions* ftOptions) {
-    return parseFaultToleranceOptions(argv, arg, rank, ftOptions);
+bool parseFaultToleranceOptionsProxy(int argc, char **argv, int *arg, int rank, FaultToleranceOptions *ftOptions) {
+    return parseFaultToleranceOptions(argc, argv, arg, rank, ftOptions);
 }

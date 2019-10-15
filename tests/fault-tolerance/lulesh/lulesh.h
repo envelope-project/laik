@@ -910,5 +910,5 @@ void remove_partitionings_and_transitions(Laik_Partitioning *&exclusivePartition
 void calculate_removing_list(Laik_Group* world, cmdLineOpts& opts, double side, double& newside, int& diffsize, int *&removeList);
 void calculate_removing_list_ft(Laik_Group* world, cmdLineOpts& opts, double side, double& newside, int& diffsize, int *&removeList, int* nodeStatuses);
 
-bool parseFaultToleranceOptionsProxy(char** argv, int *arg, int rank, FaultToleranceOptions* ftOptions);
+bool parseFaultToleranceOptionsProxy(int argc, char **argv, int *arg, int rank, FaultToleranceOptions *ftOptions);
 #endif

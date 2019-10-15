@@ -633,15 +633,7 @@ int process_options(int argc, char **argv, int rank, FaultToleranceOptions *ftOp
                 bad_usage.message = "Option Missing Required Argument";
                 bad_usage.opt = optopt;
                 return PO_BAD_USAGE;
-            default: {
-                optind--;
-                bool parseResult = parseFaultToleranceOptions(argv, &optind, rank, ftOptions);
-                optind++;
-                if(parseResult) {
-                    // Parse successful
-                    break;
-                }
-            }
+            default:
                 bad_usage.message = "Invalid option";
                 bad_usage.opt = optopt;
                 return PO_BAD_USAGE;
@@ -661,6 +653,10 @@ int process_options(int argc, char **argv, int rank, FaultToleranceOptions *ftOp
         } else if (optind != argc) {
             return PO_BAD_USAGE;
         }
+    }
+
+    for (int i = 0; i < argc; ++i) {
+        parseFaultToleranceOptions(argc, argv, &i, rank, ftOptions);
     }
 
     return PO_OKAY;

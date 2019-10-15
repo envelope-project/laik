@@ -198,7 +198,7 @@ int main(int argc, char *argv[]) {
                    argv[0]);
             exit(1);
         }
-        else if (parseFaultToleranceOptions(argv, &arg, laik_myid(world), &faultToleranceOptions)) {
+        else if (parseFaultToleranceOptions(argc, argv, &arg, laik_myid(world), &faultToleranceOptions)) {
             // Successfully parsed argument, do nothing else
         } else {
             printf("Argument %s was not understood.", argv[arg]);
