@@ -117,19 +117,19 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
     }
 
     //Center point
-    int64_t lx, ly;
-    if (laik_global2local_2d(dWrite, size / 2, size / 2, &lx, &ly) != NULL) {
-        baseW[ly * ystrideW + lx] = centerValue;
-    }
-    if (laik_global2local_2d(dWrite, (size - 1) / 2, size / 2, &lx, &ly) != NULL) {
-        baseW[ly * ystrideW + lx] = centerValue;
-    }
-    if (laik_global2local_2d(dWrite, size / 2, (size - 1) / 2, &lx, &ly) != NULL) {
-        baseW[ly * ystrideW + lx] = centerValue;
-    }
-    if (laik_global2local_2d(dWrite, (size - 1) / 2, (size - 1) / 2, &lx, &ly) != NULL) {
-        baseW[ly * ystrideW + lx] = centerValue;
-    }
+//    int64_t lx, ly;
+//    if (laik_global2local_2d(dWrite, size / 2, size / 2, &lx, &ly) != NULL) {
+//        baseW[ly * ystrideW + lx] = centerValue;
+//    }
+//    if (laik_global2local_2d(dWrite, (size - 1) / 2, size / 2, &lx, &ly) != NULL) {
+//        baseW[ly * ystrideW + lx] = centerValue;
+//    }
+//    if (laik_global2local_2d(dWrite, size / 2, (size - 1) / 2, &lx, &ly) != NULL) {
+//        baseW[ly * ystrideW + lx] = centerValue;
+//    }
+//    if (laik_global2local_2d(dWrite, (size - 1) / 2, (size - 1) / 2, &lx, &ly) != NULL) {
+//        baseW[ly * ystrideW + lx] = centerValue;
+//    }
 
     (void)iteration;
 //    // Create a spinning dot
@@ -390,7 +390,7 @@ int main(int argc, char *argv[]) {
 
         //TODO: Comment back out
 //        exportDataForVisualization();
-//        exportDataFiles();
+        exportDataFiles();
 
         // switch roles: data written before now is read
         if (dRead == data1) {

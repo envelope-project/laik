@@ -59,11 +59,21 @@ zlabel('Potential for speedup');
 saveas(gc,'C:\Users\vincent_bode\Desktop\VTStuff\GitSync\TUM\MA\res\speedup-t.eps','epsc')
 
 
+% eNewT = zeros(length(lambdaV), length(tV));
+% for row = 1:length(lambdaV)
+%     for col = 1:length(tV)
+%         lambda = lambdaV(row);
+%         t = tV(col);
+%         eNewT(row, col) = (1 - exp(-lambda * t) * (lambda * t + 1))/(lambda * (1 - exp(-lambda * t)));
+%     end
+% end
+
 eNewT = zeros(length(lambdaV), length(tV));
 for row = 1:length(lambdaV)
     for col = 1:length(tV)
         lambda = lambdaV(row);
         t = tV(col);
-        eNewT(row, col) = (1 - exp(-lambda * t) * (lambda * t + 1))/(lambda * (1 - exp(-lambda * t)));
+        eNewT(row, col) = (1/
     end
 end
+

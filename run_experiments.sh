@@ -117,6 +117,10 @@ case "$1" in
     done
   ;;
 
+  "recovery_time")
+
+  ;;
+
   "old")
     EXECUTABLE="$JAC2D"
     PROBLEM_SIZE=1024

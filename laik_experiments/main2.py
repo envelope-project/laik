@@ -1,7 +1,12 @@
 import glob
+
+import imageio
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
+def load_visualization(file : str):
+    return np.array(imageio.imread(file), dtype=np.uint8)
 
 def load_experiment(file : str):
     return pd.read_csv("data/{0}".format(file))
@@ -73,5 +78,17 @@ def boxPlot(data, title, y_label, export):
     fig.savefig(export, format='pdf')
 
 
+def draw_jac2d_example():
+    fig, axs = plt.subplots(1, 5, figsize=(6, 2))
+    # plt.subplots_adjust(left=0.125, right=0.9, top=0.9, bottom=0.0, wspace=0.1, hspace=0.0)
+    for i in range(5):
+        axs[i].imshow(load_visualization('data/jac2d-example/data_dW_{0}_0.ppm'.format(i * 5)), origin='lower')
+        axs[i].set_title('Iter {0}'.format(i * 5))
+    fig.suptitle('Iterations of the Jacobi 2D Heat Diffusion Simulation')
+    plt.show()
+    fig.savefig('graphs/jac2d-example.pdf', format='pdf')
+
+
 draw_runtime_boxplot()
 draw_restart_boxplot()
+draw_jac2d_example()
