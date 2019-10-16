@@ -16,6 +16,16 @@ def calculate_restart_time(data1 : pd.DataFrame, data2 : pd.DataFrame):
     event1Failure = data1[data1['EVENT_TYPE'] == 'FAILURE-GENERATE']
     return max(event2Inits['WALLTIME']) - min(event1Failure['WALLTIME'])
 
+def export_stats(osu, jac2d, lulesh, file):
+    data = [
+        ['OSU', np.mean(osu), np.var(osu)],
+        ['Jacobi', np.mean(jac2d), np.var(jac2d)],
+        ['LULESH', np.mean(lulesh), np.var(lulesh)],
+    ]
+    frame = pd.DataFrame(data, columns=['Benchmark', 'Median', 'Variance'])
+    frame.set_index('Benchmark', inplace=True)
+    frame.to_csv(file)
+
 def draw_runtime_boxplot():
     osu = []
     jac2d = []
@@ -26,6 +36,7 @@ def draw_runtime_boxplot():
         lulesh.append(calculate_runtime(load_experiment("experiment_runtime_time_mpi_lulesh_{0}_trace.csv".format(experiment))))
 
     data = [osu, jac2d, lulesh]
+    export_stats(osu, jac2d, lulesh, 'graphs/original-runtime-stats.csv')
     boxPlot(data, 'Original Runtime of Benchmarks', 'Runtime (s)', 'graphs/original-runtime.pdf')
 
 def draw_restart_boxplot():
@@ -46,6 +57,7 @@ def draw_restart_boxplot():
             load_experiment("experiment_restart_time_mpi_lulesh_{0}_trace.csv".format(experiment+1))
         ))
     data = [osu, jac2d, lulesh]
+    export_stats(osu, jac2d, lulesh, 'graphs/restart-time-stats.csv')
     boxPlot(data, 'Restart Time of Benchmarks', 'Time (s)', 'graphs/restart-time.pdf')
 
 
