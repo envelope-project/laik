@@ -106,16 +106,14 @@ void laik_tcp_panic(int err)
 
     if(laik_error_handler_get(tcp_instance) != NULL) {
 
-        laik_log(LAIK_LL_Info, "Error handler found, attempting to handle error.\n");
+        laik_log(LAIK_LL_Debug, "Error handler found, attempting to handle error.\n");
         if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
-            laik_log(LAIK_LL_Warning, "Unknown mini-MPI error!");
-        } else {
-            laik_log(LAIK_LL_Warning, "Mini-MPI error: %s", str);
+            strncpy(str, "Unknown MPI Error!", sizeof(str));
         }
         laik_tcp_set_errors(err, NULL);
-        laik_error_handler_get(tcp_instance)(0);
+        laik_error_handler_get(tcp_instance)(str);
         laik_tcp_clear_errors();
-        fprintf(stderr, "[LAIK TCP Backend] Error handler exited, attempting to continue\n");
+//        fprintf(stderr, "[LAIK TCP Backend] Error handler exited, attempting to continue\n");
         return;
     }
 

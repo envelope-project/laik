@@ -289,14 +289,12 @@ void laik_mpi_panic(int err)
 
     if(laik_error_handler_get(mpi_instance) != NULL) {
 
-        laik_log(LAIK_LL_Info, "Error handler found, attempting to handle error.\n");
+        laik_log(LAIK_LL_Debug, "Error handler found, attempting to handle error.\n");
         if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
-            laik_log(LAIK_LL_Warning, "Unknown mini-MPI error!");
-        } else {
-            laik_log(LAIK_LL_Warning, "MPI error: %s", str);
+            strncpy(str, "Unknown MPI Error!", sizeof(str));
         }
-        laik_error_handler_get(mpi_instance)(0);
-        fprintf(stderr, "[LAIK MPI Backend] Error handler exited, attempting to continue\n");
+        laik_error_handler_get(mpi_instance)(str);
+//        fprintf(stderr, "[LAIK MPI Backend] Error handler exited, attempting to continue\n");
         return;
     }
 
