@@ -68,12 +68,16 @@ saveas(gc,'C:\Users\vincent_bode\Desktop\VTStuff\GitSync\TUM\MA\res\speedup-t.ep
 %     end
 % end
 
-eNewT = zeros(length(lambdaV), length(tV));
+to=60;
+tr=5;
+eNewT = zeros(length(lambdaV));
 for row = 1:length(lambdaV)
-    for col = 1:length(tV)
-        lambda = lambdaV(row);
-        t = tV(col);
-        eNewT(row, col) = (1/
-    end
+    lambda = lambdaV(row);
+    eNewT(row) = ((1 - exp(-lambda .* to)) / (lambda * exp(-lambda .* to))) + ((exp(lambda .* to) - 1) .* tr);
 end
 
+plot(lambdaV, eNewT)
+title('Expected time to solution using the restart strategy')
+xlabel('Failure rate (\lambda)');
+ylabel('Expected time to solution (s)');
+saveas(gc,'C:\Users\vincent_bode\Desktop\VTStuff\GitSync\TUM\MA\res\restart-expectation.eps','epsc')

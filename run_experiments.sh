@@ -56,13 +56,33 @@ run_experiment () {
 	tests/fault-tolerance/launcher.sh "$2" "$5" "$5" release "$3" "$4"
 	EXIT_CODE=$?
 	grep -h -e "===" out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_trace.csv"
-	grep -h -e '!!!' out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_header.csv"
+#	grep -h -e '!!!' out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_header.csv"
 
 	if [ $EXIT_CODE -ne 0 ] && [ "$EXPERIMENT_IGNORE_EXIT_CODE" -ne 1 ]
 	then
 	  echo "Error: $EXIT_CODE"
 	  exit $EXIT_CODE
   fi
+}
+
+benchmark_concat_options () {
+  if [ "$#" -ne 3 ]
+  then
+    echo "Incorrect parameters to concat"
+    exit 255
+  fi
+  case "$1" in
+    "osu")
+      echo "$2 -- $1"
+      ;;
+    "jac2d"|"lulesh")
+      echo "$1 $2"
+      ;;
+    *)
+      echo "Unknown benchmark"
+      exit 255
+      ;;
+  esac
 }
 
 #PREFIX="."
@@ -81,61 +101,76 @@ fi
 
 
 
-if [ $# -ne 1 ]
+if [ $# -ne 2 ]
 then
-  echo "Need to pass which experiment to run"
+  echo "Need to pass which experiment to run and the benchmark"
   exit 255
 fi
 
-OSU_CONF_A="-m 32768:32768 -i 250000"
-JAC2D_CONF_A="20000 50 -1"
-LULESH_CONF_A="-i 280 -s 14"
+#OSU_CONF_A="-m 32768:32768 -i 250000"
+#JAC2D_CONF_A="20000 50 -1"
+#LULESH_CONF_A="-i 280 -s 14"
+OSU_CONF_A="-m 32768:32768 -i 2150000"
+JAC2D_CONF_A="25500 300 -1"
+LULESH_CONF_A="-i 3200 -s 16"
+
+#Only includes ranks up to 27 to accomodate for LULESH
+FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
+case "$2" in
+  "osu")
+    BENCHMARK="osu"
+    BENCHMARK_EXECUTABLE="$OSU"
+    BENCHMARK_OPTIONS="$OSU_CONF_A"
+    NUM_PROCESSES=48
+    FAILURE_ITERATIONS=(142266 128688 121441 118626 44627 86271 25756 155891 123766 90289)
+    ;;
+  "jac2d")
+    BENCHMARK="jac2d"
+    BENCHMARK_EXECUTABLE="$JAC2D"
+    BENCHMARK_OPTIONS="$JAC2D_CONF_A"
+    NUM_PROCESSES=48
+    FAILURE_ITERATIONS=(14297 671 21445 21745 2790 11552 14735 14808 15161 19657)
+    ;;
+  "lulesh")
+    BENCHMARK="lulesh"
+    BENCHMARK_EXECUTABLE="$LULESH"
+    BENCHMARK_OPTIONS="$LULESH_CONF_A"
+    NUM_PROCESSES=27
+    FAILURE_ITERATIONS=(2985 2485 2507 1226 2460 1096 1917 1391 1914 5)
+    ;;
+  "all")
+    echo "ALL: Skipping variable setting"
+    ;;
+  *)
+    echo "Unknown benchmark"
+    exit 255
+    ;;
+esac
 
 case "$1" in
+  "timing_test")
+      time run_experiment "timing_test_osu" "mpi" "$OSU" "$OSU_CONF_A" "48"
+      time run_experiment "timing_test_jac2d" "mpi" "$JAC2D" "$JAC2D_CONF_A" "48"
+      time run_experiment "timing_test_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27"
+  ;;
   "runtime_time")
     for i in {0..9} ; do
-      run_experiment "runtime_time_mpi_osu_$i" "mpi" "$OSU" "$OSU_CONF_A" "48"
-      run_experiment "runtime_time_mpi_jac2d_$i" "mpi" "$JAC2D" "$JAC2D_CONF_A" "48"
-      run_experiment "runtime_time_mpi_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27"
+      run_experiment "runtime_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$BENCHMARK_OPTIONS" "$NUM_PROCESSES"
     done
   ;;
   "restart_time")
     MPI_OPTIONS=""
-    #Only includes ranks up to 27 to accomodate for LULESH
-    FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
-    FAILURE_ITERATIONS=(148718 5046 96469 169485 73560 97777 122117 75460 120029 42470)
     for i in {0..9} ; do
-      run_experiment "restart_time_mpi_osu_$i" "mpi" "$OSU" "$OSU_CONF_A -- --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
-    done
-
-    FAILURE_ITERATIONS=(17 23 27 44 13 21 6 43 35 10)
-    for i in {0..9} ; do
-      run_experiment "restart_time_mpi_jac2d_$i" "mpi" "$JAC2D" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $JAC2D_CONF_A" "48"
-    done
-
-    FAILURE_ITERATIONS=(207 218 142 273 256 165 168 254 113 172)
-    for i in {0..9} ; do
-      run_experiment "restart_time_mpi_lulesh_$i" "mpi" "$LULESH" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $LULESH_CONF_A" "27"
+      OPTIONS=$(benchmark_concat_options "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
+      run_experiment "restart_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK" "$OPTIONS" "$NUM_PROCESSES"
     done
   ;;
   "restart_time_mca")
     EXPERIMENT_IGNORE_EXIT_CODE=1
     MPI_OPTIONS="--mca orte_enable_recovery false"
-    #Only includes ranks up to 27 to accomodate for LULESH
-    FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
-    FAILURE_ITERATIONS=(148718 5046 96469 169485 73560 97777 122117 75460 120029 42470)
     for i in {0..9} ; do
-      run_experiment "restart_time_mpi_osu_mca_$i" "mpi" "$OSU" "$OSU_CONF_A -- --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
-    done
-
-    FAILURE_ITERATIONS=(17 23 27 44 13 21 6 43 35 10)
-    for i in {0..9} ; do
-      run_experiment "restart_time_mpi_jac2d_mca_$i" "mpi" "$JAC2D" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $JAC2D_CONF_A" "48"
-    done
-
-    FAILURE_ITERATIONS=(207 218 142 273 256 165 168 254 113 172)
-    for i in {0..9} ; do
-      run_experiment "restart_time_mpi_lulesh_mca_$i" "mpi" "$LULESH" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $LULESH_CONF_A" "27"
+      OPTIONS=$(benchmark_concat_options "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
+      run_experiment "restart_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK" "$OPTIONS" "$NUM_PROCESSES"
     done
   ;;
 
@@ -184,4 +219,7 @@ case "$1" in
             run_experiment "mpi_weak_scale_$num" "mpi" "$EXECUTABLE" "--plannedFailure 1 29 --checkpointFrequency 10 --redundancyCount 1 --rotationDistance 1 --failureCheckFrequency 10 $PROBLEM_SIZE 50 -1" "$num"
     done
     ;;
+  *)
+    echo "Unknown experiment"
+    exit 255
 esac
