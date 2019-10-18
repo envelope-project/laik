@@ -1,8 +1,9 @@
-lambdaV = linspace(0.01, 0.1, 10);
-tV = linspace(1, 10, 10);
+lambdaV = linspace(0.001, 0.01, 10);
+tV = linspace(1, 100, 10);
 
 eX = zeros(length(lambdaV), length(tV));
 eT = zeros(length(lambdaV), length(tV));
+sT = zeros(length(lambdaV), length(tV));
 for row = 1:length(lambdaV)
     for col = 1:length(tV)
         lambda = lambdaV(row);
@@ -16,7 +17,7 @@ gc = figure;
 colormap(gray * 0.6 + 0.4);
 surf(tV, lambdaV, eX);
 colorbar;
-axis([1 10 0.01 0.1 0 inf]);
+axis([1 100 0.001 0.01 0 inf]);
 title('Expected Time Wasted on a Failure for the Restart Strategy')
 xlabel('Original runtime t_o (s)');
 ylabel('Failure rate (\lambda)');
@@ -31,7 +32,7 @@ gc = figure;
 colormap(gray * 0.6 +0.4);
 surf(tV, lambdaV, eT);
 colorbar;
-axis([1 10 0.01 0.1 0 inf]);
+axis([1 100 0.001 0.01 0 inf]);
 title('Expected Runtime with Failures using the Restart Strategy')
 xlabel('Original runtime t_o (s)');
 ylabel('Failure rate (\lambda)');
@@ -47,7 +48,7 @@ gc = figure;
 colormap(gray * 0.6 +0.4);
 surf(tV, lambdaV, sT);
 colorbar;
-axis([1 10 0.01 0.1 1 inf]);
+axis([1 100 0.001 0.01 1 inf]);
 title('Possible speedup from Restart Strategy to the Ideal Runtime')
 xlabel('Original runtime t_o (s)');
 ylabel('Failure rate (\lambda)');
@@ -68,6 +69,7 @@ saveas(gc,'C:\Users\vincent_bode\Desktop\VTStuff\GitSync\TUM\MA\res\speedup-t.ep
 %     end
 % end
 
+gc = figure;
 to=60;
 tr=5;
 eNewT = zeros(length(lambdaV));

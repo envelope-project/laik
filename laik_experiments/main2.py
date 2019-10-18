@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+TEST_MAX=10
+
 def load_visualization(file : str):
     return np.array(imageio.imread(file), dtype=np.uint8)
 
@@ -31,25 +33,27 @@ def export_stats(osu, jac2d, lulesh, file):
     frame.set_index('Benchmark', inplace=True)
     frame.to_csv(file)
 
-def draw_runtime_boxplot():
+def draw_runtime_boxplot(file_pattern="experiment_runtime_time_mpi_{0}_{1}_trace.csv",
+                         title='Original Runtime of Benchmarks', csv='graphs/original-runtime-stats.csv',
+                         pdf='graphs/original-runtime.pdf'):
     osu = []
     jac2d = []
     lulesh = []
-    for experiment in range(0,9):
-        osu.append(calculate_runtime(load_experiment("experiment_runtime_time_mpi_osu_{0}_trace.csv".format(experiment))))
-        jac2d.append(calculate_runtime(load_experiment("experiment_runtime_time_mpi_jac2d_{0}_trace.csv".format(experiment))))
-        lulesh.append(calculate_runtime(load_experiment("experiment_runtime_time_mpi_lulesh_{0}_trace.csv".format(experiment))))
+    for experiment in range(0,TEST_MAX):
+        osu.append(calculate_runtime(load_experiment(file_pattern.format("osu", experiment))))
+        jac2d.append(calculate_runtime(load_experiment(file_pattern.format("jac2d", experiment))))
+        lulesh.append(calculate_runtime(load_experiment(file_pattern.format("lulesh", experiment))))
 
     data = [osu, jac2d, lulesh]
-    export_stats(osu, jac2d, lulesh, 'graphs/original-runtime-stats.csv')
-    boxPlot(data, 'Original Runtime of Benchmarks', 'Runtime (s)', 'graphs/original-runtime.pdf')
+    export_stats(osu, jac2d, lulesh, csv)
+    boxPlot(data, title, 'Runtime (s)', pdf)
 
 def draw_restart_boxplot(file_pattern="experiment_restart_time_mpi_{0}_{1}_trace.csv",
                          csv='graphs/restart-time-stats.csv', pdf='graphs/restart-time.pdf'):
     osu = []
     jac2d = []
     lulesh = []
-    for experiment in range(0,8):
+    for experiment in range(0,TEST_MAX-1):
         osu.append(calculate_restart_time(
             load_experiment(file_pattern.format("osu",experiment)),
             load_experiment(file_pattern.format("osu",experiment+1))
@@ -91,8 +95,12 @@ def draw_jac2d_example():
 
 
 draw_runtime_boxplot()
-draw_restart_boxplot()
-draw_restart_boxplot(file_pattern="experiment_restart_time_mpi_{0}_mca_{1}_trace.csv",
-                     csv='graphs/restart-time-mca-stats.csv',
-                     pdf='graphs/restart-time-mca.pdf')
-draw_jac2d_example()
+# draw_restart_boxplot()
+# draw_restart_boxplot(file_pattern="experiment_restart_time_mpi_{0}_mca_{1}_trace.csv",
+#                      csv='graphs/restart-time-mca-stats.csv',
+#                      pdf='graphs/restart-time-mca.pdf')
+# draw_runtime_boxplot(file_pattern='experiment_restart_time_to_solution_mpi_{0}_{1}_trace.csv',
+#                      title='Measured Time to Solution Restart Strategy',
+#                      csv='graphs/restart-time-to-solution-stats.csv',
+#                      pdf='graphs/restart-time-to-solution.pdf')
+# draw_jac2d_example()

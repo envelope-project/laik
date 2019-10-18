@@ -55,7 +55,16 @@ run_experiment () {
 	rm -r out/
 	tests/fault-tolerance/launcher.sh "$2" "$5" "$5" release "$3" "$4"
 	EXIT_CODE=$?
-	grep -h -e "===" out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_trace.csv"
+
+	if [ "$EXPERIMENT_TRACE_APPEND" -ne 1 ]
+	then
+	  echo "Creating a new trace"
+	  grep -h -e "===" out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_trace.csv"
+  else
+    echo "Appending to previous trace"
+	  grep -h -e "===" out/1/rank.*/stdout >> "laik_experiments/data/experiment_$1_trace.csv"
+	  sed -i 's/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA//2g' "laik_experiments/data/experiment_$1_trace.csv"
+  fi
 #	grep -h -e '!!!' out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_header.csv"
 
 	if [ $EXIT_CODE -ne 0 ] && [ "$EXPERIMENT_IGNORE_EXIT_CODE" -ne 1 ]
@@ -111,32 +120,42 @@ fi
 #JAC2D_CONF_A="20000 50 -1"
 #LULESH_CONF_A="-i 280 -s 14"
 OSU_CONF_A="-m 32768:32768 -i 2150000"
-JAC2D_CONF_A="25500 300 -1"
-LULESH_CONF_A="-i 3200 -s 16"
+JAC2D_CONF_A="25200 300 -1"
+LULESH_CONF_A="-i 1340 -s 17"
+
+EXPERIMENT_TRACE_APPEND=0
+TEST_MAX=10
 
 #Only includes ranks up to 27 to accomodate for LULESH
 FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
+RESTART_FAILURE_RANKS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26)
 case "$2" in
   "osu")
     BENCHMARK="osu"
     BENCHMARK_EXECUTABLE="$OSU"
     BENCHMARK_OPTIONS="$OSU_CONF_A"
+    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200000 --failureCheckFrequency 200000 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=48
     FAILURE_ITERATIONS=(142266 128688 121441 118626 44627 86271 25756 155891 123766 90289)
+    RESTART_FAILURE_ITERATIONS=(182737 -1 119668 360211 1192434 -1 623058 844874 -1 997321 1356872 -1 1226131 1560360 -1 -1 927938 -1 258380 1196613 1413304 -1 458820 -1 -1)
     ;;
   "jac2d")
     BENCHMARK="jac2d"
     BENCHMARK_EXECUTABLE="$JAC2D"
     BENCHMARK_OPTIONS="$JAC2D_CONF_A"
+    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 2000 --failureCheckFrequency 2000 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=48
     FAILURE_ITERATIONS=(14297 671 21445 21745 2790 11552 14735 14808 15161 19657)
+    RESTART_FAILURE_ITERATIONS=(7636 14443 16458 -1 22108 -1 -1 975 -1 20747 -1 2325 6859 7006 24984 -1 -1 20313 -1 -1 -1)
     ;;
   "lulesh")
     BENCHMARK="lulesh"
     BENCHMARK_EXECUTABLE="$LULESH"
     BENCHMARK_OPTIONS="$LULESH_CONF_A"
+    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200 --failureCheckFrequency 200 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=27
     FAILURE_ITERATIONS=(2985 2485 2507 1226 2460 1096 1917 1391 1914 5)
+    RESTART_FAILURE_ITERATIONS=(1770 -1 3189 -1 -1 723 2764 -1 -1 1229 2982 -1 1904 -1 1342 3180 -1 2072 2800 3027 -1 317 -1)
     ;;
   "all")
     echo "ALL: Skipping variable setting"
@@ -154,13 +173,13 @@ case "$1" in
       time run_experiment "timing_test_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27"
   ;;
   "runtime_time")
-    for i in {0..9} ; do
+    for ((i = 0; i < TEST_MAX; i++)); do
       run_experiment "runtime_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$BENCHMARK_OPTIONS" "$NUM_PROCESSES"
     done
   ;;
   "restart_time")
     MPI_OPTIONS=""
-    for i in {0..9} ; do
+    for ((i = 0; i < TEST_MAX; i++)); do
       OPTIONS=$(benchmark_concat_options "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
       run_experiment "restart_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK" "$OPTIONS" "$NUM_PROCESSES"
     done
@@ -168,12 +187,43 @@ case "$1" in
   "restart_time_mca")
     EXPERIMENT_IGNORE_EXIT_CODE=1
     MPI_OPTIONS="--mca orte_enable_recovery false"
-    for i in {0..9} ; do
+    for ((i = 0; i < TEST_MAX; i++)); do
       OPTIONS=$(benchmark_concat_options "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
       run_experiment "restart_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK" "$OPTIONS" "$NUM_PROCESSES"
     done
   ;;
-
+  "restart_time_to_solution")
+    EXPERIMENT_IGNORE_EXIT_CODE=1
+    EXPERIMENT_TRACE_APPEND=1
+    MPI_OPTIONS="--mca orte_enable_recovery false"
+    FAILURE_INDEX=0
+    for ((i = 0; i < TEST_MAX; i++)); do
+      while [ "${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}" -ne -1 ]
+      do
+        CURRENT_ITER="${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}"
+        OPTIONS=$(benchmark_concat_options "--plannedFailure ${RESTART_FAILURE_RANKS[$FAILURE_INDEX]} ${CURRENT_ITER}" "$BENCHMARK_OPTIONS")
+        run_experiment "restart_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK" "$OPTIONS" "$NUM_PROCESSES"
+        FAILURE_INDEX=$((FAILURE_INDEX++))
+      done
+    done
+  ;;
+  "checkpoint_time_to_solution")
+    EXPERIMENT_IGNORE_EXIT_CODE=0
+    EXPERIMENT_TRACE_APPEND=0
+    MPI_OPTIONS="--mca orte_enable_recovery false"
+    FAILURE_INDEX=0
+    for ((i = 0; i < TEST_MAX; i++)); do
+      OPTION_STRING="$BENCHMARK_CHECKPOINT_SETTINGS"
+      while [ "${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}" -ne -1 ]
+      do
+        CURRENT_ITER="${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}"
+        OPTION_STRING="$OPTION_STRING --plannedFailure ${RESTART_FAILURE_RANKS[$FAILURE_INDEX]} ${CURRENT_ITER}"
+        FAILURE_INDEX=$((FAILURE_INDEX++))
+      done
+        OPTIONS=$(benchmark_concat_options "$OPTION_STRING" "$BENCHMARK_OPTIONS")
+        run_experiment "checkpoint_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK" "$OPTIONS" "$NUM_PROCESSES"
+    done
+  ;;
   "recovery_time")
 
   ;;
