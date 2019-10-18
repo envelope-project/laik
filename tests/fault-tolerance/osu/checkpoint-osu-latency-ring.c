@@ -18,6 +18,56 @@
 #include <laik-internal.h>
 #include "osu_util_mpi.h"
 #include "laik.h"
+#include "../fault_tolerance_test.h"
+
+Laik_Instance *inst;
+Laik_Group *world;
+Laik_Space *space;
+Laik_Data *data;
+Laik_Checkpoint *spaceCheckpoint = NULL;
+int restoreIteration = -1;
+
+void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool delayCheckpointRelease) {
+    if(spaceCheckpoint != NULL && !delayCheckpointRelease) {
+        TPRINTF("Freeing previous checkpoint from iteration %i\n", restoreIteration);
+        laik_free(spaceCheckpoint->data);
+    }
+    TRACE_EVENT_S("CHECKPOINT-PRE-NEW", "");
+    TPRINTF("Creating checkpoint of data\n");
+    Laik_Checkpoint* newCheckpoint = laik_checkpoint_create(inst, space, data, NULL, redundancyCount,
+                                                            rotationDistance, world,LAIK_RO_None);
+    TRACE_EVENT_S("CHECKPOINT-POST-NEW", "");
+    TPRINTF("Checkpoint successful at iteration %i\n", iter);
+
+    if(spaceCheckpoint != NULL && delayCheckpointRelease) {
+        TPRINTF("Freeing previous checkpoint from iteration %i\n", restoreIteration);
+        laik_free(spaceCheckpoint->data);
+    }
+
+    spaceCheckpoint = newCheckpoint;
+    restoreIteration = iter;
+}
+
+void restoreCheckpoints() {
+    TPRINTF("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
+//    laik_partitioning_migrate(spaceCheckpoint->data->activePartitioning, world);
+    laik_checkpoint_restore(inst, spaceCheckpoint, space, data);
+    TPRINTF("Restore successful\n");
+}
+
+
+void createPartitionings(Laik_Partitioner *(singlePartitioners[]),
+                         Laik_Partitioning *(singlePartitionings[])) {
+    for (int task = 0; task < world->size; ++task) {
+        singlePartitionings[task] = laik_new_partitioning(singlePartitioners[task], world, space, NULL);
+    }
+}
+
+void errorHandler(void *errors) {
+    (void) errors;
+    TRACE_EVENT_S("COMM-ERROR", "");
+    TPRINTF("Received an error condition, attempting to continue.\n");
+}
 
 int main (int argc, char *argv[])
 {
@@ -35,8 +85,8 @@ int main (int argc, char *argv[])
 
     FaultToleranceOptions faultToleranceOptions = FaultToleranceOptionsDefault;
 
-    Laik_Instance* inst = laik_init(&argc, &argv);
-    Laik_Group *world = laik_world(inst);
+    inst = laik_init(&argc, &argv);
+    world = laik_world(inst);
     numprocs = laik_size(world);
     myid = laik_myid(world);
 
@@ -135,15 +185,16 @@ int main (int argc, char *argv[])
         singlePartitioners[task] = laik_new_single_partitioner(task);
     }
 
+    int nodeStatuses[world->size];
+    Laik_Checkpoint* checkpoint = NULL;
+
     TRACE_EVENT_END("INIT", "");
     /* Latency test */
     for(/* Initialized above */; size <= options.max_message_size; size = (size ? size * 2 : 1)) {
-        Laik_Space* space = laik_new_space_1d(inst, size);
-        Laik_Data* data = laik_new_data(space, laik_Char);
+        space = laik_new_space_1d(inst, size);
+        data = laik_new_data(space, laik_Char);
 
-        for (int task = 0; task < world->size; ++task) {
-            singlePartitionings[task] = laik_new_partitioning(singlePartitioners[task], world, space, NULL);
-        }
+        createPartitionings(singlePartitioners, singlePartitionings);
 //        Laik_Partitioning* newT1Partitioning = laik_new_partitioning(singlePartitioner, world, laik_data_get_space(data), NULL);
 //        singlePartitioner->data = (void*)(((Laik_SinglePartitionerData)singlePartitioner->data) + 1);
 //        Laik_Partitioning* newT2Partitioning = laik_new_partitioning(singlePartitioner, world, laik_data_get_space(data), NULL);
@@ -175,6 +226,71 @@ int main (int argc, char *argv[])
             if(i % 10000 == 0) {
                 TRACE_EVENT_S("ITER", "");
             }
+            if (faultToleranceOptions.failureCheckFrequency > 0 && i % faultToleranceOptions.failureCheckFrequency == 0) {
+                TPRINTF("Attempting to determine global status.\n");
+                TRACE_EVENT_START("FAILURE-CHECK", "");
+                Laik_Group *checkGroup = world;
+                int numFailed = laik_failure_check_nodes(inst, checkGroup, nodeStatuses);
+                TRACE_EVENT_END("FAILURE-CHECK", "");
+                if (numFailed == 0) {
+                    TPRINTF("Could not detect a failed node.\n");
+                } else {
+                    TRACE_EVENT_S("FAILURE-DETECT", "");
+                    // Don't allow any failures while recovery
+                    laik_log(LAIK_LL_Info, "Deactivating error handler!");
+                    laik_error_handler_set(inst, NULL);
+
+                    laik_failure_eliminate_nodes(inst, numFailed, nodeStatuses);
+
+                    // Re-fetch the world
+                    world = laik_world_fault_tolerant(inst);
+
+                    TPRINTF("Attempting to restore with new world size %i\n", world->size);
+
+                    TRACE_EVENT_START("RESTORE", "");
+                    createPartitionings(singlePartitioners, singlePartitionings);
+
+                    TPRINTF("Switching to new partitionings\n");
+                    laik_switchto_partitioning(data, singlePartitionings[0], LAIK_DF_None, LAIK_RO_None);
+
+                    if (!faultToleranceOptions.skipCheckpointRecovery) {
+                        TPRINTF("Removing failed slices from checkpoints\n");
+                        if (!laik_checkpoint_remove_failed_slices(checkpoint, checkGroup, nodeStatuses)) {
+                            TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
+                            abort();
+                        }
+
+                        restoreCheckpoints();
+                        i = restoreIteration;
+                    } else {
+                        laik_log(LAIK_LL_Info, "Skipping checkpoint restore.");
+                    }
+
+                    TRACE_EVENT_END("RESTORE", "");
+                    TPRINTF("Restore complete, cleared errors.\n");
+
+//                TPRINTF("Special: Switching to all partitioning.\n");
+//                Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
+//
+//                laik_switchto_partitioning(data1, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
+//                laik_switchto_partitioning(data2, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
+//
+//                TPRINTF("Special: Switched to all partitioning.\n");
+
+                    // Restored normal state, errors are allowed now
+                    laik_log(LAIK_LL_Info, "Reactivating error handler!");
+                    laik_error_handler_set(inst, errorHandler);
+                }
+            }
+
+            // At every checkpointFrequency iterations, do a checkpoint
+            if (faultToleranceOptions.checkpointFrequency > 0 && i % faultToleranceOptions.checkpointFrequency == 0) {
+                TRACE_EVENT_START("CHECKPOINT", "");
+                createCheckpoints(i, faultToleranceOptions.redundancyCount, faultToleranceOptions.rotationDistance, faultToleranceOptions.delayCheckpointRelease);
+                TRACE_EVENT_END("CHECKPOINT", "");
+            }
+
+
             if (i == options.skip) {
                 t_start = laik_wtime();
             }

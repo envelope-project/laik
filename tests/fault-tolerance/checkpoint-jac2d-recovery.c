@@ -141,12 +141,6 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
 //    }
 }
 
-void errorHandler(void *errors) {
-    (void) errors;
-    TRACE_EVENT_S("COMM-ERROR", "");
-    TPRINTF("Received an error condition, attempting to continue.\n");
-}
-
 Laik_Instance *inst;
 Laik_Group *world;
 Laik_Group *smallWorld;
@@ -158,6 +152,11 @@ Laik_Data *dSum;
 Laik_Partitioner *prWrite, *prRead;
 Laik_Data *dWrite, *dRead;
 
+void errorHandler(void *errors) {
+    (void) errors;
+    TRACE_EVENT_S("COMM-ERROR", "");
+    TPRINTF("Received an error condition, attempting to continue.\n");
+}
 
 // Always dWrite
 Laik_Checkpoint *spaceCheckpoint = NULL;
