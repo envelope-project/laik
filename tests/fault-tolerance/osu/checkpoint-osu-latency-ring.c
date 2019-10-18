@@ -65,8 +65,10 @@ void createPartitionings(Laik_Partitioner *(singlePartitioners[]),
 
 void errorHandler(void *errors) {
     (void) errors;
-    TRACE_EVENT_S("COMM-ERROR", "");
-    TPRINTF("Received an error condition, attempting to continue.\n");
+    if(laik_get_iteration(inst) % 1000 == 0) {
+        TRACE_EVENT_S("COMM-ERROR", "");
+        TPRINTF("Received an error condition, attempting to continue.\n");
+    }
 }
 
 int main (int argc, char *argv[])
@@ -89,6 +91,8 @@ int main (int argc, char *argv[])
     world = laik_world(inst);
     numprocs = laik_size(world);
     myid = laik_myid(world);
+
+    laik_error_handler_set(inst, errorHandler);
 
     po_ret = process_options(argc, argv, myid, &faultToleranceOptions);
 
@@ -186,7 +190,6 @@ int main (int argc, char *argv[])
     }
 
     int nodeStatuses[world->size];
-    Laik_Checkpoint* checkpoint = NULL;
 
     TRACE_EVENT_END("INIT", "");
     /* Latency test */
@@ -223,6 +226,7 @@ int main (int argc, char *argv[])
 //        MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD));
 
         for(i = 0; i < options.iterations + options.skip; i++) {
+            laik_set_iteration(inst, i);
             if(i % 10000 == 0) {
                 TRACE_EVENT_S("ITER", "");
             }
@@ -255,7 +259,7 @@ int main (int argc, char *argv[])
 
                     if (!faultToleranceOptions.skipCheckpointRecovery) {
                         TPRINTF("Removing failed slices from checkpoints\n");
-                        if (!laik_checkpoint_remove_failed_slices(checkpoint, checkGroup, nodeStatuses)) {
+                        if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, checkGroup, nodeStatuses)) {
                             TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
                             abort();
                         }
