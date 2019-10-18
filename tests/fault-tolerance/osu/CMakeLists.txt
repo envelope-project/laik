@@ -23,8 +23,6 @@ foreach (test
 #    set_source_files_properties( osu_util_mpi.c COMPILE_FLAGS ${MYPROPS} )
 
 
-    set_source_files_properties( osu_util.c PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter" )
-    set_source_files_properties( osu_util_mpi.c PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter" )
 
     target_compile_options("${test}"
             PRIVATE
@@ -37,4 +35,8 @@ foreach (test
             PRIVATE "m"
             PRIVATE "mpi"
             )
+
+    set_source_files_properties( osu_util.c PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter" )
+    set_source_files_properties( osu_util_mpi.c PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter" )
+
 endforeach ()

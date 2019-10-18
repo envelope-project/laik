@@ -85,6 +85,6 @@ void exitIfFailureIteration(int iter, FaultToleranceOptions* faultToleranceOptio
         TRACE_EVENT_S("FAILURE-GENERATE", "");
         printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(laik_world(inst)),
                 iter);
-        exit(0);
+        abort();
     }
 }

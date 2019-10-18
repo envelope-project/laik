@@ -17,7 +17,7 @@ CXX=$(which g++)
 export CC
 export CXX
 
-cmake -DCMAKE_SYSTEM_PREFIX_PATH=/dss/dsshome1/08/ga26poh3/lib/ -DMPI_C_COMPILER=/dss/dsshome1/08/ga26poh3/lib/bin/mpicc -DMPI_CXX_COMPILER=/dss/dsshome1/08/ga26poh3/lib/bin/mpicxx -Dtcp-backend=off ../
+cmake -DCMAKE_SYSTEM_PREFIX_PATH=~/lib/ -DMPI_C_COMPILER=~/lib/bin/mpicc -DMPI_CXX_COMPILER=~/lib/bin/mpicxx -Dtcp-backend=off ../
 make
 
 cd ..

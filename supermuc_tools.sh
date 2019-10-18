@@ -22,6 +22,15 @@ case "$1" in
   "maimuc-sync-down-data")
     rsync -av -e "ssh -J bodev@himmuc.caps.in.tum.de" ga26poh3@skx.supermuc.lrz.de:/dss/dsshome1/08/ga26poh3/laik/laik_experiments/data ./laik_experiments/
   ;;
+  "himmuc-sync-up")
+    rsync -av --exclude ".*" --exclude "cmake-build-*" --exclude="out" --exclude "lib" --exclude "laik_experiments/data" ./ bodev@himmuc.caps.in.tum.de:/u/home/bodev/laik/
+  ;;
+  "himmuc-sync-down-data")
+    rsync -av bodev@himmuc.caps.in.tum.de:/u/home/bodev/laik/laik_experiments/data ./laik_experiments/
+  ;;
+  "himmuc-sh")
+    ssh bodev@himmuc.caps.in.tum.de
+  ;;
   "maimuc-sync-data")
     for i in 0 1 3 4 5 6 7 8 9
     do

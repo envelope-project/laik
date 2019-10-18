@@ -172,6 +172,9 @@ int main (int argc, char *argv[])
 //        MPI_CHECK(MPI_Barrier(MPI_COMM_WORLD));
 
         for(i = 0; i < options.iterations + options.skip; i++) {
+            if(i % 10000 == 0) {
+                TRACE_EVENT_S("ITER", "");
+            }
             if (i == options.skip) {
                 t_start = laik_wtime();
             }

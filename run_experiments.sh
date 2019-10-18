@@ -48,7 +48,8 @@ fi
 # $1: Name, $2 Type, $3 Executable, $4 Executable_args, $5 run_number
 run_experiment () {
 	echo "Running experiment $1"
-	export MPI_OPTIONS="--output-filename out --merge-stderr-to-stdout --stdin none"
+	export MPI_OPTIONS="$MPI_OPTIONS --output-filename out --merge-stderr-to-stdout --stdin none"
+#	export MPI_OPTIONS="--output-filename out --merge-stderr-to-stdout --stdin none --mca mpi_ft_detector true"
 #	export MPI_OPTIONS="$MPI_OPTIONS --oversubscribe"
 	export TEST_NAME="$1"
 	rm -r out/
@@ -57,7 +58,7 @@ run_experiment () {
 	grep -h -e "===" out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_trace.csv"
 	grep -h -e '!!!' out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_header.csv"
 
-	if [ $EXIT_CODE -ne 0 ]
+	if [ $EXIT_CODE -ne 0 ] && [ "$EXPERIMENT_IGNORE_EXIT_CODE" -ne 1 ]
 	then
 	  echo "Error: $EXIT_CODE"
 	  exit $EXIT_CODE
@@ -99,6 +100,7 @@ case "$1" in
     done
   ;;
   "restart_time")
+    MPI_OPTIONS=""
     #Only includes ranks up to 27 to accomodate for LULESH
     FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
     FAILURE_ITERATIONS=(148718 5046 96469 169485 73560 97777 122117 75460 120029 42470)
@@ -114,6 +116,26 @@ case "$1" in
     FAILURE_ITERATIONS=(207 218 142 273 256 165 168 254 113 172)
     for i in {0..9} ; do
       run_experiment "restart_time_mpi_lulesh_$i" "mpi" "$LULESH" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $LULESH_CONF_A" "27"
+    done
+  ;;
+  "restart_time_mca")
+    EXPERIMENT_IGNORE_EXIT_CODE=1
+    MPI_OPTIONS="--mca orte_enable_recovery false"
+    #Only includes ranks up to 27 to accomodate for LULESH
+    FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
+    FAILURE_ITERATIONS=(148718 5046 96469 169485 73560 97777 122117 75460 120029 42470)
+    for i in {0..9} ; do
+      run_experiment "restart_time_mpi_osu_mca_$i" "mpi" "$OSU" "$OSU_CONF_A -- --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "48"
+    done
+
+    FAILURE_ITERATIONS=(17 23 27 44 13 21 6 43 35 10)
+    for i in {0..9} ; do
+      run_experiment "restart_time_mpi_jac2d_mca_$i" "mpi" "$JAC2D" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $JAC2D_CONF_A" "48"
+    done
+
+    FAILURE_ITERATIONS=(207 218 142 273 256 165 168 254 113 172)
+    for i in {0..9} ; do
+      run_experiment "restart_time_mpi_lulesh_mca_$i" "mpi" "$LULESH" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]} $LULESH_CONF_A" "27"
     done
   ;;
 

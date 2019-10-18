@@ -390,7 +390,7 @@ int main(int argc, char *argv[]) {
 
         //TODO: Comment back out
 //        exportDataForVisualization();
-        exportDataFiles();
+//        exportDataFiles();
 
         // switch roles: data written before now is read
         if (dRead == data1) {
