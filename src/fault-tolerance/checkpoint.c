@@ -159,16 +159,15 @@ void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning
 
 // Copies from 1 to 2! Not like memcpy
 void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
-    void *baseTarget = mappingTarget->base, *baseSource = mappingSource->base;
-    uint64_t *strideSource = mappingSource->layout->stride;
-    uint64_t *strideTarget = mappingTarget->layout->stride;
-    uint64_t *sizeSource = mappingSource->size;
-    uint64_t *sizeTarget = mappingTarget->size;
+    Laik_NDimMapDataAllocation source, target;
+    laik_checkpoint_setupNDimAllocation(mappingSource, &source);
+    laik_checkpoint_setupNDimAllocation(mappingTarget, &target);
 
-    assert(baseSource != NULL && baseTarget != NULL);
-    assert(memcmp(sizeTarget, sizeSource, sizeof(uint64_t) * 3) == 0);
-
+    assert(source.base != NULL && target.base != NULL);
+    assert(source.sizeZ == target.sizeZ && source.sizeY == target.sizeY && source.sizeX == target.sizeX);
     assert(mappingTarget->data->type == mappingSource->data->type);
+    assert(mappingSource->layout->dims == mappingTarget->layout->dims);
+
     Laik_Type *type = mappingTarget->data->type;
 
     laik_log(LAIK_LL_Debug,
@@ -176,40 +175,17 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
              " y:%" PRIu64 " x:%" PRIu64 " and size z:%" PRIu64 " y:%" PRIu64
              " x:%" PRIu64 " to mapping with strides z:%" PRIu64 " y:%" PRIu64 " x:%" PRIu64,
              type->name, type->size,
-             strideSource[2], strideSource[1], strideSource[0],
-             sizeSource[2], sizeSource[1], sizeSource[0],
-             strideTarget[2], strideTarget[1], strideTarget[0]);
+             source.strideZ, source.strideY, source.strideX,
+             source.sizeZ, source.sizeY, source.sizeX,
+             target.strideZ, target.strideY, target.strideX);
 
-    assert(strideSource[0] != 0 || strideSource[1] != 0 || strideSource[2] != 0);
-    assert(strideTarget[0] != 0 || strideTarget[1] != 0 || strideTarget[2] != 0);
-
-    uint64_t sizeZ = sizeTarget[2];
-    uint64_t sizeY = sizeTarget[1];
-    uint64_t sizeX = sizeTarget[0];
-
-    assert(mappingSource->layout->dims == mappingTarget->layout->dims);
-    // Sets all dimension sizes above current dimension to 1 (so that loop is executed).
-    switch (mappingSource->layout->dims) {
-        case 1:
-            sizeY = 1;
-            sizeZ = 1;
-            break;
-        case 2:
-            sizeZ = 1;
-            break;
-        case 3:
-            break;
-        default:
-            laik_log(LAIK_LL_Panic, "Unknown dimensionality in bufCopy: %i", mappingSource->layout->dims);
-    }
-
-    for (uint64_t z = 0; z < sizeZ; ++z) {
-        for (uint64_t y = 0; y < sizeY; ++y) {
-            for (uint64_t x = 0; x < sizeX; ++x) {
-                memcpy((unsigned char *) baseTarget +
-                       ((z * strideTarget[2]) + (y * strideTarget[1]) + (x * strideTarget[0])) * type->size,
-                       (unsigned char *) baseSource +
-                       ((z * strideSource[2]) + (y * strideSource[1]) + (x * strideSource[0])) * type->size,
+    for (uint64_t z = 0; z < source.sizeZ; ++z) {
+        for (uint64_t y = 0; y < source.sizeY; ++y) {
+            for (uint64_t x = 0; x < source.sizeX; ++x) {
+                memcpy((unsigned char *) target.base +
+                       ((z * target.strideZ) + (y * target.strideY) + (x * target.strideX)) * type->size,
+                       (unsigned char *) source.base +
+                       ((z * source.strideZ) + (y * source.strideY) + (x * source.strideX)) * type->size,
                        type->size);
             }
         }
@@ -404,4 +380,46 @@ int laik_location_get_world_offset(Laik_Group *group, int id) {
 void laik_checkpoint_free(Laik_Checkpoint *checkpoint) {
     laik_free(checkpoint->data);
     free(checkpoint);
+}
+
+void laik_checkpoint_setupNDimAllocation(const Laik_Mapping *mappingSource, Laik_NDimMapDataAllocation *allocation) {
+    (*allocation).base = mappingSource->base;
+    uint64_t *strideSource = mappingSource->layout->stride;
+    const uint64_t *sizeSource = mappingSource->size;
+    const int64_t  *fromSource = mappingSource->allocatedSlice.from.i;
+
+    (*allocation).typeSize = mappingSource->data->type->size;
+
+    assert(strideSource[0] != 0 || strideSource[1] != 0 || strideSource[2] != 0);
+
+    (*allocation).sizeZ = sizeSource[2];
+    (*allocation).sizeY = sizeSource[1];
+    (*allocation).sizeX = sizeSource[0];
+
+    (*allocation).strideZ = strideSource[2];
+    (*allocation).strideY = strideSource[1];
+    (*allocation).strideX = strideSource[0];
+
+    allocation->globalStartZ = fromSource[2];
+    allocation->globalStartY = fromSource[1];
+    allocation->globalStartX = fromSource[0];
+
+    // Sets all dimension sizes above current dimension to 1 (so that loop is executed).
+    switch (mappingSource->layout->dims) {
+        case 1:
+            (*allocation).sizeY = 1;
+            (*allocation).sizeZ = 1;
+            allocation->globalStartY = 0;
+            allocation->globalStartZ = 0;
+            break;
+        case 2:
+            (*allocation).sizeZ = 1;
+            allocation->globalStartZ = 0;
+            break;
+        case 3:
+            break;
+        default:
+            laik_log(LAIK_LL_Panic, "Unknown dimensionality in test verify sample data: %i",
+                     mappingSource->layout->dims);
+    }
 }

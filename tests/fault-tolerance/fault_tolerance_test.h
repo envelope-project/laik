@@ -8,23 +8,38 @@
 #include "fault_tolerance_test_hash.h"
 #include <assert.h>
 
-#define TEST_SIZE 4096
+#define TEST_SIZE 256
 
 struct _Laik_Unit_Test_Data {
-    Laik_Instance* inst;
-    Laik_Group* world;
+    Laik_Instance *inst;
+    Laik_Group *world;
 
-    Laik_Space* space;
-    Laik_Data* data;
+    Laik_Space *space;
+    Laik_Data *data;
 
-    Laik_Partitioner* blockPartitioner;
-    Laik_Partitioning* blockPartitioning;
+    Laik_Partitioner *blockPartitioner;
+    Laik_Partitioning *blockPartitioning;
 
-    Laik_Partitioner* masterPartitioner;
-    Laik_Partitioning* masterPartitioning;
+    Laik_Partitioner *masterPartitioner;
+    Laik_Partitioning *masterPartitioning;
 };
 
 typedef struct _Laik_Unit_Test_Data Laik_Unit_Test_Data;
+
+void __test_assert_fail(const char *expression, const char *msg, int64_t expect, int64_t expr, const char *file,
+                        unsigned int line) {
+    laik_log(LAIK_LL_Panic, "Test assertion %s failed: %s. Expected %zu, got %zu in %s:%i.", expression, msg, expect,
+             expr, file, line);
+    abort();
+}
+
+#define test_assert(expect, expr, msg)                            \
+  ((void) sizeof ((expr) ? 1 : 0), __extension__ ({            \
+      if (expr == expect)                                \
+        ; /* empty */                            \
+      else                                \
+        __test_assert_fail (#expr, msg, expect, expr, __FILE__, __LINE__);    \
+    }))
 
 ////Laik_Instance *inst;
 ////Laik_Group *world;
@@ -58,58 +73,98 @@ void test_init_laik(int *argc, char ***argv, Laik_Unit_Test_Data *testData) {
     // provides meta-information for logging
     laik_set_phase(testData->inst, 0, "init", 0);
 }
+
+void test_write_sample_data(Laik_Data *data) {
+    Laik_Partitioning *partitioning = laik_data_get_partitioning(data);
+    for (int sliceIndex = 0; sliceIndex < laik_my_mapcount(partitioning); ++sliceIndex) {
+        Laik_Mapping *mappingSource = laik_map(data, sliceIndex, 0);
+
+        Laik_NDimMapDataAllocation allocation;
+        laik_checkpoint_setupNDimAllocation(mappingSource, &allocation);
+
+        for (uint64_t z = 0; z < allocation.sizeZ; ++z) {
+            for (uint64_t y = 0; y < allocation.sizeY; ++y) {
+                for (uint64_t x = 0; x < allocation.sizeX; ++x) {
+                    double value = (z + allocation.globalStartZ) * TEST_SIZE * TEST_SIZE
+                                   + (y + allocation.globalStartY) * TEST_SIZE
+                                   + x + allocation.globalStartX;
+                    double *pos = (double *) ((unsigned char *) allocation.base +
+                                              ((z * allocation.strideZ)
+                                               + (y * allocation.strideY)
+                                               + (x * allocation.strideX))
+                                              * allocation.typeSize);
+                    *pos = value;
+                }
+            }
+        }
+
+    }
+}
+
 //
-void test_create_sample_data(Laik_Unit_Test_Data* testData) {
-    // define global 1d double originalData with <size> entries
-    testData->space = laik_new_space_1d(testData->inst, TEST_SIZE);
+void test_create_sample_data(Laik_Unit_Test_Data *testData, int dimensions) {
+    switch (dimensions) {
+        case 1:
+            testData->space = laik_new_space_1d(testData->inst, TEST_SIZE);
+            break;
+        case 2:
+            testData->space = laik_new_space_2d(testData->inst, TEST_SIZE, TEST_SIZE);
+            break;
+        case 3:
+            testData->space = laik_new_space_3d(testData->inst, TEST_SIZE, TEST_SIZE, TEST_SIZE);
+            break;
+        default:
+            test_assert(true, (dimensions > 0) && (dimensions <= 3), "Test data creation dimensionality");
+    }
     testData->data = laik_new_data(testData->space, laik_Double);
 
     // Create some sample originalData to checkpoint
     Laik_Partitioning *masterPartitioning = laik_new_partitioning(laik_Master, testData->world, testData->space, 0);
     laik_switchto_partitioning(testData->data, masterPartitioning, LAIK_DF_None, LAIK_RO_None);
 
-    double *base;
-    uint64_t count;
-    if (laik_myid(testData->world) == 0) {
-        // it is ensured this is exactly one slice
-        laik_map_def1(testData->data, (void**) &base, &count);
-        for (uint64_t i = 0; i < count; i++) base[i] = (double) i;
-    }
+    test_write_sample_data(testData->data);
 }
 
-bool test_verify_sample_data(Laik_Data* data) {
-    double* base;
-    uint64_t count;
-    Laik_Partitioning *partitioning = laik_data_get_partitioning(data);
-    for (int sliceIndex = 0; sliceIndex < laik_my_slicecount(partitioning); ++sliceIndex) {
-        laik_map_def(data, sliceIndex, (void **) &base, &count);
-        Laik_TaskSlice* taskSlice = laik_my_slice(partitioning, sliceIndex);
-        const Laik_Slice* slice = laik_taskslice_get_slice(taskSlice);
-        int64_t sZ = slice->from.i[2];
-        int64_t sY = slice->from.i[1];
-        int64_t sX = slice->from.i[0];
-        if(slice->space->dims < 3) { sZ = 0; }
-        if(slice->space->dims < 2) { sY = 0; }
-//        laik_log(LAIK_LL_Warning, "Checking slice %i: %zu, %zu, %zu", sliceIndex, sZ, sY, sX);
 
-        int startValue = sZ * TEST_SIZE * TEST_SIZE + sY * TEST_SIZE + sX;
-        for (uint64_t offset = 0; offset < count; ++offset) {
-            if(base[offset] != startValue) {
-//                laik_log(LAIK_LL_Warning, "Comparison failed at slice %i offset %zu, values %i, %f", sliceIndex, offset, startValue, base[offset]);
-                return false;
+bool test_verify_sample_data(Laik_Data *data) {
+    Laik_Partitioning *partitioning = laik_data_get_partitioning(data);
+    for (int sliceIndex = 0; sliceIndex < laik_my_mapcount(partitioning); ++sliceIndex) {
+        Laik_Mapping *mappingSource = laik_map(data, sliceIndex, 0);
+
+        Laik_NDimMapDataAllocation allocation;
+        laik_checkpoint_setupNDimAllocation(mappingSource, &allocation);
+
+        for (uint64_t z = 0; z < allocation.sizeZ; ++z) {
+            for (uint64_t y = 0; y < allocation.sizeY; ++y) {
+                for (uint64_t x = 0; x < allocation.sizeX; ++x) {
+                    double value = (z + allocation.globalStartZ) * TEST_SIZE * TEST_SIZE
+                                    + (y + allocation.globalStartY) * TEST_SIZE
+                                    + x + allocation.globalStartX;
+                    double *pos = (double *) ((unsigned char *) allocation.base +
+                                              ((z * allocation.strideZ)
+                                              + (y * allocation.strideY)
+                                              + (x * allocation.strideX))
+                                              * allocation.typeSize);
+                    if(value != *pos) {
+//                        fprintf(stderr, "Test failed at xyz %lu %lu %lu + xyz %lu %lu %lu, expected %f got %f\n", x, y, z, mappingSource->allocatedSlice.from.i[2], mappingSource->allocatedSlice.from.i[1], mappingSource->allocatedSlice.from.i[0], value, *pos);
+                        return false;
+                    }
+                }
             }
-            startValue++;
         }
+
     }
     return true;
 }
 
-void test_create_partitioners_and_partitionings(Laik_Unit_Test_Data* testData) {
+void test_create_partitioners_and_partitionings(Laik_Unit_Test_Data *testData) {
     testData->blockPartitioner = laik_new_block_partitioner1();
-    testData->blockPartitioning = laik_new_partitioning(testData->blockPartitioner, testData->world, testData->space, 0);
+    testData->blockPartitioning = laik_new_partitioning(testData->blockPartitioner, testData->world, testData->space,
+                                                        0);
 
     testData->masterPartitioner = laik_Master;
-    testData->masterPartitioning = laik_new_partitioning(testData->masterPartitioner, testData->world, testData->space, 0);
+    testData->masterPartitioning = laik_new_partitioning(testData->masterPartitioner, testData->world, testData->space,
+                                                         0);
 }
 
 //void tprintf(char* msg, ...) __attribute__ ((format (printf, 1, 2)));

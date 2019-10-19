@@ -18,6 +18,18 @@ struct _Laik_Checkpoint {
 
 typedef struct _Laik_Checkpoint Laik_Checkpoint;
 
+struct _Laik_NDimMapDataAllocation {
+    void* base;
+    uint64_t strideX, strideY, strideZ;
+    uint64_t sizeX, sizeY, sizeZ;
+    int64_t globalStartX, globalStartY, globalStartZ;
+    int typeSize;
+};
+
+typedef struct _Laik_NDimMapDataAllocation Laik_NDimMapDataAllocation;
+
+void laik_checkpoint_setupNDimAllocation(const Laik_Mapping *mappingSource, Laik_NDimMapDataAllocation *allocation);
+
 Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
                                         Laik_Partitioner *backupPartitioner, int redundancyCount, int rotationDistance,
                                         Laik_Group *backupGroup, enum _Laik_ReductionOperation reductionOperation);

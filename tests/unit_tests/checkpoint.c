@@ -14,6 +14,7 @@
 #include "../fault-tolerance/fault_tolerance_test_hash.h"
 
 
+Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData);
 
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
@@ -21,52 +22,63 @@ int main(int argc, char *argv[]) {
 
     test_init_laik(&argc, &argv, &testData);
 
-    test_create_sample_data(&testData);
-    assert(test_verify_sample_data(testData.data));
+    test_create_sample_data(&testData, 2);
+    test_assert(true, test_verify_sample_data(testData.data), "Original test data verification");
+    testData = runTestWithData(&testData);
 
-    // distribute originalData equally among all
-    test_create_partitioners_and_partitionings(&testData);
-    laik_switchto_partitioning(testData.data, testData.blockPartitioning, LAIK_DF_Preserve, LAIK_RO_None);
-    assert(test_verify_sample_data(testData.data));
+    test_create_sample_data(&testData, 3);
+    test_assert(true, test_verify_sample_data(testData.data), "Original test data verification");
+    testData = runTestWithData(&testData);
 
-    Laik_Checkpoint* checkpoint = laik_checkpoint_create(testData.inst,
-            testData.space, testData.data, NULL,
-            0, 0, testData.world,LAIK_RO_None);
-    assert(test_verify_sample_data(checkpoint->data));
-    assert(laik_partitioning_isEqual(testData.blockPartitioning, laik_data_get_partitioning(checkpoint->data)));
+    laik_log(LAIK_LL_Info, "Test passed");
+    laik_finalize(testData.inst);
+    return 0;
+}
+
+Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribute originalData equally among all
+    test_create_partitioners_and_partitionings(testData);
+    laik_switchto_partitioning((*testData).data, (*testData).blockPartitioning, LAIK_DF_Preserve, LAIK_RO_None);
+    test_assert(true, test_verify_sample_data((*testData).data), "Distributed test data verification");
+
+    Laik_Checkpoint* checkpoint = laik_checkpoint_create((*testData).inst,
+                                                         (*testData).space, (*testData).data, NULL,
+                                                         0, 0, (*testData).world, LAIK_RO_None);
+    test_assert(true, test_verify_sample_data(checkpoint->data), "Checkpoint test data verification");
+    test_assert(true,
+                laik_partitioning_isEqual((*testData).blockPartitioning, laik_data_get_partitioning(checkpoint->data)),
+                "Non redundant checkpoint has equal partitionings to original data");
 
     // Write garbage over the original data and then restore
     double* base;
     uint64_t count;
-    laik_map_def1(testData.data, (void **) &base, &count);
+    laik_map_def1((*testData).data, (void **) &base, &count);
     for (uint64_t i = 0; i < count; i++) base[i] = (double) i + 1;
-    assert(!test_verify_sample_data(testData.data));
+    test_assert(false, test_verify_sample_data((*testData).data), "Test data scrambled verification");
 
     // Restore useful data from checkpoint over the garbage data
-    laik_checkpoint_restore(testData.inst, checkpoint, testData.space, testData.data);
-    assert(test_verify_sample_data(testData.data));
+    laik_checkpoint_restore((*testData).inst, checkpoint, (*testData).space, (*testData).data);
+    test_assert(true, test_verify_sample_data((*testData).data), "Restored test data verification");
 
     laik_checkpoint_free(checkpoint);
 
     int nodeStatuses[] = { LAIK_FT_NODE_OK, LAIK_FT_NODE_OK, LAIK_FT_NODE_FAULT, LAIK_FT_NODE_OK};
 
     //Check that missing redundancy is detected correctly
-    checkpoint = laik_checkpoint_create(testData.inst, testData.space, testData.data, NULL, 0, 0, NULL, LAIK_RO_None);
-    assert(!laik_checkpoint_remove_failed_slices(checkpoint, testData.world, nodeStatuses));
+    checkpoint = laik_checkpoint_create((*testData).inst, (*testData).space, (*testData).data, NULL, 0, 0, NULL, LAIK_RO_None);
+    test_assert(false, laik_checkpoint_remove_failed_slices(checkpoint, (*testData).world, nodeStatuses),
+                "Failed slice on non-redundant checkpoint causes data loss");
     laik_checkpoint_free(checkpoint);
 
     //Check that bad rotation distance is detected correctly
-    checkpoint = laik_checkpoint_create(testData.inst, testData.space, testData.data, NULL, 1, 4, NULL, LAIK_RO_None);
-    assert(!laik_checkpoint_remove_failed_slices(checkpoint, testData.world, nodeStatuses));
+    checkpoint = laik_checkpoint_create((*testData).inst, (*testData).space, (*testData).data, NULL, 1, 4, NULL, LAIK_RO_None);
+    test_assert(false, laik_checkpoint_remove_failed_slices(checkpoint, (*testData).world, nodeStatuses),
+                "Incorrect rotation distance on redundant checkpoint causes data loss");
     laik_checkpoint_free(checkpoint);
 
     //Check that correct rotation distance is detected correctly
-    checkpoint = laik_checkpoint_create(testData.inst, testData.space, testData.data, NULL, 1, 1, NULL, LAIK_RO_None);
-    assert(!laik_checkpoint_remove_failed_slices(checkpoint, testData.world, nodeStatuses));
+    checkpoint = laik_checkpoint_create((*testData).inst, (*testData).space, (*testData).data, NULL, 1, 1, NULL, LAIK_RO_None);
+    test_assert(true, laik_checkpoint_remove_failed_slices(checkpoint, (*testData).world, nodeStatuses),
+                "Correct rotation distance on redundant checkpoint causes no data loss");
     laik_checkpoint_free(checkpoint);
-
-
-    laik_log(LAIK_LL_Info, "Test passed");
-    laik_finalize(testData.inst);
-    return 0;
+    return (*testData);
 }
