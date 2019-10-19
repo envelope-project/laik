@@ -209,7 +209,7 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
                 memcpy((unsigned char *) baseTarget +
                        ((z * strideTarget[2]) + (y * strideTarget[1]) + (x * strideTarget[0])) * type->size,
                        (unsigned char *) baseSource +
-                       ((z * strideSource[2]) + (y * strideSource[1]) + (x * strideTarget[0])) * type->size,
+                       ((z * strideSource[2]) + (y * strideSource[1]) + (x * strideSource[0])) * type->size,
                        type->size);
             }
         }
