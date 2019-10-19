@@ -1,12 +1,14 @@
 foreach (unit_test
-        "core"
+#        "core"
+        "checkpoint"
 )
-    add_executable("unit_test_${unit_test}" "${CMAKE_CURRENT_SOURCE_DIR}/${unit_test}.c")
+    add_executable("${unit_test}" "${CMAKE_CURRENT_SOURCE_DIR}/${unit_test}.c")
 
-    target_link_libraries ("unit_test_${unit_test}"
+    target_link_libraries ("${unit_test}"
             PRIVATE "laik"
             PRIVATE "m"
             )
 
-    add_test ("unit_test/${unit_test}" "${CMAKE_CURRENT_SOURCE_DIR}/${unit_test}")
+    set (test_parameters -v -n 4 -disable-recovery "${CMAKE_CURRENT_BINARY_DIR}/${unit_test}")
+    add_test(NAME ${unit_test} COMMAND "mpirun" ${test_parameters})
 endforeach ()

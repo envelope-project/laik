@@ -1,6 +1,5 @@
 # Build the C examples
 foreach (test
-        "checkpoint"
         "checkpoint-jac2d"
         "checkpoint-jac2d-recovery"
         "checkpoint-partitioner"
