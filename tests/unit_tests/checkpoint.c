@@ -48,6 +48,24 @@ int main(int argc, char *argv[]) {
 
     laik_checkpoint_free(checkpoint);
 
+    int nodeStatuses[] = { LAIK_FT_NODE_OK, LAIK_FT_NODE_OK, LAIK_FT_NODE_FAULT, LAIK_FT_NODE_OK};
+
+    //Check that missing redundancy is detected correctly
+    checkpoint = laik_checkpoint_create(testData.inst, testData.space, testData.data, NULL, 0, 0, NULL, LAIK_RO_None);
+    assert(!laik_checkpoint_remove_failed_slices(checkpoint, testData.world, nodeStatuses));
+    laik_checkpoint_free(checkpoint);
+
+    //Check that bad rotation distance is detected correctly
+    checkpoint = laik_checkpoint_create(testData.inst, testData.space, testData.data, NULL, 1, 4, NULL, LAIK_RO_None);
+    assert(!laik_checkpoint_remove_failed_slices(checkpoint, testData.world, nodeStatuses));
+    laik_checkpoint_free(checkpoint);
+
+    //Check that correct rotation distance is detected correctly
+    checkpoint = laik_checkpoint_create(testData.inst, testData.space, testData.data, NULL, 1, 1, NULL, LAIK_RO_None);
+    assert(!laik_checkpoint_remove_failed_slices(checkpoint, testData.world, nodeStatuses));
+    laik_checkpoint_free(checkpoint);
+
+
     laik_log(LAIK_LL_Info, "Test passed");
     laik_finalize(testData.inst);
     return 0;
