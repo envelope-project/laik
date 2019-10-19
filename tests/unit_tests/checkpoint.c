@@ -19,7 +19,6 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData);
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
     Laik_Unit_Test_Data testData;
-
     test_init_laik(&argc, &argv, &testData);
 
     test_create_sample_data(&testData, 1);
@@ -34,8 +33,8 @@ int main(int argc, char *argv[]) {
     test_assert(true, test_verify_sample_data(testData.data), "Original test data verification");
     testData = runTestWithData(&testData);
 
-    laik_log(LAIK_LL_Info, "Test passed");
     laik_finalize(testData.inst);
+    laik_log(LAIK_LL_Info, "Test passed");
     return 0;
 }
 
@@ -65,6 +64,8 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
 
     laik_checkpoint_free(checkpoint);
 
+    int failedList[] = {2};
+    Laik_Group* smallWorld = laik_new_shrinked_group(testData->world, 1, failedList);
     int nodeStatusTest[] = {LAIK_FT_NODE_OK, LAIK_FT_NODE_OK, LAIK_FT_NODE_FAULT, LAIK_FT_NODE_OK};
 
     //Check that missing redundancy is detected correctly
@@ -86,6 +87,14 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
                 "Correct rotation distance on redundant checkpoint causes no data loss");
     laik_checkpoint_free(checkpoint);
 
+    // Simulate a failed node and do the restore
+    checkpoint = laik_checkpoint_create(testData->inst, testData->space, testData->data, NULL, 1, 1, NULL, LAIK_RO_None);
+    laik_checkpoint_remove_failed_slices(checkpoint, testData->world, nodeStatusTest);
+    Laik_Partitioning* smallBlock = laik_new_partitioning(testData->blockPartitioner, smallWorld, testData->space, 0);
+    laik_switchto_partitioning(testData->data, smallBlock, LAIK_DF_None, LAIK_RO_None);
+    laik_checkpoint_restore(testData->inst, checkpoint, testData->space, testData->data);
+    test_assert(true, test_verify_sample_data(testData->data), "Restored data successfully");
+    laik_checkpoint_free(checkpoint);
 
     // Check that no node is detected as failed
     int allNodesUp[] = { LAIK_FT_NODE_OK, LAIK_FT_NODE_OK, LAIK_FT_NODE_OK, LAIK_FT_NODE_OK};
