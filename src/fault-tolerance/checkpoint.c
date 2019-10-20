@@ -304,9 +304,13 @@ create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundan
 }
 
 void set_slice_to_empty(Laik_Slice *slice) {
-    (*slice).to.i[0] = (*slice).from.i[0];
-    (*slice).to.i[1] = (*slice).from.i[1];
-    (*slice).to.i[2] = (*slice).from.i[2];
+    //TODO: Find out why this fix works
+    (*slice).from.i[0] = INT64_MIN;
+    (*slice).from.i[1] = INT64_MIN;
+    (*slice).from.i[2] = INT64_MIN;
+    (*slice).to.i[0] = INT64_MIN;
+    (*slice).to.i[1] = INT64_MIN;
+    (*slice).to.i[2] = INT64_MIN;
 }
 
 void laik_checkpoint_remove_redundant_slices(Laik_Checkpoint *checkpoint) {
