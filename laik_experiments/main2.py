@@ -11,6 +11,7 @@ def load_visualization(file : str):
     return np.array(imageio.imread(file), dtype=np.uint8)
 
 def load_experiment(file : str):
+    print('Loading data from file: ', file)
     return pd.read_csv("data/{0}".format(file))
 
 def calculate_runtime(data : pd.DataFrame):
@@ -96,9 +97,9 @@ def draw_jac2d_example():
 
 draw_runtime_boxplot()
 # draw_restart_boxplot()
-# draw_restart_boxplot(file_pattern="experiment_restart_time_mpi_{0}_mca_{1}_trace.csv",
-#                      csv='graphs/restart-time-mca-stats.csv',
-#                      pdf='graphs/restart-time-mca.pdf')
+draw_restart_boxplot(file_pattern="experiment_restart_time_mca_mpi_{0}_{1}_trace.csv",
+                     csv='graphs/restart-time-mca-stats.csv',
+                     pdf='graphs/restart-time-mca.pdf')
 # draw_runtime_boxplot(file_pattern='experiment_restart_time_to_solution_mpi_{0}_{1}_trace.csv',
 #                      title='Measured Time to Solution Restart Strategy',
 #                      csv='graphs/restart-time-to-solution-stats.csv',

@@ -1,9 +1,13 @@
 import random
 
 def restart_failure_generator():
-    num_iter = 3200
-    failure_rate = 0.000979644
+    num_iter = 9500
+    failure_rate = 0.000136119
     count = 0
+
+    for i in range(10):
+        print(random.randint(0, num_iter), end=' ')
+    print('')
 
     for success in range(10):
         for i in range(num_iter):

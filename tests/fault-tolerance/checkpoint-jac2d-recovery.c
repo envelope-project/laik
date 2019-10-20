@@ -163,7 +163,7 @@ Laik_Checkpoint *spaceCheckpoint = NULL;
 
 int main(int argc, char *argv[]) {
     laik_set_loglevel(LAIK_LL_Warning);
-    laik_set_loglevel(LAIK_LL_Info);
+//    laik_set_loglevel(LAIK_LL_Info);
 //    laik_set_loglevel(LAIK_LL_Debug);
     inst = laik_init(&argc, &argv);
     world = laik_world(inst);
@@ -430,9 +430,11 @@ int main(int argc, char *argv[]) {
         // do jacobi
         double localResiduum = do_jacobi_iteration(baseR, baseW, ystrideR, ystrideW, x1, x2, y1, y2);
         double globalResiduum = calculateGlobalResiduum(localResiduum, &sumPtr);
-        TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
-        if(laik_myid(world) == 0) {
-            printf("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
+        if(iter % 100 == 0) {
+            TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
+            if(laik_myid(world) == 0) {
+                printf("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
+            }
         }
     }
 
