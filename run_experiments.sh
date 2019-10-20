@@ -63,7 +63,7 @@ run_experiment () {
   else
     echo "Appending to previous trace"
 	  grep -h -e "===" out/1/rank.*/stdout >> "laik_experiments/data/experiment_$1_trace.csv"
-	  sed -i 's/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA//2g' "laik_experiments/data/experiment_$1_trace.csv"
+	  sed -i -e '1s/^/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA\n/' -e 's/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA//g' "laik_experiments/data/experiment_$1_trace.csv"
   fi
 #	grep -h -e '!!!' out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_header.csv"
 
@@ -116,11 +116,13 @@ then
   exit 255
 fi
 
+rm -v laik_experiments/data/*_trace.csv
+
 #OSU_CONF_A="-m 32768:32768 -i 250000"
 #JAC2D_CONF_A="20000 50 -1"
 #LULESH_CONF_A="-i 280 -s 14"
 OSU_CONF_A="-m 32768:32768 -i 2150000"
-JAC2D_CONF_A="4096 9750 -1"
+JAC2D_CONF_A="4096 10600 -1"
 LULESH_CONF_A="-s 17 -i 1340"
 
 EXPERIMENT_TRACE_APPEND=0
@@ -198,13 +200,18 @@ case "$1" in
     EXPERIMENT_TRACE_APPEND=1
     FAILURE_INDEX=0
     for ((i = 0; i < TEST_MAX; i++)); do
-      while [ "${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}" -ne -1 ]
+      while true
       do
         MPI_OPTIONS="--mca orte_enable_recovery false"
         CURRENT_ITER="${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}"
         OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--plannedFailure ${RESTART_FAILURE_RANKS[$FAILURE_INDEX]} ${CURRENT_ITER}" "$BENCHMARK_OPTIONS")
         run_experiment "restart_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES"
-        FAILURE_INDEX=$((FAILURE_INDEX++))
+        if  [ "${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}" -eq -1 ]
+        then
+          ((FAILURE_INDEX++))
+          break
+        fi
+        ((FAILURE_INDEX++))
       done
     done
   ;;
@@ -218,8 +225,9 @@ case "$1" in
       do
         CURRENT_ITER="${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}"
         OPTION_STRING="$OPTION_STRING --plannedFailure ${RESTART_FAILURE_RANKS[$FAILURE_INDEX]} ${CURRENT_ITER}"
-        FAILURE_INDEX=$((FAILURE_INDEX++))
+        ((FAILURE_INDEX++))
       done
+      ((FAILURE_INDEX++))
       MPI_OPTIONS="--mca orte_enable_recovery false"
       OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$OPTION_STRING" "$BENCHMARK_OPTIONS")
       run_experiment "checkpoint_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES"
