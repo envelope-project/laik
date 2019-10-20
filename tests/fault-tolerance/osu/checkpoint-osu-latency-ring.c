@@ -63,13 +63,6 @@ void createPartitionings(Laik_Partitioner *(singlePartitioners[]),
     }
 }
 
-void laik_failure_default_error_handler(void *errors) {
-    (void) errors;
-    if(laik_get_iteration(inst) % 1000 == 0) {
-        TRACE_EVENT_S("COMM-ERROR", "");
-        TPRINTF("Received an error condition, attempting to continue.\n");
-    }
-}
 
 int main (int argc, char *argv[])
 {
