@@ -298,7 +298,9 @@ int main(int argc, char *argv[]) {
 
     for (; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
-        TRACE_EVENT_S("ITER", "");
+        if(iter % 100 == 0) {
+            TRACE_EVENT_S("ITER", "");
+        }
 
         if (faultToleranceOptions.failureCheckFrequency > 0 && iter % faultToleranceOptions.failureCheckFrequency == 0) {
             TPRINTF("Attempting to determine global status.\n");
