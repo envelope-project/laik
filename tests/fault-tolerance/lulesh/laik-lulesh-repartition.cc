@@ -258,12 +258,19 @@ void remove_partitionings_and_transitions(Laik_Partitioning *&exclusivePartition
 void calculate_removing_list(Laik_Group *world, cmdLineOpts &opts, double side, double &newside, int &diffsize,
                              int *&removeList) {
     int cursize = laik_size(world);
-    newside = cbrt(opts.repart);
-    if (newside - ((int) floor(newside + 0.1)) != 0) {
-        MPI_Abort(MPI_COMM_WORLD, -1);
+    if(opts.repart != 0) {
+        // Planned repartitioning (not fault tolerant)
+        newside = cbrt(opts.repart);
+        if (newside - ((int) floor(newside + 0.1)) != 0) {
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
+        diffsize = cursize - opts.repart;
+    } else {
+        //Fault tolerance
+        //TODO
+        printf("Not implemented\n");
+        abort();
     }
-    diffsize = cursize - opts.repart;
-
     removeList = (int *) malloc(diffsize * sizeof(int));
     for (int i = 0; i < diffsize; i++) {
         removeList[i] = i + opts.repart;

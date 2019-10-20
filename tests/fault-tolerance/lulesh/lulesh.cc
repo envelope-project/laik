@@ -2758,10 +2758,6 @@ void LagrangeLeapFrog(Domain &domain) {
 #endif
 }
 
-void laik_failure_default_error_handler(void* data) {
-    std::cout << "Error handler triggered." << std::endl;
-}
-
 /******************************************/
 
 int main(int argc, char *argv[]) {
@@ -2951,6 +2947,8 @@ int main(int argc, char *argv[]) {
 #define USE_MPI 1
 #if USE_MPI
 
+        laik_set_iteration(inst, locDom->cycle());
+
         // Execute any pre planned failures
         exitIfFailureIteration(locDom->cycle(), &ftOptions, inst);
 
@@ -3095,7 +3093,7 @@ int main(int argc, char *argv[]) {
                 free(removeList);
 
                 TRACE_EVENT_END("RESTORE", "");
-            } else if(failedCount == 0) {
+            } else if(failedCount == 0 && locDom->cycle() % ftOptions.checkpointFrequency == 0) {
                 if(!ftOptions.delayCheckpointRelease) {
                     if(myRank == 0) {
                         std::cout << "Freeing " << checkpoints.size() << " checkpoints." << std::endl;
