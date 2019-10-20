@@ -14,15 +14,20 @@ def load_experiment(file : str):
     print('Loading data from file: ', file)
     return pd.read_csv("data/{0}".format(file))
 
-def calculate_runtime(data : pd.DataFrame):
+def calculate_runtime(data: pd.DataFrame, column='TIME'):
     eventInits = data[data['EVENT_TYPE'] == 'INIT-START']
     eventFinalizes = data[data['EVENT_TYPE'] == 'FINALIZE-STOP']
-    return max(eventFinalizes['TIME']) - min(eventInits['TIME'])
+    return max(eventFinalizes[column]) - min(eventInits[column])
 
 def calculate_restart_time(data1 : pd.DataFrame, data2 : pd.DataFrame):
     event2Inits = data2[data2['EVENT_TYPE'] == 'INIT-STOP']
     event1Failure = data1[data1['EVENT_TYPE'] == 'FAILURE-GENERATE']
     return max(event2Inits['WALLTIME']) - min(event1Failure['WALLTIME'])
+
+def calculate_recovery_time(data: pd.DataFrame, column='TIME'):
+    eventResume = data[data['EVENT_TYPE'] == 'RESTORE-STOP']
+    eventFailure = data[data['EVENT_TYPE'] == 'FAILURE-GENERATE']
+    return max(eventResume[column]) - min(eventFailure[column])
 
 def export_stats(osu, jac2d, lulesh, file):
     data = [
@@ -36,14 +41,14 @@ def export_stats(osu, jac2d, lulesh, file):
 
 def draw_runtime_boxplot(file_pattern="experiment_runtime_time_mpi_{0}_{1}_trace.csv",
                          title='Original Runtime of Benchmarks', csv='graphs/original-runtime-stats.csv',
-                         pdf='graphs/original-runtime.pdf'):
+                         pdf='graphs/original-runtime.pdf', time_column='TIME'):
     osu = []
     jac2d = []
     lulesh = []
     for experiment in range(0,TEST_MAX):
-        osu.append(calculate_runtime(load_experiment(file_pattern.format("osu", experiment))))
-        jac2d.append(calculate_runtime(load_experiment(file_pattern.format("jac2d", experiment))))
-        lulesh.append(calculate_runtime(load_experiment(file_pattern.format("lulesh", experiment))))
+        # osu.append(calculate_runtime(load_experiment(file_pattern.format("osu", experiment)), time_column))
+        jac2d.append(calculate_runtime(load_experiment(file_pattern.format("jac2d", experiment)), time_column))
+        # lulesh.append(calculate_runtime(load_experiment(file_pattern.format("lulesh", experiment)), time_column))
 
     data = [osu, jac2d, lulesh]
     export_stats(osu, jac2d, lulesh, csv)
@@ -95,13 +100,15 @@ def draw_jac2d_example():
     fig.savefig('graphs/jac2d-example.pdf', format='pdf')
 
 
-draw_runtime_boxplot()
+# draw_runtime_boxplot()
 # draw_restart_boxplot()
-draw_restart_boxplot(file_pattern="experiment_restart_time_mca_mpi_{0}_{1}_trace.csv",
-                     csv='graphs/restart-time-mca-stats.csv',
-                     pdf='graphs/restart-time-mca.pdf')
-# draw_runtime_boxplot(file_pattern='experiment_restart_time_to_solution_mpi_{0}_{1}_trace.csv',
-#                      title='Measured Time to Solution Restart Strategy',
-#                      csv='graphs/restart-time-to-solution-stats.csv',
-#                      pdf='graphs/restart-time-to-solution.pdf')
+# draw_restart_boxplot(file_pattern="experiment_restart_time_mca_mpi_{0}_{1}_trace.csv",
+#                      csv='graphs/restart-time-mca-stats.csv',
+#                      pdf='graphs/restart-time-mca.pdf')
+draw_runtime_boxplot(file_pattern='experiment_restart_time_to_solution_mpi_{0}_{1}_trace.csv',
+                     title='Measured Time to Solution Restart Strategy',
+                     csv='graphs/restart-time-to-solution-stats.csv',
+                     pdf='graphs/restart-time-to-solution.pdf',
+                     time_column='WALLTIME')
+
 # draw_jac2d_example()

@@ -45,7 +45,7 @@ else
   export MPI_RUN
 fi
 
-# $1: Name, $2 Type, $3 Executable, $4 Executable_args, $5 run_number
+# $1: Name, $2 Type, $3 Executable, $4 Executable_args, $5 run_number, $6 append index
 run_experiment () {
 	echo "Running experiment $1"
 	export MPI_OPTIONS="$MPI_OPTIONS --output-filename out --merge-stderr-to-stdout --stdin none --mca orte_tmpdir_base /tmp/ga26poh3/"
@@ -62,8 +62,13 @@ run_experiment () {
 	  grep -h -e "===" out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_trace.csv"
   else
     echo "Appending to previous trace"
+    if [ "$6" -eq 0 ]
+    then
+      echo "Clearing earlier trace due to test 0"
+      rm -v "laik_experiments/data/experiment_$1_trace.csv"
+    fi
 	  grep -h -e "===" out/1/rank.*/stdout >> "laik_experiments/data/experiment_$1_trace.csv"
-	  sed -i -e '1s/^/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA\n/' -e 's/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA//g' "laik_experiments/data/experiment_$1_trace.csv"
+	  sed -i -e 's/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA//g' -e '1s/^/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA/' "laik_experiments/data/experiment_$1_trace.csv"
   fi
 #	grep -h -e '!!!' out/1/rank.*/stdout > "laik_experiments/data/experiment_$1_header.csv"
 
@@ -115,8 +120,6 @@ then
   echo "Need to pass which experiment to run and the benchmark"
   exit 255
 fi
-
-rm -v laik_experiments/data/*_trace.csv
 
 #OSU_CONF_A="-m 32768:32768 -i 250000"
 #JAC2D_CONF_A="20000 50 -1"
@@ -170,21 +173,21 @@ esac
 
 case "$1" in
   "timing_test")
-      time run_experiment "timing_test_osu" "mpi" "$OSU" "$OSU_CONF_A" "48"
-      time run_experiment "timing_test_jac2d" "mpi" "$JAC2D" "$JAC2D_CONF_A" "48"
-      time run_experiment "timing_test_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27"
+      time run_experiment "timing_test_osu" "mpi" "$OSU" "$OSU_CONF_A" "48" "0"
+      time run_experiment "timing_test_jac2d" "mpi" "$JAC2D" "$JAC2D_CONF_A" "48" "0"
+      time run_experiment "timing_test_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27" "0"
   ;;
   "runtime_time")
     for ((i = 0; i < TEST_MAX; i++)); do
       MPI_OPTIONS=""
-      run_experiment "runtime_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$BENCHMARK_OPTIONS" "$NUM_PROCESSES"
+      run_experiment "runtime_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$BENCHMARK_OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
   "restart_time")
     for ((i = 0; i < TEST_MAX; i++)); do
       MPI_OPTIONS=""
       OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
-      run_experiment "restart_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES"
+      run_experiment "restart_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
   "restart_time_mca")
@@ -192,7 +195,7 @@ case "$1" in
     for ((i = 0; i < TEST_MAX; i++)); do
       MPI_OPTIONS="--mca orte_enable_recovery false"
       OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
-      run_experiment "restart_time_mca_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES"
+      run_experiment "restart_time_mca_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
   "restart_time_to_solution")
@@ -205,7 +208,8 @@ case "$1" in
         MPI_OPTIONS="--mca orte_enable_recovery false"
         CURRENT_ITER="${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}"
         OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--plannedFailure ${RESTART_FAILURE_RANKS[$FAILURE_INDEX]} ${CURRENT_ITER}" "$BENCHMARK_OPTIONS")
-        run_experiment "restart_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES"
+        ## Attention! Not $i but $FAILURE_INDEX for append detection
+        run_experiment "restart_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$FAILURE_INDEX"
         if  [ "${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}" -eq -1 ]
         then
           ((FAILURE_INDEX++))
@@ -230,7 +234,7 @@ case "$1" in
       ((FAILURE_INDEX++))
       MPI_OPTIONS="--mca orte_enable_recovery false"
       OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$OPTION_STRING" "$BENCHMARK_OPTIONS")
-      run_experiment "checkpoint_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES"
+      run_experiment "checkpoint_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
   "recovery_time")
