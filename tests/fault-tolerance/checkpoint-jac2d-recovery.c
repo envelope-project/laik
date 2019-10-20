@@ -152,11 +152,6 @@ Laik_Data *dSum;
 Laik_Partitioner *prWrite, *prRead;
 Laik_Data *dWrite, *dRead;
 
-void errorHandler(void *errors) {
-    (void) errors;
-    TRACE_EVENT_S("COMM-ERROR", "");
-    TPRINTF("Received an error condition, attempting to continue.\n");
-}
 
 // Always dWrite
 Laik_Checkpoint *spaceCheckpoint = NULL;
@@ -215,7 +210,7 @@ int main(int argc, char *argv[]) {
 
     // Set the error handler to be able to recover from if failures are being checked
     if(faultToleranceOptions.failureCheckFrequency > -1) {
-        laik_error_handler_set(inst, errorHandler);
+        laik_error_handler_set(inst, laik_failure_default_error_handler);
     }
 
 
@@ -364,7 +359,7 @@ int main(int argc, char *argv[]) {
 
                 // Restored normal state, errors are allowed now
                 laik_log(LAIK_LL_Info, "Reactivating error handler!");
-                laik_error_handler_set(inst, errorHandler);
+                laik_error_handler_set(inst, laik_failure_default_error_handler);
             }
         }
 

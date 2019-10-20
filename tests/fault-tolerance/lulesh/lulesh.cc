@@ -2758,7 +2758,7 @@ void LagrangeLeapFrog(Domain &domain) {
 #endif
 }
 
-void errorHandler(void* data) {
+void laik_failure_default_error_handler(void* data) {
     std::cout << "Error handler triggered." << std::endl;
 }
 
@@ -3130,7 +3130,7 @@ int main(int argc, char *argv[]) {
                 checkpoints = newCheckpoints;
 
                 // Make sure error handler is installed so we can make use of the checkpoints
-                laik_error_handler_set(inst, errorHandler);
+                laik_error_handler_set(inst, laik_failure_default_error_handler);
             }
         }
 #endif

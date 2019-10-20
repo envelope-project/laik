@@ -111,7 +111,7 @@ void laik_tcp_panic(int err)
             strncpy(str, "Unknown MPI Error!", sizeof(str));
         }
         laik_tcp_set_errors(err, NULL);
-        laik_error_handler_get(tcp_instance)(str);
+        laik_error_handler_get(tcp_instance)(tcp_instance, str);
         laik_tcp_clear_errors();
 //        fprintf(stderr, "[LAIK TCP Backend] Error handler exited, attempting to continue\n");
         return;

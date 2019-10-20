@@ -293,7 +293,7 @@ void laik_mpi_panic(int err)
         if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
             strncpy(str, "Unknown MPI Error!", sizeof(str));
         }
-        laik_error_handler_get(mpi_instance)(str);
+        laik_error_handler_get(mpi_instance)(mpi_instance, str);
 //        fprintf(stderr, "[LAIK MPI Backend] Error handler exited, attempting to continue\n");
         return;
     }

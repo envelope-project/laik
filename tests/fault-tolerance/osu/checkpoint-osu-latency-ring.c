@@ -63,7 +63,7 @@ void createPartitionings(Laik_Partitioner *(singlePartitioners[]),
     }
 }
 
-void errorHandler(void *errors) {
+void laik_failure_default_error_handler(void *errors) {
     (void) errors;
     if(laik_get_iteration(inst) % 1000 == 0) {
         TRACE_EVENT_S("COMM-ERROR", "");
@@ -92,7 +92,7 @@ int main (int argc, char *argv[])
     numprocs = laik_size(world);
     myid = laik_myid(world);
 
-    laik_error_handler_set(inst, errorHandler);
+    laik_error_handler_set(inst, laik_failure_default_error_handler);
 
     po_ret = process_options(argc, argv, myid, &faultToleranceOptions);
 
@@ -283,7 +283,7 @@ int main (int argc, char *argv[])
 
                     // Restored normal state, errors are allowed now
                     laik_log(LAIK_LL_Info, "Reactivating error handler!");
-                    laik_error_handler_set(inst, errorHandler);
+                    laik_error_handler_set(inst, laik_failure_default_error_handler);
                 }
             }
 

@@ -16,9 +16,21 @@ Laik_Partitioning *all;
 
 void laik_set_fault_tolerant_world(Laik_Group *group);
 
+bool reportedAnErrorSinceLastFailureCheck = false;
+void laik_failure_default_error_handler(Laik_Instance* inst, void *errors) {
+    (void) errors;
+    if(!reportedAnErrorSinceLastFailureCheck) {
+        TRACE_EVENT_S("COMM-ERROR", "");
+        reportedAnErrorSinceLastFailureCheck = true;
+    }
+//    TPRINTF("Received an error condition, attempting to continue.\n");
+}
+
+
 int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup, int *failedNodes) {
 
     int failuresFound = 0;
+    reportedAnErrorSinceLastFailureCheck = false;
 
     // Check if there is a backend operation that will do this for us. Otherwise, fall back to the default
     // implementation below

@@ -33,7 +33,7 @@ typedef struct _Laik_Backend Laik_Backend;
 typedef struct _Laik_Group Laik_Group;
 
 // An error handler to allow the backend to pass errors back to the user instead of aborting the application
-typedef void (Laik_Backend_Error_Handler)(void*);
+typedef void (Laik_Backend_Error_Handler)(Laik_Instance*, void*);
 
 /*********************************************************************/
 /* Core LAIK API: task groups and elasticity
