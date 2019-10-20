@@ -2965,11 +2965,13 @@ int main(int argc, char *argv[]) {
                 if(myRank == 0) {
                     std::cout << "Checking for failed nodes." << std::endl;
                 }
+                TRACE_EVENT_S("FAILURE-DETECT", "");
                 nodeStatuses.reserve(laik_size(world));
                 failedCount = laik_failure_check_nodes(inst, world, &nodeStatuses[0]);
                 std::cout << "Detected " << failedCount << " node failures on rank " << myRank << "." << std::endl;
             }
             if (ftOptions.failureCheckFrequency <= 0 || failedCount > 0) {
+                TRACE_EVENT_START("RESTORE", "");
                 double intermediate_timer = MPI_Wtime() - start2;
                 double itG = -1;
                 if (ftOptions.failureCheckFrequency <= 0) {
@@ -3091,6 +3093,8 @@ int main(int argc, char *argv[]) {
                 allPartitioning = allPartitioning2;
 
                 free(removeList);
+
+                TRACE_EVENT_END("RESTORE", "");
             } else if(failedCount == 0) {
                 if(!ftOptions.delayCheckpointRelease) {
                     if(myRank == 0) {
