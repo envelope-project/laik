@@ -3,8 +3,8 @@
 # Job Name and Files (also --job-name)
 #SBATCH -J LAIK_FAULT_TOLERANCE
 #Output and error (also --output, --error):
-#SBATCH -o ./%x.%j.out
-#SBATCH -e ./%x.%j.err
+#SBATCH -o ./%x.out
+#SBATCH -e ./%x.err
 #Initial working directory (also --chdir):
 #SBATCH -D ./
 #Notification and type
@@ -64,8 +64,8 @@ run_experiment () {
     echo "Appending to previous trace"
     if [ "$6" -eq 0 ]
     then
-      echo "Clearing earlier trace due to test 0"
-      rm -v "laik_experiments/data/experiment_$1_trace.csv"
+      echo "[DEACTIVATED] Clearing earlier trace due to test 0"
+#      rm -v "laik_experiments/data/experiment_$1_trace.csv"
     fi
 	  grep -h -e "===" out/1/rank.*/stdout >> "laik_experiments/data/experiment_$1_trace.csv"
 	  sed -i -e 's/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA//g' -e '1s/^/===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA/' "laik_experiments/data/experiment_$1_trace.csv"
@@ -129,7 +129,8 @@ JAC2D_CONF_A="4096 10600 -1"
 LULESH_CONF_A="-s 17 -i 1340"
 
 EXPERIMENT_TRACE_APPEND=0
-TEST_MAX=10
+TEST_MIN=0
+TEST_MAX=1
 
 #Only includes ranks up to 27 to accomodate for LULESH
 FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
@@ -142,13 +143,13 @@ case "$2" in
     BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200000 --failureCheckFrequency 200000 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=48
     FAILURE_ITERATIONS=(142266 128688 121441 118626 44627 86271 25756 155891 123766 90289)
-    RESTART_FAILURE_ITERATIONS=(182737 -1 119668 360211 1192434 -1 623058 844874 -1 997321 1356872 -1 1226131 1560360 -1 -1 927938 -1 258380 1196613 1413304 -1 458820 -1 -1)
+    RESTART_FAILURE_ITERATIONS=(182737 -1 119668 360211 1192434 -1 997321 1356872 -1 1226131 1560360 -1 -1 927938 -1 258380 1196613 1413304 -1 458820 -1 -1 623058 844874 -1)
     ;;
   "jac2d")
     BENCHMARK="jac2d"
     BENCHMARK_EXECUTABLE="$JAC2D"
     BENCHMARK_OPTIONS="$JAC2D_CONF_A"
-    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 2000 --failureCheckFrequency 2000 --redundancyCount 1 --rotationDistance 1"
+    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 2000 --failureCheckFrequency 500 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=48
     FAILURE_ITERATIONS=(2214 6897 3384 4608 9296 7218 2518 2008 6843 1558)
     RESTART_FAILURE_ITERATIONS=(190 4723 -1 2665 3374 6259 -1 -1 952 1783 3355 4413 -1 -1 959 -1 9266 -1 8035 8160 8255 -1 7542 -1 4182 4693 4841 6616 8471 9428 -1)
@@ -157,7 +158,7 @@ case "$2" in
     BENCHMARK="lulesh"
     BENCHMARK_EXECUTABLE="$LULESH"
     BENCHMARK_OPTIONS="$LULESH_CONF_A"
-    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200 --failureCheckFrequency 200 --redundancyCount 1 --rotationDistance 1"
+    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200 --failureCheckFrequency 50 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=27
     FAILURE_ITERATIONS=(880 238 415 1179 656 718 480 42 225 475)
     RESTART_FAILURE_ITERATIONS=(316 495 -1 640 -1 179 1083 -1 753 -1 242 1059 -1 74 115 -1 215 527 1190 -1 316 -1 177 865 -1 271 401 915 -1)
@@ -178,13 +179,13 @@ case "$1" in
       time run_experiment "timing_test_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27" "0"
   ;;
   "runtime_time")
-    for ((i = 0; i < TEST_MAX; i++)); do
+    for ((i = TEST_MIN; i < TEST_MAX; i++)); do
       MPI_OPTIONS=""
       run_experiment "runtime_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$BENCHMARK_OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
   "restart_time")
-    for ((i = 0; i < TEST_MAX; i++)); do
+    for ((i = TEST_MIN; i < TEST_MAX; i++)); do
       MPI_OPTIONS=""
       OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
       run_experiment "restart_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
@@ -192,17 +193,26 @@ case "$1" in
   ;;
   "restart_time_mca")
     EXPERIMENT_IGNORE_EXIT_CODE=1
-    for ((i = 0; i < TEST_MAX; i++)); do
+    for ((i = TEST_MIN; i < TEST_MAX; i++)); do
       MPI_OPTIONS="--mca orte_enable_recovery false"
       OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
       run_experiment "restart_time_mca_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
+    done
+  ;;
+  "recovery_time")
+    EXPERIMENT_IGNORE_EXIT_CODE=1
+    for ((i = TEST_MIN; i < TEST_MAX; i++)); do
+      MPI_OPTIONS=""
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$BENCHMARK_CHECKPOINT_SETTINGS --plannedFailure ${FAILURE_RANKS[i]} ${FAILURE_ITERATIONS[i]}" "$BENCHMARK_OPTIONS")
+      run_experiment "recovery_time_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
   "restart_time_to_solution")
     EXPERIMENT_IGNORE_EXIT_CODE=1
     EXPERIMENT_TRACE_APPEND=1
     FAILURE_INDEX=0
-    for ((i = 0; i < TEST_MAX; i++)); do
+    rm -v "laik_experiments/data/experiment_restart_time_to_solution_mpi_${BENCHMARK}_*.csv"
+    for ((i = TEST_MIN; i < TEST_MAX; i++)); do
       while true
       do
         MPI_OPTIONS="--mca orte_enable_recovery false"
@@ -220,10 +230,10 @@ case "$1" in
     done
   ;;
   "checkpoint_time_to_solution")
-    EXPERIMENT_IGNORE_EXIT_CODE=0
+    EXPERIMENT_IGNORE_EXIT_CODE=1
     EXPERIMENT_TRACE_APPEND=0
     FAILURE_INDEX=0
-    for ((i = 0; i < TEST_MAX; i++)); do
+    for ((i = TEST_MIN; i < TEST_MAX; i++)); do
       OPTION_STRING="$BENCHMARK_CHECKPOINT_SETTINGS"
       while [ "${RESTART_FAILURE_ITERATIONS[$FAILURE_INDEX]}" -ne -1 ]
       do
@@ -232,13 +242,10 @@ case "$1" in
         ((FAILURE_INDEX++))
       done
       ((FAILURE_INDEX++))
-      MPI_OPTIONS="--mca orte_enable_recovery false"
+      MPI_OPTIONS="--mca mpi_ft_detector true"
       OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$OPTION_STRING" "$BENCHMARK_OPTIONS")
       run_experiment "checkpoint_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
-  ;;
-  "recovery_time")
-
   ;;
 
   "old")

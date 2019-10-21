@@ -29,6 +29,12 @@ def calculate_recovery_time(data: pd.DataFrame, column='TIME'):
     eventFailure = data[data['EVENT_TYPE'] == 'FAILURE-GENERATE']
     return max(eventResume[column]) - min(eventFailure[column])
 
+def calculate_checkpoint_time(data: pd.DataFrame, column='TIME'):
+    eventResume = data[data['EVENT_TYPE'] == 'CHECKPOINT-STOP']
+    eventFailure = data[data['EVENT_TYPE'] == 'CHECKPOINT-START']
+    # TODO: This is a bit of a lie, max-max, as workaround to avoid data from different checkpoints
+    return max(eventResume[column]) - max(eventFailure[column])
+
 def export_stats(osu, jac2d, lulesh, file):
     data = [
         ['OSU', np.mean(osu), np.var(osu)],
@@ -41,13 +47,13 @@ def export_stats(osu, jac2d, lulesh, file):
 
 def draw_runtime_boxplot(file_pattern="experiment_runtime_time_mpi_{0}_{1}_trace.csv",
                          title='Original Runtime of Benchmarks', csv='graphs/original-runtime-stats.csv',
-                         pdf='graphs/original-runtime.pdf', time_column='TIME'):
+                         pdf='graphs/original-runtime.pdf', time_column='TIME', evaluation_function=calculate_runtime):
     osu = []
     jac2d = []
     lulesh = []
     for experiment in range(0,TEST_MAX):
-        # osu.append(calculate_runtime(load_experiment(file_pattern.format("osu", experiment)), time_column))
-        jac2d.append(calculate_runtime(load_experiment(file_pattern.format("jac2d", experiment)), time_column))
+        osu.append(evaluation_function(load_experiment(file_pattern.format("osu", experiment)), time_column))
+        jac2d.append(evaluation_function(load_experiment(file_pattern.format("jac2d", experiment)), time_column))
         # lulesh.append(calculate_runtime(load_experiment(file_pattern.format("lulesh", experiment)), time_column))
 
     data = [osu, jac2d, lulesh]
@@ -105,10 +111,27 @@ def draw_jac2d_example():
 # draw_restart_boxplot(file_pattern="experiment_restart_time_mca_mpi_{0}_{1}_trace.csv",
 #                      csv='graphs/restart-time-mca-stats.csv',
 #                      pdf='graphs/restart-time-mca.pdf')
-draw_runtime_boxplot(file_pattern='experiment_restart_time_to_solution_mpi_{0}_{1}_trace.csv',
-                     title='Measured Time to Solution Restart Strategy',
-                     csv='graphs/restart-time-to-solution-stats.csv',
-                     pdf='graphs/restart-time-to-solution.pdf',
-                     time_column='WALLTIME')
+# draw_runtime_boxplot(file_pattern='experiment_restart_time_to_solution_mpi_{0}_{1}_trace.csv',
+#                      title='Measured Time to Solution Restart Strategy',
+#                      csv='graphs/restart-time-to-solution-stats.csv',
+#                      pdf='graphs/restart-time-to-solution.pdf',
+#                      time_column='WALLTIME')
+# draw_runtime_boxplot(file_pattern='experiment_checkpoint_time_to_solution_mpi_{0}_{1}_trace.csv',
+#                      title='Measured Time to Solution Checkpoint Strategy',
+#                      csv='graphs/checkpoint-time-to-solution-stats.csv',
+#                      pdf='graphs/checkpoint-time-to-solution.pdf',
+#                      time_column='WALLTIME')
+draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
+                     title='Time for Restoration in the Checkpoint Strategy',
+                     csv='graphs/checkpoint-restore-time-stats.csv',
+                     pdf='graphs/checkpoint-restore-time.pdf',
+                     time_column='WALLTIME',
+                     evaluation_function=calculate_recovery_time)
+draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
+                     title='Time for Checkpointing in the Checkpoint Strategy',
+                     csv='graphs/checkpoint-checkpoint-time-stats.csv',
+                     pdf='graphs/checkpoint-checkpoint-time.pdf',
+                     time_column='WALLTIME',
+                     evaluation_function=calculate_checkpoint_time)
 
 # draw_jac2d_example()
