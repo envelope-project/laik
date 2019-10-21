@@ -1,4 +1,4 @@
-lambdaV = linspace(0.001, 0.01, 10);
+lambdaV = linspace(0.001, 0.03, 10);
 tV = linspace(1, 100, 10);
 
 eX = zeros(length(lambdaV), length(tV));
@@ -17,7 +17,7 @@ gc = figure;
 colormap(gray * 0.6 + 0.4);
 surf(tV, lambdaV, eX);
 colorbar;
-axis([1 100 0.001 0.01 0 inf]);
+axis([min(tV) max(tV) min(lambdaV) max(lambdaV) 0 inf]);
 title('Expected Time Wasted on a Failure for the Restart Strategy')
 xlabel('Original runtime t_o (s)');
 ylabel('Failure rate (\lambda)');
@@ -32,7 +32,7 @@ gc = figure;
 colormap(gray * 0.6 +0.4);
 surf(tV, lambdaV, eT);
 colorbar;
-axis([1 100 0.001 0.01 0 inf]);
+axis([min(tV) max(tV) min(lambdaV) max(lambdaV) 0 inf]);
 title('Expected Runtime with Failures using the Restart Strategy')
 xlabel('Original runtime t_o (s)');
 ylabel('Failure rate (\lambda)');
@@ -48,7 +48,7 @@ gc = figure;
 colormap(gray * 0.6 +0.4);
 surf(tV, lambdaV, sT);
 colorbar;
-axis([1 100 0.001 0.01 1 inf]);
+axis([min(tV) max(tV) min(lambdaV) max(lambdaV) 1 inf]);
 title('Possible speedup from Restart Strategy to the Ideal Runtime')
 xlabel('Original runtime t_o (s)');
 ylabel('Failure rate (\lambda)');
