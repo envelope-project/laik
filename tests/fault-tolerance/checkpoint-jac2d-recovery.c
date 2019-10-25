@@ -53,8 +53,8 @@ unsigned char colors[][3] = {
 };
 
 // boundary values
-double loRowValue = 1.0, hiRowValue = 1.0;
-double loColValue = 1.0, hiColValue = 1.0;
+double loRowValue = -5.0, hiRowValue = 10.0;
+double loColValue = -10.0, hiColValue = 5.0;
 double centerValue = 1.0;
 double initVal = 0.1;
 
@@ -80,6 +80,8 @@ void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCou
 void exportDataFiles();
 void exportDataForVisualization();
 
+
+void doSumIfRequested(bool do_sum, double **baseW, uint64_t *ysizeW, uint64_t *ystrideW, uint64_t *xsizeW, int iter);
 
 void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *dWrite) {
     double *baseW;
@@ -176,21 +178,35 @@ int main(int argc, char *argv[]) {
     int repart = 0; // enforce repartitioning after <repart> iterations
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
+    bool do_sum = false;
+
     FaultToleranceOptions faultToleranceOptions = FaultToleranceOptionsDefault;
+    int progressReportInterval = 10;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
         if (strcmp("-n", argv[arg]) == 0) use_cornerhalo = false;
         else if (strcmp("-p", argv[arg]) == 0) do_profiling = true;
+        else if (argv[arg][1] == 's') do_sum = true;
         else if (strcmp("-h", argv[arg]) == 0) {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac2d_profiling.txt'\n"
+                   " -s : print value sum at end (warning: sum done at master)\n"
                    " -h : print this help text and exit\n"
+                   " --progressReportInterval <iter> : Print progress every <iter> iterations\n"
                    FAULT_TOLERANCE_OPTIONS_HELP,
                    argv[0]);
             exit(1);
+        }
+        else if (strcmp("--progressReportInterval", argv[arg]) == 0) {
+            if(arg + 1 >= argc) {
+                printf("Missing argument for option progressReportInterval.\n");
+                exit(1);
+            }
+            progressReportInterval = atoi(argv[arg + 1]);
+            arg++;
         }
         else if (parseFaultToleranceOptions(argc, argv, &arg, laik_myid(world), &faultToleranceOptions)) {
             // Successfully parsed argument, do nothing else
@@ -220,15 +236,13 @@ int main(int argc, char *argv[]) {
     TRACE_INIT(laik_myid(world));
     TRACE_EVENT_START("INIT", "");
 
-    TPRINTF("Jac_2d parallel with rank %i\n", laik_myid(world));
+//    TPRINTF("Jac_2d parallel with rank %i\n", laik_myid(world));
     if (laik_myid(world) == 0) {
-        TPRINTF("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks",
+        printf("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks",
                 size, size, .000016 * size * size, maxiter, laik_size(world));
-        printf("%d x %d cells (mem %.1f MB), running %d iterations with %d tasks.\n",
-                size, size, .000016 * size * size, maxiter, laik_size(world));
-        if (!use_cornerhalo) TPRINTF(" (halo without corners)");
-        if (repart > 0) TPRINTF("\n  with repartitioning every %d iterations\n", repart);
-        TPRINTF("\n");
+        if (!use_cornerhalo) printf(" (halo without corners)");
+        if (repart > 0) printf("\n  with repartitioning every %d iterations\n", repart);
+        printf("\n");
     }
 
     // start profiling interface
@@ -301,13 +315,13 @@ int main(int argc, char *argv[]) {
         }
 
         if (isFaultToleranceActive(&faultToleranceOptions) && iter % faultToleranceOptions.failureCheckFrequency == 0) {
-            TPRINTF("Attempting to determine global status.\n");
+            laik_log(LAIK_LL_Info, "Attempting to determine global status.");
             TRACE_EVENT_START("FAILURE-CHECK", "");
             Laik_Group *checkGroup = world;
             int numFailed = laik_failure_check_nodes(inst, checkGroup, nodeStatuses);
             TRACE_EVENT_END("FAILURE-CHECK", "");
             if (numFailed == 0) {
-                TPRINTF("Could not detect a failed node.\n");
+                laik_log(LAIK_LL_Info, "Could not detect a failed node.");
             } else {
                 TRACE_EVENT_S("FAILURE-DETECT", "");
                 // Don't allow any failures while recovery
@@ -321,7 +335,7 @@ int main(int argc, char *argv[]) {
 //                world = smallWorld;
 
 //                assert(world->size == 3);
-                TPRINTF("Attempting to restore with new world size %i\n", world->size);
+                laik_log(LAIK_LL_Info, "Attempting to restore with new world size %i", world->size);
 
                 TRACE_EVENT_START("RESTORE", "");
                 pSum = laik_new_partitioning(laik_All, world, sp1, 0);
@@ -331,15 +345,15 @@ int main(int argc, char *argv[]) {
                 pRead = laik_new_partitioning(prRead, world, space, pWrite);
                 laik_partitioning_set_name(pRead, "pRead_new");
 
-                TPRINTF("Switching to new partitionings\n");
+                laik_log(LAIK_LL_Debug, "Switching to new partitionings\n");
                 laik_switchto_partitioning(dRead, pRead, LAIK_DF_None, LAIK_RO_None);
                 laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
                 laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
                 if (!faultToleranceOptions.skipCheckpointRecovery) {
-                    TPRINTF("Removing failed slices from checkpoints\n");
+                    laik_log(LAIK_LL_Debug, "Removing failed slices from checkpoints\n");
                     if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, checkGroup, nodeStatuses)) {
-                        TPRINTF("A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
+                        laik_log(LAIK_LL_Panic, "A checkpoint no longer covers its entire space, some data was irreversibly lost. Abort.\n");
                         abort();
                     }
 
@@ -350,7 +364,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 TRACE_EVENT_END("RESTORE", "");
-                TPRINTF("Restore complete, cleared errors.\n");
+                laik_log(LAIK_LL_Info, "Restore complete, cleared errors.");
 
 //                TPRINTF("Special: Switching to all partitioning.\n");
 //                Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
@@ -430,18 +444,40 @@ int main(int argc, char *argv[]) {
         // do jacobi
         double localResiduum = do_jacobi_iteration(baseR, baseW, ystrideR, ystrideW, x1, x2, y1, y2);
         double globalResiduum = calculateGlobalResiduum(localResiduum, &sumPtr);
-        if(iter % 100 == 0) {
-            TPRINTF("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
+        if(iter % progressReportInterval == 0) {
+            laik_log(LAIK_LL_Debug, "Local residuum: %f", localResiduum);
             if(laik_myid(world) == 0) {
-                printf("Residuum after %2d iters: %f (local: %f)\n", iter + 1, globalResiduum, localResiduum);
+                printf("Residuum after %2d iters: %f\n", iter + 1, globalResiduum);
             }
         }
     }
 
+    doSumIfRequested(do_sum, &baseW, &ysizeW, &ystrideW, &xsizeW, iter);
     TRACE_EVENT_START("FINALIZE", "");
     laik_finalize(inst);
     TRACE_EVENT_END("FINALIZE", "");
     return 0;
+}
+
+void doSumIfRequested(bool do_sum, double **baseW, uint64_t *ysizeW, uint64_t *ystrideW, uint64_t *xsizeW, int iter) {
+    if (do_sum) {
+        Laik_Group* activeGroup = laik_data_get_group(dWrite);
+
+        // for check at end: sum up all just written values
+        Laik_Partitioning* pMaster;
+        pMaster = laik_new_partitioning(laik_Master, activeGroup, space, 0);
+        laik_switchto_partitioning(dWrite, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
+
+        if (laik_myid(activeGroup) == 0) {
+            double sum = 0.0;
+            laik_map_def1_2d(dWrite, (void**) baseW, ysizeW, ystrideW, xsizeW);
+            for(uint64_t y = 0; y < (*ysizeW); y++)
+                for(uint64_t x = 0; x < (*xsizeW); x++)
+                    sum += (*baseW)[y * (*ystrideW) + x];
+            printf("Global value sum after %d iterations: %f\n",
+                   iter, sum);
+        }
+    }
 }
 
 void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCounter) {//        if (iter == 25 && world->size == 4) {
@@ -454,7 +490,8 @@ void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCou
         char filenamePrefix[1024];
         snprintf(filenamePrefix, 1024, "output/data_%s_%i_", label, dataFileCounter);
 //            writeDataToFile(filenamePrefix, ".pgm", exportCheckpoint->data);
-        writeColorDataToFile(filenamePrefix, ".ppm", exportCheckpoint->data, data->activePartitioning, colors, true);
+        writeColorDataToFile(".ppm", exportCheckpoint->data, data->activePartitioning, colors, true, filenamePrefix, -10,
+                             10);
     }
     laik_checkpoint_free(exportCheckpoint);
     //        }
@@ -476,26 +513,26 @@ void exportDataFiles() {
 }
 
 void restoreCheckpoints() {
-    TPRINTF("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
+    laik_log(LAIK_LL_Info, "Restoring from checkpoint (checkpoint iteration %i)", restoreIteration);
 //    laik_partitioning_migrate(spaceCheckpoint->data->activePartitioning, world);
     laik_checkpoint_restore(inst, spaceCheckpoint, space, dWrite);
-    TPRINTF("Restore successful\n");
+    laik_log(LAIK_LL_Info, "Restore successful");
 }
 
 void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool delayCheckpointRelease) {
     if(spaceCheckpoint != NULL && !delayCheckpointRelease) {
-        TPRINTF("Freeing previous checkpoint from iteration %i\n", restoreIteration);
+        laik_log(LAIK_LL_Info, "Freeing previous checkpoint from iteration %i", restoreIteration);
         laik_free(spaceCheckpoint->data);
     }
     TRACE_EVENT_S("CHECKPOINT-PRE-NEW", "");
-    TPRINTF("Creating checkpoint of data\n");
+    laik_log(LAIK_LL_Info, "Creating checkpoint of data");
     Laik_Checkpoint* newCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount,
             rotationDistance, world,LAIK_RO_None);
     TRACE_EVENT_S("CHECKPOINT-POST-NEW", "");
-    TPRINTF("Checkpoint successful at iteration %i\n", iter);
+    laik_log(LAIK_LL_Info, "Checkpoint successful at iteration %i", iter);
 
     if(spaceCheckpoint != NULL && delayCheckpointRelease) {
-        TPRINTF("Freeing previous checkpoint from iteration %i\n", restoreIteration);
+        laik_log(LAIK_LL_Info,"Freeing previous checkpoint from iteration %i", restoreIteration);
         laik_free(spaceCheckpoint->data);
     }
 
@@ -509,8 +546,8 @@ void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t 
     (void) gy1;
     for (uint64_t y = 0; y < ysizeW; y++)
         for (uint64_t x = 0; x < xsizeW; x++)
-//            baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
-            baseW[y * ystrideW + x] = initVal;
+            baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
+//            baseW[y * ystrideW + x] = initVal;
 }
 
 double calculateGlobalResiduum(double localResiduum, double **sumPtr) {// calculate global residuum

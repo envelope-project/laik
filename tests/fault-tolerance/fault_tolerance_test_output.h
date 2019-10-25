@@ -67,8 +67,9 @@ int laik_point_find_slice(int64_t gx, int64_t gy, int64_t gz, Laik_Partitioning*
 }
 
 void
-writeColorDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *data, Laik_Partitioning *partitioning,
-                     unsigned char colors[][3], bool binaryPPM) {
+writeColorDataToFile(char *fileNameExtension, Laik_Data *data, Laik_Partitioning *partitioning,
+                     unsigned char colors[][3], bool binaryPPM, char *fileNamePrefix, double minValue,
+                     double maxValue) {
     char debugOutputFileName[1024];
     snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, data->space->inst->myid,
              fileNameExtension);
@@ -101,9 +102,10 @@ writeColorDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *d
         for (unsigned long x = 0; x < dim0Size; ++x) {
             int colorIndex = laik_point_find_slice(x, y, 0, partitioning);
             double value = base[y * stride + x];
+            double normalizedValue = (value - minValue) / (maxValue - minValue);
 
             for (int i = 0; i < 3; ++i) {
-                unsigned char colorValue = (unsigned char)(colors[colorIndex][i] * value);
+                unsigned char colorValue = (unsigned char)(colors[colorIndex][i] * normalizedValue);
                 if(binaryPPM) {
                     fwrite(&colorValue, sizeof(unsigned char), 1, myOutput);
                 } else {

@@ -992,3 +992,23 @@ int eventNum = 0;
 int getEventNum() {
     return eventNum++;
 }
+
+bool TRACE_ENABLED = false;
+
+bool isTraceEnabled() {
+    return TRACE_ENABLED;
+}
+
+void setTraceEnabled(bool newTraceSetting) {
+    TRACE_ENABLED = newTraceSetting;
+}
+
+void TRACE_INIT(int myRank) {
+    char *envVar = getenv("LAIK_APPLICATION_TRACE_ENABLED");
+    if(envVar != NULL && strcmp(envVar, "1") == 0) {
+        setTraceEnabled(true);
+    }
+    if(isTraceEnabled() && myRank == 0) {
+        printf("===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA\n");
+    }
+}
