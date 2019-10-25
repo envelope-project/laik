@@ -66,7 +66,6 @@ void createPartitionings(Laik_Partitioner *(singlePartitioners[]),
 
 int main (int argc, char *argv[])
 {
-    laik_set_loglevel(LAIK_LL_Warning);
     int myid, numprocs;
     size_t size, i;
 //    char *s_buf, *r_buf;

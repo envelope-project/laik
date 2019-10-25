@@ -159,9 +159,6 @@ Laik_Data *dWrite, *dRead;
 Laik_Checkpoint *spaceCheckpoint = NULL;
 
 int main(int argc, char *argv[]) {
-    laik_set_loglevel(LAIK_LL_Warning);
-//    laik_set_loglevel(LAIK_LL_Info);
-//    laik_set_loglevel(LAIK_LL_Debug);
     inst = laik_init(&argc, &argv);
     world = laik_world(inst);
 
