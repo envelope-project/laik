@@ -223,7 +223,7 @@ int main (int argc, char *argv[])
             if(i % 10000 == 0) {
                 TRACE_EVENT_S("ITER", "");
             }
-            if (faultToleranceOptions.failureCheckFrequency > 0 && i % faultToleranceOptions.failureCheckFrequency == 0) {
+            if (isFaultToleranceActive(&faultToleranceOptions) && i % faultToleranceOptions.failureCheckFrequency == 0) {
                 TPRINTF("Attempting to determine global status.\n");
                 TRACE_EVENT_START("FAILURE-CHECK", "");
                 Laik_Group *checkGroup = world;

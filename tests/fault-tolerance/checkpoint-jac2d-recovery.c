@@ -206,10 +206,13 @@ int main(int argc, char *argv[]) {
 
     if (size == 0) size = 1024; // entries
     if (maxiter == 0) maxiter = 50;
-    if (faultToleranceOptions.failureCheckFrequency == -1) faultToleranceOptions.failureCheckFrequency = faultToleranceOptions.checkpointFrequency;
+//    if (faultToleranceOptions.failureCheckFrequency == -1)
+//    {
+//        faultToleranceOptions.failureCheckFrequency = faultToleranceOptions.checkpointFrequency;
+//    }
 
     // Set the error handler to be able to recover from if failures are being checked
-    if(faultToleranceOptions.failureCheckFrequency > -1) {
+    if(isFaultToleranceActive(&faultToleranceOptions)) {
         laik_error_handler_set(inst, laik_failure_default_error_handler);
     }
 
@@ -297,7 +300,7 @@ int main(int argc, char *argv[]) {
             TRACE_EVENT_S("ITER", "");
         }
 
-        if (faultToleranceOptions.failureCheckFrequency > 0 && iter % faultToleranceOptions.failureCheckFrequency == 0) {
+        if (isFaultToleranceActive(&faultToleranceOptions) && iter % faultToleranceOptions.failureCheckFrequency == 0) {
             TPRINTF("Attempting to determine global status.\n");
             TRACE_EVENT_START("FAILURE-CHECK", "");
             Laik_Group *checkGroup = world;

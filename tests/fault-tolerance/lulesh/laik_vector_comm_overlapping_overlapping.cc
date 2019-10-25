@@ -106,7 +106,7 @@ void laik_vector_comm_overlapping_overlapping<T>::migrate(Laik_Group *new_group,
     int* base;
     //int slice = 0;
 
-    laik_switchto_partitioning(this->data, this->p1, LAIK_DF_None, LAIK_RO_Min);
+    this->prepareMigration(suppressSwitchToP1);
 
     Laik_Reservation* reservation = laik_reservation_new(this->data);
     laik_reservation_add(reservation, p_new_1);

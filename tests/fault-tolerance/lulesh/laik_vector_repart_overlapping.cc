@@ -66,7 +66,7 @@ void laik_vector_repart_overlapping<T>::migrate(Laik_Group *new_group, Laik_Part
 
     this -> state = 0;
 
-    laik_switchto_partitioning(this->data, this->p1, LAIK_DF_None, LAIK_RO_Min);
+    this->prepareMigration(suppressSwitchToP1);
 
     this->copyVectorToLaikData(data_vector);
 

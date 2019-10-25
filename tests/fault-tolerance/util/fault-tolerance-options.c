@@ -20,6 +20,10 @@ const FaultToleranceOptions FaultToleranceOptionsDefault = {
 
 #define ENSURE_NUMBER_ARGUMENTS(num) if(*arg + num >= argc) { laik_log(LAIK_LL_Panic, "Missing argument for option %s.", argv[*arg]); return false;}
 
+bool isFaultToleranceActive(FaultToleranceOptions * faultToleranceOptions) {
+    return faultToleranceOptions->failureCheckFrequency > 0;
+}
+
 bool parseFaultToleranceOptions(int argc, char **argv, int *arg, int rank, FaultToleranceOptions *ftOptions) {
     if (strcmp("--plannedFailure", argv[*arg]) == 0) {
         if (rank == atoi(argv[*arg + 1])) {

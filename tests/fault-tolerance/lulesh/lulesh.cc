@@ -179,6 +179,7 @@ extern "C" {
 /*********************************/
 
 /* might want to add access methods so that memory can be */
+
 /* better managed, as in luleshFT */
 
 template<typename T>
@@ -199,6 +200,8 @@ void Release(T **ptr) {
 /******************************************/
 
 /* Work Routines */
+
+double laik_reduce(double input, Int_t myRank, Laik_Data *laikTimer, Laik_Partitioning *all, Laik_Partitioning *master);
 
 static inline
 void TimeIncrement(Domain &domain, Laik_Data *laikDt, Laik_Partitioning *allPartitioning, Real_t &gnewdt) {
@@ -1071,7 +1074,7 @@ void CalcHourglassControlForElems(Domain &domain,
         /* Do a check for negative volumes */
         if (domain.v(i) <= Real_t(0.0)) {
 #if USE_MPI
-            laik_log((Laik_LogLevel) 2, "Debug 1\n");
+            laik_log(LAIK_LL_Warning, "Debug 1\n");
             MPI_Barrier(MPI_COMM_WORLD);
             MPI_Abort(MPI_COMM_WORLD, VolumeError);
 #else
@@ -1132,7 +1135,7 @@ void CalcVolumeForceForElems(Domain &domain) {
             //laik_log((Laik_LogLevel)2,"Debug: %f\n", determ[k]);
             if (determ[k] <= Real_t(0.0)) {
 #if USE_MPI
-                laik_log((Laik_LogLevel) 2, "Debug 2\n");
+                laik_log(LAIK_LL_Warning, "Debug 2\n");
                 MPI_Barrier(MPI_COMM_WORLD);
                 MPI_Abort(MPI_COMM_WORLD, VolumeError);
 #else
@@ -1650,7 +1653,7 @@ void CalcLagrangeElements(Domain &domain, Real_t *vnew) {
             // See if any volumes are negative, and take appropriate action.
             if (vnew[k] <= Real_t(0.0)) {
 #if USE_MPI
-                laik_log((Laik_LogLevel) 2, "Debug 3\n");
+                laik_log(LAIK_LL_Warning, "Debug 3\n");
                 MPI_Barrier(MPI_COMM_WORLD);
                 MPI_Abort(MPI_COMM_WORLD, VolumeError);
 #else
@@ -2116,7 +2119,7 @@ void CalcQForElems(Domain &domain, Real_t vnew[]) {
 
         if (idx >= 0) {
 #if USE_MPI
-            laik_log((Laik_LogLevel) 2, "Debug 4\n");
+            laik_log(LAIK_LL_Warning, "Debug 4\n");
             MPI_Barrier(MPI_COMM_WORLD);
             MPI_Abort(MPI_COMM_WORLD, QStopError);
 #else
@@ -2479,7 +2482,7 @@ void ApplyMaterialPropertiesForElems(Domain &domain, Real_t vnew[]) {
                 }
                 if (vc <= 0.) {
 #if USE_MPI
-                    laik_log((Laik_LogLevel) 2, "Debug 5\n");
+                    laik_log(LAIK_LL_Warning, "Debug 5\n");
                     MPI_Barrier(MPI_COMM_WORLD);
                     MPI_Abort(MPI_COMM_WORLD, VolumeError);
 #else
@@ -2767,6 +2770,8 @@ int main(int argc, char *argv[]) {
     struct cmdLineOpts opts;
 
     laik_set_loglevel(LAIK_LL_Warning);
+    laik_set_loglevel(LAIK_LL_Info);
+//    laik_set_loglevel(LAIK_LL_Debug);
 
 #if USE_MPI
     //Domain_member fieldData ;
@@ -2869,6 +2874,8 @@ int main(int argc, char *argv[]) {
     // Laik data container for dt
     Laik_Data *laikDt = nullptr;
 
+    Laik_Data *laikReductionAuxiliaryContainer = nullptr;
+
     // create index spaces for elements, nodes and dt
     indexSpaceElements = laik_new_space_1d(inst, numRanks * numElem);
     indexSpaceNodes = laik_new_space_1d(inst, NumNodes);
@@ -2887,6 +2894,12 @@ int main(int argc, char *argv[]) {
     // created inside inside Domain by
     // initializing laik_vectors
     laikDt = laik_new_data(indexSapceDt, laik_Double);
+
+    laikReductionAuxiliaryContainer = laik_new_data_1d(inst, laik_Double, 1);
+    Laik_Partitioning *all, *master;
+    all = laik_new_partitioning(laik_All, world, laik_data_get_space(laikReductionAuxiliaryContainer), nullptr);
+    master = laik_new_partitioning(laik_Master, world, laik_data_get_space(laikReductionAuxiliaryContainer), nullptr);
+    laik_switchto_partitioning(laikReductionAuxiliaryContainer, all, LAIK_DF_None, LAIK_RO_None);
 
     // for dt we need to get the base pointer to and
     // send it to TimeIncrement function to
@@ -2941,7 +2954,8 @@ int main(int argc, char *argv[]) {
 
     TRACE_EVENT_END("INIT", "");
 
-    while ((locDom->time() < locDom->stoptime()) && (locDom->cycle() < opts.its)) {
+    //TODO do not terminate early in case of fault
+    while ( /*(locDom->time() < locDom->stoptime()) && */ (locDom->cycle() < opts.its)) {
 
 // TODO remove the following def
 #define USE_MPI 1
@@ -2955,27 +2969,27 @@ int main(int argc, char *argv[]) {
         // check if repartitioning has to be done in this iteration
         // if so, do repartitioning before the actual iteration
         // after repartitioning continue from the current iteration
-        if ((opts.repart > 0 && locDom->cycle() == opts.cycle) || (ftOptions.failureCheckFrequency > 0 && locDom->cycle() % ftOptions.failureCheckFrequency == 0)) {
+        if ((opts.repart > 0 && locDom->cycle() == opts.cycle) || (isFaultToleranceActive(&ftOptions) && locDom->cycle() % ftOptions.failureCheckFrequency == 0)) {
             std::vector<int> nodeStatuses;
             int failedCount = -1;
             // Check if a node has failed, then do restore. Else, do a checkpoint.
-            if(ftOptions.failureCheckFrequency > 0){
+            if(isFaultToleranceActive(&ftOptions)){
                 if(myRank == 0) {
                     std::cout << "Checking for failed nodes." << std::endl;
                 }
                 TRACE_EVENT_S("FAILURE-DETECT", "");
                 nodeStatuses.reserve(laik_size(world));
                 failedCount = laik_failure_check_nodes(inst, world, &nodeStatuses[0]);
-                std::cout << "Detected " << failedCount << " node failures on rank " << myRank << "." << std::endl;
+                std::cout << "Rank " << myRank << " detected " << failedCount << " node failures." << std::endl;
             }
-            if (ftOptions.failureCheckFrequency <= 0 || failedCount > 0) {
+            if (!isFaultToleranceActive(&ftOptions) || failedCount > 0) {
                 TRACE_EVENT_START("RESTORE", "");
                 double intermediate_timer = MPI_Wtime() - start2;
                 double itG = -1;
-                if (ftOptions.failureCheckFrequency <= 0) {
-                    MPI_Reduce(&intermediate_timer, &itG, 1, MPI_DOUBLE,
-                               MPI_MAX, 0, MPI_COMM_WORLD);
-                }
+
+//                MPI_Reduce(&intermediate_timer, &itG, 1, MPI_DOUBLE,
+//                           MPI_MAX, 0, MPI_COMM_WORLD);
+                itG = laik_reduce(intermediate_timer, myRank, laikReductionAuxiliaryContainer, all, master);
 
                 if ((myRank == 0) && (opts.quiet == 0)) {
                     printf("Starting Repartitioning, current runtime = %f s\n", itG);
@@ -2993,7 +3007,8 @@ int main(int argc, char *argv[]) {
                 int *removeList = nullptr;
                 Laik_Group *shrinked_group;
 
-                if (ftOptions.failureCheckFrequency <= 0) {
+                //Todo this was switched logic. Based on previous working version, this was changed back.
+                if (isFaultToleranceActive(&ftOptions)) {
                     std::cout << "Fault tolerance recovery repartitioning pre-step initiated" << std::endl;
 //                    calculate_removing_list_ft(world, opts, side, newside, diffsize, removeList, &nodeStatuses[0]);
 
@@ -3014,6 +3029,10 @@ int main(int argc, char *argv[]) {
                     laik_log(LAIK_LL_Debug, "Switching the dt container to temporary group.");
                     laik_switchto_new_partitioning(laikDt, shrinked_group, laik_All, LAIK_DF_None, LAIK_RO_None);
                     laik_log(LAIK_LL_Debug, "Switched the dt container to temporary group.");
+
+                    laik_log(LAIK_LL_Debug, "Switching the auxiliary container to temporary group.");
+                    laik_switchto_new_partitioning(laikReductionAuxiliaryContainer, shrinked_group, laik_All, LAIK_DF_None, LAIK_RO_None);
+                    laik_log(LAIK_LL_Debug, "Switched the auxiliary container to temporary group.");
 
                     // Fake new temporary world
                     world = shrinked_group;
@@ -3040,14 +3059,18 @@ int main(int argc, char *argv[]) {
                                                      allPartitioning2,
                                                      transitionToExclusive2, transitionToHalo2,
                                                      transitionToOverlappingInit2, transitionToOverlappingReduce2);
+                master = laik_new_partitioning(laik_Master, world, laik_data_get_space(laikReductionAuxiliaryContainer), nullptr);
+                all = laik_new_partitioning(laik_All, world, laik_data_get_space(laikReductionAuxiliaryContainer), nullptr);
 
                 // migrate data for all the data structures
                 laik_log(LAIK_LL_Info, "Redistributing data structures.");
+                //Todo: This was also switched sign, see other TODO
                 locDom->re_distribute_data_structures(shrinked_group, exclusivePartitioning2, haloPartitioning2,
                                                       overlapingPartitioning2, transitionToExclusive2,
                                                       transitionToHalo2, transitionToOverlappingInit2,
                                                       transitionToOverlappingReduce2,
-                                                      ftOptions.failureCheckFrequency <= 0);
+                                                      isFaultToleranceActive(&ftOptions));
+                laik_switchto_partitioning(laikReductionAuxiliaryContainer, all, LAIK_DF_None, LAIK_RO_None);
 
                 // processes that are not part of the new (shrinked)
                 // process group have to exit the main loop
@@ -3172,10 +3195,12 @@ int main(int argc, char *argv[]) {
     double elapsed_timeG;
 #if USE_MPI
     double elapsed_timeG2;
-    MPI_Reduce(&elapsed_time, &elapsed_timeG, 1, MPI_DOUBLE,
-               MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&alternate_time, &elapsed_timeG2, 1, MPI_DOUBLE,
-               MPI_MAX, 0, MPI_COMM_WORLD);
+//    MPI_Reduce(&elapsed_time, &elapsed_timeG, 1, MPI_DOUBLE,
+//               MPI_MAX, 0, MPI_COMM_WORLD);
+//    MPI_Reduce(&alternate_time, &elapsed_timeG2, 1, MPI_DOUBLE,
+//               MPI_MAX, 0, MPI_COMM_WORLD);
+    elapsed_timeG = laik_reduce(elapsed_time, myRank, laikReductionAuxiliaryContainer, all, master);
+    elapsed_timeG2 = laik_reduce(alternate_time, myRank, laikReductionAuxiliaryContainer, all, master);
 #else
     elapsed_timeG = elapsed_time;
 #endif
@@ -3213,6 +3238,31 @@ int main(int argc, char *argv[]) {
 
     TRACE_EVENT_END("FINALIZE", "");
     return 0;
+}
+
+double laik_reduce(double input, Int_t myRank, Laik_Data *laikTimer, Laik_Partitioning *all, Laik_Partitioning *master) {
+    double output;
+    double* buffer;
+    uint64_t count;
+    laik_switchto_partitioning(laikTimer, all, LAIK_DF_None, LAIK_RO_None);
+    laik_map_def1(laikTimer, reinterpret_cast<void **>(&buffer), &count);
+    if(count != 1) {
+        std::cerr << "Laik reduce received incorrect partitioning size\n" << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, -1);
+    }
+    buffer[0] = input;
+    laik_switchto_partitioning(laikTimer, master, LAIK_DF_Preserve, LAIK_RO_Max);
+    if(myRank == 0) {
+        laik_map_def1(laikTimer, reinterpret_cast<void **>(buffer), &count);
+        if(count != 1) {
+            std::cerr << "Laik reduce received incorrect partitioning size\n" << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
+        output = buffer[0];
+    } else {
+        output = -1;
+    }
+    return output;
 }
 
 bool parseFaultToleranceOptionsProxy(int argc, char **argv, int *arg, int rank, FaultToleranceOptions *ftOptions) {

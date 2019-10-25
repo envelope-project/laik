@@ -74,12 +74,12 @@ laik_vector_repart_exclusive<T>::migrate(Laik_Group *new_group, Laik_Partitionin
 
     this->state = 0;
 
-    laik_switchto_partitioning(this->data, this->p1, LAIK_DF_Preserve, LAIK_RO_None);
+    this->prepareMigration(suppressSwitchToP1);
 
     this->copyVectorToLaikData(data_vector);
 
     // perform switches for communication
-    this->prepareMigration(suppressSwitchToP1);
+    laik_switchto_partitioning(this->data, p_new_1, LAIK_DF_Preserve, LAIK_RO_None);
 
     this->world = new_group;
     if (laik_myid(this->world) < 0)
