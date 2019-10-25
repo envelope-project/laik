@@ -3041,6 +3041,11 @@ int main(int argc, char *argv[]) {
                 // create the shrinked group by removing tasks in removeList
                 shrinked_group = laik_new_shrinked_group(world, diffsize, removeList);
 
+                if(laik_size(world) - diffsize == 1) {
+                    laik_log(LAIK_LL_Info, "Only 1 process left in group, disabling redundancy.");
+                    ftOptions.redundancyCount = 0;
+                }
+
                 // update number of local number of elements per edge in each task
                 opts.nx = opts.nx * side / (int) newside;
 

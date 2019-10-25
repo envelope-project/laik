@@ -53,6 +53,11 @@ Domain::re_distribute_data_structures(Laik_Group *new_group, Laik_Partitioning *
     this->world = new_group;
 }
 
+
+Real_t checkpointDeltaTimeMultLB, checkpointDeltaTimeMultUB, checkpointDTCourant, checkpointDTHydro, checkpointDTMax;
+Real_t checkpointTime, checkpointDeltaTime;
+Int_t checkpointCycle;
+
 void Domain::createCheckpoints(std::vector<Laik_Checkpoint *> &checkpoints, int redundancyCount, int rotationDistance) {
 #ifdef REPARTITIONING
     checkpoints.push_back(m_x.checkpoint(redundancyCount, rotationDistance));
@@ -94,9 +99,27 @@ void Domain::createCheckpoints(std::vector<Laik_Checkpoint *> &checkpoints, int 
     checkpoints.push_back(m_ss.checkpoint(redundancyCount, rotationDistance));
     checkpoints.push_back(m_elemMass.checkpoint(redundancyCount, rotationDistance));
 #endif
+
+    checkpointDeltaTimeMultLB = deltatimemultlb();
+    checkpointDeltaTimeMultUB = deltatimemultub();
+    checkpointDTCourant = dtcourant();
+    checkpointDTHydro = dthydro();
+    checkpointDTMax = dtmax();
+    checkpointTime = time();
+    checkpointCycle = cycle();
+    checkpointDeltaTime = deltatime();
 }
 
 int Domain::restore(std::vector<Laik_Checkpoint *> &checkpoints, Laik_Group *newGroup) {
+    deltatimemultlb() = checkpointDeltaTimeMultLB;
+    deltatimemultub() = checkpointDeltaTimeMultUB;
+    dtcourant() = checkpointDTCourant;
+    dthydro() = checkpointDTHydro;
+    dtmax() = checkpointDTMax;
+    time() = checkpointTime;
+    cycle() = checkpointCycle;
+    deltatime() = checkpointDeltaTime;
+
     int index = 0;
 #ifdef REPARTITIONING
     m_x.restore(checkpoints[index++], newGroup);
