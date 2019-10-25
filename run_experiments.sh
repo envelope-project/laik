@@ -52,6 +52,7 @@ run_experiment () {
 #	export MPI_OPTIONS="--output-filename out --merge-stderr-to-stdout --stdin none --mca mpi_ft_detector true"
 #	export MPI_OPTIONS="$MPI_OPTIONS --oversubscribe"
 	export TEST_NAME="$1"
+	export LAIK_APPLICATION_TRACE_ENABLED=1
 	rm -r out/
 	tests/fault-tolerance/launcher.sh "$2" "$5" "$5" release "$3" "$4"
 	EXIT_CODE=$?
@@ -125,8 +126,12 @@ fi
 #JAC2D_CONF_A="20000 50 -1"
 #LULESH_CONF_A="-i 280 -s 14"
 OSU_CONF_A="-m 32768:32768 -i 2150000"
-JAC2D_CONF_A="4096 10600 -1"
+JAC2D_CONF_A="--progressReportInterval 100 4096 10600 -1"
 LULESH_CONF_A="-s 17 -i 1340"
+
+OSU_CONF_B="-m 32768:32768 -i 100"
+JAC2D_CONF_B="4096 20 -1"
+LULESH_CONF_B="-s 17 -i 20"
 
 EXPERIMENT_TRACE_APPEND=0
 TEST_MIN=0
@@ -140,6 +145,7 @@ case "$2" in
     BENCHMARK="osu"
     BENCHMARK_EXECUTABLE="$OSU"
     BENCHMARK_OPTIONS="$OSU_CONF_A"
+    BENCHMARK_OPTIONS_B="$OSU_CONF_B"
     BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200000 --failureCheckFrequency 200000 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=48
     FAILURE_ITERATIONS=(142266 128688 121441 118626 44627 86271 25756 155891 123766 90289)
@@ -149,6 +155,7 @@ case "$2" in
     BENCHMARK="jac2d"
     BENCHMARK_EXECUTABLE="$JAC2D"
     BENCHMARK_OPTIONS="$JAC2D_CONF_A"
+    BENCHMARK_OPTIONS_B="$JAC2D_CONF_B"
     BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 2000 --failureCheckFrequency 500 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=48
     FAILURE_ITERATIONS=(2214 6897 3384 4608 9296 7218 2518 2008 6843 1558)
@@ -158,6 +165,7 @@ case "$2" in
     BENCHMARK="lulesh"
     BENCHMARK_EXECUTABLE="$LULESH"
     BENCHMARK_OPTIONS="$LULESH_CONF_A"
+    BENCHMARK_OPTIONS_B="$LULESH_CONF_B"
     BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200 --failureCheckFrequency 50 --redundancyCount 1 --rotationDistance 1"
     NUM_PROCESSES=27
     FAILURE_ITERATIONS=(880 238 415 1179 656 718 480 42 225 475)
@@ -245,6 +253,17 @@ case "$1" in
       MPI_OPTIONS="--mca mpi_ft_detector true"
       OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$OPTION_STRING" "$BENCHMARK_OPTIONS")
       run_experiment "checkpoint_time_to_solution_mpi_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
+    done
+  ;;
+
+  "demo")
+    EXPERIMENT_IGNORE_EXIT_CODE=1
+    EXPERIMENT_TRACE_APPEND=0
+
+    for ((i = TEST_MIN; i < TEST_MAX; i++)); do
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK_OPTIONS_B" "--plannedFailure 1 10")
+      NUM_PROCESSES=4
+      run_experiment "demo_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
 
