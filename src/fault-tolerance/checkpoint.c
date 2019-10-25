@@ -268,6 +268,13 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
         for (unsigned int i = 0; i < originalCount; i++) {
             Laik_TaskSlice_Gen duplicateSlice = receiver->array->tslice[i];
             int taskId = (duplicateSlice.task + (redundancyCount + 1) * checkpointPartitionerData->rotationDistance) % receiver->params->group->size;
+            if(duplicateSlice.task == taskId) {
+                laik_log_begin(LAIK_LL_Panic);
+                laik_log_append("A checkpoint slice (");
+                laik_log_Slice(&duplicateSlice.s);
+                laik_log_append(") and one of its redundant copies are being placed on the same task with id %i. This means that redundancy is incorrectly configured. Please adjust redundancy count and rotation distance.", taskId);
+                laik_log_flush("");
+            }
             laik_append_slice(receiver, taskId, &duplicateSlice.s, duplicateSlice.tag, duplicateSlice.data);
         }
     }
