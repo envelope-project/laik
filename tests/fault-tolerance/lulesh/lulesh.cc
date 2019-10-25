@@ -2975,12 +2975,12 @@ int main(int argc, char *argv[]) {
             // Check if a node has failed, then do restore. Else, do a checkpoint.
             if(isFaultToleranceActive(&ftOptions)){
                 if(myRank == 0) {
-                    std::cout << "Checking for failed nodes." << std::endl;
+                    laik_log(LAIK_LL_Info, "Checking for failed nodes.");
                 }
                 TRACE_EVENT_S("FAILURE-DETECT", "");
                 nodeStatuses.reserve(laik_size(world));
                 failedCount = laik_failure_check_nodes(inst, world, &nodeStatuses[0]);
-                std::cout << "Rank " << myRank << " detected " << failedCount << " node failures." << std::endl;
+                laik_log(LAIK_LL_Info, "Rank %i detected %i node failures.", myRank, failedCount);
             }
             if (!isFaultToleranceActive(&ftOptions) || failedCount > 0) {
                 TRACE_EVENT_START("RESTORE", "");
@@ -3009,7 +3009,7 @@ int main(int argc, char *argv[]) {
 
                 //Todo this was switched logic. Based on previous working version, this was changed back.
                 if (isFaultToleranceActive(&ftOptions)) {
-                    std::cout << "Fault tolerance recovery repartitioning pre-step initiated" << std::endl;
+                    laik_log(LAIK_LL_Info, "Fault tolerance recovery repartitioning pre-step initiated");
 //                    calculate_removing_list_ft(world, opts, side, newside, diffsize, removeList, &nodeStatuses[0]);
 
                     // Only remove the actually failed before restoring
@@ -3119,7 +3119,7 @@ int main(int argc, char *argv[]) {
             } else if(failedCount == 0 && locDom->cycle() % ftOptions.checkpointFrequency == 0) {
                 if(!ftOptions.delayCheckpointRelease) {
                     if(myRank == 0) {
-                        std::cout << "Freeing " << checkpoints.size() << " checkpoints." << std::endl;
+                        laik_log(LAIK_LL_Info, "Freeing %zu checkpoints.\n", checkpoints.size());
                     }
 
                     for (auto & checkpoint : checkpoints) {
@@ -3129,17 +3129,17 @@ int main(int argc, char *argv[]) {
                 }
 
                 if(myRank == 0) {
-                    std::cout << "Creating checkpoints." << std::endl;
+                    laik_log(LAIK_LL_Info, "Creating checkpoints.");
                 }
                 std::vector<Laik_Checkpoint*> newCheckpoints;
                 locDom->createCheckpoints(newCheckpoints, ftOptions.redundancyCount, ftOptions.rotationDistance);
                 if(myRank == 0) {
-                    std::cout << "Finished creating checkpoints." << std::endl;
+                    laik_log(LAIK_LL_Info, "Finished creating checkpoints.");
                 }
 
                 if(ftOptions.delayCheckpointRelease) {
                     if(myRank == 0) {
-                        std::cout << "Freeing " << checkpoints.size() << " checkpoints." << std::endl;
+                        laik_log(LAIK_LL_Info, "Freeing %zu checkpoints.\n", checkpoints.size());
                     }
 
                     for (auto & checkpoint : checkpoints) {

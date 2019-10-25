@@ -104,9 +104,7 @@ int Domain::restore(std::vector<Laik_Checkpoint *> &checkpoints, Laik_Group *new
     m_z.restore(checkpoints[index++], newGroup);
     m_xd.restore(checkpoints[index++], newGroup);
     m_yd.restore(checkpoints[index++], newGroup);
-    std::cout << "Restored m_yd." << std::endl;
     m_zd.restore(checkpoints[index++], newGroup);
-    std::cout << "Restored m_zd." << std::endl;
     m_xdd.restore(checkpoints[index++], newGroup);
     m_ydd.restore(checkpoints[index++], newGroup);
     m_zdd.restore(checkpoints[index++], newGroup);
