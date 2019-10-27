@@ -43,6 +43,7 @@ static void PrintCommandLineOptions(char *execname, int myRank)
       printf(" -v              : Output viz file (requires compiling with -DVIZ_MESH\n");
       printf(" -repart         : enable repartitioning by defining the number of target group\n");
       printf(" -repart_cycle   : cycle at which repartitioning happens\n");
+      printf(" -no-timers      : disable MPI timing functionality to make output stable\n");
       printf(" -h              : This message\n");
        printf(FAULT_TOLERANCE_OPTIONS_HELP);
        printf("\n\n");
@@ -178,6 +179,10 @@ ParseCommandLineOptions(int argc, char *argv[], int myRank, struct cmdLineOpts *
          }
          else if (parseFaultToleranceOptionsProxy(argc, argv, &i, myRank, ftOptions)) {
              // Successfully parsed arg, need to shift by one more arg since lulesh doesn't do any shifting on its own
+             i++;
+         }
+         else if(strcmp(argv[i], "-no-timers") == 0) {
+             opts->noTimer = true;
              i++;
          }
          /* -h */

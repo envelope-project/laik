@@ -203,6 +203,8 @@ void Release(T **ptr) {
 
 double laik_reduce(double input, Int_t myRank, Laik_Data *laikTimer, Laik_Partitioning *all, Laik_Partitioning *master);
 
+double getMPI_Wtime(cmdLineOpts* opts);
+
 static inline
 void TimeIncrement(Domain &domain, Laik_Data *laikDt, Laik_Partitioning *allPartitioning, Real_t &gnewdt) {
     Real_t targetdt = domain.stoptime() - domain.time();
@@ -2805,6 +2807,7 @@ int main(int argc, char *argv[]) {
     opts.cost = 1;
     opts.repart = 0;
     opts.cycle = 5;
+    opts.noTimer = false;
 
     FaultToleranceOptions ftOptions = FaultToleranceOptionsDefault;
 
@@ -2941,8 +2944,8 @@ int main(int argc, char *argv[]) {
 
     // BEGIN timestep to solution */
 #if USE_MPI
-    double start = MPI_Wtime();
-    double start2 = MPI_Wtime();
+    double start = getMPI_Wtime(&opts);
+    double start2 = getMPI_Wtime(&opts);
     int repart_iter = 0;
 #else
                                                                                                                             timeval start;
@@ -2981,7 +2984,7 @@ int main(int argc, char *argv[]) {
             }
             if (!isFaultToleranceActive(&ftOptions) || failedCount > 0) {
                 TRACE_EVENT_START("RESTORE", "");
-                double intermediate_timer = MPI_Wtime() - start2;
+                double intermediate_timer = getMPI_Wtime(&opts) - start2;
                 double itG = -1;
 
 //                MPI_Reduce(&intermediate_timer, &itG, 1, MPI_DOUBLE,
@@ -2996,7 +2999,7 @@ int main(int argc, char *argv[]) {
                 laik_log((Laik_LogLevel) 2, "Before repart\n");
                 laik_log((Laik_LogLevel) 2, "My ID in main world: %d\n", laik_myid(world));
 
-                double repart_start = MPI_Wtime();
+                double repart_start = getMPI_Wtime(&opts);
 
                 // calculate number of removing tasks and a list of them
                 double newside;
@@ -3096,13 +3099,13 @@ int main(int argc, char *argv[]) {
                 locDom->re_init_domain(laik_size(world), col, row, plane, opts.nx,
                                        side, opts.numReg, opts.balance, opts.cost);
 
-                double duration = MPI_Wtime() - repart_start;
+                double duration = getMPI_Wtime(&opts) - repart_start;
 
                 laik_log((Laik_LogLevel) 2, "After repart\n");
                 if (opts.quiet == 0)
                     printf("Repartition Done in %f s on Rank %d\n", duration, laik_myid(world));
 
-                start2 = MPI_Wtime();
+                start2 = getMPI_Wtime(&opts);
                 repart_iter = locDom->cycle();
 
                 // remove the old partitioning and transition objects
@@ -3133,8 +3136,10 @@ int main(int argc, char *argv[]) {
                 if(myRank == 0) {
                     laik_log(LAIK_LL_Info, "Creating checkpoints.");
                 }
+                TRACE_EVENT_START("CHECKPOINT", "");
                 std::vector<Laik_Checkpoint*> newCheckpoints;
                 locDom->createCheckpoints(newCheckpoints, ftOptions.redundancyCount, ftOptions.rotationDistance);
+                TRACE_EVENT_END("CHECKPOINT", "");
                 if(myRank == 0) {
                     laik_log(LAIK_LL_Info, "Finished creating checkpoints.");
                 }
@@ -3187,8 +3192,8 @@ int main(int argc, char *argv[]) {
     // Use reduced max elapsed time
     double elapsed_time;
 #if USE_MPI
-    elapsed_time = MPI_Wtime() - start;
-    double alternate_time = MPI_Wtime() - start2;
+    elapsed_time = getMPI_Wtime(&opts) - start;
+    double alternate_time = getMPI_Wtime(&opts) - start2;
 #else
                                                                                                                             timeval end;
    gettimeofday(&end, NULL) ;
@@ -3240,6 +3245,13 @@ int main(int argc, char *argv[]) {
 
     TRACE_EVENT_END("FINALIZE", "");
     return 0;
+}
+
+double getMPI_Wtime(cmdLineOpts* opts) {
+    if(opts->noTimer) {
+        return 0;
+    }
+    return MPI_Wtime();
 }
 
 double laik_reduce(double input, Int_t myRank, Laik_Data *laikTimer, Laik_Partitioning *all, Laik_Partitioning *master) {

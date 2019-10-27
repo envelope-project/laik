@@ -10,8 +10,8 @@ To print out progress, use -p
 To write an output file for VisIt, use -v
 See help (-h) for more options
 
-
-=== TESTS ON REPARTITIONING MODE ===
+ 
+=== TESTS ON REPARTITIONING MODE === 
 cycle = 1, time = 1.068124e-05, dt=1.068124e-05
 cycle = 2, time = 2.349873e-05, dt=1.281749e-05
 cycle = 3, time = 2.789208e-05, dt=4.393346e-06
@@ -44,6 +44,16 @@ cycle = 29, time = 1.083436e-04, dt=4.183372e-06
 cycle = 30, time = 1.130908e-04, dt=4.747189e-06
 cycle = 31, time = 1.176481e-04, dt=4.557295e-06
 cycle = 32, time = 1.220514e-04, dt=4.403381e-06
+Oops. Process with rank 1 did something silly on iteration 32. Aborting!
+cycle = 33, time = 1.263491e-04, dt=4.297636e-06
+cycle = 34, time = 1.305781e-04, dt=4.229043e-06
+cycle = 35, time = 1.347762e-04, dt=4.198111e-06
+Starting Repartitioning, current runtime = 0.000000 s
+Previous Time per Iteration: 0.000000 s 
+New world size: 1
+Repartition Done in 0.051567 s on Rank 0
+cycle = 31, time = 1.176481e-04, dt=4.557295e-06
+cycle = 32, time = 1.220514e-04, dt=4.403381e-06
 cycle = 33, time = 1.263491e-04, dt=4.297636e-06
 cycle = 34, time = 1.305781e-04, dt=4.229043e-06
 cycle = 35, time = 1.347762e-04, dt=4.198111e-06
@@ -55,9 +65,6 @@ cycle = 40, time = 1.562730e-04, dt=4.704301e-06
 cycle = 41, time = 1.609773e-04, dt=4.704301e-06
 cycle = 42, time = 1.656816e-04, dt=4.704301e-06
 cycle = 43, time = 1.703859e-04, dt=4.704301e-06
-Starting Repartitioning, current runtime = 0.688989 s
-Previous Time per Iteration: 0.016023 s
-Repartition Done in 0.133623 s on Rank 0
 cycle = 44, time = 1.750902e-04, dt=4.704301e-06
 cycle = 45, time = 1.797569e-04, dt=4.666679e-06
 cycle = 46, time = 1.843243e-04, dt=4.567459e-06
@@ -65,19 +72,20 @@ cycle = 47, time = 1.888070e-04, dt=4.482654e-06
 cycle = 48, time = 1.932201e-04, dt=4.413125e-06
 cycle = 49, time = 1.975783e-04, dt=4.358243e-06
 cycle = 50, time = 2.018977e-04, dt=4.319329e-06
-Run completed:
-   Problem size        =  20
-   MPI tasks           =  8
-   Iteration count     =  50
-   Final Origin Energy = 6.483837e+05
+Run completed:  
+   Problem size        =  20 
+   MPI tasks           =  8 
+   Iteration count     =  50 
+   Final Origin Energy = 6.483837e+05 
    Testing Plane 0 of Energy Array on rank 0:
         MaxAbsDiff   = 8.731149e-11
         TotalAbsDiff = 1.037000e-10
         MaxRelDiff   = 7.684754e-13
 
 
-Elapsed time         =       1.44 (s)
-Grind time (us/z/c)  =  3.6047522 (per dom)  (0.45059403 overall)
-FOM                  =  2219.2926 (z/s)
+Elapsed time         =       0.00 (s)
+Grind time (us/z/c)  = 1.7383252e-309 (per dom)  (2.1729065e-310 overall)
+FOM                  =        inf (z/s)
 
-Time After Repartitioing: 0.820517, per Iteration 0.117217
+Time After Repartitioning: 0.000000, per Iteration 0.000000
+

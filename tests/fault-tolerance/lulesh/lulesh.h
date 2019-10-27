@@ -805,6 +805,7 @@ struct cmdLineOpts {
    Int_t balance; // -b
    Int_t repart; // -repart
    Int_t cycle; // -repart_cycle
+   bool noTimer;
 };
 
 
