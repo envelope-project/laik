@@ -6,21 +6,23 @@ then
   exit 255
 fi
 
+JUMP_HOST=bodev@lxhalle.in.tum.de
+
 case "$1" in
   "sync-up")
-    rsync -av -e "ssh bodev@lxhalle.in.tum.de ssh" --exclude ".*" --exclude "cmake-build-*" --exclude="out" --exclude "lib" --exclude "laik_experiments/data" ./ ga26poh3@skx.supermuc.lrz.de:/dss/dsshome1/08/ga26poh3/laik
+    rsync -av -e "ssh -J $JUMP_HOST" --exclude ".*" --exclude "cmake-build-*" --exclude="out" --exclude "lib" --exclude "laik_experiments/data" ./ ga26poh3@skx.supermuc.lrz.de:/dss/dsshome1/08/ga26poh3/laik
   ;;
   "sync-down-data")
-    rsync -av -e "ssh bodev@lxhalle.in.tum.de ssh" ga26poh3@skx.supermuc.lrz.de:/dss/dsshome1/08/ga26poh3/laik/laik_experiments/data ./laik_experiments/
+    rsync -av -e "ssh -J $JUMP_HOST" ga26poh3@skx.supermuc.lrz.de:/dss/dsshome1/08/ga26poh3/laik/laik_experiments/data ./laik_experiments/
   ;;
   "sh")
-    ssh -o ProxyCommand="ssh -W %h:%p bodev@lxhalle.in.tum.de"  ga26poh3@skx.supermuc.lrz.de
+    ssh -J $JUMP_HOST ga26poh3@skx.supermuc.lrz.de
   ;;
   "maimuc-sync-up")
     rsync -av -e "ssh -J bodev@himmuc.caps.in.tum.de" --exclude ".*" --exclude "cmake-build-*" --exclude="out" --exclude "lib" --exclude "laik_experiments/data" ./ login@maimuc.caps.in.tum.de:/home/pi/ga26poh/laik/
   ;;
   "maimuc-sync-down-data")
-    rsync -av -e "ssh -J bodev@himmuc.caps.in.tum.de" ga26poh3@skx.supermuc.lrz.de:/dss/dsshome1/08/ga26poh3/laik/laik_experiments/data ./laik_experiments/
+#    rsync -av -e "ssh -J bodev@himmuc.caps.in.tum.de" ga26poh3@skx.supermuc.lrz.de:/dss/dsshome1/08/ga26poh3/laik/laik_experiments/data ./laik_experiments/
   ;;
   "himmuc-sync-up")
     rsync -av --exclude ".*" --exclude "cmake-build-*" --exclude="out" --exclude "lib" --exclude "laik_experiments/data" ./ bodev@himmuc.caps.in.tum.de:/u/home/bodev/laik/

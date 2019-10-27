@@ -53,6 +53,7 @@ run_experiment () {
 #	export MPI_OPTIONS="$MPI_OPTIONS --oversubscribe"
 	export TEST_NAME="$1"
 	export LAIK_APPLICATION_TRACE_ENABLED=1
+	export LAIK_LOG=3
 	rm -r out/
 	tests/fault-tolerance/launcher.sh "$2" "$5" "$5" release "$3" "$4"
 	EXIT_CODE=$?
@@ -116,7 +117,7 @@ fi
 
 
 
-if [ $# -ne 2 ]
+if [ $# -lt 2 ]
 then
   echo "Need to pass which experiment to run and the benchmark"
   exit 255
@@ -125,9 +126,6 @@ fi
 #OSU_CONF_A="-m 32768:32768 -i 250000"
 #JAC2D_CONF_A="20000 50 -1"
 #LULESH_CONF_A="-i 280 -s 14"
-OSU_CONF_A="-m 32768:32768 -i 2150000"
-JAC2D_CONF_A="--progressReportInterval 100 4096 10600 -1"
-LULESH_CONF_A="-s 17 -i 1340"
 
 OSU_CONF_B="-m 32768:32768 -i 100"
 JAC2D_CONF_B="4096 20 -1"
@@ -137,6 +135,9 @@ EXPERIMENT_TRACE_APPEND=0
 TEST_MIN=0
 TEST_MAX=1
 
+TEST_MIN_2=2
+TEST_MAX_2=3
+
 #Only includes ranks up to 27 to accomodate for LULESH
 FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
 RESTART_FAILURE_RANKS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26)
@@ -144,6 +145,8 @@ case "$2" in
   "osu")
     BENCHMARK="osu"
     BENCHMARK_EXECUTABLE="$OSU"
+    BENCHMARK_ITER=2150000
+    OSU_CONF_A="-m 32768:32768 -i $BENCHMARK_ITER"
     BENCHMARK_OPTIONS="$OSU_CONF_A"
     BENCHMARK_OPTIONS_B="$OSU_CONF_B"
     BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200000 --failureCheckFrequency 200000 --redundancyCount 1 --rotationDistance 1"
@@ -154,6 +157,8 @@ case "$2" in
   "jac2d")
     BENCHMARK="jac2d"
     BENCHMARK_EXECUTABLE="$JAC2D"
+    BENCHMARK_ITER=10600
+    JAC2D_CONF_A="--progressReportInterval 100 4096 $BENCHMARK_ITER -1"
     BENCHMARK_OPTIONS="$JAC2D_CONF_A"
     BENCHMARK_OPTIONS_B="$JAC2D_CONF_B"
     BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 2000 --failureCheckFrequency 500 --redundancyCount 1 --rotationDistance 1"
@@ -164,9 +169,11 @@ case "$2" in
   "lulesh")
     BENCHMARK="lulesh"
     BENCHMARK_EXECUTABLE="$LULESH"
+    BENCHMARK_ITER=1340
+    LULESH_CONF_A="-s 17 -i $BENCHMARK_ITER"
     BENCHMARK_OPTIONS="$LULESH_CONF_A"
     BENCHMARK_OPTIONS_B="$LULESH_CONF_B"
-    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200 --failureCheckFrequency 50 --redundancyCount 1 --rotationDistance 1"
+    BENCHMARK_CHECKPOINT_SETTINGS="--checkpointFrequency 200 --failureCheckFrequency 50 --redundancyCount 1 --rotationDistance 1 -repart 1"
     NUM_PROCESSES=27
     FAILURE_ITERATIONS=(880 238 415 1179 656 718 480 42 225 475)
     RESTART_FAILURE_ITERATIONS=(316 495 -1 640 -1 179 1083 -1 753 -1 242 1059 -1 74 115 -1 215 527 1190 -1 316 -1 177 865 -1 271 401 915 -1)
@@ -182,9 +189,9 @@ esac
 
 case "$1" in
   "timing_test")
-      time run_experiment "timing_test_osu" "mpi" "$OSU" "$OSU_CONF_A" "48" "0"
-      time run_experiment "timing_test_jac2d" "mpi" "$JAC2D" "$JAC2D_CONF_A" "48" "0"
-      time run_experiment "timing_test_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27" "0"
+#      time run_experiment "timing_test_osu" "mpi" "$OSU" "$OSU_CONF_A" "48" "0"
+#      time run_experiment "timing_test_jac2d" "mpi" "$JAC2D" "$JAC2D_CONF_A" "48" "0"
+#      time run_experiment "timing_test_lulesh_$i" "mpi" "$LULESH" "$LULESH_CONF_A" "27" "0"
   ;;
   "runtime_time")
     for ((i = TEST_MIN; i < TEST_MAX; i++)); do
@@ -260,10 +267,49 @@ case "$1" in
     EXPERIMENT_IGNORE_EXIT_CODE=1
     EXPERIMENT_TRACE_APPEND=0
 
+
     for ((i = TEST_MIN; i < TEST_MAX; i++)); do
-      OPTIONS=$(benchmark_concat_options "$BENCHMARK_OPTIONS_B" "--plannedFailure 1 10")
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--plannedFailure 1 10" "$BENCHMARK_OPTIONS_B" )
       NUM_PROCESSES=4
       run_experiment "demo_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
+    done
+  ;;
+
+  "scaling")
+    EXPERIMENT_IGNORE_EXIT_CODE=1
+    EXPERIMENT_TRACE_APPEND=0
+
+    if [ $# -ne 3 ]
+    then
+      echo "Need to pass the number of processes to run"
+      exit 255
+    fi
+
+    for ((i = TEST_MIN_2; i < TEST_MAX_2; i++)); do
+      MPI_OPTIONS="--mca mpi_ft_detector true"
+      NUM_PROCESSES=$3
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$BENCHMARK_CHECKPOINT_SETTINGS --plannedFailure $(( NUM_PROCESSES - 1 )) $(( BENCHMARK_ITER / 3 )) --plannedFailure $(( NUM_PROCESSES - 2 )) $(( BENCHMARK_ITER * 2 / 3))" "$BENCHMARK_OPTIONS")
+      run_experiment "mpi_scale_${BENCHMARK}_${NUM_PROCESSES}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
+    done
+  ;;
+  "scaling-lulesh")
+    EXPERIMENT_IGNORE_EXIT_CODE=1
+    EXPERIMENT_TRACE_APPEND=0
+
+    if [ $# -ne 3 ]
+    then
+      echo "Need to pass the number of processes to run"
+      exit 255
+    fi
+
+    for ((i = TEST_MIN_2; i < TEST_MAX_2; i++)); do
+      MPI_OPTIONS=""
+      CUBE_ROOT=$3
+      NUM_PROCESSES=$(( CUBE_ROOT * CUBE_ROOT * CUBE_ROOT ))
+      SMALLER_CUBE_ROOT=$(( CUBE_ROOT - 1))
+      NUM_REPART_PROCESSES=$(( SMALLER_CUBE_ROOT * SMALLER_CUBE_ROOT * SMALLER_CUBE_ROOT ))
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$BENCHMARK_CHECKPOINT_SETTINGS -repart $NUM_REPART_PROCESSES --plannedFailure $(( NUM_PROCESSES - 1 )) $(( BENCHMARK_ITER / 3 )) --plannedFailure $(( NUM_PROCESSES - 2 )) $(( BENCHMARK_ITER * 2 / 3))" "$BENCHMARK_OPTIONS")
+      run_experiment "mpi_scale_${BENCHMARK}_${NUM_PROCESSES}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
 
