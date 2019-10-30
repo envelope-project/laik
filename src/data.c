@@ -1878,6 +1878,9 @@ int laik_map_get_mapNo(const Laik_Mapping *map) {
 void laik_free(Laik_Data *d) {
     // TODO: free space, partitionings
 
+    // Modification by VB: Make sure that no active mappings are left before deleting data
+    freeMaps(d->activeMappings, d->stat);
+
     // Modification by VB: Make sure that there is no dangling pointer in the instance array
     laik_data_get_inst(d)->data[d->id] = NULL;
 
