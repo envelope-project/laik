@@ -83,6 +83,11 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
 
     //Check that correct rotation distance is detected correctly
     checkpoint = laik_checkpoint_create(testData->inst, testData->space, testData->data, NULL, 1, 1, NULL, LAIK_RO_None);
+
+    // Check that slices are assigned into different mappings, instead of allocating a large mapping.
+    test_assert(testData->data->activeMappings->count * 2, checkpoint->data->activeMappings->count,
+                "Have twice as many mappings in checkpoint as in original data");
+
     test_assert(true, laik_checkpoint_remove_failed_slices(checkpoint, testData->world, nodeStatusTest),
                 "Correct rotation distance on redundant checkpoint causes no data loss");
     laik_checkpoint_free(checkpoint);

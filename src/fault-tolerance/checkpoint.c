@@ -17,7 +17,8 @@ void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const
 laik_run_partitioner_t wrapPartitionerRun(const Laik_Partitioner *currentPartitioner);
 
 Laik_Partitioner *
-create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance);
+create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance,
+                              bool suppressBackupSliceTag);
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning);
 
@@ -55,7 +56,8 @@ Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
 
     if (redundancyCount != 0) {
         //TODO: This partitioner needs to be released at some point
-        backupPartitioner = create_checkpoint_partitioner(backupPartitioner, redundancyCount, rotationDistance);
+        //Todo: Should it be possible to not suppress tags? Cannot really think of a use case for this
+        backupPartitioner = create_checkpoint_partitioner(backupPartitioner, redundancyCount, rotationDistance, true);
     }
 
     laik_log(LAIK_LL_Debug, "Switching to backup partitioning\n");
@@ -214,6 +216,7 @@ Laik_Checkpoint *initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, 
 struct _LaikCheckpointPartitionerData {
     int redundancyCounts;
     int rotationDistance;
+    bool suppressBackupSliceTag;
     Laik_Partitioner *originalPartitioner;
 };
 typedef struct _LaikCheckpointPartitionerData LaikCheckpointPartitionerData;
@@ -268,6 +271,7 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
         for (unsigned int i = 0; i < originalCount; i++) {
             Laik_TaskSlice_Gen duplicateSlice = receiver->array->tslice[i];
             int taskId = (duplicateSlice.task + (redundancyCount + 1) * checkpointPartitionerData->rotationDistance) % receiver->params->group->size;
+            int tag = checkpointPartitionerData->suppressBackupSliceTag ? 0 : duplicateSlice.tag;
             if(duplicateSlice.task == taskId) {
                 laik_log_begin(LAIK_LL_Panic);
                 laik_log_append("A checkpoint slice (");
@@ -275,7 +279,7 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
                 laik_log_append(") and one of its redundant copies are being placed on the same task with id %i. This means that redundancy is incorrectly configured. Please adjust redundancy count and rotation distance.", taskId);
                 laik_log_flush("");
             }
-            laik_append_slice(receiver, taskId, &duplicateSlice.s, duplicateSlice.tag, duplicateSlice.data);
+            laik_append_slice(receiver, taskId, &duplicateSlice.s, tag, duplicateSlice.data);
         }
     }
 }
@@ -293,7 +297,8 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
 
 
 Laik_Partitioner *
-create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance) {
+create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance,
+                              bool suppressBackupSliceTag) {
     Laik_Partitioner *checkpointPartitioner = laik_new_partitioner("checkpoint-partitioner", run_wrapped_partitioner,
                                                                    currentPartitioner,
                                                                    currentPartitioner->flags);
@@ -306,6 +311,7 @@ create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundan
     checkpointPartitioner->data = partitionerData;
     partitionerData->rotationDistance = rotationDistance;
     partitionerData->redundancyCounts = redundancyCount;
+    partitionerData->suppressBackupSliceTag = suppressBackupSliceTag;
     partitionerData->originalPartitioner = currentPartitioner;
     return checkpointPartitioner;
 }
