@@ -237,14 +237,14 @@ void laik_log_SliceArray(Laik_SliceArray* sa)
     laik_log_Space(sa->space);
     if (sa->count > 0) {
         assert(sa->tslice); // only show generic slices
-        laik_log_append(": (tid:slice-tag/mapNo)\n    ");
+        laik_log_append(": (tid:slice:tag/mapNo)\n    ");
         for(unsigned int i = 0; i < sa->count; i++) {
             Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
             if (i>0)
                 laik_log_append(", ");
             laik_log_append("%d:", ts->task);
             laik_log_Slice(&(ts->s));
-            laik_log_append("-%d/%d", ts->tag, ts->mapNo);
+            laik_log_append(":%d/%d", ts->tag, ts->mapNo);
         }
     }
 }
