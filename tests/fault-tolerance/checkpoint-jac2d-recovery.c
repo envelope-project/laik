@@ -307,7 +307,7 @@ int main(int argc, char *argv[]) {
 
     for (; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
-        if(iter % 100 == 0) {
+        if(iter % progressReportInterval == 0) {
             TRACE_EVENT_S("ITER", "");
         }
 
@@ -378,7 +378,7 @@ int main(int argc, char *argv[]) {
         }
 
         // At every checkpointFrequency iterations, do a checkpoint
-        if (faultToleranceOptions.checkpointFrequency > 0 && iter % faultToleranceOptions.checkpointFrequency == 0) {
+        if (faultToleranceOptions.checkpointFrequency > 0 && iter % faultToleranceOptions.checkpointFrequency == 0 && iter != 0) {
 //            Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, space, NULL);
 //            TPRINTF("Switching READ.\n");
 //            laik_switchto_partitioning(dRead, pMaster, LAIK_DF_None, LAIK_RO_None);
@@ -519,18 +519,35 @@ void restoreCheckpoints() {
 void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool delayCheckpointRelease) {
     if(spaceCheckpoint != NULL && !delayCheckpointRelease) {
         laik_log(LAIK_LL_Info, "Freeing previous checkpoint from iteration %i", restoreIteration);
-        laik_free(spaceCheckpoint->data);
+        laik_checkpoint_free(spaceCheckpoint);
     }
     TRACE_EVENT_S("CHECKPOINT-PRE-NEW", "");
     laik_log(LAIK_LL_Info, "Creating checkpoint of data");
-    Laik_Checkpoint* newCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount,
-            rotationDistance, world,LAIK_RO_None);
+
+    Laik_Checkpoint *newCheckpoint = NULL;
+//    if(iter < 20) {
+//        printf("CHECKPOINT ITER %i\n", iter);
+        newCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount,
+                                               rotationDistance, world, LAIK_RO_None);
+//        laik_log_begin(LAIK_LL_Warning);
+//        laik_log_SwitchStat(newCheckpoint->data->stat);
+//        for(int i = 0; i < newCheckpoint->data->activeMappings->count; i++) {
+//            Laik_Mapping mapping = newCheckpoint->data->activeMappings->map[i];
+//            laik_log_append("Active mapping %i: count %i, capacity %i, capacity %f MB, ", i, mapping.count, mapping.capacity, (mapping.capacity * newCheckpoint->data->elemsize * 1.0) / (1024.0 * 1024.0));
+//            laik_log_Slice(&mapping.allocatedSlice);
+//            laik_log_append("\n");
+//        }
+//        laik_log_SliceArray(laik_partitioning_myslices(newCheckpoint->data->activePartitioning));
+//        laik_log_flush("");
+//    } else {
+//        printf("SKIP CHECKPOINT\n");
+//    }
     TRACE_EVENT_S("CHECKPOINT-POST-NEW", "");
     laik_log(LAIK_LL_Info, "Checkpoint successful at iteration %i", iter);
 
     if(spaceCheckpoint != NULL && delayCheckpointRelease) {
         laik_log(LAIK_LL_Info,"Freeing previous checkpoint from iteration %i", restoreIteration);
-        laik_free(spaceCheckpoint->data);
+        laik_checkpoint_free(spaceCheckpoint);
     }
 
     spaceCheckpoint = newCheckpoint;
