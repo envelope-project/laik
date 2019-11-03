@@ -30,7 +30,7 @@
 
 #Important
 module load slurm_setup
-
+module load python/3.6_intel
 
 set -x
 
@@ -128,15 +128,15 @@ fi
 #LULESH_CONF_A="-i 280 -s 14"
 
 OSU_CONF_B="-m 32768:32768 -i 100"
-JAC2D_CONF_B="4096 20 -1"
+JAC2D_CONF_B="4096 30 -1"
 LULESH_CONF_B="-s 17 -i 20"
 
 EXPERIMENT_TRACE_APPEND=0
-TEST_MIN=0
-TEST_MAX=1
+TEST_MIN=1
+TEST_MAX=2
 
-TEST_MIN_2=2
-TEST_MAX_2=3
+TEST_MIN_2=0
+TEST_MAX_2=1
 
 #Only includes ranks up to 27 to accomodate for LULESH
 FAILURE_RANKS=(22 26 13 18 26 1 4 13 19 16)
@@ -269,8 +269,22 @@ case "$1" in
 
 
     for ((i = TEST_MIN; i < TEST_MAX; i++)); do
-      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--plannedFailure 1 10" "$BENCHMARK_OPTIONS_B" )
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--checkpointFrequency 10 --failureCheckFrequency 10 --redundancyCount 1 --rotationDistance 1 --plannedFailure 1 15 --progressReportInterval 1" "$BENCHMARK_OPTIONS_B" )
       NUM_PROCESSES=4
+      BENCHMARK_EXECUTABLE="valgrind --tool=massif --time-unit=ms --detailed-freq=1000000 --depth=1 --max-snapshots=500 $BENCHMARK_EXECUTABLE"
+      run_experiment "demo_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
+    done
+  ;;
+
+  "demo-late-release")
+    EXPERIMENT_IGNORE_EXIT_CODE=1
+    EXPERIMENT_TRACE_APPEND=0
+
+
+    for ((i = TEST_MIN; i < TEST_MAX; i++)); do
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "--checkpointFrequency 10 --failureCheckFrequency 10 --redundancyCount 1 --rotationDistance 1 --plannedFailure 1 15 --progressReportInterval 1 --delayCheckpointRelease" "$BENCHMARK_OPTIONS_B" )
+      NUM_PROCESSES=4
+      BENCHMARK_EXECUTABLE="valgrind --tool=massif --time-unit=ms --detailed-freq=1000000 --depth=1 --max-snapshots=500 $BENCHMARK_EXECUTABLE"
       run_experiment "demo_${BENCHMARK}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
@@ -292,7 +306,7 @@ case "$1" in
       run_experiment "mpi_scale_${BENCHMARK}_${NUM_PROCESSES}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;
-  "scaling-lulesh")
+  "weak-scaling")
     EXPERIMENT_IGNORE_EXIT_CODE=1
     EXPERIMENT_TRACE_APPEND=0
 
@@ -303,12 +317,39 @@ case "$1" in
     fi
 
     for ((i = TEST_MIN_2; i < TEST_MAX_2; i++)); do
-      MPI_OPTIONS=""
+      MPI_OPTIONS="--mca mpi_ft_detector true --oversubscribe"
+      NUM_PROCESSES=$3
+      BENCHMARK_GRID_SIZE=$(python3 -c "import math; print(math.floor(math.sqrt( $NUM_PROCESSES ) * 591))" )
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$BENCHMARK_CHECKPOINT_SETTINGS --plannedFailure $(( NUM_PROCESSES - 1 )) $(( BENCHMARK_ITER / 3 )) --plannedFailure $(( NUM_PROCESSES - 2 )) $(( BENCHMARK_ITER * 2 / 3))" "--progressReportInterval 100 $BENCHMARK_GRID_SIZE $BENCHMARK_ITER -1")
+      run_experiment "mpi_scale_weak_${BENCHMARK}_${NUM_PROCESSES}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
+    done
+  ;;
+  "scaling-lulesh")
+    EXPERIMENT_IGNORE_EXIT_CODE=1
+    EXPERIMENT_TRACE_APPEND=0
+
+    if [ $# -ne 4 ]
+    then
+      echo "Need to pass the number of processes to run and the problem size"
+      exit 255
+    fi
+
+    for ((i = TEST_MIN_2; i < TEST_MAX_2; i++)); do
+      MPI_OPTIONS="--oversubscribe"
       CUBE_ROOT=$3
       NUM_PROCESSES=$(( CUBE_ROOT * CUBE_ROOT * CUBE_ROOT ))
       SMALLER_CUBE_ROOT=$(( CUBE_ROOT - 1))
       NUM_REPART_PROCESSES=$(( SMALLER_CUBE_ROOT * SMALLER_CUBE_ROOT * SMALLER_CUBE_ROOT ))
-      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$BENCHMARK_CHECKPOINT_SETTINGS -repart $NUM_REPART_PROCESSES --plannedFailure $(( NUM_PROCESSES - 1 )) $(( BENCHMARK_ITER / 3 )) --plannedFailure $(( NUM_PROCESSES - 2 )) $(( BENCHMARK_ITER * 2 / 3))" "$BENCHMARK_OPTIONS")
+
+      PROBLEM_SIZE=$4
+      NUM_ITEMS=$(( NUM_PROCESSES * PROBLEM_SIZE))
+      REMAINDER=$(( NUM_ITEMS % NUM_REPART_PROCESSES ))
+      if [ $REMAINDER -ne 0 ]
+      then
+        echo "Repart problem size is imbalanced."
+        exit 255
+      fi
+      OPTIONS=$(benchmark_concat_options "$BENCHMARK" "$BENCHMARK_CHECKPOINT_SETTINGS -repart $NUM_REPART_PROCESSES --plannedFailure $(( NUM_PROCESSES - 1 )) $(( BENCHMARK_ITER / 3 )) --plannedFailure $(( NUM_PROCESSES - 2 )) $(( BENCHMARK_ITER * 2 / 3))" "$BENCHMARK_OPTIONS -s $PROBLEM_SIZE")
       run_experiment "mpi_scale_${BENCHMARK}_${NUM_PROCESSES}_$i" "mpi" "$BENCHMARK_EXECUTABLE" "$OPTIONS" "$NUM_PROCESSES" "$i"
     done
   ;;

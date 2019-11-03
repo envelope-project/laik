@@ -6,7 +6,7 @@ then
   exit 255
 fi
 
-JUMP_HOST=bodev@lxhalle.in.tum.de
+JUMP_HOST=bodev@himmuc.caps.in.tum.de
 
 case "$1" in
   "sync-up")

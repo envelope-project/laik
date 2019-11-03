@@ -5,7 +5,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-TEST_MAX = 1
+TEST_MAX = 0
+
+arrowprops = dict(
+    arrowstyle="->",
+    connectionstyle="angle,angleA=0,angleB=90,rad=10")
 
 
 def load_visualization(file: str):
@@ -23,7 +27,9 @@ def series_as_scalar(series: pd.Series):
     return series.iat[0]
 
 
-def iterate_by_rank(reference_data: pd.DataFrame, function, skip):
+def iterate_by_rank(reference_data: pd.DataFrame, function, skip=None):
+    if(skip is None):
+        skip = pd.DataFrame()
     write_data = pd.DataFrame()
     for rank in reference_data['RANK'].unique():
         if rank in skip.values.tolist():
@@ -76,41 +82,82 @@ def export_stats(osu, jac2d, lulesh, file):
         ['Jacobi', np.mean(jac2d), np.var(jac2d)],
         ['LULESH', np.mean(lulesh), np.var(lulesh)],
     ]
-    frame = pd.DataFrame(data, columns=['Benchmark', 'Median', 'Variance'])
+    frame = pd.DataFrame(data, columns=['Benchmark', 'Average', 'Variance'])
     frame.set_index('Benchmark', inplace=True)
     frame.to_csv(file)
 
 
 def draw_runtime_boxplot(file_pattern="experiment_runtime_time_mpi_{0}_{1}_trace.csv",
                          title='Original Runtime of Benchmarks', csv='graphs/original-runtime-stats.csv',
-                         pdf='graphs/original-runtime.pdf', time_column='TIME', evaluation_function=calculate_runtime):
+                         pdf='graphs/original-runtime.pdf',
+                         time_column='TIME',
+                         evaluation_function=calculate_runtime,
+                         scatter=False):
     osu = []
     jac2d = []
     lulesh = []
+    scatterData = pd.DataFrame(columns=['x', 'y', 'numfails'])
+
     for experiment in range(0, TEST_MAX):
-        osu.append(evaluation_function(load_experiment(file_pattern.format("osu", experiment)), time_column))
-        jac2d.append(evaluation_function(load_experiment(file_pattern.format("jac2d", experiment)), time_column))
-        lulesh.append(evaluation_function(load_experiment(file_pattern.format("lulesh", experiment)), time_column))
+        evaluateData("osu", evaluation_function, file_pattern, experiment, osu, time_column, scatterData)
+        evaluateData("jac2d", evaluation_function, file_pattern, experiment, jac2d, time_column, scatterData)
+        evaluateData("lulesh", evaluation_function, file_pattern, experiment, lulesh, time_column, scatterData)
 
     data = [osu, jac2d, lulesh]
     export_stats(osu, jac2d, lulesh, csv)
-    boxPlot(data, title, 'Runtime (s)', pdf)
+
+    def postProcess(ax: plt.Axes):
+        if scatter:
+            ax.get_figure().set_size_inches(6, 2.5)
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0, box.width * 1.25, box.height])
+            scatters = []
+            scatterLabels = []
+            unique = scatterData['numfails'].unique()
+            unique.sort()
+            colors=['green', 'blue', 'orange', 'red', 'purple']
+            for i in unique:
+                row = scatterData[scatterData['numfails'] == i]
+                scatters.append(ax.scatter(row['x'] + 0.25, row['y'], c=colors[int(i)]))
+                scatterLabels.append('{} failures'.format(int(i)))
+            plt.legend(scatters, scatterLabels, loc='center left', bbox_to_anchor=(1, 0.5))
+
+    boxPlot(data, title, 'Runtime (s)', pdf, postProcess=postProcess)
+
+
+def evaluateData(name, evaluation_function, file_pattern, experiment, data, time_column, scatterData : pd.DataFrame):
+    experimentData = load_experiment(file_pattern.format(name, experiment))
+    value = evaluation_function(experimentData, time_column)
+    data.append(value)
+    xVal = 0
+    if name == 'osu':
+        xVal = 1
+    elif name == 'jac2d':
+        xVal = 2
+    elif name == 'lulesh':
+        xVal = 3
+    scatterData.loc[len(scatterData.index)] = [xVal, value, count_failures(experimentData)]
+
+
+def count_failures(experimentData):
+    return len(experimentData[experimentData['EVENT_TYPE'] == 'FAILURE-GENERATE'])
 
 
 def draw_scaling_runtime_boxplot(file_pattern, title, csv, pdf, pdf2, time_column='TIME',
-                                 evaluation_function=calculate_runtime):
+                                 evaluation_function=calculate_runtime, num_processes=None, include_log_graph=False):
+    if num_processes is None:
+        num_processes = [6, 12, 24, 48, 96, 192, 384]
     data = []
-    numProcesses = [6, 12, 24, 48, 96, 192, 384]
-    for scale in numProcesses:
+    for scale in num_processes:
         entry = []
-        for experiment in [0, 1, 2]:
+        for experiment in range(TEST_MAX):
             entry.append(evaluation_function(load_experiment(file_pattern.format(scale, experiment)), time_column))
         data.append(entry)
 
     def plotExpected():
         startVal = 3900
         data = [startVal / 3]
-        for i in numProcesses:
+        for i in num_processes:
             data.append(startVal / i)
         plt.plot(data)
 
@@ -118,8 +165,9 @@ def draw_scaling_runtime_boxplot(file_pattern, title, csv, pdf, pdf2, time_colum
         plotExpected()
         plt.yscale('log')
 
-    boxPlot(data, title, 'Runtime (s)', pdf, xTickLabels=numProcesses, postProcess=lambda ax: plotExpected())
-    boxPlot(data, title, 'Runtime (s)', pdf2, xTickLabels=numProcesses, postProcess=lambda ax: plotExpectedLogScale())
+    boxPlot(data, title, 'Runtime (s)', pdf, xTickLabels=num_processes, postProcess=lambda ax: plotExpected())
+    if include_log_graph:
+        boxPlot(data, title, 'Runtime (s)', pdf2, xTickLabels=num_processes, postProcess=lambda ax: plotExpected(), ylim=[None, None])
 
 
 def draw_restart_boxplot(file_pattern="experiment_restart_time_mpi_{0}_{1}_trace.csv",
@@ -144,13 +192,219 @@ def draw_restart_boxplot(file_pattern="experiment_restart_time_mpi_{0}_{1}_trace
     export_stats(osu, jac2d, lulesh, csv)
     boxPlot(data, 'Restart Time of Benchmarks', 'Time (s)', pdf)
 
+def draw_memory_plot(file_pattern='experiment_demo_jac2d_0_trace.csv'):
+    data = load_experiment(file_pattern)
+    iterate_by_rank(data, lambda rank_filter, y: plt.plot(rank_filter(data)['TIME'], rank_filter(data)['MEM']))
 
-def boxPlot(data, title, y_label, export, xTickLabels=None, postProcess=None):
+    plt.show()
+
+def draw_memory_plot_2(file_pattern='demo_mem/mem{0}.csv', pdf='graphs/demo-mem.pdf'):
+    fig = plt.figure()
+    annotate_offset=50
+    bbox = dict(boxstyle="round", fc="1.0")
+
+    for i in range(4):
+        data = load_experiment(file_pattern.format(i))
+        plt.step(data['TIME'] / 1000, data['MEM'])
+        if i == 1:
+            maxTime = max(data['TIME'])
+            plt.annotate('Failure',
+                         (maxTime / 1000, series_as_scalar(data[data['TIME'] == maxTime].loc[:,'MEM'])),
+                         xytext=(0, -0.75 * annotate_offset),
+                         textcoords='offset points',
+                         horizontalalignment='center',
+                         bbox=bbox,
+                         arrowprops=arrowprops
+                         )
+    plt.annotate('Unprotected',
+             (5, 75000000),
+             xytext=(0, -1.5 * annotate_offset),
+             textcoords='offset points',
+             horizontalalignment='center',
+             bbox=bbox,
+             arrowprops=arrowprops
+             )
+    plt.annotate('Checkpoint',
+             (7.5, 210000000),
+             xytext=(0, annotate_offset),
+             textcoords='offset points',
+             horizontalalignment='center',
+             bbox=bbox,
+             arrowprops=arrowprops
+             )
+    plt.annotate('Restore',
+             (12, 145000000),
+             xytext=(0, -1.5*annotate_offset),
+             textcoords='offset points',
+             horizontalalignment='center',
+             bbox=bbox,
+             arrowprops=arrowprops
+             )
+    plt.annotate('Total Data Set Size',
+             (24, 134217728),
+             horizontalalignment='center',
+             verticalalignment='center',
+             bbox=bbox,
+             )
+    plt.axhline(134217728, linestyle='--')
+
+    plt.annotate('1/4 Data Set Size',
+             (24, 33554432),
+             horizontalalignment='center',
+             verticalalignment='center',
+             bbox=bbox,
+             )
+    plt.axhline(33554432, linestyle='--')
+
+    plt.xlabel('Time (s)')
+    plt.ylabel('Memory Consumption (byte)')
+    plt.title('Memory Consumption of the Jacobi Benchmark')
+
+    plt.legend(['Rank 0', 'Rank 1', 'Rank 2', 'Rank 3'])
+
+    plt.show()
+
+    fig.savefig(pdf, format='pdf')
+
+
+def draw_memory_plot_3(file_pattern='demo_mem/mem{0}.csv', pdf='graphs/demo-mem.pdf'):
+    fig = plt.figure()
+    annotate_offset=50
+    bbox = dict(boxstyle="round", fc="1.0")
+
+    for i in range(4):
+        data = load_experiment(file_pattern.format(i))
+        plt.step(data['TIME'] / 1000, data['MEM'])
+        if i == 1:
+            maxTime = max(data['TIME'])
+            plt.annotate('Failure',
+                         (maxTime / 1000, series_as_scalar(data[data['TIME'] == maxTime].loc[:,'MEM'])),
+                         xytext=(0, -0.75 * annotate_offset),
+                         textcoords='offset points',
+                         horizontalalignment='center',
+                         bbox=bbox,
+                         arrowprops=arrowprops
+                         )
+    plt.annotate('Unprotected',
+             (3, 75000000),
+             xytext=(0, 1 * annotate_offset),
+             textcoords='offset points',
+             horizontalalignment='center',
+             bbox=bbox,
+             arrowprops=arrowprops
+             )
+    plt.annotate('Checkpoint',
+             (5.5, 210000000),
+             xytext=(0, annotate_offset),
+             textcoords='offset points',
+             horizontalalignment='center',
+             bbox=bbox,
+             arrowprops=arrowprops
+             )
+    plt.annotate('Restore',
+             (12, 190000000),
+             xytext=(0, -1.5*annotate_offset),
+             textcoords='offset points',
+             horizontalalignment='center',
+             bbox=bbox,
+             arrowprops=arrowprops
+             )
+    plt.annotate('Total Data Set Size',
+             (17, 134217728),
+             horizontalalignment='center',
+             verticalalignment='center',
+             bbox=bbox,
+             )
+    plt.axhline(134217728, linestyle='--')
+
+    plt.annotate('1/4 Data Set Size',
+             (17, 33554432),
+             horizontalalignment='center',
+             verticalalignment='center',
+             bbox=bbox,
+             )
+    plt.axhline(33554432, linestyle='--')
+
+    plt.xlabel('Time (s)')
+    plt.ylabel('Memory Consumption (byte)')
+    plt.title('Memory Consumption of the Jacobi Benchmark')
+
+    plt.legend(['Rank 0', 'Rank 1', 'Rank 2', 'Rank 3'])
+
+    plt.show()
+
+    fig.savefig(pdf, format='pdf')
+
+
+def draw_network_plot():
+    fig = plt.figure()
+    annotate_offset=50
+    bbox = dict(boxstyle="round", fc="1.0")
+
+    data = load_experiment('experiment_demo_jac2d_1_trace.csv')
+    iterate_by_rank(data, lambda rank_filter, write: plt.step(rank_filter(data)['TIME'], rank_filter(data)['NET'] * 1024))
+
+    plt.annotate('Failure',
+                 (7.5, 6000000),
+                 xytext=(0, 0.75 * annotate_offset),
+                 textcoords='offset points',
+                 horizontalalignment='center',
+                 bbox=bbox,
+                 arrowprops=arrowprops
+                 )
+    plt.annotate('Checkpoint',
+             (3, 67000000),
+             xytext=(0, annotate_offset),
+             textcoords='offset points',
+             horizontalalignment='center',
+             bbox=bbox,
+             arrowprops=arrowprops
+             )
+    plt.annotate('Restore',
+             (7.4, 100000000),
+             xytext=(0, 1*annotate_offset),
+             textcoords='offset points',
+             horizontalalignment='center',
+             bbox=bbox,
+             arrowprops=arrowprops
+             )
+
+    plt.annotate('Total Data Set Size',
+                 (17, 134217728),
+                 horizontalalignment='center',
+                 verticalalignment='center',
+                 bbox=bbox,
+                 )
+    plt.axhline(134217728, linestyle='--')
+
+    plt.annotate('1/4 Data Set Size',
+                 (17, 33554432),
+                 horizontalalignment='center',
+                 verticalalignment='center',
+                 bbox=bbox,
+                 )
+    plt.axhline(33554432, linestyle='--')
+
+    plt.xlabel('Time (s)')
+    plt.ylabel('Communicated Data (bytes)')
+    plt.title('Data Transmitted in the Jacobi Benchmark')
+
+    plt.legend(['Rank 0', 'Rank 1', 'Rank 2', 'Rank 3'])
+
+    plt.show()
+
+    fig.savefig('graphs/demo-net.pdf', format='pdf')
+
+
+def boxPlot(data, title, y_label, export, xTickLabels=None, postProcess=None, ylim=None):
+    if ylim is None:
+        ylim = [0, None]
     if xTickLabels is None:
         xTickLabels = ['OSU', 'Jacobi', 'LULESH']
 
     fig, ax = plt.subplots(figsize=(4, 2.5))
     ax.boxplot(data)
+    ax.set_ylim(ylim)
     ax.set_title(title)
     ax.set_xlabel('Benchmark')
     #    ax.set_xticks(np.arange(1,4))
@@ -217,6 +471,7 @@ def calculate_restore_barchart(data: pd.DataFrame):
     plotData.set_index(pd.Series(['Time (s)'])).transpose().to_csv('graphs/recovery-time-distribution-stats.csv',
                                                                    index_label='Activities')
 
+TEST_MAX=10
 # draw_runtime_boxplot()
 # draw_restart_boxplot()
 # draw_restart_boxplot(file_pattern="experiment_restart_time_mca_mpi_{0}_{1}_trace.csv",
@@ -226,33 +481,103 @@ def calculate_restore_barchart(data: pd.DataFrame):
 #                      title='Measured Time to Solution Restart Strategy',
 #                      csv='graphs/restart-time-to-solution-stats.csv',
 #                      pdf='graphs/restart-time-to-solution.pdf',
-#                      time_column='WALLTIME')
-# draw_runtime_boxplot(file_pattern='experiment_checkpoint_time_to_solution_mpi_{0}_{1}_trace.csv',
-#                      title='Measured Time to Solution Checkpoint Strategy',
-#                      csv='graphs/checkpoint-time-to-solution-stats.csv',
-#                      pdf='graphs/checkpoint-time-to-solution.pdf',
-#                      time_column='WALLTIME')
-# draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
-#                      title='Time for Restoration in the Checkpoint Strategy',
-#                      csv='graphs/checkpoint-restore-time-stats.csv',
-#                      pdf='graphs/checkpoint-restore-time.pdf',
 #                      time_column='WALLTIME',
-#                      evaluation_function=calculate_recovery_time)
+#                      scatter=True)
+TEST_MAX=1
 # draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
 #                      title='Time for Checkpointing in the Checkpoint Strategy',
 #                      csv='graphs/checkpoint-checkpoint-time-stats.csv',
 #                      pdf='graphs/checkpoint-checkpoint-time.pdf',
 #                      time_column='WALLTIME',
 #                      evaluation_function=calculate_checkpoint_time)
+# draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
+#                      title='Time for Restoration in the Checkpoint Strategy',
+#                      csv='graphs/checkpoint-restore-time-stats.csv',
+#                      pdf='graphs/checkpoint-restore-time.pdf',
+#                      time_column='WALLTIME',
+#                      evaluation_function=calculate_recovery_time)
+# draw_runtime_boxplot(file_pattern='experiment_checkpoint_time_to_solution_mpi_{0}_{1}_trace.csv',
+#                      title='Measured Time to Solution Checkpoint Strategy',
+#                      csv='graphs/checkpoint-time-to-solution-stats.csv',
+#                      pdf='graphs/checkpoint-time-to-solution.pdf',
+#                      time_column='WALLTIME')
+
 # calculate_restore_barchart(load_experiment('experiment_recovery_time_mpi_jac2d_0_trace.csv'))
 
-draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_jac2d_{0}_{1}_trace.csv',
-                     title='Strong Scaling Test (Jac2D Benchmark)',
-                     csv='graphs/scaling-jac2d-stats.csv',
-                     pdf='graphs/scaling-jac2d.pdf',
-                     pdf2='graphs/scaling-jac2d-log.pdf',
-                     time_column='WALLTIME',
-                     evaluation_function=calculate_runtime)
+# TEST_MAX=2
+# draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_jac2d_{0}_{1}_trace.csv',
+#                      title='Strong Scaling Test (Jac2D Benchmark)',
+#                      csv='graphs/scaling-jac2d-stats.csv',
+#                      pdf='graphs/scaling-jac2d.pdf',
+#                      pdf2='graphs/scaling-jac2d-log.pdf',
+#                      time_column='WALLTIME',
+#                      evaluation_function=calculate_runtime, include_log_graph=True)
 
+# TEST_MAX=1
+# draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_weak_jac2d_{0}_{1}_trace.csv',
+#                      title='Weak Scaling Test (Jac2D Benchmark)',
+#                      csv='graphs/scaling-weak-jac2d-stats.csv',
+#                      pdf='graphs/scaling-weak-jac2d.pdf',
+#                      pdf2='graphs/scaling-jac2d-log.pdf',
+#                      time_column='WALLTIME',
+#                      evaluation_function=calculate_runtime,
+#                      num_processes=[6, 12, 24, 48, 96])
+
+
+# draw_memory_plot_2()
+# draw_memory_plot_3(file_pattern='demo_mem/mem{0}-late.csv', pdf='graphs/demo-mem-late.pdf')
+draw_network_plot()
 
 # draw_jac2d_example()
+
+
+def draw_distribution_cutoff():
+    fig, axs = plt.subplots(1, 2, figsize=(6,2))
+
+    x = np.linspace(0, 4)
+    pdf = lambda x: np.exp(-x)
+    cdf = lambda x: 1 - np.exp(-x)
+    axs[0].plot(x, pdf(x))
+    axs[0].plot([2, 2], [0, 1])
+    axs[0].set_xlabel(r'$x$')
+    axs[0].set_ylabel(r'PDF $f(x)$')
+    axs[1].plot(x, cdf(x))
+    axs[1].plot([0, 2, 2], [cdf(2), cdf(2), 0])
+    axs[1].set_xlabel(r'$x$')
+    axs[1].set_ylabel(r'CDF $F(x)$')
+    axs[1].set_title(' ')
+
+    for i in range(2):
+        axs[i].set_xlim([0,4])
+        axs[i].set_ylim([0,1])
+        axs[i].axvspan(2, 4, facecolor='0.95')
+
+    arrow=dict(arrowstyle='->')
+    plt.annotate(r'$1/\alpha$',
+                 (2, cdf(2)),
+                 xytext=(50, 0),
+                 textcoords='offset points',
+                 horizontalalignment='center',
+                 verticalalignment='center',
+                 arrowprops=arrow)
+
+    plt.suptitle('Windowing the exponential distribution')
+
+    plt.show()
+    fig.savefig('graphs/exp-window.pdf', format='pdf')
+
+# draw_distribution_cutoff()
+
+def determine_actual_failure_rates():
+    TEST_MAX = 10
+    for file_pattern in ['experiment_restart_time_to_solution_mpi_{0}_{1}_trace.csv', 'experiment_checkpoint_time_to_solution_mpi_{0}_{1}_trace.csv']:
+        for benchmark in ['osu', 'jac2d', 'lulesh']:
+            time = 0.0
+            failures = 0.0
+            for i in range(TEST_MAX):
+                test_data = load_experiment(file_pattern.format(benchmark, i))
+                time += calculate_runtime(test_data, 'WALLTIME')
+                failures += count_failures(test_data)
+            print('Failure rate for {}: {} ({} / {})'.format(benchmark, failures/time, failures, time))
+
+# determine_actual_failure_rates()
