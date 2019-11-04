@@ -18,5 +18,5 @@ def output(input, output):
 
 count = 0
 for input in glob.glob('massif.out.*'):
-    output(input, "laik_experiments/data/demo_mem/mem{0}.csv".format(count))
+    output(input, "laik_experiments/data/demo_mem/mem{0}{1}.csv".format(count, sys.argv[1]))
     count += 1

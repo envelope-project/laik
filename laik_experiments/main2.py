@@ -217,15 +217,15 @@ def draw_memory_plot_2(file_pattern='demo_mem/mem{0}.csv', pdf='graphs/demo-mem.
                          arrowprops=arrowprops
                          )
     plt.annotate('Unprotected',
-             (5, 75000000),
-             xytext=(0, -1.5 * annotate_offset),
+             (4.5, 75000000),
+             xytext=(0, -0.9 * annotate_offset),
              textcoords='offset points',
              horizontalalignment='center',
              bbox=bbox,
              arrowprops=arrowprops
              )
     plt.annotate('Checkpoint',
-             (7.5, 210000000),
+             (6.5, 210000000),
              xytext=(0, annotate_offset),
              textcoords='offset points',
              horizontalalignment='center',
@@ -233,38 +233,51 @@ def draw_memory_plot_2(file_pattern='demo_mem/mem{0}.csv', pdf='graphs/demo-mem.
              arrowprops=arrowprops
              )
     plt.annotate('Restore',
-             (12, 145000000),
-             xytext=(0, -1.5*annotate_offset),
+             (10.75, 145000000),
+             xytext=(0, -1.2*annotate_offset),
              textcoords='offset points',
              horizontalalignment='center',
              bbox=bbox,
              arrowprops=arrowprops
              )
-    plt.annotate('Total Data Set Size',
-             (24, 134217728),
-             horizontalalignment='center',
-             verticalalignment='center',
-             bbox=bbox,
-             )
-    plt.axhline(134217728, linestyle='--')
-
-    plt.annotate('1/4 Data Set Size',
-             (24, 33554432),
-             horizontalalignment='center',
-             verticalalignment='center',
-             bbox=bbox,
-             )
-    plt.axhline(33554432, linestyle='--')
+    annotate_set_sizes(bbox)
 
     plt.xlabel('Time (s)')
     plt.ylabel('Memory Consumption (byte)')
-    plt.title('Memory Consumption of the Jacobi Benchmark')
+    plt.title('Memory Consumption (Jacobi, Early Release)')
 
     plt.legend(['Rank 0', 'Rank 1', 'Rank 2', 'Rank 3'])
 
     plt.show()
 
     fig.savefig(pdf, format='pdf')
+
+
+def annotate_set_sizes(bbox):
+    x = 21
+    plt.xlim([0, 24])
+    plt.ylim([0, 380000000])
+    plt.annotate('Data Set Size',
+                 (x, 134217728),
+                 horizontalalignment='center',
+                 verticalalignment='center',
+                 bbox=bbox,
+                 )
+    plt.axhline(134217728, linestyle='--')
+    plt.annotate('1/3 Data Set Size',
+                 (x, 44739243 + 5000000),
+                 horizontalalignment='center',
+                 verticalalignment='center',
+                 bbox=bbox,
+                 )
+    plt.axhline(44739243, linestyle='--')
+    plt.annotate('1/4 Data Set Size',
+                 (x, 33554432 - 5000000),
+                 horizontalalignment='center',
+                 verticalalignment='center',
+                 bbox=bbox,
+                 )
+    plt.axhline(33554432, linestyle='--')
 
 
 def draw_memory_plot_3(file_pattern='demo_mem/mem{0}.csv', pdf='graphs/demo-mem.pdf'):
@@ -286,7 +299,7 @@ def draw_memory_plot_3(file_pattern='demo_mem/mem{0}.csv', pdf='graphs/demo-mem.
                          arrowprops=arrowprops
                          )
     plt.annotate('Unprotected',
-             (3, 75000000),
+             (4, 75000000),
              xytext=(0, 1 * annotate_offset),
              textcoords='offset points',
              horizontalalignment='center',
@@ -294,7 +307,7 @@ def draw_memory_plot_3(file_pattern='demo_mem/mem{0}.csv', pdf='graphs/demo-mem.
              arrowprops=arrowprops
              )
     plt.annotate('Checkpoint',
-             (5.5, 210000000),
+             (6.5, 210000000),
              xytext=(0, annotate_offset),
              textcoords='offset points',
              horizontalalignment='center',
@@ -302,32 +315,18 @@ def draw_memory_plot_3(file_pattern='demo_mem/mem{0}.csv', pdf='graphs/demo-mem.
              arrowprops=arrowprops
              )
     plt.annotate('Restore',
-             (12, 190000000),
-             xytext=(0, -1.5*annotate_offset),
+             (10.35, 150000000),
+             xytext=(0, -1.3*annotate_offset),
              textcoords='offset points',
              horizontalalignment='center',
              bbox=bbox,
              arrowprops=arrowprops
              )
-    plt.annotate('Total Data Set Size',
-             (17, 134217728),
-             horizontalalignment='center',
-             verticalalignment='center',
-             bbox=bbox,
-             )
-    plt.axhline(134217728, linestyle='--')
-
-    plt.annotate('1/4 Data Set Size',
-             (17, 33554432),
-             horizontalalignment='center',
-             verticalalignment='center',
-             bbox=bbox,
-             )
-    plt.axhline(33554432, linestyle='--')
+    annotate_set_sizes(bbox)
 
     plt.xlabel('Time (s)')
     plt.ylabel('Memory Consumption (byte)')
-    plt.title('Memory Consumption of the Jacobi Benchmark')
+    plt.title('Memory Consumption (Jacobi, Standard Release)')
 
     plt.legend(['Rank 0', 'Rank 1', 'Rank 2', 'Rank 3'])
 
@@ -342,18 +341,27 @@ def draw_network_plot():
     bbox = dict(boxstyle="round", fc="1.0")
 
     data = load_experiment('experiment_demo_jac2d_1_trace.csv')
-    iterate_by_rank(data, lambda rank_filter, write: plt.step(rank_filter(data)['TIME'], rank_filter(data)['NET'] * 1024))
+
+    def process(rank_filter, write):
+        filterData = rank_filter(data)
+        filterData.loc[:, 'DIFF'] = filterData['NET'].diff()
+        for index, i in filterData.iterrows():
+            if i['DIFF'] < 0:
+                filterData.loc[filterData['EVENT_SEQ'] >= i['EVENT_SEQ'], 'NET'] -= i['DIFF']
+        plt.step(filterData['TIME'], filterData['NET'] * 1024)
+
+    iterate_by_rank(data, process)
 
     plt.annotate('Failure',
-                 (7.5, 6000000),
-                 xytext=(0, 0.75 * annotate_offset),
+                 (6.5, 67000000),
+                 xytext=(0, -0.5 * annotate_offset),
                  textcoords='offset points',
                  horizontalalignment='center',
                  bbox=bbox,
                  arrowprops=arrowprops
                  )
     plt.annotate('Checkpoint',
-             (3, 67000000),
+             (3.5, 67000000),
              xytext=(0, annotate_offset),
              textcoords='offset points',
              horizontalalignment='center',
@@ -361,29 +369,15 @@ def draw_network_plot():
              arrowprops=arrowprops
              )
     plt.annotate('Restore',
-             (7.4, 100000000),
-             xytext=(0, 1*annotate_offset),
+             (8.3, 135000000),
+             xytext=(0, 1.7*annotate_offset),
              textcoords='offset points',
              horizontalalignment='center',
              bbox=bbox,
              arrowprops=arrowprops
              )
 
-    plt.annotate('Total Data Set Size',
-                 (17, 134217728),
-                 horizontalalignment='center',
-                 verticalalignment='center',
-                 bbox=bbox,
-                 )
-    plt.axhline(134217728, linestyle='--')
-
-    plt.annotate('1/4 Data Set Size',
-                 (17, 33554432),
-                 horizontalalignment='center',
-                 verticalalignment='center',
-                 bbox=bbox,
-                 )
-    plt.axhline(33554432, linestyle='--')
+    annotate_set_sizes(bbox)
 
     plt.xlabel('Time (s)')
     plt.ylabel('Communicated Data (bytes)')
@@ -453,18 +447,42 @@ def calculate_restore_barchart(data: pd.DataFrame):
 
     failure_check_stops = dropIndex(iterate_by_rank(data, iterFunction, skip=failure_event['RANK']))
 
+    labels = ['Propagate error', 'Wait for detection', 'Detect', 'React', 'Restore']
     plotData = pd.DataFrame([(
         np.average(comm_errors['WALLTIME'] - series_as_scalar(failure_event['WALLTIME'])),
         np.average(failure_check_starts['WALLTIME'] - comm_errors['WALLTIME']),
         np.average(failure_check_stops['WALLTIME'] - failure_check_starts['WALLTIME']),
         np.average(restore_start['WALLTIME'] - failure_check_stops['WALLTIME']),
         np.average(restore_stop['WALLTIME'] - restore_start['WALLTIME'])
-    )], columns=['Propagate error', 'Wait for next detection', 'Detect', 'React', 'Restore'])
+    )], columns=labels)
 
-    ax = plotData.plot.barh(stacked=True)
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.bar(x=np.arange(5), height=plotData.loc[0].values)
 
-    ax.set_title('Distribution of Activities during the Recovery Process')
-    ax.set_xlabel('Time (s)')
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    from mpl_toolkits.axes_grid1.inset_locator import mark_inset
+
+    axins = inset_axes(ax, 1, 1)
+    axins.bar(np.arange(5), height=plotData.loc[0].values)
+
+    axins.set_xticks(np.arange(5))
+    axins.set_xticklabels(labels, rotation='vertical')
+
+    axins.set_xlim(1.5, 4.5)
+    axins.set_ylim(0, 0.05)
+
+    ax.set_xticks(np.arange(5))
+    ax.set_xticklabels(['Propagate\nerror','Wait for\ndetection', 'Detect', 'React', 'Restore'], rotation='vertical')
+
+
+    mark_inset(ax, axins, loc1=3, loc2=4)
+#    plt.xscale('log')
+
+
+
+    ax.set_title('Distribution of Activities\nduring the Recovery Process')
+    ax.set_xlabel('Activity')
+    ax.set_ylabel('Time (s)')
     plt.show()
 
     ax.get_figure().savefig('graphs/recovery-time-distribution.pdf', format='pdf')
@@ -524,8 +542,8 @@ TEST_MAX=1
 #                      num_processes=[6, 12, 24, 48, 96])
 
 
-# draw_memory_plot_2()
-# draw_memory_plot_3(file_pattern='demo_mem/mem{0}-late.csv', pdf='graphs/demo-mem-late.pdf')
+draw_memory_plot_2()
+draw_memory_plot_3(file_pattern='demo_mem/mem{0}-late.csv', pdf='graphs/demo-mem-late.pdf')
 draw_network_plot()
 
 # draw_jac2d_example()
