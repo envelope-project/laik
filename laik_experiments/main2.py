@@ -144,7 +144,7 @@ def count_failures(experimentData):
 
 
 def draw_scaling_runtime_boxplot(file_pattern, title, csv, pdf, pdf2, time_column='TIME',
-                                 evaluation_function=calculate_runtime, num_processes=None, include_log_graph=False):
+                                 evaluation_function=calculate_runtime, num_processes=None, include_log_graph=False, suppress_expected=False):
     if num_processes is None:
         num_processes = [6, 12, 24, 48, 96, 192, 384]
     data = []
@@ -159,7 +159,8 @@ def draw_scaling_runtime_boxplot(file_pattern, title, csv, pdf, pdf2, time_colum
         data = [startVal / 3]
         for i in num_processes:
             data.append(startVal / i)
-        plt.plot(data)
+        if not suppress_expected:
+            plt.plot(data)
 
     def plotExpectedLogScale():
         plotExpected()
@@ -501,21 +502,22 @@ TEST_MAX=10
 #                      pdf='graphs/restart-time-to-solution.pdf',
 #                      time_column='WALLTIME',
 #                      scatter=True)
-TEST_MAX=1
+# TEST_MAX=3
 # draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
-#                      title='Time for Checkpointing in the Checkpoint Strategy',
+#                      title='Time for Checkpointing (Checkpoint Strategy)',
 #                      csv='graphs/checkpoint-checkpoint-time-stats.csv',
 #                      pdf='graphs/checkpoint-checkpoint-time.pdf',
 #                      time_column='WALLTIME',
 #                      evaluation_function=calculate_checkpoint_time)
 # draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
-#                      title='Time for Restoration in the Checkpoint Strategy',
+#                      title='Time for Restoration (Checkpoint Strategy)',
 #                      csv='graphs/checkpoint-restore-time-stats.csv',
 #                      pdf='graphs/checkpoint-restore-time.pdf',
 #                      time_column='WALLTIME',
 #                      evaluation_function=calculate_recovery_time)
+# TEST_MAX=3
 # draw_runtime_boxplot(file_pattern='experiment_checkpoint_time_to_solution_mpi_{0}_{1}_trace.csv',
-#                      title='Measured Time to Solution Checkpoint Strategy',
+#                      title='Measured Time to Solution\nCheckpoint Strategy',
 #                      csv='graphs/checkpoint-time-to-solution-stats.csv',
 #                      pdf='graphs/checkpoint-time-to-solution.pdf',
 #                      time_column='WALLTIME')
@@ -531,7 +533,7 @@ TEST_MAX=1
 #                      time_column='WALLTIME',
 #                      evaluation_function=calculate_runtime, include_log_graph=True)
 
-# TEST_MAX=1
+# TEST_MAX=3
 # draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_weak_jac2d_{0}_{1}_trace.csv',
 #                      title='Weak Scaling Test (Jac2D Benchmark)',
 #                      csv='graphs/scaling-weak-jac2d-stats.csv',
@@ -539,12 +541,13 @@ TEST_MAX=1
 #                      pdf2='graphs/scaling-jac2d-log.pdf',
 #                      time_column='WALLTIME',
 #                      evaluation_function=calculate_runtime,
-#                      num_processes=[6, 12, 24, 48, 96])
+#                      num_processes=[6, 12, 24, 48, 96],
+#                      suppress_expected=True)
 
 
-draw_memory_plot_2()
-draw_memory_plot_3(file_pattern='demo_mem/mem{0}-late.csv', pdf='graphs/demo-mem-late.pdf')
-draw_network_plot()
+# draw_memory_plot_2()
+# draw_memory_plot_3(file_pattern='demo_mem/mem{0}-late.csv', pdf='graphs/demo-mem-late.pdf')
+# draw_network_plot()
 
 # draw_jac2d_example()
 
