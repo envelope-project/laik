@@ -168,7 +168,7 @@ def draw_scaling_runtime_boxplot(file_pattern, title, csv, pdf, pdf2, time_colum
 
     boxPlot(data, title, 'Runtime (s)', pdf, xTickLabels=num_processes, postProcess=lambda ax: plotExpected())
     if include_log_graph:
-        boxPlot(data, title, 'Runtime (s)', pdf2, xTickLabels=num_processes, postProcess=lambda ax: plotExpected(), ylim=[None, None])
+        boxPlot(data, title, 'Runtime (s)', pdf2, xTickLabels=num_processes, postProcess=lambda ax: plotExpectedLogScale(), ylim=[None, None])
 
 
 def draw_restart_boxplot(file_pattern="experiment_restart_time_mpi_{0}_{1}_trace.csv",
@@ -524,26 +524,27 @@ TEST_MAX=10
 
 # calculate_restore_barchart(load_experiment('experiment_recovery_time_mpi_jac2d_0_trace.csv'))
 
-TEST_MAX=3
-draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_jac2d_{0}_{1}_trace.csv',
-                     title='Strong Scaling Test (Jac2D Benchmark)',
-                     csv='graphs/scaling-jac2d-stats.csv',
-                     pdf='graphs/scaling-jac2d.pdf',
-                     pdf2='graphs/scaling-jac2d-log.pdf',
-                     num_processes=[6, 12, 24, 48, 96, 192, 384, 768],
-                     time_column='TIME',
-                     evaluation_function=calculate_runtime, include_log_graph=True)
-
 # TEST_MAX=3
-# draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_weak_jac2d_{0}_{1}_trace.csv',
-#                      title='Weak Scaling Test (Jac2D Benchmark)',
-#                      csv='graphs/scaling-weak-jac2d-stats.csv',
-#                      pdf='graphs/scaling-weak-jac2d.pdf',
+# draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_jac2d_{0}_{1}_trace.csv',
+#                      title='Strong Scaling Test (Jac2D Benchmark)',
+#                      csv='graphs/scaling-jac2d-stats.csv',
+#                      pdf='graphs/scaling-jac2d.pdf',
 #                      pdf2='graphs/scaling-jac2d-log.pdf',
+#                      num_processes=[6, 12, 24, 48, 96, 192, 384, 768],
 #                      time_column='TIME',
 #                      evaluation_function=calculate_runtime,
-#                      num_processes=[6, 12, 24, 48, 96, 192, 384, 768],
-#                      suppress_expected=True)
+#                      include_log_graph=True)
+
+TEST_MAX=3
+draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_weak_jac2d_{0}_{1}_trace.csv',
+                     title='Weak Scaling Test (Jac2D Benchmark)',
+                     csv='graphs/scaling-weak-jac2d-stats.csv',
+                     pdf='graphs/scaling-weak-jac2d.pdf',
+                     pdf2='graphs/scaling-jac2d-log.pdf',
+                     time_column='TIME',
+                     evaluation_function=calculate_runtime,
+                     num_processes=[6, 12, 24, 48, 96, 192, 384, 768],
+                     suppress_expected=True)
 
 
 # draw_memory_plot_2()
