@@ -1,12 +1,13 @@
-import numpy as np
-import imageio
-import matplotlib.pyplot as plt
-import pyinotify
 import logging
 import os
 import os.path
+import sys
+from subprocess import Popen
+
+import imageio
 import matplotlib.animation as animation
-import glob
+import matplotlib.pyplot as plt
+import numpy as np
 
 format=logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.DEBUG,
@@ -61,6 +62,9 @@ modified = 0
 numUpdates = 0
 numIter = 0
 
+subprocessArgs = sys.argv[1:]
+process = Popen(subprocessArgs, shell=True)
+
 def draw(*args):
     global modified, numUpdates, numIter
     if os.path.isfile(file):
@@ -86,6 +90,10 @@ def draw(*args):
         logging.info("Posted %i updates in %i iterations.", numUpdates, numIter)
         numUpdates = 0
         numIter = 0
+    returnCode = process.poll()
+    if returnCode is not None:
+        print("Subprocess exit code:", returnCode)
+        sys.exit(returnCode)
     return image,
 
 

@@ -354,6 +354,10 @@ case "$1" in
     done
   ;;
 
+  "demo-visualizer")
+    python3 ./laik_experiments/visualizer.py "/bin/bash" "-c" "MPI_OPTIONS=\"\" tests/fault-tolerance/launcher.sh \"mpi\" \"$NUM_PROCESSES\" \"$NUM_PROCESSES\" release \"$BENCHMARK_EXECUTABLE\" \"--checkpointFrequency 10 --failureCheckFrequency 10 --redundancyCount 1  --rotationDistance 1 --progressReportInterval 1 $JAC2D_CONF_B\""
+  ;;
+
   "old")
     EXECUTABLE="$JAC2D"
     PROBLEM_SIZE=1024

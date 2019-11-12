@@ -504,34 +504,35 @@ TEST_MAX=10
 #                      scatter=True)
 # TEST_MAX=3
 # draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
-#                      title='Time for Checkpointing (Checkpoint Strategy)',
+#                      title='Time for Checkpointing\n(Checkpoint Strategy)',
 #                      csv='graphs/checkpoint-checkpoint-time-stats.csv',
 #                      pdf='graphs/checkpoint-checkpoint-time.pdf',
 #                      time_column='WALLTIME',
 #                      evaluation_function=calculate_checkpoint_time)
 # draw_runtime_boxplot(file_pattern='experiment_recovery_time_mpi_{0}_{1}_trace.csv',
-#                      title='Time for Restoration (Checkpoint Strategy)',
+#                      title='Time for Restoration\n(Checkpoint Strategy)',
 #                      csv='graphs/checkpoint-restore-time-stats.csv',
 #                      pdf='graphs/checkpoint-restore-time.pdf',
 #                      time_column='WALLTIME',
 #                      evaluation_function=calculate_recovery_time)
 # TEST_MAX=3
 # draw_runtime_boxplot(file_pattern='experiment_checkpoint_time_to_solution_mpi_{0}_{1}_trace.csv',
-#                      title='Measured Time to Solution\nCheckpoint Strategy',
+#                      title='Measured Time to Solution\n(Checkpoint Strategy)',
 #                      csv='graphs/checkpoint-time-to-solution-stats.csv',
 #                      pdf='graphs/checkpoint-time-to-solution.pdf',
 #                      time_column='WALLTIME')
 
 # calculate_restore_barchart(load_experiment('experiment_recovery_time_mpi_jac2d_0_trace.csv'))
 
-# TEST_MAX=2
-# draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_jac2d_{0}_{1}_trace.csv',
-#                      title='Strong Scaling Test (Jac2D Benchmark)',
-#                      csv='graphs/scaling-jac2d-stats.csv',
-#                      pdf='graphs/scaling-jac2d.pdf',
-#                      pdf2='graphs/scaling-jac2d-log.pdf',
-#                      time_column='WALLTIME',
-#                      evaluation_function=calculate_runtime, include_log_graph=True)
+TEST_MAX=3
+draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_jac2d_{0}_{1}_trace.csv',
+                     title='Strong Scaling Test (Jac2D Benchmark)',
+                     csv='graphs/scaling-jac2d-stats.csv',
+                     pdf='graphs/scaling-jac2d.pdf',
+                     pdf2='graphs/scaling-jac2d-log.pdf',
+                     num_processes=[6, 12, 24, 48, 96, 192, 384, 768],
+                     time_column='TIME',
+                     evaluation_function=calculate_runtime, include_log_graph=True)
 
 # TEST_MAX=3
 # draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_weak_jac2d_{0}_{1}_trace.csv',
@@ -539,9 +540,9 @@ TEST_MAX=10
 #                      csv='graphs/scaling-weak-jac2d-stats.csv',
 #                      pdf='graphs/scaling-weak-jac2d.pdf',
 #                      pdf2='graphs/scaling-jac2d-log.pdf',
-#                      time_column='WALLTIME',
+#                      time_column='TIME',
 #                      evaluation_function=calculate_runtime,
-#                      num_processes=[6, 12, 24, 48, 96],
+#                      num_processes=[6, 12, 24, 48, 96, 192, 384, 768],
 #                      suppress_expected=True)
 
 

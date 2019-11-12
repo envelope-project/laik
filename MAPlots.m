@@ -19,9 +19,9 @@ surf(tV, lambdaV, eX);
 colorbar;
 axis([min(tV) max(tV) min(lambdaV) max(lambdaV) 0 inf]);
 title('Expected Time Wasted on a Failure for the Restart Strategy')
-xlabel('Original runtime t_o (s)');
-ylabel('Failure rate (\lambda)');
-zlabel('Expected time wasted');
+xlabel('Original Runtime t_o (s)');
+ylabel('Failure Rate (\lambda)');
+zlabel('Expected Time Wasted');
 
 %pos = get(gc,'Position');
 
@@ -34,9 +34,9 @@ surf(tV, lambdaV, eT);
 colorbar;
 axis([min(tV) max(tV) min(lambdaV) max(lambdaV) 0 inf]);
 title('Expected Runtime with Failures using the Restart Strategy')
-xlabel('Original runtime t_o (s)');
-ylabel('Failure rate (\lambda)');
-zlabel('Expected runtime t');
+xlabel('Original Runtime t_o (s)');
+ylabel('Failure Rate (\lambda)');
+zlabel('Expected Runtime t');
 
 %pos = get(gc,'Position');
 %set(gc,'PaperPositionMode','Auto','PaperUnits','Points','PaperSize',[pos(3), pos(4)])
@@ -49,10 +49,10 @@ colormap(gray * 0.6 +0.4);
 surf(tV, lambdaV, sT);
 colorbar;
 axis([min(tV) max(tV) min(lambdaV) max(lambdaV) 1 inf]);
-title('Possible speedup from Restart Strategy to the Ideal Runtime')
-xlabel('Original runtime t_o (s)');
-ylabel('Failure rate (\lambda)');
-zlabel('Potential for speedup');
+title('Possible Speedup from Restart Strategy to the Ideal Runtime')
+xlabel('Original Runtime t_o (s)');
+ylabel('Failure Rate (\lambda)');
+zlabel('Potential for Speedup');
 
 %pos = get(gc,'Position');
 %set(gc,'PaperPositionMode','Auto','PaperUnits','Points','PaperSize',[pos(3), pos(4)])
@@ -79,7 +79,7 @@ for row = 1:length(lambdaV)
 end
 
 plot(lambdaV, eNewT)
-title('Expected time to solution using the restart strategy')
-xlabel('Failure rate (\lambda)');
-ylabel('Expected time to solution (s)');
+title('Expected Time to Solution using the Restart Strategy')
+xlabel('Failure Rate (\lambda)');
+ylabel('Expected Time to Solution (s)');
 saveas(gc,'C:\Users\vincent_bode\Desktop\VTStuff\GitSync\TUM\MA\res\restart-expectation.eps','epsc')

@@ -24,14 +24,14 @@ r = 4.25
 
 
 def calc_checkpoint_restart():
-    return (t * f) * ((1 - np.exp(-l * z)) / (l * np.exp(-l * z)) + (np.exp(l * z) - 1) * r)
+    return (t * f) * (np.exp(l * ((1/ f) + c) ) - 1) * ((1/l) + r)
 
 
 result = calc_checkpoint_restart()
 print(result)
 
 values = []
-xValues = np.linspace(0.015, 3, 100)
+xValues = np.linspace(0.015, 3, 500)
 for f_new in xValues:
     f = f_new
     calculate_z()
