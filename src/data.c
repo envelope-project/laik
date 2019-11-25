@@ -263,8 +263,7 @@ void initMapping(Laik_Mapping* m, Laik_Data* d)
 }
 
 static
-Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
-                              Laik_Layout* l)
+Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
 {
     if (!p) return 0; // without partitioning borders there are no mappings
 
@@ -320,8 +319,6 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p,
         Laik_Mapping* m = &(ml->map[mapNo]);
         initMapping(m, d);
         m->mapNo = mapNo;
-        // remember layout request as hint
-        m->layout = l;
 
         // required space
         Laik_Slice slc = sa->tslice[o].s;
@@ -1214,7 +1211,7 @@ void laik_exec_transition(Laik_Data* d, Laik_Transition* t)
         exit(1);
     }
 
-    Laik_MappingList* toList = prepareMaps(d, t->toPartitioning, 0);
+    Laik_MappingList* toList = prepareMaps(d, t->toPartitioning);
     doTransition(d, t, 0, d->activeMappings, toList);
 
     // set new mapping/partitioning active
@@ -1281,7 +1278,7 @@ void laik_exec_actions(Laik_ActionSeq* as)
         exit(1);
     }
 
-    Laik_MappingList* toList = prepareMaps(d, t->toPartitioning, 0);
+    Laik_MappingList* toList = prepareMaps(d, t->toPartitioning);
 
     if (tc->prepFromList && (tc->prepFromList != d->activeMappings)) {
         laik_panic("laik_exec_actions: start mappings mismatch!");
@@ -1325,7 +1322,7 @@ void laik_switchto_partitioning(Laik_Data* d,
         }
     }
 
-    Laik_MappingList* toList = prepareMaps(d, toP, 0);
+    Laik_MappingList* toList = prepareMaps(d, toP);
     Laik_Transition* t = do_calc_transition(d->space,
                                             d->activePartitioning, toP,
                                             flow, redOp);
@@ -1384,8 +1381,8 @@ void laik_fill_double(Laik_Data* d, double v)
     double* base;
     uint64_t count, i;
 
-    laik_map_def1(d, (void**) &base, &count);
     // TODO: partitioning can have multiple slices
+    laik_get_map_1d(d, 0, (void**) &base, &count);
     assert(laik_my_slicecount(d->activePartitioning) == 1);
     for (i = 0; i < count; i++)
         base[i] = v;
@@ -1699,8 +1696,8 @@ unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
     return count;
 }
 
-// make own partition available for direct access in local memory
-Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
+// get mapping of own partition into local memory for direct access
+Laik_Mapping* laik_get_map(Laik_Data* d, int n)
 {
     // we must have an active partitioning
     assert(d->activePartitioning);
@@ -1713,12 +1710,8 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
                  d->name, g->gid);
     }
 
-    if (!d->activeMappings) {
-        // lazy allocation
-        d->activeMappings = prepareMaps(d, d->activePartitioning, layout);
-        if (d->activeMappings == 0)
-            return 0;
-    }
+    // we must have existing mappings
+    assert(d->activeMappings != 0);
 
     if ((n<0) || (n >= d->activeMappings->count))
         return 0;
@@ -1730,44 +1723,27 @@ Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout)
     return m;
 }
 
-// similar to laik_map, but force a default mapping
-Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count)
+// for 1d mapping with ID n, return base pointer and count
+Laik_Mapping* laik_get_map_1d(Laik_Data* d, int n, void** base, uint64_t* count)
 {
-    static Laik_Layout* def_layout = 0;
-    if (!def_layout)
-        def_layout = laik_new_layout(LAIK_LT_Default);
+    Laik_Mapping* m = laik_get_map(d, n);
+    if (!m) {
+        if (base) *base = 0;
+        if (count) *count = 0;
+        return 0;
+    }
 
-    Laik_Mapping* m = laik_map(d, n, def_layout);
-
-    if (base) *base = m ? m->base : 0;
-    if (count) *count = m ? m->count : 0;
+    if (base) *base = m->base;
+    if (count) *count = m->count;
     return m;
 }
 
-
-// similar to laik_map, but force a default mapping with only 1 slice
-Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count)
+// for 2d mapping with ID n, describe mapping in output parameters
+Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n,
+                              void** base, uint64_t* ysize,
+                              uint64_t* ystride, uint64_t* xsize)
 {
-    static Laik_Layout* def_layout = 0;
-    if (!def_layout)
-        def_layout = laik_new_layout(LAIK_LT_Default1Slice);
-
-    Laik_Mapping* m = laik_map(d, 0, def_layout);
-    int n = laik_my_mapcount(d->activePartitioning);
-    if (n > 1)
-        laik_log(LAIK_LL_Panic, "Request for one continuous mapping, "
-                                "but partition with %d slices!\n", n);
-
-    if (base) *base = m ? m->base : 0;
-    if (count) *count = m ? m->count : 0;
-    return m;
-}
-
-Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
-                               void** base, uint64_t* ysize,
-                               uint64_t* ystride, uint64_t* xsize)
-{
-    Laik_Mapping* m = laik_map(d, 0, 0);
+    Laik_Mapping* m = laik_get_map(d, n);
     if (!m) {
         if (base) *base = 0;
         if (xsize) *xsize = 0;
@@ -1775,15 +1751,10 @@ Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
         return 0;
     }
 
-    int n = laik_my_mapcount(d->activePartitioning);
-    if (n > 1)
-        laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
-                                "but partition with %d slices!", n);
-
     Laik_Layout* l = m->layout;
     assert(l);
     if (l->dims != 2)
-        laik_log(LAIK_LL_Error, "Request for 2d mapping of %dd space!",
+        laik_log(LAIK_LL_Error, "Querying 2d mapping of an %dd space!",
                  l->dims);
 
     if (base)    *base    = m->base;
@@ -1793,12 +1764,13 @@ Laik_Mapping* laik_map_def1_2d(Laik_Data* d,
     return m;
 }
 
-Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
-                               uint64_t* zsize, uint64_t* zstride,
-                               uint64_t* ysize, uint64_t* ystride,
-                               uint64_t* xsize)
+// for 3d mapping with ID n, describe mapping in output parameters
+Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
+                          uint64_t* zsize, uint64_t* zstride,
+                          uint64_t* ysize, uint64_t* ystride,
+                          uint64_t* xsize)
 {
-    Laik_Mapping* m = laik_map(d, 0, 0);
+    Laik_Mapping* m = laik_get_map(d, n);
     if (!m) {
         if (base) *base = 0;
         if (xsize) *xsize = 0;
@@ -1807,15 +1779,10 @@ Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
         return 0;
     }
 
-    int n = laik_my_mapcount(d->activePartitioning);
-    if (n > 1)
-        laik_log(LAIK_LL_Error, "Request for one continuous mapping, "
-                                "but partition with %d slices!", n);
-
     Laik_Layout* l = m->layout;
     assert(l);
     if (l->dims != 3)
-        laik_log(LAIK_LL_Error, "Request for 3d mapping of %dd space!",
+        laik_log(LAIK_LL_Error, "Querying 3d mapping of %dd space!",
                  l->dims);
 
     if (base)    *base    = m->base;

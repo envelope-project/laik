@@ -62,11 +62,11 @@ int main(int argc, char* argv[])
 
     // distribution of the elements
     laik_switchto_partitioning(element, pElements, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(element, (void**) &ebase, &ecount);
+    laik_get_map_1d(element, 0, (void**) &ebase, &ecount);
 
     // distribution of the nodes
     laik_switchto_partitioning(node, pNodes, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(node, (void**) &nbase, &ncount);
+    laik_get_map_1d(node, 0, (void**) &nbase, &ncount);
 
     // do something with elements and nodes...
 

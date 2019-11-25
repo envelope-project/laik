@@ -61,11 +61,11 @@ int main(int argc, char* argv[])
                                    LAIK_DF_None, LAIK_RO_None);
     if (laik_myid(world) == 0) {
         // it is ensured this is exactly one slice
-        laik_map_def1(a, (void**) &base, &count);
+        laik_get_map_1d(a, 0, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) base[i] = (double) i;
     }
     // partial sum (according to master partitioning)
-    laik_map_def1(a, (void**) &base, &count);
+    laik_get_map_1d(a, 0, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[0] += base[i];
 
     laik_set_phase(inst, 2, "block", NULL);
@@ -76,7 +76,7 @@ int main(int argc, char* argv[])
                                    LAIK_DF_Preserve, LAIK_RO_None);
     // partial sum using equally-sized blocks, outer loop over slices
     for(int sNo = 0;; sNo++) {
-        if (laik_map_def(a, sNo, (void**) &base, &count) == 0) break;
+        if (laik_get_map_1d(a, sNo, (void**) &base, &count) == 0) break;
         for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];
     }
 
@@ -88,7 +88,7 @@ int main(int argc, char* argv[])
                                    LAIK_DF_Preserve, LAIK_RO_None);
     // partial sum using blocks sized by element weights
     for(int sNo = 0;; sNo++) {
-        if (laik_map_def(a, sNo, (void**) &base, &count) == 0) break;
+        if (laik_get_map_1d(a, sNo, (void**) &base, &count) == 0) break;
         for(uint64_t i = 0; i < count; i++) mysum[2] += base[i];
     }
 
@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
                                        LAIK_DF_Preserve, LAIK_RO_None);
         // partial sum using blocks sized by task weights
         for(int sNo = 0;; sNo++) {
-            if (laik_map_def(a, sNo, (void**) &base, &count) == 0) break;
+            if (laik_get_map_1d(a, sNo, (void**) &base, &count) == 0) break;
             for(uint64_t i = 0; i < count; i++) mysum[3] += base[i];
         }
     }
@@ -118,7 +118,7 @@ int main(int argc, char* argv[])
     Laik_Data* sum = laik_new_data_1d(inst, laik_Double, 4);
     laik_switchto_new_partitioning(sum, world, laik_All,
                                    LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(sum, (void**) &base, &count);
+    laik_get_map_1d(sum, 0, (void**) &base, &count);
     assert(count == 4);
     for(int i = 0; i < 4; i++) base[i] = mysum[i];
 
@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
     laik_switchto_new_partitioning(sum, world, laik_Master,
                                    LAIK_DF_Preserve, LAIK_RO_Sum);
     if (laik_myid(world) == 0) {
-        laik_map_def1(sum, (void**) &base, &count);
+        laik_get_map_1d(sum, 0, (void**) &base, &count);
         printf("Total sums: %.0f, %.0f, %.0f, %.0f\n",
                base[0], base[1], base[2], base[3]);
     }

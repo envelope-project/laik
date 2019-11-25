@@ -41,7 +41,7 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
     // default mapping order for 2d:
     //   with y in [0;ysize[, x in [0;xsize[
     //   base[y][x] is at (base + y * ystride + x)
-    laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+    laik_get_map_2d(dWrite, 0, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
     // set fixed boundary values at the 4 edges
     if (gy1 == 0) {
@@ -169,7 +169,7 @@ int main(int argc, char* argv[])
     // default mapping order for 2d:
     //   with y in [0;ysize], x in [0;xsize[
     //   base[y][x] is at (base + y * ystride + x)
-    laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+    laik_get_map_2d(dWrite, 0, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
     // arbitrary non-zero values based on global indexes to detect bugs
     for(uint64_t y = 0; y < ysizeW; y++)
         for(uint64_t x = 0; x < xsizeW; x++)
@@ -193,8 +193,8 @@ int main(int argc, char* argv[])
 
         laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-        laik_map_def1_2d(dRead,  (void**) &baseR, &ysizeR, &ystrideR, &xsizeR);
-        laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+        laik_get_map_2d(dRead,  0, (void**) &baseR, &ysizeR, &ystrideR, &xsizeR);
+        laik_get_map_2d(dWrite, 0, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
         setBoundary(size, pWrite, dWrite);
 
@@ -237,10 +237,10 @@ int main(int argc, char* argv[])
 
             // calculate global residuum
             laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
+            laik_get_map_1d(sumD, 0, (void**) &sumPtr, 0);
             *sumPtr = res;
             laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
+            laik_get_map_1d(sumD, 0, (void**) &sumPtr, 0);
             res = *sumPtr;
 
             if (iter > 0) {
@@ -306,7 +306,7 @@ int main(int argc, char* argv[])
 
         if (laik_myid(activeGroup) == 0) {
             double sum = 0.0;
-            laik_map_def1_2d(dWrite, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
+            laik_get_map_2d(dWrite, 0, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
             for(uint64_t y = 0; y < ysizeW; y++)
                 for(uint64_t x = 0; x < xsizeW; x++)
                     sum += baseW[ y * ystrideW + x];

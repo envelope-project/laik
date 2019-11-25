@@ -215,7 +215,7 @@ int main(int argc, char* argv[])
     // initialize input vector at master, broadcast to all
     laik_switchto_new_partitioning(inpD, world, laik_Master,
                                    LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(inpD, (void**) &inp, &icount);
+    laik_get_map_1d(inpD, 0, (void**) &inp, &icount);
     for(i = 0; i < icount; i++) inp[i] = 1.0;
 
     // better debug output
@@ -232,7 +232,7 @@ int main(int argc, char* argv[])
         laik_set_iteration(inst, iter);
 
         // access to complete input vector (local indexing = global indexing)
-        laik_map_def1(inpD, (void**) &inp, 0);
+        laik_get_map_1d(inpD, 0, (void**) &inp, 0);
 
         // SpMV operation, for my range of rows
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[])
             if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
 
             // my partition slice of result vector (local indexing, from 0)
-            laik_map_def(resD, sNo, (void**) &res, &rcount);
+            laik_get_map_1d(resD, sNo, (void**) &res, &rcount);
 
 #ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic,50)
@@ -266,10 +266,10 @@ int main(int argc, char* argv[])
         assert(laik_myid(laik_data_get_group(sumD)) >= 0);
 
         laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
-        laik_map_def1(sumD, (void**) &sumPtr, 0);
+        laik_get_map_1d(sumD, 0, (void**) &sumPtr, 0);
         *sumPtr = sum;
         laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
-        laik_map_def1(sumD, (void**) &sumPtr, 0);
+        laik_get_map_1d(sumD, 0, (void**) &sumPtr, 0);
         sum = *sumPtr;
 
         if (laik_myid(laik_data_get_group(sumD)) == 0) {
@@ -286,13 +286,13 @@ int main(int argc, char* argv[])
             // variant 1: broadcast written input values via sum reduction
             // makes input vector writable for all, triggers (unneeded) initialization
             laik_switchto_partitioning(inpD, pAll, LAIK_DF_Init, LAIK_RO_Sum);
-            laik_map_def1(inpD, (void**) &inp, 0);
+            laik_get_map_1d(inpD, 0, (void**) &inp, 0);
 
             // loop over all local slices of result vector
             for(int sNo = 0; ; sNo++) {
                 if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
 
-                laik_map_def(resD, sNo, (void**) &res, &rcount);
+                laik_get_map_1d(resD, sNo, (void**) &res, &rcount);
                 for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
             }
         }
@@ -301,8 +301,8 @@ int main(int argc, char* argv[])
             laik_switchto_partitioning(inpD, p, LAIK_DF_None, LAIK_RO_None);
             // loop over all local slices of result and input vector
             for(int sNo = 0; laik_my_slice(p, sNo) != 0; sNo++) {
-                laik_map_def(resD, sNo, (void**) &res, &rcount);
-                laik_map_def(inpD, sNo, (void**) &inp, 0);
+                laik_get_map_1d(resD, sNo, (void**) &res, &rcount);
+                laik_get_map_1d(inpD, sNo, (void**) &inp, 0);
                 for(i = 0; i < rcount; i++) inp[i] = res[i] / sum;
             }
         }
@@ -363,10 +363,10 @@ int main(int argc, char* argv[])
                                    laik_Master, LAIK_DF_Preserve, LAIK_RO_None);
     if (laik_myid(laik_data_get_group(inpD)) == 0) {
         double sum = 0.0;
-        laik_map_def1(resD, (void**) &res, &rcount);
+        laik_get_map_1d(resD, 0, (void**) &res, &rcount);
         for(i = 0; i < rcount; i++) sum += res[i];
         printf("Result sum: %f (should be same as last iter sum)\n", sum);
-        laik_map_def1(inpD, (void**) &inp, &icount);
+        laik_get_map_1d(inpD, 0, (void**) &inp, &icount);
         sum = 0.0;
         for(i = 0; i < icount; i++) sum += inp[i];
         printf("Input sum: %f (should be 1.0)\n", sum);

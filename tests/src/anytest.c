@@ -20,19 +20,19 @@ int main(int argc, char* argv[])
     laik_switchto_partitioning(data, halo, LAIK_DF_Preserve, LAIK_RO_Any);
 
     // go over own data and double each value
-    laik_map_def1(data, (void**) &base, &count);
+    laik_get_map_1d(data, 0, (void**) &base, &count);
     for (i = 0; i < count; i++) base[i] *= 2.0;
 
     laik_switchto_partitioning(data, halo, LAIK_DF_Preserve, LAIK_RO_Any);
 
-    laik_map_def1(data, (void**) &base, &count);
+    laik_get_map_1d(data, 0, (void**) &base, &count);
     for (i = 0; i < count; i++) base[i] *= 2.0;
 
     laik_switchto_new_partitioning(data, world, laik_Master,
                                    LAIK_DF_Preserve, LAIK_RO_Sum);
     if (laik_myid(world) == 0) {
         double sum = 0.0;
-        laik_map_def1(data, (void**) &base, &count);
+        laik_get_map_1d(data, 0, (void**) &base, &count);
         for (i = 0; i < count; i++) sum += base[i];
         printf("Result: %f\n", sum);
     }

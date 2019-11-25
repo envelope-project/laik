@@ -194,7 +194,7 @@ void print_data(Laik_Data* d, Laik_Partitioning* p)
     uint64_t count;
     int nSlices = laik_my_slicecount(p);
     for (int s = 0; s < nSlices; s++) {
-        laik_map_def(d, s, (void**) &base, &count);
+        laik_get_map_1d(d, s, (void**) &base, &count);
         laik_log_begin(1);
         for (uint64_t i = 0; i < count; i++) {
             laik_log_append(" %f", base[i]);
@@ -211,7 +211,7 @@ double data_check_sum(Laik_Data* d, Laik_Partitioning* p, Laik_Group* world)
     int nSlices = laik_my_slicecount(p);
     double sum = 0.0;
     for(int s = 0; s < nSlices; s++) {
-        laik_map_def(d, s, (void**) &base, &count);
+        laik_get_map_1d(d, s, (void**) &base, &count);
         for (uint64_t i = 0; i < count; i++) {
             sum += base[i];
         }
@@ -224,10 +224,10 @@ double data_check_sum(Laik_Data* d, Laik_Partitioning* p, Laik_Group* world)
     sumdata  = laik_new_data(sumspace, laik_Double);
     sumpart  = laik_new_partitioning(laik_All, world, sumspace, 0);
     laik_switchto_partitioning(sumdata, sumpart, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(sumdata, (void**) &base, 0);
+    laik_get_map_1d(sumdata, 0, (void**) &base, 0);
     *base = sum;
     laik_switchto_partitioning(sumdata, sumpart, LAIK_DF_Preserve, LAIK_RO_Sum);
-    laik_map_def1(sumdata, (void**) &base, 0);
+    laik_get_map_1d(sumdata, 0, (void**) &base, 0);
 
     return *base;
 }
@@ -244,27 +244,27 @@ void apply_boundary_condition(Laik_Data* data, Laik_Partitioning* p,
     if (rx == 0) {
         i = 0;
         for(n = 0; n < nSlices; ++n) {
-            laik_map_def(data, n, (void**) &baseN, &countN);
+            laik_get_map_1d(data, n, (void**) &baseN, &countN);
             baseN[i]=value;
         }
     }
     if (rx == Rx - 1) {
         for(n = 0; n < nSlices; ++n) {
-            laik_map_def(data, n, (void**) &baseN, &countN);
+            laik_get_map_1d(data, n, (void**) &baseN, &countN);
             i=countN-1;
             baseN[i]=value;
         }
     }
     if (ry == 0) {
         n = 0;
-        laik_map_def(data, n, (void**) &baseN, &countN);
+        laik_get_map_1d(data, n, (void**) &baseN, &countN);
         for(i = 0; i < countN; ++i) {
             baseN[i]=value;
         }
     }
     if (ry == Ry - 1) {
         n = nSlices - 1;
-        laik_map_def(data, n, (void**) &baseN, &countN);
+        laik_get_map_1d(data, n, (void**) &baseN, &countN);
         for(i = 0; i < countN; ++i) {
             baseN[i]=value;
         }
@@ -361,7 +361,7 @@ int main(int argc, char* argv[])
     // set the double value for each element to 1.0
     int nSlicesElem = laik_my_slicecount(pElements);
     for (int n = 0; n < nSlicesElem; ++n) {
-        laik_map_def(element, n, (void**) &baseE, &countE);
+        laik_get_map_1d(element, n, (void**) &baseE, &countE);
         for (uint64_t i = 0; i < countE; i++) {
             baseE[i] = 1.0;
         }
@@ -371,7 +371,7 @@ int main(int argc, char* argv[])
     laik_switchto_partitioning(node, pNodes, LAIK_DF_None, LAIK_RO_None);
     int nSlicesNodes = laik_my_slicecount(pNodes);
     for (int n = 0; n < nSlicesNodes; ++n) {
-        laik_map_def(node, n, (void**) &baseN, &countN);
+        laik_get_map_1d(node, n, (void**) &baseN, &countN);
         for (uint64_t i = 0; i < countN; i++) {
             baseN[i] = 0.0;
         }
@@ -401,7 +401,7 @@ int main(int argc, char* argv[])
         // - go through all the elements and refer to their
         //   neighbouring nodes and update the elements
         for (int m = 0; m < nMapsElements; m++) {
-            laik_map_def(element, m, (void **)&baseE, &countE);
+            laik_get_map_1d(element, m, (void **)&baseE, &countE);
 
             for (uint64_t i = 0; i < countE; i++) {
                 gi = laik_maplocal2global_1d(element, m, i);
@@ -416,13 +416,13 @@ int main(int argc, char* argv[])
                 laik_global2maplocal_1d(node, gj2, &m2, &j2);
                 laik_global2maplocal_1d(node, gj3, &m3, &j3);
 
-                laik_map_def(node, m0, (void **)&baseN, &countN);
+                laik_get_map_1d(node, m0, (void **)&baseN, &countN);
                 baseE[i] += baseN[j0] / 4;
-                laik_map_def(node, m1, (void **)&baseN, &countN);
+                laik_get_map_1d(node, m1, (void **)&baseN, &countN);
                 baseE[i] += baseN[j1] / 4;
-                laik_map_def(node, m2, (void **)&baseN, &countN);
+                laik_get_map_1d(node, m2, (void **)&baseN, &countN);
                 baseE[i] += baseN[j2] / 4;
-                laik_map_def(node, m3, (void **)&baseN, &countN);
+                laik_get_map_1d(node, m3, (void **)&baseN, &countN);
                 baseE[i] += baseN[j3] / 4;
             }
         }
@@ -433,7 +433,7 @@ int main(int argc, char* argv[])
         //   to their neighbouring nodes and update them
         laik_switchto_partitioning(node, pNodes, LAIK_DF_Init, LAIK_RO_Sum);
         for(int m = 0; m < nMapsElements; m++) {
-            laik_map_def(element, m, (void **)&baseE, &countE);
+            laik_get_map_1d(element, m, (void **)&baseE, &countE);
 
             for (uint64_t i = 0; i < countE; i++) {
                 gi = laik_maplocal2global_1d(element, m, i);
@@ -454,13 +454,13 @@ int main(int argc, char* argv[])
                 //laik_log(1,"local indexes for neighbours of element: %d: neighbour0:%d in mapping %d, neighbour1:%d in mapping %d, neighbour2:%d  in mapping %d, neighbour3:%d in mapping %d\n"
                 //                , gi, j0, m0, j1, m1, j2, m2, j3, m3);
 
-                laik_map_def(node, m0, (void **)&baseN, &countN);
+                laik_get_map_1d(node, m0, (void **)&baseN, &countN);
                 baseN[j0] += baseE[i] / 4;
-                laik_map_def(node, m1, (void **)&baseN, &countN);
+                laik_get_map_1d(node, m1, (void **)&baseN, &countN);
                 baseN[j1] += baseE[i] / 4;
-                laik_map_def(node, m2, (void **)&baseN, &countN);
+                laik_get_map_1d(node, m2, (void **)&baseN, &countN);
                 baseN[j2] += baseE[i] / 4;
-                laik_map_def(node, m3, (void **)&baseN, &countN);
+                laik_get_map_1d(node, m3, (void **)&baseN, &countN);
                 baseN[j3] += baseE[i] / 4;
             }
         }

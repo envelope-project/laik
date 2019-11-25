@@ -33,12 +33,12 @@
  * MPI/LAIK Modification by Dai Yang
  */
 
-#include <cstdlib> 
-#include <cstdio> 
-#include <cmath> 
-#include <fstream> 
-#include <vector> 
-#include <iostream> 
+#include <cstdlib>
+#include <cstdio>
+#include <cmath>
+#include <fstream>
+#include <vector>
+#include <iostream>
 #include <cassert>
 #include <cstring>
 
@@ -305,9 +305,9 @@ int main(int argc, char **argv)
     int64_t xstart, xend, ystart, yend;
     laik_my_slice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
 
-    laik_map_def1(xval, (void**)&xvalues, 0);
-    laik_map_def1(yval, (void**)&yvalues, 0);
-    laik_map_def1(zval, (void**)&zvalues, 0);
+    laik_get_map_1d(xval, 0, (void**)&xvalues, 0);
+    laik_get_map_1d(yval, 0, (void**)&yvalues, 0);
+    laik_get_map_1d(zval, 0, (void**)&zvalues, 0);
 
     // Trace rays
     for (unsigned y = ystart; y < yend; ++y) { 
@@ -330,9 +330,9 @@ int main(int argc, char **argv)
     laik_switchto_partitioning(zval, pValMaster, LAIK_DF_Preserve, LAIK_RO_Sum);
 
     if (laik_myid(world) == 0) {
-        laik_map_def1(xval, (void**)&xvalues, 0);
-        laik_map_def1(yval, (void**)&yvalues, 0);
-        laik_map_def1(zval, (void**)&zvalues, 0);
+        laik_get_map_1d(xval, 0, (void**)&xvalues, 0);
+        laik_get_map_1d(yval, 0, (void**)&yvalues, 0);
+        laik_get_map_1d(zval, 0, (void**)&zvalues, 0);
         // Save result to a PPM image (keep these flags if you compile under Windows)
         std::ofstream ofs("./untitled.ppm", std::ios::out | std::ios::binary);
         ofs << "P6\n" << width << " " << height << "\n255\n";

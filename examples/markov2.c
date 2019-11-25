@@ -138,13 +138,13 @@ Laik_Data* runSparse(MGraph* mg, int miter,
 
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto_partitioning(dRead,  pRead, LAIK_DF_Preserve, LAIK_RO_Sum);
-        laik_map_def1(dRead, (void**) &src, &srcCount);
+        laik_get_map_1d(dRead, 0, (void**) &src, &srcCount);
         laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
         assert(srcFrom <= srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_Init, LAIK_RO_Sum);
-        laik_map_def1(dWrite, (void**) &dst, &dstCount);
+        laik_get_map_1d(dWrite, 0, (void**) &dst, &dstCount);
         dstFrom = (srcCount > 0) ? laik_local2global_1d(dWrite, 0) : 0;
 
         if (doPrint) {
@@ -203,7 +203,7 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
     // local index array
     int* iarray;
     uint64_t icount;
-    laik_map_def1(idata, (void**) &iarray, &icount);
+    laik_get_map_1d(idata, 0, (void**) &iarray, &icount);
 
     // start reading from data1, writing to data2
     Laik_Data *dRead = data1, *dWrite = data2;
@@ -217,13 +217,13 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
 
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto_partitioning(dRead,  pRead, LAIK_DF_Preserve, LAIK_RO_Sum);
-        laik_map_def1(dRead, (void**) &src, &srcCount);
+        laik_get_map_1d(dRead, 0, (void**) &src, &srcCount);
         laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
         assert(srcFrom < srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_Init, LAIK_RO_Sum);
-        laik_map_def1(dWrite, (void**) &dst, &dstCount);
+        laik_get_map_1d(dWrite, 0, (void**) &dst, &dstCount);
 
         if (doPrint) {
             laik_log_begin(2);
@@ -380,7 +380,7 @@ int main(int argc, char* argv[])
         // TODO: move to inititialization function
         int* iarray;
         uint64_t icount, ioff;
-        laik_map_def1(idata, (void**) &iarray, &icount);
+        laik_get_map_1d(idata, 0, (void**) &iarray, &icount);
         for(uint64_t i = 0; i < icount; i++) {
             int gi = laik_local2global_1d(idata, i);
             for(int j = 0; j <= out; j++) {
@@ -403,7 +403,7 @@ int main(int argc, char* argv[])
     double *v;
     uint64_t count, off;
     laik_switchto_partitioning(data1, pRead, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(data1, (void**) &v, &count);
+    laik_get_map_1d(data1, 0, (void**) &v, &count);
     double p = (onestate < 0) ? (1.0 / n) : 0.0;
     for(uint64_t i = 0; i < count; i++)
         v[i] = p;
@@ -437,7 +437,7 @@ int main(int argc, char* argv[])
 
     laik_switchto_partitioning(dRes, pMaster, LAIK_DF_Preserve, LAIK_RO_Sum);
     laik_writeout_profile();
-    laik_map_def1(dRes, (void**) &v, &count);
+    laik_get_map_1d(dRes, 0, (void**) &v, &count);
     laik_set_phase(inst, 4, "Out", 0);
     if (laik_myid(world) == 0) {
 

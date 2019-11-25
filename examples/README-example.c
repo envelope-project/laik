@@ -15,9 +15,8 @@ int main(int argc, char* argv[])
     // partial vector sum over own partition via direct access
     double mysum = 0.0, *base;
     uint64_t count, i;
-    // map own partition to local memory space
-    // (using 1d identity mapping from indexes to addresses, from <base>)
-    laik_map_def1(a, (void**) &base, &count);
+    // get base pointer/size of identity mapping of own partition in local memory
+    laik_get_map_1d(a, 0, (void**) &base, &count);
     for (i = 0; i < count; i++) mysum += base[i];
     // for adding the partial sums and making the result available at
     // master, first, everybody gets write access to a LAIK container
@@ -30,7 +29,7 @@ int main(int argc, char* argv[])
     laik_switchto_new_partitioning(sum, world, laik_Master,
                                    LAIK_DF_Preserve, LAIK_RO_Sum);
     if (laik_myid(world) == 0) {
-        laik_map_def1(sum, (void**) &base, &count);
+        laik_get_map_1d(sum, 0, (void**) &base, &count);
         printf("Result: %f\n", base[0]);
     }
     laik_finalize(inst);
