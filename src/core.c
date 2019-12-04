@@ -929,10 +929,16 @@ void laik_kvs_sort(Laik_KVStore* kvs)
 }
 
 Laik_Backend_Error_Handler* laik_error_handler_get(Laik_Instance* instance) {
+    if(instance == NULL) {
+        return NULL;
+    }
     return instance->errorHandler;
 }
 
 void laik_error_handler_set(Laik_Instance* instance, Laik_Backend_Error_Handler* errorHandler) {
+    if(instance == NULL) {
+        return;
+    }
     instance->errorHandler = errorHandler;
 }
 
