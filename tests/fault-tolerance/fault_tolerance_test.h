@@ -28,13 +28,13 @@ typedef struct _Laik_Unit_Test_Data Laik_Unit_Test_Data;
 
 void __test_assert_success(const char *expression, const char *msg, int64_t expect, int64_t expr, const char *file,
                         unsigned int line) {
-    laik_log(LAIK_LL_Info, "[OK] Test assertion %s: %s. Expected %zu, got %zu in %s:%i.", expression, msg, expect,
+    laik_log(LAIK_LL_Info, "[OK] Test assertion %s: %s. Expected %" PRIi64 ", got %" PRIi64 " in %s:%i.", expression, msg, expect,
              expr, file, line);
 }
 
 void __test_assert_fail(const char *expression, const char *msg, int64_t expect, int64_t expr, const char *file,
                         unsigned int line) {
-    laik_log(LAIK_LL_Panic, "[FAIL] Test assertion %s: %s. Expected %zu, got %zu in %s:%i.", expression, msg, expect,
+    laik_log(LAIK_LL_Panic, "[FAIL] Test assertion %s: %s. Expected %" PRIi64 ", got %" PRIi64 " in %s:%i.", expression, msg, expect,
              expr, file, line);
     abort();
 }

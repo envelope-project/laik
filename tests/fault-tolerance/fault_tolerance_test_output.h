@@ -68,10 +68,14 @@ int laik_point_find_slice(int64_t gx, int64_t gy, int64_t gz, Laik_Partitioning*
 
 void
 writeColorDataToFile(char *fileNameExtension, Laik_Data *data, Laik_Partitioning *partitioning,
-                     unsigned char colors[][3], bool binaryPPM, char *fileNamePrefix, double minValue,
-                     double maxValue) {
+                     unsigned char colors[][3], bool binaryPPM, bool suppressRank, char *fileNamePrefix,
+                     double minValue, double maxValue) {
     char debugOutputFileName[1024];
-    snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, data->space->inst->myid,
+    int myid = data->space->inst->myid;
+    if(suppressRank) {
+        myid = 0;
+    }
+    snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, myid,
              fileNameExtension);
 //    snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, 0,
 //             fileNameExtension);
@@ -101,6 +105,8 @@ writeColorDataToFile(char *fileNameExtension, Laik_Data *data, Laik_Partitioning
 
         for (unsigned long x = 0; x < dim0Size; ++x) {
             int colorIndex = laik_point_find_slice(x, y, 0, partitioning);
+            colorIndex = partitioning->saList->slices->tslice[colorIndex].task;
+            colorIndex = laik_location_get_world_offset(partitioning->group, colorIndex);
             double value = base[y * stride + x];
             double normalizedValue = (value - minValue) / (maxValue - minValue);
 

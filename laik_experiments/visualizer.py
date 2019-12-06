@@ -63,41 +63,56 @@ numUpdates = 0
 numIter = 0
 
 subprocessArgs = sys.argv[1:]
-process = Popen(subprocessArgs, shell=True)
+process = None
 
 def draw(*args):
-    global modified, numUpdates, numIter
-    if os.path.isfile(file):
-    # if os.path.isfile(file):
-        mtime = os.stat(file).st_mtime
-        if mtime > modified:
-            data = np.array(imageio.imread(file), dtype=np.uint8)
-            image.set_data(data)
-            modified = mtime
-            logging.info("Reloaded image")
-            numUpdates += 1
-        else:
-            logging.info("Unmodified")
-            modified = mtime
-    else:
-        logging.info("Not exists")
-        data = np.array(np.zeros([dataSetSize, dataSetSize]), dtype=np.uint8)
-        image.set_data(data)
+    global modified, numUpdates, numIter, process
 
-    # logging.info("Updated animation")
-    numIter += 1
-    if numIter > 10:
-        logging.info("Posted %i updates in %i iterations.", numUpdates, numIter)
-        numUpdates = 0
-        numIter = 0
-    returnCode = process.poll()
-    if returnCode is not None:
-        print("Subprocess exit code:", returnCode)
-        sys.exit(returnCode)
+    try:
+        if os.path.isfile(file):
+        # if os.path.isfile(file):
+            mtime = os.stat(file).st_mtime
+            if mtime > modified:
+                data = np.array(imageio.imread(file), dtype=np.uint8)
+                image.set_data(data)
+                modified = mtime
+                # logging.info("Reloaded image")
+                numUpdates += 1
+            else:
+                # logging.info("Unmodified")
+                modified = mtime
+        else:
+            logging.info("Not exists")
+            data = np.array(np.zeros([dataSetSize, dataSetSize]), dtype=np.uint8)
+            image.set_data(data)
+
+        # logging.info("Updated animation")
+        numIter += 1
+        if numIter > 10:
+            logging.info("Posted %i updates in %i iterations.", numUpdates, numIter)
+            numUpdates = 0
+            numIter = 0
+
+        if process is None:
+            logging.info("Starting subprocess: %s", ' '.join(subprocessArgs))
+            process = Popen(subprocessArgs, shell=False)
+        # logging.info("Polling for subprocess status.")
+        returnCode = process.poll()
+        if returnCode is not None:
+            print("Subprocess exit code: ", returnCode)
+            sys.exit(returnCode)
+    except RuntimeError as e:
+        print("Runtime error: ", e)
     return image,
 
+def onclick(event):
+    print("Click event registered. Aborting application!")
+    process.kill()
+    sys.exit()
 
-animation = animation.FuncAnimation(fig, draw, interval=500, blit=True)
+cid = fig.canvas.mpl_connect('button_press_event', onclick)
+
+animation = animation.FuncAnimation(fig, draw, interval=1000, blit=True)
 
 mng = plt.get_current_fig_manager()
 mng.full_screen_toggle()

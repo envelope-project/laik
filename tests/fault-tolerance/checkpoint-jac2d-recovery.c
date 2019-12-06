@@ -31,6 +31,7 @@
 #include "fault_tolerance_test_hash.h"
 #include "util/fault-tolerance-options.h"
 #include <unistd.h>
+#include <errno.h>
 
 // Red is hard to see, so make it the last slice
 //unsigned char colors[][3] = {
@@ -53,9 +54,9 @@ unsigned char colors[][3] = {
 };
 
 // boundary values
-double loRowValue = -5.0, hiRowValue = 10.0;
-double loColValue = -10.0, hiColValue = 5.0;
-double centerValue = 1.0;
+double loRowValue = -10.0, hiRowValue = -10.0;
+double loColValue = -10.0, hiColValue = -10.0;
+double centerValue = 10.0;
 double initVal = 0.1;
 
 int restoreIteration = -1;
@@ -66,7 +67,7 @@ int main(int argc, char **argv);
 double do_jacobi_iteration(const double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
                            int64_t x2, int64_t y1, int64_t y2);
 
-double calculateGlobalResiduum(double localResiduum, double **sumPtr);
+double calculateGlobalResiduum(double localResiduum);
 
 void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t ystrideW, uint64_t xsizeW, int64_t gx1,
                                        int64_t gy1);
@@ -75,7 +76,7 @@ void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool
 
 void restoreCheckpoints();
 
-void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCounter);
+void exportDataFile(char *label, Laik_Data *data, bool allRanks, bool suppressRank, int dataFileCounter);
 
 void exportDataFiles();
 void exportDataForVisualization();
@@ -119,7 +120,7 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
     }
 
     //Center point
-//    int64_t lx, ly;
+    int64_t lx, ly;
 //    if (laik_global2local_2d(dWrite, size / 2, size / 2, &lx, &ly) != NULL) {
 //        baseW[ly * ystrideW + lx] = centerValue;
 //    }
@@ -163,9 +164,9 @@ int main(int argc, char *argv[]) {
     world = laik_world(inst);
 
 
-//    colors[laik_myid(world)][0] = 128;
-//    colors[laik_myid(world)][1] = 255;
-//    colors[laik_myid(world)][2] = 0;
+    colors[laik_myid(world)][0] = 128;
+    colors[laik_myid(world)][1] = 255;
+    colors[laik_myid(world)][2] = 0;
 //    printf("Preparing shrinked world, eliminating rank 1 (world size %i)\n", world->size);
 //    int elimination[] = {1};
 //    smallWorld = laik_new_shrinked_group(world, 1, elimination);
@@ -246,7 +247,7 @@ int main(int argc, char *argv[]) {
     if (do_profiling)
         laik_enable_profiling_file(inst, "jac2d_profiling.txt");
 
-    double *baseR, *baseW, *sumPtr;
+    double *baseR, *baseW;
     uint64_t ysizeR, ystrideR, xsizeR;
     uint64_t ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2;
@@ -347,6 +348,12 @@ int main(int argc, char *argv[]) {
                 laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
                 laik_switchto_partitioning(dSum, pSum, LAIK_DF_None, LAIK_RO_None);
 
+                double* sumClear = NULL;
+                uint64_t count = 0;
+                laik_map_def1(dSum, (void **) &sumClear, &count);
+                assert(sumClear && count == 1);
+                *sumClear = 0;
+
                 if (!faultToleranceOptions.skipCheckpointRecovery) {
                     laik_log(LAIK_LL_Debug, "Removing failed slices from checkpoints\n");
                     if (!laik_checkpoint_remove_failed_slices(spaceCheckpoint, checkGroup, nodeStatuses)) {
@@ -440,11 +447,14 @@ int main(int argc, char *argv[]) {
 
         // do jacobi
         double localResiduum = do_jacobi_iteration(baseR, baseW, ystrideR, ystrideW, x1, x2, y1, y2);
-        double globalResiduum = calculateGlobalResiduum(localResiduum, &sumPtr);
+        double globalResiduum = -1;
+        globalResiduum = calculateGlobalResiduum(localResiduum);
         if(iter % progressReportInterval == 0) {
             laik_log(LAIK_LL_Debug, "Local residuum: %f", localResiduum);
             if(laik_myid(world) == 0) {
-                printf("Residuum after %2d iters: %f\n", iter + 1, globalResiduum);
+                int iterClone = iter;
+                (void)globalResiduum;
+                printf("Residuum after %d iters: %f\n", iterClone + 1, globalResiduum);
             }
         }
     }
@@ -477,7 +487,7 @@ void doSumIfRequested(bool do_sum, double **baseW, uint64_t *ysizeW, uint64_t *y
     }
 }
 
-void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCounter) {//        if (iter == 25 && world->size == 4) {
+void exportDataFile(char *label, Laik_Data *data, bool allRanks, bool suppressRank, int dataFileCounter) {//        if (iter == 25 && world->size == 4) {
 // export the data to an image
 //    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, 0, 0, world,
 //                                                               LAIK_RO_None);
@@ -487,7 +497,8 @@ void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCou
         char filenamePrefix[1024];
         snprintf(filenamePrefix, 1024, "output/data_%s_%i_", label, dataFileCounter);
 //            writeDataToFile(filenamePrefix, ".pgm", exportCheckpoint->data);
-        writeColorDataToFile(".ppm", exportCheckpoint->data, data->activePartitioning, colors, true, filenamePrefix, -10,
+        writeColorDataToFile(".ppm", exportCheckpoint->data, data->activePartitioning, colors, true, suppressRank, filenamePrefix,
+                             -10,
                              10);
     }
     laik_checkpoint_free(exportCheckpoint);
@@ -496,15 +507,18 @@ void exportDataFile(char *label, Laik_Data *data, bool allRanks, int dataFileCou
 }
 
 void exportDataForVisualization() {
-    exportDataFile("live", dWrite, 1, 0);
+    exportDataFile("live_tmp", dWrite, 1, 1, 0);
+    if(rename("output/data_live_tmp_0_0.ppm", "output/data_live_0_0.ppm") != 0) {
+        printf("Failed to rename file! Error: %s\n", strerror(errno));
+    }
     sleep(1);
 }
 
 void exportDataFiles() {
-    exportDataFile("dW", dWrite, 0, dataFileCounter);
+    exportDataFile("dW", dWrite, 0, 0, dataFileCounter);
 //    exportDataFile("d2", data2);
     if (spaceCheckpoint != NULL) {
-        exportDataFile("c1", spaceCheckpoint->data, 0, dataFileCounter);
+        exportDataFile("c1", spaceCheckpoint->data, 0, 0, dataFileCounter);
     }
     dataFileCounter++;
 }
@@ -564,15 +578,18 @@ void initialize_write_arbitrary_values(double *baseW, uint64_t ysizeW, uint64_t 
 //            baseW[y * ystrideW + x] = initVal;
 }
 
-double calculateGlobalResiduum(double localResiduum, double **sumPtr) {// calculate global residuum
+double calculateGlobalResiduum(double localResiduum) {// calculate global residuum
+    double* sumPtr = NULL;
+    uint64_t count = 0;
     laik_switchto_flow(dSum, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(dSum, (void **) sumPtr, 0);
-    *(*sumPtr) = localResiduum;
+    laik_map_def1(dSum, (void **) &sumPtr, &count);
+    assert(sumPtr != NULL && count == 1);
+    *sumPtr = localResiduum;
     laik_switchto_flow(dSum, LAIK_DF_Preserve, LAIK_RO_Sum);
-    laik_map_def1(dSum, (void **) sumPtr, 0);
-    localResiduum = *(*sumPtr);
+    laik_map_def1(dSum, (void **) &sumPtr, &count);
+    assert(sumPtr != NULL && count == 1);
 
-    return localResiduum;
+    return *sumPtr;
 }
 
 double do_jacobi_iteration(const double *baseR, double *baseW, uint64_t ystrideR, uint64_t ystrideW, int64_t x1,
