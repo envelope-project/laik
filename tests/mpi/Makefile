@@ -14,8 +14,7 @@ TESTS= \
     test-jac3dri test-jac3deri test-jac3dari test-jac3d-rgx3 \
     test-markov test-markov2 test-markov2-f \
     test-propagation2d test-propagation2do \
-    test-kvstest \
-    test-location
+    test-kvstest test-location test-spaces
 
 .PHONY: $(TESTS)
 
@@ -128,6 +127,9 @@ test-kvstest:
 
 test-location:
 	$(SDIR)./unit_tests/test-location-mpi-4.sh
+
+test-spaces:
+	$(SDIR)./unit_tests/test-spaces-mpi-4.sh
 
 clean:
 	rm -rf *.out

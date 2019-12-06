@@ -193,43 +193,36 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
 // for a local index (1d/2d/3d), return offset into memory mapping
 int64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
 
-// Make own partition available for direct access in local memory.
-// A partition for a task can consist of multiple consecutive ranges
+// get mapping of own partition into local memory for direct access
+//
+// A partition for a process can consist of multiple consecutive ranges
 // of memory allocated for the partition. Each range is called a
 // mapping. Each mapping may cover multiple slices.
 //
 // <n> is the mapping ID, going from 0 to number of current mappings -1,
 // see laik_my_mapcount(laik_get_partitioning(<data>)).
 //
-// If <layout> is 0, it will be choosen by LAIK, and can be requested with
-// laik_map_layout(). Otherwise a new layout with a hint can be provided,
-// and the layout object is updated to reflect the used layout.
-// Returns 0 for invalid mapping IDs.
-Laik_Mapping* laik_map(Laik_Data* d, int n, Laik_Layout* layout);
+// Returns 0 if data not yet mapped or for invalid mapping IDs.
+Laik_Mapping* laik_get_map(Laik_Data* d, int n);
 
-// similar to laik_map, but force a default mapping
-Laik_Mapping* laik_map_def(Laik_Data* d, int n, void** base, uint64_t* count);
+// for 1d mapping with ID n, return base pointer and count
+Laik_Mapping* laik_get_map_1d(Laik_Data* d, int n, void** base, uint64_t* count);
 
-// similar to laik_map, but force a default mapping with only 1 slice
-Laik_Mapping* laik_map_def1(Laik_Data* d, void** base, uint64_t* count);
-
-// request default 2d mapping for 1 slice (= rectangle).
-// returns the mapping, and values describing mapping in output parameters
+// for 2d mapping with ID n, describe mapping in output parameters
 //  - valid ranges: y in [0;ysize[, x in [0;xsize[
 //  - base[y][x] is at address (base + y * ystride + x)
 //    (note: ystride may be larger than xsize)
-Laik_Mapping* laik_map_def1_2d(Laik_Data* d, void** base,
-                               uint64_t* ysize, uint64_t* ystride,
-                               uint64_t* xsize);
+Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n, void** base,
+                              uint64_t* ysize, uint64_t* ystride,
+                              uint64_t* xsize);
 
-// request default 3d mapping for 1 slice (= cuboid).
-// returns the mapping, and values describing mapping in output parameters
+// for 3d mapping with ID n, describe mapping in output parameters
 //  - valid ranges: z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
 //  - base[z][y][x] is at address (base + z * zstride + y * ystride + x)
-Laik_Mapping* laik_map_def1_3d(Laik_Data* d, void** base,
-                               uint64_t* zsize, uint64_t* zstride,
-                               uint64_t* ysize, uint64_t* ystride,
-                               uint64_t* xsize);
+Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
+                              uint64_t* zsize, uint64_t* zstride,
+                              uint64_t* ysize, uint64_t* ystride,
+                              uint64_t* xsize);
 
 // 1d global to 1d local
 // if global index <gidx> is locally mapped, return mapping and set local

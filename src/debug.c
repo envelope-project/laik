@@ -117,6 +117,7 @@ void laik_log_Reduction(Laik_ReductionOperation op)
     case LAIK_RO_Max:  laik_log_append("max"); break;
     case LAIK_RO_And:  laik_log_append("bitwise and"); break;
     case LAIK_RO_Or:   laik_log_append("bitwise or"); break;
+    case LAIK_RO_Any:  laik_log_append("any"); break;
     default: assert(0);
     }
 }

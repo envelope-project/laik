@@ -37,7 +37,7 @@ LAIKLIB = liblaik.so
 # build targets
 .PHONY: $(SUBDIRS) force
 
-all: $(LAIKLIB) $(SUBDIRS) testbins
+all: $(LAIKLIB) $(SUBDIRS) testbins README.md
 
 # version information for first line of LAIK_LOG=2
 # only trigger compile if git revision changes
@@ -88,7 +88,7 @@ tidy-clean: clean
 	rm -f compile_commands.json
 
 # clean targets
-SUBDIRS_CLEAN=$(addprefix clean_, $(SUBDIRS))
+SUBDIRS_CLEAN=$(addprefix clean_, $(SUBDIRS)) clean_tests
 .PHONY: $(SUBDIRS_CLEAN)
 
 clean: clean_laik $(SUBDIRS_CLEAN)
@@ -121,6 +121,9 @@ uninstall_laik:
 	rm -f $(PREFIX)/include/laik-internal.h
 	rm -f $(PREFIX)/include/laik-backend-*.h
 	rm -f $(PREFIX)/lib/liblaik.*
+
+README.md: $(SDIR)README.in $(SDIR)examples/README-example.c
+	sed -e '/EXAMPLECODE/ {r $(SDIR)examples/README-example.c' -e 'd' -e '}' $(SDIR)README.in > README.md
 
 # include previously generated dependency rules if existing
 -include $(DEPS)

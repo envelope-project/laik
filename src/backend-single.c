@@ -75,7 +75,6 @@ void laik_single_exec(Laik_ActionSeq* as)
     Laik_MappingList* fromList = tc->fromList;
     Laik_MappingList* toList = tc->toList;
 
-    Laik_Instance* inst = d->space->inst;
     if (t->redCount > 0) {
         assert(fromList->count == 1);
         assert(toList->count == 1);
@@ -90,7 +89,7 @@ void laik_single_exec(Laik_ActionSeq* as)
             int64_t from = op->slc.from.i[0];
             int64_t to   = op->slc.to.i[0];
             assert(fromBase != 0);
-            assert(laik_trans_isInGroup(t, op->outputGroup, inst->myid));
+            assert(laik_trans_isInGroup(t, op->outputGroup, t->group->myid));
             assert(toBase != 0);
             assert(to > from);
 

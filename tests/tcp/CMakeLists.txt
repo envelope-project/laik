@@ -19,6 +19,7 @@ if ("USE_TCP" IN_LIST definitions)
         "spmv_4000.sh"
         "vsum2.sh"
         "vsum.sh"
+	"kvstest.sh"
     )
         add_test ("tcp/${test}" "${CMAKE_CURRENT_SOURCE_DIR}/${test}")
     endforeach ()

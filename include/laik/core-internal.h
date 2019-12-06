@@ -26,36 +26,43 @@
 // dynamically generated revision/opt flags information, in info.c
 void laik_log_append_info(void);
 
-// key-value store (see below)
-typedef struct _Laik_KVNode Laik_KVNode;
-
 struct _Laik_Task {
     int rank;
 };
 
 struct _Laik_Group {
     Laik_Instance* inst;
-    int gid;
-    int size;
-    int myid;
+    int gid;         // group ID
+    int size;        // number of processes in group
+    int myid;        // index of this process (in [0;size[ or -1 if not in group)
     void* backend_data;
 
     Laik_Group* parent;
-    int* toParent;   // mapping local task IDs to parent task IDs
-    int* fromParent; // mapping parent task IDs to local task IDs
-
-    int* toLocation;
+    int maxsize;     // size of allocation for following 3 arrays
+    int* toParent;   // maps process indexes in this group to indexes in parent
+    int* fromParent; // maps parent process indexes to indexes in this group
+    int* locationid; // maps process indexes to location IDs they are bound to
 };
 
 
 struct _Laik_Instance {
-    int size;
-    int myid;
+    // number of process locations, can only grow
+    int locations;
+    int mylocationid;
     char* mylocation;
     char guid[64];
 
-    // Stores exchanged location information if user requested it using synchronize.
+    // current world, may change
+    Laik_Group* world;
+
+    // KV store for exchanging location information
     Laik_KVStore* locationStore;
+    // direct access to synchronized location strings (array of size <size>)
+    // null if not synced yet; for removed processes entries are null
+    char** location;
+
+    // KV stores for LAIK objects
+    Laik_KVStore* spaceStore;
 
     // for time logging
     struct timeval init_time;
@@ -89,8 +96,8 @@ void laik_removeSpaceFromInstance(Laik_Instance* inst, Laik_Space* s);
 
 void laik_addDataForInstance(Laik_Instance* inst, Laik_Data* d);
 
-// synchronize location identifiers
-void laik_location_synchronize_data(Laik_Instance *instance, Laik_Group *synchronizationGroup);
+// synchronize location strings via KVS among processes in current world
+void laik_sync_location(Laik_Instance *instance);
 
 
 struct _Laik_Error {
@@ -105,9 +112,22 @@ struct _Laik_Error {
 
 struct _Laik_KVS_Entry {
     char* key;
-    char* data;
-    unsigned int size;
+    char* value;
+    unsigned int vlen;
     bool updated;
+
+    void* data; // custom user data attached to this entry
+};
+
+// LAIK-internal KVS change journal
+typedef struct _Laik_KVS_Changes Laik_KVS_Changes;
+struct _Laik_KVS_Changes {
+    int offSize, offUsed;
+    int* off;
+    int dataSize, dataUsed;
+    char* data;
+    int entrySize, entryUsed;
+    Laik_KVS_Entry* entry;
 };
 
 struct _Laik_KVStore {
@@ -120,14 +140,30 @@ struct _Laik_KVStore {
     // new entries are unsorted, call laik_kvs_sort to enable binary search
     unsigned int sorted_upto;
 
-    // arrays collecting new/change data to send at next sync
-    unsigned int myOffSize, myOffUsed;
-    unsigned int* myOff;
-    unsigned int myDataSize, myDataUsed;
-    char* myData;
+    laik_kvs_created_func created_func;
+    laik_kvs_changed_func changed_func;
+    laik_kvs_removed_func removed_func;
+
+    // new/changed data to send at next sync
+    Laik_KVS_Changes changes;
+
     // if true, setting values will not be propagated for next sync
     bool in_sync;
 };
 
+// internal API for KVS change journal
+Laik_KVS_Changes* laik_kvs_changes_new();
+void laik_kvs_changes_init(Laik_KVS_Changes* c);
+void laik_kvs_changes_free(Laik_KVS_Changes* c);
+void laik_kvs_changes_ensure_size(Laik_KVS_Changes* c, int n, int dlen);
+void laik_kvs_changes_set_size(Laik_KVS_Changes* c, int n, int dlen);
+void laik_kvs_changes_add(Laik_KVS_Changes* c, char* key, int dlen, char* data,
+                          bool do_alloc, bool append_sorted);
+void laik_kvs_changes_sort(Laik_KVS_Changes* c);
+void laik_kvs_changes_sort(Laik_KVS_Changes* c);
+void laik_kvs_changes_sort(Laik_KVS_Changes* c);
+void laik_kvs_changes_merge(Laik_KVS_Changes* dst,
+                            Laik_KVS_Changes* src1, Laik_KVS_Changes* src2);
+void laik_kvs_changes_apply(Laik_KVS_Changes* c, Laik_KVStore* kvs);
 
 #endif // LAIK_CORE_INTERNAL_H

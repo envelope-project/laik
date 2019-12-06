@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
 
     laik_set_phase(inst, 1, "1st SpmV", NULL);
     // init result vector (only my partition)
-    laik_map_def1(resD, (void**) &res, &count);
+    laik_get_map_1d(resD, 0, (void**) &res, &count);
     for(uint64_t i = 0; i < count; i++)
         res[i] = 0.0;
     // SPMV on my part of matrix rows
@@ -113,7 +113,7 @@ int main(int argc, char* argv[])
     Laik_Partitioning* pMaster = laik_new_partitioning(laik_Master, world, s, 0);
     laik_switchto_partitioning(resD, pMaster, LAIK_DF_Preserve, LAIK_RO_None);
     if (laik_myid(world) == 0) {
-        laik_map_def1(resD, (void**) &res, &count);
+        laik_get_map_1d(resD, 0, (void**) &res, &count);
         double sum = 0.0;
         for(uint64_t i = 0; i < count; i++) sum += res[i];
         printf("Res sum (regular): %f\n", sum);
@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
     // other way to push results to master: use sum reduction
     Laik_Partitioning* pAll = laik_new_partitioning(laik_All, world, s, 0);
     laik_switchto_partitioning(resD, pAll, LAIK_DF_Init, LAIK_RO_Sum);
-    laik_map_def1(resD, (void**) &res, &count);
+    laik_get_map_1d(resD, 0, (void**) &res, &count);
     laik_my_slice_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
@@ -136,7 +136,7 @@ int main(int argc, char* argv[])
     }
     laik_switchto_partitioning(resD, pMaster, LAIK_DF_Preserve, LAIK_RO_Sum);
     if (laik_myid(world) == 0) {
-        laik_map_def1(resD, (void**) &res, &count);
+        laik_get_map_1d(resD, 0, (void**) &res, &count);
         double sum = 0.0;
         for(uint64_t i = 0; i < count; i++) sum += res[i];
         printf("Res sum (reduce): %f\n", sum);

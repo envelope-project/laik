@@ -26,8 +26,6 @@
 void laik_add_index(Laik_Index* res, Laik_Index* src1, Laik_Index* src2);
 void laik_sub_index(Laik_Index* res, const Laik_Index* src1, const Laik_Index* src2);
 
-
-
 struct _Laik_Space {
     char* name; // for debugging
     int id;     // for debugging
@@ -35,9 +33,18 @@ struct _Laik_Space {
     int dims;
     Laik_Slice s; // defines the valid indexes in this space
 
+    Laik_KVStore* kvs; // attached to this store if non-null
+
     Laik_Instance* inst;
     Laik_Space* nextSpaceForInstance; // for list of spaces used in instance
 };
+
+// internal: space store
+Laik_KVStore* laik_spacestore(Laik_Instance* i);
+void laik_spacestore_set(Laik_Space* s);
+Laik_Space* laik_spacestore_get(Laik_Instance* i, char* name);
+void laik_sync_spaces(Laik_Instance* i);
+
 
 struct _Laik_Partitioner {
     const char* name;

@@ -50,12 +50,15 @@ void laik_finalize(Laik_Instance* inst);
 char* laik_mylocation(Laik_Instance*);
 
 //! create a group to be used in this LAIK instance
-Laik_Group* laik_create_group(Laik_Instance*);
+Laik_Group* laik_create_group(Laik_Instance*, int maxsize);
 
-//! get default group with all tasks within this LAIK instance
+//! get default group with all active processes in this instance
 Laik_Group* laik_world(Laik_Instance* i);
 
-//! get instance the group is coming from
+//! set new default group of active processes for this instance
+void laik_set_world(Laik_Instance* i, Laik_Group* world);
+
+//! get instance the group is created in
 Laik_Instance* laik_inst(Laik_Group*);
 
 //! return number of LAIK tasks available (within this instance)
@@ -142,6 +145,12 @@ typedef enum _Laik_LogLevel {
     LAIK_LL_Panic    // prefix with "Panic" and immediately exit
 } Laik_LogLevel;
 
+// initialize logging for instance <i>
+void laik_log_init(Laik_Instance* i);
+
+// cleanup logging of instance <i>
+void laik_log_cleanup(Laik_Instance* i);
+
 // increment logging counter used in logging prefix
 void laik_log_inc(void);
 
@@ -183,13 +192,18 @@ Laik_Instance* laik_init (int* argc, char*** argv);
 //
 // current restrictions:
 // - flat
-// - sync only among all processues of current world
+// - sync only among all processes of current world
 
 // a flat KV store
 typedef struct _Laik_KVStore Laik_KVStore;
 
 // an entry in a KV Store
 typedef struct _Laik_KVS_Entry Laik_KVS_Entry;
+
+// functions optionally called on KVS changes (see laik_kvs_reg_callbacks)
+typedef void (*laik_kvs_created_func)(Laik_KVStore*, Laik_KVS_Entry*);
+typedef void (*laik_kvs_changed_func)(Laik_KVStore*, Laik_KVS_Entry*);
+typedef void (*laik_kvs_removed_func)(Laik_KVStore*, char*);
 
 // create KVS among processes of current world in instance
 Laik_KVStore* laik_kvs_new(const char *name, Laik_Instance* inst);
@@ -198,10 +212,16 @@ Laik_KVStore* laik_kvs_new(const char *name, Laik_Instance* inst);
 void laik_kvs_free(Laik_KVStore* kvs);
 
 // set a binary data blob as value for key (deep copy, overwrites if key exists)
-bool laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data);
+Laik_KVS_Entry* laik_kvs_set(Laik_KVStore* kvs, char* key, unsigned int size, char* data);
 
 // set a null-terminated string as value for key
-bool laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str);
+Laik_KVS_Entry* laik_kvs_sets(Laik_KVStore* kvs, char* key, char* str);
+
+// remove all entries
+void laik_kvs_clean(Laik_KVStore* kvs);
+
+// remove entry for key
+bool laik_kvs_remove(Laik_KVStore* kvs, char* key);
 
 // synchronize KV store
 void laik_kvs_sync(Laik_KVStore* kvs);
@@ -232,6 +252,12 @@ unsigned int laik_kvs_copy(Laik_KVS_Entry* e, char* mem, unsigned int size);
 
 // sort KVS entries for faster access (done after sync)
 void laik_kvs_sort(Laik_KVStore* kvs);
+
+// register functions to be called when entries are created/changed/removed in sync
+void laik_kvs_reg_callbacks(Laik_KVStore* kvs,
+                            laik_kvs_created_func fc,
+                            laik_kvs_changed_func fu,
+                            laik_kvs_removed_func fr);
 
 /*********************************************************************/
 /* Backend Error Handling

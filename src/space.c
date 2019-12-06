@@ -17,10 +17,14 @@
 
 #include "laik-internal.h"
 
+// for string.h to declare strdup
+#define __STDC_WANT_LIB_EXT2__ 1
+
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -340,6 +344,8 @@ Laik_Space* laik_new_space(Laik_Instance* inst)
     space->dims = 0; // invalid
     space->nextSpaceForInstance = 0;
 
+    space->kvs = 0;
+
     // append this space to list of spaces used by LAIK instance
     laik_addSpaceForInstance(inst, space);
 
@@ -401,11 +407,117 @@ void laik_free_space(Laik_Space* s)
     // TODO
 }
 
-
-// set a space a name, for debug output
+// give a space a name, for debugging or referencing in space store
 void laik_set_space_name(Laik_Space* s, char* n)
 {
+    // name only can be changed if not attached yet to space store yet
+    assert(s->kvs == 0);
     s->name = strdup(n);
+}
+
+char* laik_space_serialize(Laik_Space* s, unsigned* psize)
+{
+    static char buf[100];
+
+    int off = -1;
+    if (s->dims == 1)
+        off = sprintf(buf, "1(%" PRId64 "/%" PRId64 ")",
+                      s->s.from.i[0], s->s.to.i[0]);
+    else if (s->dims == 2)
+        off = sprintf(buf, "2(%" PRId64 ",%" PRId64 "/%" PRId64 ",%" PRId64 ")",
+                      s->s.from.i[0], s->s.from.i[1],
+                      s->s.to.i[0], s->s.to.i[1]);
+    else if (s->dims == 3)
+        off = sprintf(buf, "3(%" PRId64 ",%" PRId64 ",%" PRId64
+                      "/%" PRId64 ",%" PRId64 ",%" PRId64 ")",
+                      s->s.from.i[0], s->s.from.i[1], s->s.from.i[2],
+                      s->s.to.i[0], s->s.to.i[1], s->s.to.i[2]);
+    assert(off > 0);
+    if (psize) *psize = (unsigned) off;
+    return buf;
+}
+
+bool laik_space_set(Laik_Space* s, char* v)
+{
+    if ((v[0] < '1') || (v[0] > '3')) return false;
+    s->dims = v[0] - '0';
+    if (s->dims == 1) {
+        if (sscanf(v+1, "(%" SCNd64 "/%" SCNd64 ")",
+                   &(s->s.from.i[0]), &(s->s.to.i[0]) ) != 2) return false;
+    }
+    else if (s->dims == 2) {
+        if (sscanf(v+1, "(%" SCNd64 ",%" SCNd64 "/%" SCNd64 ",%" SCNd64 ")",
+                   &(s->s.from.i[0]), &(s->s.from.i[1]),
+                   &(s->s.to.i[0]), &(s->s.to.i[1]) ) != 4) return false;
+    }
+    else if (s->dims == 3) {
+        if (sscanf(v+1, "(%" SCNd64 ",%" SCNd64 ",%" SCNd64
+                   "/%" SCNd64 ",%" SCNd64 ",%" SCNd64 ")",
+                   &(s->s.from.i[0]), &(s->s.from.i[1]), &(s->s.from.i[2]),
+                   &(s->s.to.i[0]), &(s->s.to.i[1]), &(s->s.to.i[2]) ) != 6) return false;
+    }
+    return true;
+}
+
+static void update_space(Laik_KVStore* kvs, Laik_KVS_Entry* e)
+{
+    Laik_Space* s = (Laik_Space*) e->data;
+    if (!s) {
+        s = laik_new_space(kvs->inst);
+        s->name = strdup(e->key);
+        s->kvs = kvs;
+        e->data = s;
+    }
+    bool res = laik_space_set(s, e->value);
+    assert(res);
+    laik_log(1, "space '%s' updated to '%s'", e->key, e->value);
+}
+
+Laik_KVStore* laik_spacestore(Laik_Instance* i)
+{
+    if (!i->spaceStore) {
+        i->spaceStore = laik_kvs_new("space", i);
+        laik_kvs_reg_callbacks(i->spaceStore,
+                               update_space, update_space, 0);
+    }
+
+    return i->spaceStore;
+}
+
+// add a space to the space store of the instance
+void laik_spacestore_set(Laik_Space* s)
+{
+    if (s->kvs == 0)
+        s->kvs = laik_spacestore(s->inst);
+
+    unsigned len;
+    char* value = laik_space_serialize(s, &len);
+    Laik_KVS_Entry* e = laik_kvs_set(s->kvs, s->name, len + 1, value);
+    e->data = s;
+}
+
+Laik_Space* laik_spacestore_get(Laik_Instance* i, char* name)
+{
+    if (i->spaceStore == 0) return 0;
+
+    Laik_KVS_Entry* e = laik_kvs_entry(i->spaceStore, name);
+    if (!e) return 0;
+    Laik_Space* s = (Laik_Space*) e->data;
+    if (!s) {
+        s = laik_new_space(i);
+        s->name = strdup(name);
+        s->kvs = i->spaceStore;
+        bool res = laik_space_set(s, e->value);
+        assert(res);
+        e->data = s;
+    }
+    return s;
+}
+
+void laik_sync_spaces(Laik_Instance* i)
+{
+    Laik_KVStore* kvs = laik_spacestore(i);
+    laik_kvs_sync(kvs);
 }
 
 // change the size of an index space, eventually triggering a repartitiong
@@ -417,6 +529,51 @@ void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1)
 
     s->s.from.i[0] = from1;
     s->s.to.i[0] = to1;
+
+    // if slice is in store, notify other processes on next sync
+    if (s->kvs)
+        laik_spacestore_set(s);
+
+    // TODO: notify partitionings about space change
+}
+
+void laik_change_space_2d(Laik_Space* s,
+                          int64_t from1, int64_t to1, int64_t from2, int64_t to2)
+{
+    assert(s->dims == 2);
+    if ((s->s.from.i[0] == from1) && (s->s.to.i[0] == to1) &&
+        (s->s.from.i[1] == from2) && (s->s.to.i[1] == to2)) return;
+
+    s->s.from.i[0] = from1;
+    s->s.to.i[0] = to1;
+    s->s.from.i[1] = from2;
+    s->s.to.i[1] = to2;
+
+    // if slice is in store, notify other processes on next sync
+    if (s->kvs)
+        laik_spacestore_set(s);
+
+    // TODO: notify partitionings about space change
+}
+
+void laik_change_space_3d(Laik_Space* s, int64_t from1, int64_t to1,
+                          int64_t from2, int64_t to2, int64_t from3, int64_t to3)
+{
+    assert(s->dims == 3);
+    if ((s->s.from.i[0] == from1) && (s->s.to.i[0] == to1) &&
+        (s->s.from.i[1] == from2) && (s->s.to.i[1] == to2) &&
+        (s->s.from.i[2] == from3) && (s->s.to.i[2] == to3)) return;
+
+    s->s.from.i[0] = from1;
+    s->s.to.i[0] = to1;
+    s->s.from.i[1] = from2;
+    s->s.to.i[1] = to2;
+    s->s.from.i[2] = from3;
+    s->s.to.i[2] = to3;
+
+    // if slice is in store, notify other processes on next sync
+    if (s->kvs)
+        laik_spacestore_set(s);
 
     // TODO: notify partitionings about space change
 }

@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
     laik_my_slice_1d(pWrite, 0, &gx1, &gx2);
 
     // arbitrary non-zero values based on global indexes to detect bugs
-    laik_map_def1(dWrite, (void**) &baseW, &countW);
+    laik_get_map_1d(dWrite, 0, (void**) &baseW, &countW);
     for(uint64_t i = 0; i < countW; i++)
         baseW[i] = (double) ((gx1 + i) & 6);
 
@@ -133,8 +133,8 @@ int main(int argc, char* argv[])
 
         laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-        laik_map_def1(dRead,  (void**) &baseR, &countR);
-        laik_map_def1(dWrite, (void**) &baseW, &countW);
+        laik_get_map_1d(dRead,  0, (void**) &baseR, &countR);
+        laik_get_map_1d(dWrite, 0, (void**) &baseW, &countW);
 
         // local range for which to do 1d stencil, adjust at borders
         x1 = 0;
@@ -176,10 +176,10 @@ int main(int argc, char* argv[])
 
             // calculate global residuum
             laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
+            laik_get_map_1d(sumD, 0, (void**) &sumPtr, 0);
             *sumPtr = res;
             laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
-            laik_map_def1(sumD, (void**) &sumPtr, 0);
+            laik_get_map_1d(sumD, 0, (void**) &sumPtr, 0);
             res = *sumPtr;
 
             if (iter > 0) {
@@ -251,15 +251,15 @@ int main(int argc, char* argv[])
 
     // for check at end: sum up all just written values
     double sum = 0.0;
-    laik_map_def1(dWrite, (void**) &baseW, &countW);
+    laik_get_map_1d(dWrite, 0, (void**) &baseW, &countW);
     for(uint64_t i = 0; i < countW; i++) sum += baseW[i];
 
     // global reduction of local sum values
     laik_switchto_flow(sumD, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(sumD, (void**) &sumPtr, 0);
+    laik_get_map_1d(sumD, 0, (void**) &sumPtr, 0);
     *sumPtr = sum;
     laik_switchto_flow(sumD, LAIK_DF_Preserve, LAIK_RO_Sum);
-    laik_map_def1(sumD, (void**) &sumPtr, 0);
+    laik_get_map_1d(sumD, 0, (void**) &sumPtr, 0);
     sum = *sumPtr;
 
     if (laik_myid(laik_data_get_group(sumD)) == 0) {

@@ -11,7 +11,7 @@ TESTS= \
 
 .PHONY: mpi tcp $(TESTS)
 
-all: clean testbins fault-tolerance $(TESTS) $(TEST_SUBDIRS)
+all: testbins fault-tolerance $(TESTS) $(TEST_SUBDIRS)
 
 testbins:
 	$(MAKE) -C src
@@ -73,6 +73,14 @@ test-propagation2d:
 test-kvstest:
 	$(SDIR)./test-kvstest-single.sh
 
+test-locationtest:
+	$(SDIR)./test-locationtest-single.sh
+
+test-spacestest:
+	$(SDIR)./test-spacestest-single.sh
+
 clean:
 	rm -rf *.out
-
+	$(MAKE) clean -C src
+	$(MAKE) clean -C mpi
+	$(MAKE) clean -C tcp

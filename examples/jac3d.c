@@ -42,8 +42,8 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
-    laik_map_def1_3d(dWrite, (void**) &baseW,
-                     &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
+    laik_get_map_3d(dWrite, 0, (void**) &baseW,
+                    &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
 
     // set fixed boundary values at the 6 faces
     if (gz1 == 0) {
@@ -267,8 +267,8 @@ int main(int argc, char* argv[])
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
     //   base[z][y][x] is at (base + z * zstride + y * ystride + x)
-    laik_map_def1_3d(dWrite, (void**) &baseW,
-                     &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
+    laik_get_map_3d(dWrite, 0, (void**) &baseW,
+                    &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
     // arbitrary non-zero values based on global indexes to detect bugs
     for(uint64_t z = 0; z < zsizeW; z++)
         for(uint64_t y = 0; y < ysizeW; y++)
@@ -332,10 +332,10 @@ int main(int argc, char* argv[])
             laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
         }
 
-        laik_map_def1_3d(dRead,  (void**) &baseR,
-                         &zsizeR, &zstrideR, &ysizeR, &ystrideR, &xsizeR);
-        laik_map_def1_3d(dWrite, (void**) &baseW,
-                         &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
+        laik_get_map_3d(dRead,  0, (void**) &baseR,
+                        &zsizeR, &zstrideR, &ysizeR, &ystrideR, &xsizeR);
+        laik_get_map_3d(dWrite, 0, (void**) &baseW,
+                        &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
 
         setBoundary(size, pWrite, dWrite);
 
@@ -401,10 +401,10 @@ int main(int argc, char* argv[])
 
             // calculate global residuum
             laik_switchto_flow(dSum, LAIK_DF_None, LAIK_RO_None);
-            laik_map_def1(dSum, (void**) &sumPtr, 0);
+            laik_get_map_1d(dSum, 0, (void**) &sumPtr, 0);
             *sumPtr = res;
             laik_switchto_flow(dSum, LAIK_DF_Preserve, LAIK_RO_Sum);
-            laik_map_def1(dSum, (void**) &sumPtr, 0);
+            laik_get_map_1d(dSum, 0, (void**) &sumPtr, 0);
             res = *sumPtr;
 
             if (iter > 0) {
@@ -525,7 +525,7 @@ int main(int argc, char* argv[])
                 // for reservation API test: update saved pointer
                 data1BaseW = data2BaseW = 0;
                 if (laik_myid(newWorld) >=0) {
-                    laik_map_def1_3d(dWrite, (void**) &baseW, 0,0,0,0,0);
+                    laik_get_map_3d(dWrite, 0, (void**) &baseW, 0,0,0,0,0);
                     if (dWrite == data1) data1BaseW = baseW; else data2BaseW = baseW;
                 }
             }
@@ -563,8 +563,8 @@ int main(int argc, char* argv[])
 
         if (laik_myid(world) == 0) {
             double sum = 0.0;
-            laik_map_def1_3d(dWrite, (void**) &baseW,
-                             &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
+            laik_get_map_3d(dWrite, 0, (void**) &baseW,
+                            &zsizeW, &zstrideW, &ysizeW, &ystrideW, &xsizeW);
             for(uint64_t z = 0; z < zsizeW; z++)
                 for(uint64_t y = 0; y < ysizeW; y++)
                     for(uint64_t x = 0; x < xsizeW; x++)

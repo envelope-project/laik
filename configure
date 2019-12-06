@@ -3,10 +3,17 @@
 # Configure script for LAIK:
 # - tests for required/wanted packages
 # - generates a Makefile.config
+# - if not called from top source dir, create Makefiles to
+#   enable out-of-source build
+#
+# There is no need to run this script:
+# - with Makefile.config empty, sensible defaults will be used
+# - you can modify/create your own Makefile.config
 
 import os
 import subprocess
 import distutils.spawn
+import argparse
 
 defs = ""
 miscvars = ""
@@ -19,6 +26,14 @@ cc = ""
 # if compiler is specified via CC for configure, use it
 if "CC" in os.environ:
     cc = os.environ['CC']
+
+#------------------------------------
+# Command line parsing
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--no-tcp", help="disable TCP backend", action="store_true")
+args = parser.parse_args()
+use_tcp = not args.no_tcp
 
 #------------------------------------
 # Mosquitto/MQTT
@@ -87,17 +102,18 @@ else:
         print("  Detected Open MPI")
         # required for tests with OpenMPI, otherwise tests may fail
         # with "not enough slots" error on small machines
-        exports = "export MPIEXEC=mpiexec --oversubscribe"
+        exports = "export MPIEXEC=mpiexec --oversubscribe --mca btl_base_warn_component_unused 0"
 
 #------------------------------------
 # TCP backend support
 
-pkgc_found = distutils.spawn.find_executable('pkg-config')
-if pkgc_found:
-    # check gio version
-    glib_versionok = not subprocess.call(['pkg-config', '--atleast-version=2.44', 'gio-2.0'])
-    glib_inc = os.popen('pkg-config --cflags gio-2.0').read().strip()
-if pkgc_found and glib_inc and glib_versionok:
+if use_tcp:
+    pkgc_found = distutils.spawn.find_executable('pkg-config')
+    if pkgc_found:
+        # check gio version
+        glib_versionok = not subprocess.call(['pkg-config', '--atleast-version=2.44', 'gio-2.0'])
+        glib_inc = os.popen('pkg-config --cflags gio-2.0').read().strip()
+if use_tcp and pkgc_found and glib_inc and glib_versionok:
     glib_libs = os.popen('pkg-config --libs gio-2.0').read().strip()
     print("TCP backend enabled (glib-2.0/gio-2.0 found).")
     defs += " -DUSE_TCP"
@@ -106,7 +122,9 @@ if pkgc_found and glib_inc and glib_versionok:
     miscvars += "TCP_LIBS=" + glib_libs + "\n"
     test_subdirs += " tcp"
 else:
-    if not pkgc_found:
+    if not use_tcp:
+        print("TCP backend disabled")
+    elif not pkgc_found:
         print("TCP backend disabled: pkg-config required to detect glib-2.0 dependency")
     elif not glib_versionok:
         print("TCP backend disabled: glib-2.0/gio-2.0 version < 2.44")
