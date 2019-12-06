@@ -23,6 +23,8 @@ add_library ("laik" SHARED
     "space.c"
     "slicearray.c"
     "type.c"
+    "logging.c"
+    "kvs.c"
     "fault-tolerance/checkpoint.c"
     "fault-tolerance/failure_detector.c")
 
