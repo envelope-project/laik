@@ -58,12 +58,15 @@ int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup
         laik_switchto_partitioning(nodeData, each, LAIK_DF_None, LAIK_RO_None);
         unsigned char *nodeBase;
         uint64_t nodeCount;
-        laik_map_def1(nodeData, (void **) &nodeBase, &nodeCount);
+        assert(laik_my_mapcount(laik_data_get_partitioning(nodeData)) == 1);
+        laik_get_map_1d(nodeData, 0, (void **) &nodeBase, &nodeCount);
         assert(nodeCount == 1);
         *nodeBase = LAIK_FT_NODE_OK;
 
         laik_switchto_partitioning(nodeData, all, LAIK_DF_Preserve, LAIK_RO_None);
-        laik_map_def1(nodeData, (void **) &nodeBase, &nodeCount);
+
+        assert(laik_my_mapcount(laik_data_get_partitioning(nodeData)) == 1);
+        laik_get_map_1d(nodeData, 0, (void **) &nodeBase, &nodeCount);
 
         for (unsigned long i = 0; i < nodeCount; ++i) {
             if (nodeBase[i] != LAIK_FT_NODE_OK) {

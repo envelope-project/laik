@@ -205,7 +205,8 @@ int main (int argc, char *argv[])
 
         char* base;
         uint64_t count;
-        laik_map_def1(data, (void**)&base, &count);
+        assert(laik_my_mapcount(laik_data_get_partitioning(data)) == 1);
+        laik_get_map_1d(data,0, (void**)&base, &count);
 
 //        t1Partitioning = newT1Partitioning;
 //        t2Partitioning = newT2Partitioning;
@@ -293,7 +294,8 @@ int main (int argc, char *argv[])
             int nextId = (int)i % world->size;
 //            printf("Switch to single (task id %i)\n", TSLICE_0_TASK(singlePartitionings[nextId]));
             laik_switchto_partitioning(data, singlePartitionings[nextId], LAIK_DF_Preserve, LAIK_RO_None);
-            laik_map_def1(data, (void**)&base, &count);
+            assert(laik_my_slicecount(laik_data_get_partitioning(data)) == 1);
+            laik_get_map_1d(data, 0, (void**)&base, &count);
 
             // Execute any pre planned failures
             exitIfFailureIteration(i, &faultToleranceOptions, inst);

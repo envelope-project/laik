@@ -83,7 +83,7 @@ void test_init_laik(int *argc, char ***argv, Laik_Unit_Test_Data *testData) {
 void test_write_sample_data(Laik_Data *data) {
     Laik_Partitioning *partitioning = laik_data_get_partitioning(data);
     for (int sliceIndex = 0; sliceIndex < laik_my_mapcount(partitioning); ++sliceIndex) {
-        Laik_Mapping *mappingSource = laik_map(data, sliceIndex, 0);
+        Laik_Mapping *mappingSource = laik_get_map(data, sliceIndex);
 
         Laik_NDimMapDataAllocation allocation;
         laik_checkpoint_setupNDimAllocation(mappingSource, &allocation);
@@ -135,7 +135,7 @@ void test_create_sample_data(Laik_Unit_Test_Data *testData, int dimensions) {
 bool test_verify_sample_data(Laik_Data *data) {
     Laik_Partitioning *partitioning = laik_data_get_partitioning(data);
     for (int sliceIndex = 0; sliceIndex < laik_my_mapcount(partitioning); ++sliceIndex) {
-        Laik_Mapping *mappingSource = laik_map(data, sliceIndex, 0);
+        Laik_Mapping *mappingSource = laik_get_map(data, sliceIndex);
 
         Laik_NDimMapDataAllocation allocation;
         laik_checkpoint_setupNDimAllocation(mappingSource, &allocation);

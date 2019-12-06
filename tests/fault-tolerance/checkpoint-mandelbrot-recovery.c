@@ -38,8 +38,10 @@ int main(int argc, char *argv[]) {
     double *baseReal, *baseImaginary;
     uint64_t sizeRealY, sizeImaginaryY, sizeRealX, sizeImaginaryX, strideRealY, strideImaginaryY;
 
-    laik_map_def1_2d(dataReal, (void **) &baseReal, &sizeRealY, &strideRealY, &sizeRealX);
-    laik_map_def1_2d(dataImaginary, (void **) &baseImaginary, &sizeImaginaryY, &strideImaginaryY, &sizeImaginaryX);
+    assert(laik_my_mapcount(laik_data_get_partitioning(dataReal)) == 1);
+    laik_get_map_2d(dataReal,0,  (void **) &baseReal, &sizeRealY, &strideRealY, &sizeRealX);
+    assert(laik_my_mapcount(laik_data_get_partitioning(dataImaginary)) == 1);
+    laik_get_map_2d(dataImaginary, 0, (void **) &baseImaginary, &sizeImaginaryY, &strideImaginaryY, &sizeImaginaryX);
 
 
     double y;

@@ -54,7 +54,8 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
     // Write garbage over the original data and then restore
     double* base;
     uint64_t count;
-    laik_map_def1(testData->data, (void **) &base, &count);
+    assert(laik_my_slicecount(laik_data_get_partitioning(testData->data)) == 1);
+    laik_get_map_1d(testData->data, 0, (void **) &base, &count);
     for (uint64_t i = 0; i < count; i++) base[i] = (double) i + 1;
     test_assert(false, test_verify_sample_data(testData->data), "Test data scrambled verification");
 

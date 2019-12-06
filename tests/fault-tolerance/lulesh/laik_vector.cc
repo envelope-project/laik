@@ -35,7 +35,7 @@ void laik_vector<T>::test_print(){
     int nSlices = laik_my_slicecount(p1);
     for (int s = 0; s < nSlices; s++)
     {
-        laik_map_def(data, s, (void**) &base, &count);
+        laik_get_map_1d(data, s, (void**) &base, &count);
         for (uint64_t i = 0; i < count; i++)
         {
             laik_log(Laik_LogLevel(2),"%f\n", base[i]);
@@ -58,7 +58,7 @@ void laik_vector<T>::copyLaikDataToVector(std::vector<T> &data_vector) {
         assert(this->data != NULL);
         assert(laik_data_get_partitioning(this->data) != nullptr);
         assert(laik_my_slicecount(laik_data_get_partitioning(this->data)) == nSlices);
-        laik_map_def(this->data, n, (void **) &base, &cnt);
+        laik_get_map_1d(this->data, n, (void **) &base, &cnt);
         uint64_t elemOffset = n * cnt;
         laik_log(LAIK_LL_Debug, "Copy LAIK data to vector: vector (capacity) %zu data %" PRIu64
         " offset %" PRIu64 " length %" PRIu64, data_vector.capacity(), cnt,
@@ -76,7 +76,7 @@ void laik_vector<T>::copyVectorToLaikData(std::vector<T> &data_vector) {
     // copy the data from stl vector into the laik container
     int nSlices = laik_my_slicecount(this->p1);
     for (int n = 0; n < nSlices; n++) {
-        laik_map_def(this->data, n, (void **) &base, &cnt);
+        laik_get_map_1d(this->data, n, (void **) &base, &cnt);
 //        laik_log(LAIK_LL_Info, "Copy vector to LAIK data: vector (size) %lu data %lu", data_vector.size(), cnt);
         assert(n * cnt >= 0 && n * cnt + cnt <= data_vector.capacity());
         memcpy(base, &data_vector[0] + n * cnt, cnt * sizeof(T));
@@ -88,7 +88,8 @@ template <typename T>
 void laik_vector<T>::resizeVector(std::vector<T> &data_vector) {// resize vector
     uint64_t cnt;
     T* base;
-    laik_map_def(this->data, 0, (void **)&base, &cnt);
+    assert(laik_my_mapcount(laik_data_get_partitioning(this->data)) == 1);
+    laik_get_map_1d(this->data, 0, (void **)&base, &cnt);
     int s = cnt*cnt*cnt;
     data_vector.resize(s);
 }

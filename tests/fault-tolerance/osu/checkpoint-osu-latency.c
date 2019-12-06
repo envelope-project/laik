@@ -138,7 +138,8 @@ int main (int argc, char *argv[])
 
         char* base;
         uint64_t count;
-        laik_map_def1(data, (void**)&base, &count);
+        assert(laik_my_slicecount(laik_data_get_partitioning(data)) == 1);
+        laik_get_map_1d(data, 0, (void**)&base, &count);
 
 //        t1Partitioning = newT1Partitioning;
 //        t2Partitioning = newT2Partitioning;
@@ -156,11 +157,13 @@ int main (int argc, char *argv[])
             }
             printf("Switch to T1\n");
             laik_switchto_partitioning(data, newT1Partitioning, LAIK_DF_Preserve, LAIK_RO_None);
-            laik_map_def1(data, (void**)&base, &count);
+            assert(laik_my_slicecount(laik_data_get_partitioning(data)));
+            laik_get_map_1d(data, 0, (void**)&base, &count);
 
             printf("Switch to T2\n");
             laik_switchto_partitioning(data, newT2Partitioning, LAIK_DF_Preserve, LAIK_RO_None);
-            laik_map_def1(data, (void**)&base, &count);
+            assert(laik_my_slicecount(laik_data_get_partitioning(data)));
+            laik_get_map_1d(data, 0, (void**)&base, &count);
 
             // Execute any pre planned failures
             exitIfFailureIteration(i, &faultToleranceOptions, inst);

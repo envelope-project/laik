@@ -42,7 +42,7 @@ void laik_vector_repart_exclusive<T>::resize(int count) {
     T *base;
     int nSlices = laik_my_slicecount(this->p1);
     for (int n = 0; n < nSlices; ++n) {
-        laik_map_def(this->data, n, (void **) &base, &cnt);
+        laik_get_map_1d(this->data, n, (void **) &base, &cnt);
     }
     this->count = cnt;
 }

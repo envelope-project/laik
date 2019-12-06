@@ -111,28 +111,28 @@ laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint
              space->name, data->name);
 }
 
-void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
-                 uint64_t *count, void **backupBase, uint64_t *backupCount) {
-    // TODO: Temporarily unused
-    (void) laikInstance;
-//    Laik_Partitioner *backupPartitioner = data->activePartitioning->;
-    assert(data);
-    Laik_Partitioning *backupPartitioning = data->activePartitioning;
-    assert(backupPartitioning);
-
-    laik_log(LAIK_LL_Debug, "Switching checkpoint buffers to target active partitioning %s", backupPartitioning->name);
-    laik_switchto_partitioning(checkpoint->data, backupPartitioning, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(checkpoint->data, backupBase, backupCount);
-
-    assert(data->activeMappings->count == 1);
-    Laik_Mapping activeMapping = data->activeMappings->map[0];
-    *base = activeMapping.base;
-    *count = activeMapping.count;
-
-    laik_log(LAIK_LL_Debug, "Preparing buffer for %" PRIu64 " elements of size %i (%" PRIu64 ")\n", *count, data->elemsize,
-             *backupCount);
-    assert(*count == *backupCount);
-}
+//void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
+//                 uint64_t *count, void **backupBase, uint64_t *backupCount) {
+//    // TODO: Temporarily unused
+//    (void) laikInstance;
+////    Laik_Partitioner *backupPartitioner = data->activePartitioning->;
+//    assert(data);
+//    Laik_Partitioning *backupPartitioning = data->activePartitioning;
+//    assert(backupPartitioning);
+//
+//    laik_log(LAIK_LL_Debug, "Switching checkpoint buffers to target active partitioning %s", backupPartitioning->name);
+//    laik_switchto_partitioning(checkpoint->data, backupPartitioning, LAIK_DF_None, LAIK_RO_None);
+//    laik_map_def1(checkpoint->data, backupBase, backupCount);
+//
+//    assert(data->activeMappings->count == 1);
+//    Laik_Mapping activeMapping = data->activeMappings->map[0];
+//    *base = activeMapping.base;
+//    *count = activeMapping.count;
+//
+//    laik_log(LAIK_LL_Debug, "Preparing buffer for %" PRIu64 " elements of size %i (%" PRIu64 ")\n", *count, data->elemsize,
+//             *backupCount);
+//    assert(*count == *backupCount);
+//}
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
     laik_log_begin(LAIK_LL_Debug);
@@ -152,8 +152,8 @@ void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning
     int numberMyMappings = laik_my_mapcount(partitioning);
     laik_log(LAIK_LL_Debug, "Copying %i data mappings", numberMyMappings);
     for (int mappingNumber = 0; mappingNumber < numberMyMappings; ++mappingNumber) {
-        Laik_Mapping *sourceMapping = laik_map(sourceData, mappingNumber, 0);
-        Laik_Mapping *targetMapping = laik_map(targetData, mappingNumber, 0);
+        Laik_Mapping *sourceMapping = laik_get_map(sourceData, mappingNumber);
+        Laik_Mapping *targetMapping = laik_get_map(targetData, mappingNumber);
 
         bufCopy(sourceMapping, targetMapping);
     }

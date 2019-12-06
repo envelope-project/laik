@@ -155,6 +155,7 @@ Additional BSD Notice
 #include <sys/time.h>
 #include <iostream>
 #include <unistd.h>
+#include <assert.h>
 
 #if _OPENMP
 # include <omp.h>
@@ -2907,7 +2908,8 @@ int main(int argc, char *argv[]) {
     laik_switchto_partitioning(laikDt, allPartitioning, LAIK_DF_Init, LAIK_RO_Min);
     uint64_t dt_count;
     double *dt_base;
-    laik_map_def1(laikDt, (void **) &dt_base, &dt_count);
+    assert(laik_my_slicecount(laik_data_get_partitioning(laikDt)) == 1);
+    laik_get_map_1d(laikDt, 0, (void **) &dt_base, &dt_count);
 
     // Build the main data structure and initialize it
     // pass the laik_inst and laik_world and partitionings
@@ -3087,7 +3089,8 @@ int main(int argc, char *argv[]) {
                 // repartition and geting the base pointer for only for dt
                 laik_switchto_partitioning(laikDt, allPartitioning2, LAIK_DF_None, LAIK_RO_Min);
                 laik_switchto_partitioning(laikDt, allPartitioning2, LAIK_DF_Preserve, LAIK_RO_Min);
-                laik_map_def1(laikDt, (void **) &dt_base, &dt_count);
+                assert(laik_my_slicecount(laik_data_get_partitioning(laikDt)) == 1);
+                laik_get_map_1d(laikDt, 0, (void **) &dt_base, &dt_count);
 
                 // update the working process group in codes
                 world = shrinked_group;
@@ -3259,7 +3262,8 @@ double laik_reduce(double input, Int_t myRank, Laik_Data *laikTimer, Laik_Partit
     double* buffer;
     uint64_t count;
     laik_switchto_partitioning(laikTimer, all, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(laikTimer, reinterpret_cast<void **>(&buffer), &count);
+    assert(laik_my_slicecount(laik_data_get_partitioning(laikTimer)) == 1);
+    laik_get_map_1d(laikTimer, 0, reinterpret_cast<void **>(&buffer), &count);
     if(count != 1) {
         std::cerr << "Laik reduce received incorrect partitioning size\n" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, -1);
@@ -3267,7 +3271,8 @@ double laik_reduce(double input, Int_t myRank, Laik_Data *laikTimer, Laik_Partit
     buffer[0] = input;
     laik_switchto_partitioning(laikTimer, master, LAIK_DF_Preserve, LAIK_RO_Max);
     if(myRank == 0) {
-        laik_map_def1(laikTimer, reinterpret_cast<void **>(buffer), &count);
+        assert(laik_my_slicecount(laik_data_get_partitioning(laikTimer)) == 1);
+        laik_get_map_1d(laikTimer, 0, reinterpret_cast<void **>(buffer), &count);
         if(count != 1) {
             std::cerr << "Laik reduce received incorrect partitioning size\n" << std::endl;
             MPI_Abort(MPI_COMM_WORLD, -1);

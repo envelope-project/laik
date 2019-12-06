@@ -13,15 +13,15 @@
 
 void writeDataToFile(char *fileNamePrefix, char *fileNameExtension, Laik_Data *data) {
     char debugOutputFileName[1024];
-    snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, data->space->inst->myid,
+    snprintf(debugOutputFileName, sizeof(debugOutputFileName), "%s%i%s", fileNamePrefix, data->space->inst->mylocationid,
              fileNameExtension);
 
     FILE *myOutput;
     myOutput = fopen(debugOutputFileName, "wb");
     assert(myOutput);
-    assert(data->activeMappings->count == 1);
 
-    Laik_Mapping* mapping = laik_map_def1(data, NULL, NULL);
+    assert(data->activeMappings->count == 1);
+    Laik_Mapping* mapping = laik_get_map(data, 0);
     double *base = (double *) mapping->base;
     uint64_t dim0Size = mapping->size[0];
     uint64_t dim1Size = mapping->size[1];
@@ -71,7 +71,7 @@ writeColorDataToFile(char *fileNameExtension, Laik_Data *data, Laik_Partitioning
                      unsigned char colors[][3], bool binaryPPM, bool suppressRank, char *fileNamePrefix,
                      double minValue, double maxValue) {
     char debugOutputFileName[1024];
-    int myid = data->space->inst->myid;
+    int myid = data->space->inst->mylocationid;
     if(suppressRank) {
         myid = 0;
     }
@@ -83,9 +83,9 @@ writeColorDataToFile(char *fileNameExtension, Laik_Data *data, Laik_Partitioning
     FILE *myOutput;
     myOutput = fopen(debugOutputFileName, "wb");
     assert(myOutput);
-    assert(data->activeMappings->count == 1);
 
-    Laik_Mapping* mapping = laik_map_def1(data, NULL, NULL);
+    assert(data->activeMappings->count == 1);
+    Laik_Mapping* mapping = laik_get_map(data, 0);
     double *base = (double *) mapping->base;
     uint64_t dim0Size = mapping->size[0];
     uint64_t dim1Size = mapping->size[1];

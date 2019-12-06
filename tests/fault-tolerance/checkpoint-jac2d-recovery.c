@@ -95,7 +95,8 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
     // default mapping order for 2d:
     //   with y in [0;ysize[, x in [0;xsize[
     //   base[y][x] is at (base + y * ystride + x)
-    laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
+    assert(laik_my_mapcount(laik_data_get_partitioning(dWrite)) == 1);
+    laik_get_map_2d(dWrite, 0, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
     // set fixed boundary values at the 4 edges
     if (gy1 == 0) {
@@ -120,7 +121,7 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
     }
 
     //Center point
-    int64_t lx, ly;
+//    int64_t lx, ly;
 //    if (laik_global2local_2d(dWrite, size / 2, size / 2, &lx, &ly) != NULL) {
 //        baseW[ly * ystrideW + lx] = centerValue;
 //    }
@@ -295,7 +296,8 @@ int main(int argc, char *argv[]) {
     // default mapping order for 2d:
     //   with y in [0;ysize], x in [0;xsize[
     //   base[y][x] is at (base + y * ystride + x)
-    laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
+    assert(laik_my_mapcount(laik_data_get_partitioning(dWrite)) == 1);
+    laik_get_map_2d(dWrite, 0, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
     initialize_write_arbitrary_values(baseW, ysizeW, ystrideW, xsizeW, gx1, gy1);
 
     int iter = 0;
@@ -350,7 +352,8 @@ int main(int argc, char *argv[]) {
 
                 double* sumClear = NULL;
                 uint64_t count = 0;
-                laik_map_def1(dSum, (void **) &sumClear, &count);
+                assert(laik_my_mapcount(laik_data_get_partitioning(dSum)) == 1);
+                laik_get_map_1d(dSum, 0, (void **) &sumClear, &count);
                 assert(sumClear && count == 1);
                 *sumClear = 0;
 
@@ -423,8 +426,10 @@ int main(int argc, char *argv[]) {
         laik_switchto_partitioning(dRead, pRead, LAIK_DF_Preserve, LAIK_RO_None);
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
 //        TPRINTF("Switched partitionings\n");
-        laik_map_def1_2d(dRead, (void **) &baseR, &ysizeR, &ystrideR, &xsizeR);
-        laik_map_def1_2d(dWrite, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
+        assert(laik_my_slicecount(laik_data_get_partitioning(dRead)) == 1);
+        laik_get_map_2d(dRead, 0, (void **) &baseR, &ysizeR, &ystrideR, &xsizeR);
+        assert(laik_my_slicecount(laik_data_get_partitioning(dWrite)) == 1);
+        laik_get_map_2d(dWrite, 0, (void **) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
 
 
@@ -477,7 +482,8 @@ void doSumIfRequested(bool do_sum, double **baseW, uint64_t *ysizeW, uint64_t *y
 
         if (laik_myid(activeGroup) == 0) {
             double sum = 0.0;
-            laik_map_def1_2d(dWrite, (void**) baseW, ysizeW, ystrideW, xsizeW);
+            assert(laik_my_slicecount(laik_data_get_partitioning(dWrite)) == 1);
+            laik_get_map_2d(dWrite, 0, (void**) baseW, ysizeW, ystrideW, xsizeW);
             for(uint64_t y = 0; y < (*ysizeW); y++)
                 for(uint64_t x = 0; x < (*xsizeW); x++)
                     sum += (*baseW)[y * (*ystrideW) + x];
@@ -582,11 +588,13 @@ double calculateGlobalResiduum(double localResiduum) {// calculate global residu
     double* sumPtr = NULL;
     uint64_t count = 0;
     laik_switchto_flow(dSum, LAIK_DF_None, LAIK_RO_None);
-    laik_map_def1(dSum, (void **) &sumPtr, &count);
+    assert(laik_my_slicecount(laik_data_get_partitioning(dSum)) == 1);
+    laik_get_map_1d(dSum, 0, (void **) &sumPtr, &count);
     assert(sumPtr != NULL && count == 1);
     *sumPtr = localResiduum;
     laik_switchto_flow(dSum, LAIK_DF_Preserve, LAIK_RO_Sum);
-    laik_map_def1(dSum, (void **) &sumPtr, &count);
+    assert(laik_my_slicecount(laik_data_get_partitioning(dSum)) == 1);
+    laik_get_map_1d(dSum, 0, (void **) &sumPtr, &count);
     assert(sumPtr != NULL && count == 1);
 
     return *sumPtr;
