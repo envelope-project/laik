@@ -33,6 +33,20 @@ case "$1" in
   "himmuc-sh")
     ssh bodev@himmuc.caps.in.tum.de
   ;;
+  "maimuc-sh")
+    ssh -J bodev@himmuc.caps.in.tum.de login@maimuc.caps.in.tum.de
+  ;;
+  "maimuc-live")
+    while true
+    do
+      rsync -av -e "ssh -J bodev@himmuc.caps.in.tum.de login@maimuc.caps.in.tum.de ssh " pi@mai00:~/ga26poh/laik/output/data_live_0_0.ppm ./output/
+#      rsync -av pi@mai00:~/ga26poh/laik/output/data_live_0_0.ppm ./output/
+      sleep 1
+    done
+  ;;
+  "maimuc-remote-vis")
+    xopen "$(which ssh)" -v -C -Y -J bodev@himmuc.caps.in.tum.de login@maimuc.caps.in.tum.de bash -c \'DISPLAY=:0 python3 /home/pi/ga26poh/laik/laik_experiments/visualizer.py sleep 10000\'
+  ;;
   "maimuc-sync-data")
     for i in 0 1 3 4 5 6 7 8 9
     do
@@ -63,9 +77,15 @@ case "$1" in
     ;;
   "maimuc-compile-and-sync")
     cd cmake-build-debug_wsl || exit
-    make checkpoint-jac2d-recovery
+    rm -r CMakeCache.txt CMakeFiles/ cmake_install.cmake
+    CC=$(which gcc)
+    CXX=$(which g++)
+    export CC
+    export CXX
+    cmake -DCMAKE_SYSTEM_PREFIX_PATH=~/ga26poh/lib/ulfm/ -DMPI_C_COMPILER=~/ga26poh/lib/ulfm/bin/mpicc -DMPI_CXX_COMPILER=~/ga26poh/lib/ulfm/bin/mpicxx ../ || exit
+    make checkpoint-jac2d-recovery || exit
     cd .. || exit
-    ./supermuc_tools.sh maimuc-sync-data
+    ./supermuc_tools.sh maimuc-sync-data || exit
     ;;
   *)
     echo "Unrecognized: $1"

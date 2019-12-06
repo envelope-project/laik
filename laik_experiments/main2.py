@@ -124,18 +124,65 @@ def draw_runtime_boxplot(file_pattern="experiment_runtime_time_mpi_{0}_{1}_trace
 
     boxPlot(data, title, 'Runtime (s)', pdf, postProcess=postProcess)
 
+def draw_runtime_boxplot_2(file_pattern="experiment_runtime_time_mpi_{0}_{1}_trace.csv",
+                           file_pattern_2="",
+                         title='Original Runtime of Benchmarks', csv='graphs/original-runtime-stats.csv',
+                         pdf='graphs/original-runtime.pdf',
+                         time_column='TIME',
+                         evaluation_function=calculate_runtime,
+                         scatter=False):
+    osu = []
+    jac2d = []
+    lulesh = []
+    osu2 = []
+    jac2d2 = []
+    lulesh2 = []
+    scatterData = pd.DataFrame(columns=['x', 'y', 'numfails'])
 
-def evaluateData(name, evaluation_function, file_pattern, experiment, data, time_column, scatterData : pd.DataFrame):
+    for experiment in range(0, TEST_MAX):
+        evaluateData("osu", evaluation_function, file_pattern, experiment, osu, time_column, scatterData)
+        evaluateData("jac2d", evaluation_function, file_pattern, experiment, jac2d, time_column, scatterData)
+        evaluateData("lulesh", evaluation_function, file_pattern, experiment, lulesh, time_column, scatterData)
+
+    for experiment in range(0, TEST_MAX):
+        evaluateData("osu", evaluation_function, file_pattern_2, experiment, osu2, time_column, scatterData, xVal=4)
+        evaluateData("jac2d", evaluation_function, file_pattern_2, experiment, jac2d2, time_column, scatterData, xVal=5)
+        # evaluateData("lulesh", evaluation_function, file_pattern, experiment, lulesh2, time_column, scatterData)
+
+    data = [osu, jac2d, lulesh, osu2, jac2d2, lulesh2]
+    # export_stats(osu, jac2d, lulesh, csv)
+
+    def postProcess(ax: plt.Axes):
+        if scatter:
+            # ax.get_figure().set_size_inches(6, 2.5)
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0, box.width * 1.0, box.height])
+            scatters = []
+            scatterLabels = []
+            unique = scatterData['numfails'].unique()
+            unique.sort()
+            colors=['green', 'blue', 'orange', 'red', 'purple']
+            for i in unique:
+                row = scatterData[scatterData['numfails'] == i]
+                scatters.append(ax.scatter(row['x'] + 0.4, row['y'], c=colors[int(i)]))
+                scatterLabels.append('{} failures'.format(int(i)))
+            plt.legend(scatters, scatterLabels, loc='center left', bbox_to_anchor=(1, 0.5))
+
+    boxPlot(data, title, 'Runtime (s)', pdf, postProcess=postProcess, figsize=(7, 2.5), xTickLabels=["OSU", "Jac2D", "LULESH", "OSU-FT", "Jac2D-FT", "LULESH-FT"])
+
+
+
+def evaluateData(name, evaluation_function, file_pattern, experiment, data, time_column, scatterData : pd.DataFrame, xVal = -1):
     experimentData = load_experiment(file_pattern.format(name, experiment))
     value = evaluation_function(experimentData, time_column)
     data.append(value)
-    xVal = 0
-    if name == 'osu':
-        xVal = 1
-    elif name == 'jac2d':
-        xVal = 2
-    elif name == 'lulesh':
-        xVal = 3
+    if xVal == -1:
+        if name == 'osu':
+            xVal = 1
+        elif name == 'jac2d':
+            xVal = 2
+        elif name == 'lulesh':
+            xVal = 3
     scatterData.loc[len(scatterData.index)] = [xVal, value, count_failures(experimentData)]
 
 
@@ -144,7 +191,7 @@ def count_failures(experimentData):
 
 
 def draw_scaling_runtime_boxplot(file_pattern, title, csv, pdf, pdf2, time_column='TIME',
-                                 evaluation_function=calculate_runtime, num_processes=None, include_log_graph=False, suppress_expected=False):
+                                 evaluation_function=calculate_runtime, num_processes=None, include_log_graph=False, suppress_expected=False, suppress_weak_expected=True):
     if num_processes is None:
         num_processes = [6, 12, 24, 48, 96, 192, 384]
     data = []
@@ -157,10 +204,18 @@ def draw_scaling_runtime_boxplot(file_pattern, title, csv, pdf, pdf2, time_colum
     def plotExpected():
         startVal = 3900
         data = [startVal / 3]
+        data2 = [startVal / (30 * np.power(3, 0.15))]
         for i in num_processes:
             data.append(startVal / i)
+            data2.append(startVal / (30 * np.power(i, 0.15)))
         if not suppress_expected:
             plt.plot(data)
+            plt.plot(data2)
+        if not suppress_weak_expected:
+            print('Axhline')
+            plt.plot([0.5, 4.5], [80, 80])
+            plt.plot([4.5, 8.5], [110, 110])
+        plt.xlabel('Number of processes')
 
     def plotExpectedLogScale():
         plotExpected()
@@ -391,13 +446,13 @@ def draw_network_plot():
     fig.savefig('graphs/demo-net.pdf', format='pdf')
 
 
-def boxPlot(data, title, y_label, export, xTickLabels=None, postProcess=None, ylim=None):
+def boxPlot(data, title, y_label, export, xTickLabels=None, postProcess=None, ylim=None, figsize=(4, 2.5)):
     if ylim is None:
         ylim = [0, None]
     if xTickLabels is None:
         xTickLabels = ['OSU', 'Jacobi', 'LULESH']
 
-    fig, ax = plt.subplots(figsize=(4, 2.5))
+    fig, ax = plt.subplots(figsize=figsize)
     ax.boxplot(data)
     ax.set_ylim(ylim)
     ax.set_title(title)
@@ -422,6 +477,17 @@ def draw_jac2d_example():
     fig.suptitle('Iterations of the Jacobi 2D Heat Diffusion Simulation')
     plt.show()
     fig.savefig('graphs/jac2d-example.pdf', format='pdf')
+
+
+def draw_jac2d_example_2():
+    # plt.subplots_adjust(left=0.125, right=0.9, top=0.9, bottom=0.0, wspace=0.1, hspace=0.0)
+    for i in range(5):
+        fig = plt.figure(figsize=(2, 2))
+        ax = plt.gca()
+        ax.imshow(load_visualization('data/jac2d-example/data_dW_{0}_0.ppm'.format(i * 5)), origin='lower')
+        ax.set_title('Iter {0}'.format(i * 5))
+        plt.show()
+        fig.savefig('graphs/jac2d-example-iter-{0}.pdf'.format(i), format='pdf')
 
 
 def calculate_restore_barchart(data: pd.DataFrame):
@@ -534,24 +600,34 @@ TEST_MAX=10
 #                      time_column='TIME',
 #                      evaluation_function=calculate_runtime,
 #                      include_log_graph=True)
+#
+# TEST_MAX=3
+# draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_weak_jac2d_{0}_{1}_trace.csv',
+#                      title='Weak Scaling Test (Jac2D Benchmark)',
+#                      csv='graphs/scaling-weak-jac2d-stats.csv',
+#                      pdf='graphs/scaling-weak-jac2d.pdf',
+#                      pdf2='graphs/scaling-jac2d-log.pdf',
+#                      time_column='TIME',
+#                      evaluation_function=calculate_runtime,
+#                      num_processes=[6, 12, 24, 48, 96, 192, 384, 768],
+#                      suppress_expected=True,
+#                      suppress_weak_expected=False)
 
-TEST_MAX=3
-draw_scaling_runtime_boxplot(file_pattern='experiment_mpi_scale_weak_jac2d_{0}_{1}_trace.csv',
-                     title='Weak Scaling Test (Jac2D Benchmark)',
-                     csv='graphs/scaling-weak-jac2d-stats.csv',
-                     pdf='graphs/scaling-weak-jac2d.pdf',
-                     pdf2='graphs/scaling-jac2d-log.pdf',
-                     time_column='TIME',
-                     evaluation_function=calculate_runtime,
-                     num_processes=[6, 12, 24, 48, 96, 192, 384, 768],
-                     suppress_expected=True)
-
+draw_runtime_boxplot_2(
+                     file_pattern="experiment_restart_time_to_solution_mpi_{0}_{1}_trace.csv",
+                     file_pattern_2='experiment_checkpoint_time_to_solution_mpi_{0}_{1}_trace.csv',
+                     title='Measured Time to Solution',
+                     csv='graphs/checkpoint-time-to-solution-stats.csv',
+                     pdf='graphs/checkpoint-time-to-solution.pdf',
+                     time_column='WALLTIME',
+                     scatter=True)
 
 # draw_memory_plot_2()
 # draw_memory_plot_3(file_pattern='demo_mem/mem{0}-late.csv', pdf='graphs/demo-mem-late.pdf')
 # draw_network_plot()
 
 # draw_jac2d_example()
+# draw_jac2d_example_2()
 
 
 def draw_distribution_cutoff():
