@@ -1207,11 +1207,7 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
     int err;
     MPI_Comm oldComm = ((MPIGroupData *) oldGroup->backend_data)->comm;
 
-    // We still need the old communicator to recover the checkpoints, don't invalidate it.
-//    err = MPIX_Comm_revoke(oldComm);
-//    if(err != MPI_SUCCESS) {
-//        laik_mpi_panic(err);
-//    }
+    // We still need the old communicator to recover the checkpoints, don't invalidate it just yet.
 
     MPIGroupData* gd = (MPIGroupData*) newGroup->backend_data;
     assert(gd == 0); // must not be updated yet
@@ -1238,7 +1234,7 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
         assert(0);
     }
 #else
-    laik_log(LAIK_LL_Panic, "Application tried to perform a eliminate nodes but no fault tolerance capability was built.");
+    laik_log(LAIK_LL_Panic, "Application tried to eliminate nodes but no fault tolerance capability was built.");
 #endif
 }
 
@@ -1248,68 +1244,8 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
 
     laik_log(LAIK_LL_Debug, "Starting agreement protocol\n");
 
-//    // Make sure my position fits into the integer
-//    assert((unsigned long) group->myid < sizeof(int) * 8);
-//    int status = 1U << group->myid;
-//    MPIX_Comm_agree(((MPIGroupData*)group->backend_data)->comm, &status);
-//
-//    int numFailed = 0;
-//    for (int i = 0; i < group->size; ++i) {
-//        bool hasFailed = (status & (1U << i)) > 0;
-//        if(hasFailed) {
-//            nodeStatuses[i] = LAIK_FT_NODE_FAULT;
-//            numFailed++;
-//        } else {
-//            nodeStatuses[i] = LAIK_FT_NODE_OK;
-//        }
-//    }
-//    return numFailed;
-
 
     MPI_Comm originalComm = ((MPIGroupData *) group->backend_data)->comm;
-//    MPI_Comm testComm;
-//    MPI_Group checkGroup, originalGroup, shrinkedGroup;
-//
-//    MPIX_Comm_shrink(originalComm, &testComm);
-//
-//    MPI_Comm_group(originalComm, &originalGroup);
-//    MPI_Comm_group(testComm, &shrinkedGroup);
-//    MPI_Comm_group(MPI_COMM_WORLD, &checkGroup);
-//
-//    MPI_Group difference;
-//
-//    MPI_Group_difference(originalGroup, shrinkedGroup, &difference);
-//
-//    int n = -1;
-//    MPI_Group_size(shrinkedGroup, &n);
-//    int ranks[n];
-//    int checkGroupRanks[n];
-//
-//    laik_log(LAIK_LL_Warning, "Shrinked MPI_Group size is %i", n);
-//
-//    for (int i = 0; i < n; ++i) {
-//        ranks[i] = i;
-//    }
-//
-//    MPI_Group_translate_ranks(shrinkedGroup, n, ranks, checkGroup, checkGroupRanks);
-//
-//    if(nodeStatuses != NULL) {
-//        for (int i = 0; i < group->size; ++i) {
-//            nodeStatuses[i] = LAIK_FT_NODE_FAULT;
-//        }
-//
-//        for (int i = 0; i < n; ++i) {
-//            nodeStatuses[checkGroupRanks[i]] = LAIK_FT_NODE_OK;
-//        }
-//    }
-//
-//    MPI_Group_free(&originalGroup);
-//    MPI_Group_free(&shrinkedGroup);
-//    MPI_Group_free(&checkGroup);
-//
-//    MPI_Comm_free(&testComm);
-
-//    return group->size - n;
 
     int result;
     int reduceFlag = 1;
@@ -1334,7 +1270,7 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
         ranks[i] = i;
     }
 
-    // WARNING: Different from above, this group contains only failed ones, not the survivors
+    // WARNING: Different from old implementation, this group contains only failed ones, not the survivors
     MPI_Group_translate_ranks(failedGroup, n, ranks, checkGroup, checkGroupRanks);
     if (nodeStatuses != NULL) {
         for (int i = 0; i < group->size; ++i) {
@@ -1351,7 +1287,10 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
     MPI_Group_free(&checkGroup);
     return n;
 #else
-    laik_log(LAIK_LL_Panic, "Application tried to perform a status check but no fault tolerance capability was built.");
+    laik_log(LAIK_LL_Warning, "Application tried to perform a status check but no fault tolerance capability was built. Will assume that all nodes are reachable.");
+    for (int i = 0; i < laik_size(group); ++i) {
+        nodeStatuses[i] = LAIK_FT_NODE_OK;
+    }
 #endif
 }
 
