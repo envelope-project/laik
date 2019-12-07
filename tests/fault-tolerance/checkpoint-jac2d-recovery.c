@@ -54,10 +54,8 @@ unsigned char colors[][3] = {
 };
 
 // boundary values
-double loRowValue = -10.0, hiRowValue = -10.0;
-double loColValue = -10.0, hiColValue = -10.0;
-double centerValue = 10.0;
-double initVal = 0.1;
+double loRowValue = -5.0, hiRowValue = 10.0;
+double loColValue = -10.0, hiColValue = 5.0;
 
 int restoreIteration = -1;
 int dataFileCounter = 0;
@@ -136,7 +134,7 @@ void setBoundary(int size, int iteration, Laik_Partitioning *pWrite, Laik_Data *
 //    }
 
     (void)iteration;
-//    // Create a spinning dot
+//    // Create a spinning dot, portable heat source
 //    double angle = 0.3 * iteration;
 //    int64_t xOffset = (int64_t) (cos(angle) * (size / 4.0) + (size / 2.0));
 //    int64_t yOffset = (int64_t) (sin(angle) * (size / 4.0) + (size / 2.0));
@@ -459,7 +457,7 @@ int main(int argc, char *argv[]) {
             if(laik_myid(world) == 0) {
                 int iterClone = iter;
                 (void)globalResiduum;
-                printf("Residuum after %d iters: %f\n", iterClone + 1, globalResiduum);
+                printf("Residuum after %2d iters: %f\n", iterClone + 1, globalResiduum);
             }
         }
     }

@@ -87,8 +87,9 @@ bool parseFaultToleranceOptions(int argc, char **argv, int *arg, int rank, Fault
 void exitIfFailureIteration(int iter, FaultToleranceOptions* faultToleranceOptions, Laik_Instance* inst) {
     if (iter == faultToleranceOptions->failIteration) {
         TRACE_EVENT_S("FAILURE-GENERATE", "");
-        printf("Oops. Process with rank %i did something silly on iteration %i. Aborting!\n", laik_myid(laik_world(inst)),
+        laik_log(LAIK_LL_Warning,
+                "Process with rank %i now exiting on iteration %i.\n", laik_myid(laik_world(inst)),
                 iter);
-        abort();
+        exit(0);
     }
 }
