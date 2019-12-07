@@ -102,53 +102,7 @@ int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup
 }
 
 int laik_failure_eliminate_nodes(Laik_Instance *instance, int count, int *nodeStatuses) {
-    (void) instance;
     (void) count;
-    (void) nodeStatuses;
-//    Laik_Group* world = laik_world(instance);
-//    laik_log(LAIK_LL_Info, "Attempting to eliminate %d failed nodes (world size from %d to %d)", count, world->size, world->size - count);
-//    world->size -= count;
-//    instance->size -= count;
-//    int shiftCounter = 0;
-//
-//    for(int i = 0; i < count; i++) {
-//        int nodeToRemove = (*nodesToRemove)[i];
-//
-//        assert(nodeToRemove != world->myid);
-//        if(nodeToRemove < world->myid) {
-//            shiftCounter++;
-//        }
-//    }
-//
-//    world->myid -= shiftCounter;
-//
-//    // Only TCP backend supported for now
-//    //Fixme: Its strcmp
-//    assert(strcmp(instance->backend->name, "TCP Backend") == 0);
-//    unsigned char* backendData = (unsigned char*)world->backend_data;
-//    TCPGroupData* backendGroupData = tcpGroupData(world);
-//    MPI_Comm communicator = backendGroupData->comm;
-//    GArray tasks = communicator->tasks;
-//
-//    //Fixme: Its a hack
-//    //Adjust the mappings into the backend ranks
-////    GArray* tasks = (GArray*)backendData;
-//    shiftCounter = 0;
-//    unsigned int inCounter = 0;
-//    for(int i = 0; i < world-> size + count; i++) {
-//        g_array_index(tasks, size_t, i - shiftCounter) = i;
-//        laik_log(LAIK_LL_Info, "TCP mapping rank %d now points to %d", i - shiftCounter, i);
-//        if((*nodesToRemove)[inCounter] == (unsigned int)i) {
-//            shiftCounter++;
-//            inCounter++;
-//        }
-//    }
-//
-//    backendData += sizeof(GArray*);
-//    // Backend data now points to our own rank in the backend
-//    *((size_t *)backendData) = world->myid;
-//
-//    laik_log(LAIK_LL_Info, "Changed own rank to %d", world->myid);
 
     Laik_Group *currentWorld = laik_world_fault_tolerant(instance);
 

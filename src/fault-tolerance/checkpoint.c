@@ -7,14 +7,7 @@
 #include <string.h>
 #include <inttypes.h>
 
-#define SLICE_ROTATE_DISTANCE 1
-
 Laik_Checkpoint *initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data);
-
-void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
-                 uint64_t *count, void **backupBase, uint64_t *backupCount);
-
-laik_run_partitioner_t wrapPartitionerRun(const Laik_Partitioner *currentPartitioner);
 
 Laik_Partitioner *
 create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance,
@@ -35,13 +28,6 @@ Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
 
     checkpoint = initCheckpoint(laikInstance, space, data);
 
-//    void *base, *backupBase;
-//    uint64_t count, backupCount;
-//    initBuffers(laikInstance, &checkpoint, data, &base, &count, &backupBase, &backupCount);
-//
-//    uint64_t data_length = backupCount * data->elemsize;
-//    laik_log(LAIK_LL_Debug, "Checkpoint buffers allocated, copying data of size %lu\n", data_length);
-//    memcpy(backupBase, base, data_length);
     migrateData(data, checkpoint->data, data->activePartitioning);
 
     if (backupGroup == NULL) {
@@ -66,12 +52,6 @@ Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space 
         currentPartitioning = NULL;
     }
     Laik_Partitioning *partitioning = laik_new_partitioning(backupPartitioner, backupGroup, space, currentPartitioning);
-//    Laik_SliceArray *sliceArray = partitioning->saList->slices;
-//    assert(partitioning && sliceArray);
-//    for(unsigned int i = 0; i < sliceArray->count; i++) {
-//        Laik_TaskSlice_Gen taskSliceGen = sliceArray->tslice[i];
-//        sliceArray->tslice[i].task = (sliceArray->tslice[i].task + 1) % backupGroup->size;
-//    }
     partitioning->name = "Backup partitioning";
 
     laik_switchto_partitioning(checkpoint->data, partitioning, LAIK_DF_Preserve, reductionOperation);
@@ -94,45 +74,15 @@ laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint
     laik_log(LAIK_LL_Info, "Checkpoint restore requested at iteration %i for space %s data %s\n", iteration,
              space->name, data->name);
 
-//    void *base, *backupBase;
-//    uint64_t count, backupCount;
-
-
     assert(checkpoint->space);
     assert(checkpoint->data);
-
     assert(laik_space_size(space) == laik_space_size(checkpoint->space));
-//    initBuffers(laikInstance, checkpoint, data, &base, &count, &backupBase, &backupCount);
-//
-//    memcpy(base, backupBase, backupCount * data->elemsize);
+
     migrateData(checkpoint->data, data, data->activePartitioning);
 
     laik_log(LAIK_LL_Info, "Checkpoint restore completed at iteration %i for space %s data %s\n", iteration,
              space->name, data->name);
 }
-
-//void initBuffers(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, const Laik_Data *data, void **base,
-//                 uint64_t *count, void **backupBase, uint64_t *backupCount) {
-//    // TODO: Temporarily unused
-//    (void) laikInstance;
-////    Laik_Partitioner *backupPartitioner = data->activePartitioning->;
-//    assert(data);
-//    Laik_Partitioning *backupPartitioning = data->activePartitioning;
-//    assert(backupPartitioning);
-//
-//    laik_log(LAIK_LL_Debug, "Switching checkpoint buffers to target active partitioning %s", backupPartitioning->name);
-//    laik_switchto_partitioning(checkpoint->data, backupPartitioning, LAIK_DF_None, LAIK_RO_None);
-//    laik_map_def1(checkpoint->data, backupBase, backupCount);
-//
-//    assert(data->activeMappings->count == 1);
-//    Laik_Mapping activeMapping = data->activeMappings->map[0];
-//    *base = activeMapping.base;
-//    *count = activeMapping.count;
-//
-//    laik_log(LAIK_LL_Debug, "Preparing buffer for %" PRIu64 " elements of size %i (%" PRIu64 ")\n", *count, data->elemsize,
-//             *backupCount);
-//    assert(*count == *backupCount);
-//}
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
     laik_log_begin(LAIK_LL_Debug);
@@ -197,15 +147,12 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
 Laik_Checkpoint *initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data) {
     //TODO: Temporarily unused
     (void) laikInstance;
-    (void) data;
 
     Laik_Checkpoint *checkpoint = malloc(sizeof(Laik_Checkpoint));
     if (checkpoint == NULL) {
         laik_panic("Out of memory allocating checkpoint!");
         assert(0);
     }
-//    (*checkpoint).space = laik_new_space_1d(laikInstance, laik_space_size(space) * data->elemsize);
-//    laik_set_space_name((*checkpoint).space, "checkpoint");
     checkpoint->space = space;
 
     checkpoint->data = laik_new_data((*checkpoint).space, data->type);
@@ -230,37 +177,8 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
             .other = params->other,
             .partitioner = originalPartitioner
     };
-//    Laik_Group modifiedGroup;
-//
-//    // Change the original laik group rotating all ids by 1
-//    // This should cause data to be switched to the neighbor
-//    memcpy(&modifiedGroup, params->group, sizeof(Laik_Group));
-//    modifiedGroup.myid = (modifiedGroup.myid + 1) % modifiedGroup.size;
-//
-//    laik_log(LAIK_LL_Debug, "wrap partitioner: modifying group of size %i, old id %i to new id %i", modifiedGroup.size,
-//             params->group->myid, modifiedGroup.myid);
-//
-//    modifiedParams.partitioner = originalPartitioner;
-////    modifiedParams.group = &modifiedGroup;
-//    modifiedParams.group = params->group;
-//    modifiedParams.other = params->other;
-//    modifiedParams.space = params->space;
 
     originalPartitioner->run(receiver, &modifiedParams);
-
-//    laik_log(LAIK_LL_Debug, "wrap partitioner: rotating slice array of size %i by %i. Number mappings: %i.",
-//             receiver->array->count, SLICE_ROTATE_DISTANCE, receiver->array->map_count);
-//
-//    //Currently, only distance 1 supported
-//    static_assert(SLICE_ROTATE_DISTANCE == 1, "");
-//    Laik_TaskSlice_Gen temp;
-//    //Save first element in temp
-//    memcpy(&temp, &(receiver->array->tslice[0]), sizeof(Laik_TaskSlice_Gen));
-//    for(unsigned int i = 0; i < receiver->array->count - 1; i++) {
-//        //Copy each element to the left
-//        memcpy(&(receiver->array->tslice[i]), &(receiver->array->tslice[i+1]), sizeof(Laik_TaskSlice_Gen));
-//    }
-//    memcpy(&(receiver->array->tslice[receiver->array->count - 1]), &temp, sizeof(Laik_TaskSlice_Gen));
 
     // Duplicate slices to neighbor. Make sure to duplicate only the original ones, and not the ones we add in the
     // process
@@ -276,7 +194,9 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
                 laik_log_begin(LAIK_LL_Panic);
                 laik_log_append("A checkpoint slice (");
                 laik_log_Slice(&duplicateSlice.s);
-                laik_log_append(") and one of its redundant copies are being placed on the same task with id %i. This means that redundancy is incorrectly configured. Please adjust redundancy count and rotation distance.", taskId);
+                laik_log_append(") and one of its redundant copies are being placed on the same task with id %i. "
+                                "This means that redundancy is incorrectly configured. "
+                                "Please adjust redundancy count and rotation distance.", taskId);
                 laik_log_flush("");
             }
             laik_append_slice(receiver, taskId, &duplicateSlice.s, tag, duplicateSlice.data);
@@ -284,16 +204,6 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
     }
 }
 
-//void run_single_copy_backup(Laik_SliceReceiver* receiver, Laik_PartitionerParams params) {
-//    params.partitioner->data
-//    receiver->
-//}
-
-//void laik_create_backup_partitioning(Laik_Partitioning* currentPartitioning) {
-//    SliceArray_Entry* entry = currentPartitioning->saList;
-//    assert(entry->info == LAIK_AI_FULL);
-//    entry->slices->tslice->s
-//}
 
 
 Laik_Partitioner *
