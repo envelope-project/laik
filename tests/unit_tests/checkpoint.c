@@ -10,8 +10,8 @@
 #include <string.h>
 #include <laik-internal.h>
 #include <assert.h>
-#include "../fault-tolerance/fault_tolerance_test.h"
-#include "../fault-tolerance/fault_tolerance_test_hash.h"
+#include "../../examples/fault-tolerance/fault_tolerance_test.h"
+#include "../../examples/fault-tolerance/fault_tolerance_test_hash.h"
 
 
 Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData);

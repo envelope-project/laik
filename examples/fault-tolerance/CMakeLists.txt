@@ -19,8 +19,8 @@ endforeach ()
 
 
 foreach(integration_test
-        "test-jac2d-1000-ft.sh"
-        "test-lulesh-ft.sh" )
+        "../../tests/fault-tolerance/test-jac2d-1000-ft.sh"
+        "../../tests/fault-tolerance/test-lulesh-ft.sh" )
 
-    add_test(NAME ${integration_test} COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/${integration_test}" "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
+    add_test(NAME ${integration_test} COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/${integration_test}" "../../tests/fault-tolerance" "${CMAKE_CURRENT_BINARY_DIR}")
 endforeach()

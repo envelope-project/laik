@@ -36,7 +36,7 @@ foreach (test
             PRIVATE "mpi"
             )
 
-    set_source_files_properties( osu_util.c PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter" )
-    set_source_files_properties( osu_util_mpi.c PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter" )
+    set_source_files_properties(osu_util.c PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter" )
+    set_source_files_properties(osu_util_mpi.c PROPERTIES COMPILE_FLAGS "-Wno-error=implicit-fallthrough -Wno-error=unused-parameter -Wno-error=unused-but-set-parameter" )
 
 endforeach ()
