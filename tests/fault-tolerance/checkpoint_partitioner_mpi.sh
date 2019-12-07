@@ -1,1 +1,0 @@
-LAIK_BACKEND=mpi ${MPIEXEC-mpiexec} -n 2 ./cmake-build-debug_wsl/tests/fault-tolerance/checkpoint_partitioner
