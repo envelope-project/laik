@@ -96,6 +96,11 @@ void laik_checkpoint_restore(Laik_Checkpoint *checkpoint, Laik_Data *data) {
              laik_data_get_space(data)->name, data->name);
 }
 
+/// Copies data from sourceData to targetData (arbitrary number of slices and dimensions). Uses the partitioning
+/// "partitioning" to do so, switching partitionings if necessary. Does not revert any partitionings once done.
+/// \param sourceData The data container that provides the data.
+/// \param targetData The data container that receives the data.
+/// \param partitioning The partitioning used for the data transfer.
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
     laik_log_begin(LAIK_LL_Debug);
     laik_log_append("Migrate source partitioning:\n");
@@ -104,6 +109,7 @@ void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning
     laik_log_Partitioning(targetData->activePartitioning);
     laik_log_flush("\nusing partitioning %s.\n", partitioning->name);
 
+    // Switch data containers ahead of copying data where necessary
     if (sourceData->activePartitioning != partitioning) {
         laik_switchto_partitioning(sourceData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
     }
@@ -111,6 +117,7 @@ void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning
         laik_switchto_partitioning(targetData, partitioning, LAIK_DF_Preserve, LAIK_RO_None);
     }
 
+    // Copy all the mappings on this process over
     int numberMyMappings = laik_my_mapcount(partitioning);
     laik_log(LAIK_LL_Debug, "Copying %i data mappings", numberMyMappings);
     for (int mappingNumber = 0; mappingNumber < numberMyMappings; ++mappingNumber) {
@@ -121,12 +128,18 @@ void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning
     }
 }
 
-// Copies from 1 to 2! Not like memcpy
+/// Copies the data from the specified mappingSource to mappingTarget. Works with up to 3-dimensional data and arbitrary
+/// strides.
+/// \param mappingSource The mapping from which to copy data.
+/// \param mappingTarget The mapping to which data will be copied.
 void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
+
+    //Setup auxiliary data to hold strides and sizes
     Laik_NDimMapDataAllocation source, target;
     laik_checkpoint_setupNDimAllocation(mappingSource, &source);
     laik_checkpoint_setupNDimAllocation(mappingTarget, &target);
 
+    //Do some sanity checks to catch any obvious errors.
     assert(source.base != NULL && target.base != NULL);
     assert(source.sizeZ == target.sizeZ && source.sizeY == target.sizeY && source.sizeX == target.sizeX);
     assert(mappingTarget->data->type == mappingSource->data->type);
@@ -143,6 +156,8 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
              source.sizeZ, source.sizeY, source.sizeX,
              target.strideZ, target.strideY, target.strideX);
 
+    //Loop over all dimensions (size of unused dimensions is set to 1 by setup routine). Do copy operations of size
+    // type, taking into account all strides.
     for (uint64_t z = 0; z < source.sizeZ; ++z) {
         for (uint64_t y = 0; y < source.sizeY; ++y) {
             for (uint64_t x = 0; x < source.sizeX; ++x) {
@@ -156,6 +171,10 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
     }
 }
 
+/// Initialize the Laik_Checkpoint data structure from the checkpoint's space and data.
+/// \param space The space in which the checkpoint was created.
+/// \param data The data container used for the checkpoint.
+/// \return A Laik_Checkpoint structure with the appropriate fields set.
 Laik_Checkpoint *initCheckpoint(Laik_Space *space, const Laik_Data *data) {
 
     Laik_Checkpoint *checkpoint = malloc(sizeof(Laik_Checkpoint));
@@ -170,10 +189,15 @@ Laik_Checkpoint *initCheckpoint(Laik_Space *space, const Laik_Data *data) {
     return checkpoint;
 }
 
+/// Stores data necessary for the checkpoint partitioner to function.
 struct _LaikCheckpointPartitionerData {
+    //The number of redundant slices to create
     int redundancyCounts;
+    //The difference in ranks between each available copy of the slice
     int rotationDistance;
+    //Whether to suppress tags to prevent duplicate slices being assigned to the same mapping
     bool suppressBackupSliceTag;
+    //The original partitioner, including any data used by the original partitioner
     Laik_Partitioner *originalPartitioner;
 };
 typedef struct _LaikCheckpointPartitionerData LaikCheckpointPartitionerData;
@@ -258,6 +282,10 @@ void set_slice_to_empty(Laik_Slice *slice) {
     (*slice).to.i[2] = INT64_MIN;
 }
 
+/// Removes redundant slices from a checkpoint's partitioning. This is necessary because LAIK cannot switch a data
+/// container from multiple potential sources to a single destination without using a reduction. This algorithm works
+/// by pairwise matching slices and setting the last one to empty (O(n^2)).
+/// \param checkpoint
 void laik_checkpoint_remove_redundant_slices(Laik_Checkpoint *checkpoint) {
     Laik_Partitioning *backupPartitioning = checkpoint->data->activePartitioning;
 
@@ -325,6 +353,9 @@ void laik_checkpoint_free(Laik_Checkpoint *checkpoint) {
     free(checkpoint);
 }
 
+/// Prepares an auxiliary struct that holds information on the mapping to allow for easy iteration over the mapping.
+/// \param mappingSource The mapping for which auxiliary data is setup.
+/// \param allocation The output auxiliary struct
 void laik_checkpoint_setupNDimAllocation(const Laik_Mapping *mappingSource, Laik_NDimMapDataAllocation *allocation) {
     (*allocation).base = mappingSource->base;
     uint64_t *strideSource = mappingSource->layout->stride;
@@ -362,7 +393,7 @@ void laik_checkpoint_setupNDimAllocation(const Laik_Mapping *mappingSource, Laik
         case 3:
             break;
         default:
-            laik_log(LAIK_LL_Panic, "Unknown dimensionality in test verify sample data: %i",
+            laik_log(LAIK_LL_Panic, "Unknown dimensionality while setting up helper mapping data: %i",
                      mappingSource->layout->dims);
     }
 }
