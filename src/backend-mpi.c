@@ -1201,6 +1201,9 @@ static void laik_mpi_sync(Laik_KVStore* kvs)
 
 static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup, int* nodeStatuses) {
     (void) oldGroup; (void)newGroup; (void)nodeStatuses;
+
+#ifdef USE_ULFM
+
     int err;
     MPI_Comm oldComm = ((MPIGroupData *) oldGroup->backend_data)->comm;
 
@@ -1234,9 +1237,15 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
         laik_log(LAIK_LL_Panic, "The size of the new mpi group (%i) is different to the new group size (%i).", newSize, newGroup->size);
         assert(0);
     }
+#else
+    laik_log(LAIK_LL_Panic, "Application tried to perform a eliminate nodes but no fault tolerance capability was built.");
+#endif
 }
 
 static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
+
+#ifdef USE_ULFM
+
     laik_log(LAIK_LL_Debug, "Starting agreement protocol\n");
 
 //    // Make sure my position fits into the integer
@@ -1340,8 +1349,10 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
 
     MPI_Group_free(&failedGroup);
     MPI_Group_free(&checkGroup);
-
     return n;
+#else
+    laik_log(LAIK_LL_Panic, "Application tried to perform a status check but no fault tolerance capability was built.");
+#endif
 }
 
 

@@ -91,6 +91,16 @@ if (mpi-backend)
         target_link_libraries ("laik"
             PRIVATE "mpi"
         )
+
+        FIND_FILE(MPI_EXT_HEADER mpi-ext.h)
+        if(MPI_EXT_HEADER)
+            target_compile_definitions("laik"
+                    PRIVATE "USE_ULFM"
+            )
+            message (STATUS "Dependency check mpi found a ULFM compatible version, building!")
+        else()
+            message (STATUS "Depedency check mpi did not find ULFM support, deactivating.")
+        endif()
     elseif (skip-missing)
         message (STATUS "Dependency check for option 'mpi-backend' failed, skipping!")
     else ()
