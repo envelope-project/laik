@@ -63,3 +63,5 @@ if (openmp-examples)
         message (FATAL_ERROR "Dependency check for option 'openmp-examples' failed, stopping!")
     endif ()
 endif ()
+
+add_subdirectory("fault-tolerance")
