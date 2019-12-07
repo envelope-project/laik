@@ -9,14 +9,15 @@
 #include <string.h>
 
 
+//TODO@VB: Remove global variables
 Laik_Space *nodeSpace;
 Laik_Data *nodeData;
 Laik_Partitioning *each;
 Laik_Partitioning *all;
+bool reportedAnErrorSinceLastFailureCheck = false;
 
 void laik_set_fault_tolerant_world(Laik_Group *group);
 
-bool reportedAnErrorSinceLastFailureCheck = false;
 void laik_failure_default_error_handler(Laik_Instance* inst, void *errors) {
     (void) errors;
     if(!reportedAnErrorSinceLastFailureCheck) {
@@ -139,7 +140,7 @@ void laik_set_fault_tolerant_world(Laik_Group *group) {
 }
 
 //
-////TODO: Store current world index for each instance;
+////TODO@VB: Store current world index for each instance;
 Laik_Group *laik_world_fault_tolerant(Laik_Instance *instance) {
     return instance->group[current_world_index];
 }
