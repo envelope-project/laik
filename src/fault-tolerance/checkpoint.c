@@ -214,8 +214,8 @@ create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundan
     Laik_Partitioner *checkpointPartitioner = laik_new_partitioner("checkpoint-partitioner", run_wrapped_partitioner,
                                                                    currentPartitioner,
                                                                    currentPartitioner->flags);
-    LaikCheckpointPartitionerData* partitionerData;
-    partitionerData = malloc(sizeof(Laik_Partitioner));
+    LaikCheckpointPartitionerData *partitionerData;
+    partitionerData = malloc(sizeof(LaikCheckpointPartitionerData));
     if (!partitionerData) {
         laik_panic("Out of memory allocating LaikCheckpointPartitionerData object");
         exit(1); // not actually needed, laik_panic never returns
