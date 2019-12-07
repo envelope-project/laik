@@ -34,8 +34,8 @@ void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool
     }
     TRACE_EVENT_S("CHECKPOINT-PRE-NEW", "");
     TPRINTF("Creating checkpoint of data\n");
-    Laik_Checkpoint* newCheckpoint = laik_checkpoint_create(inst, space, data, NULL, redundancyCount,
-                                                            rotationDistance, world,LAIK_RO_None);
+    Laik_Checkpoint* newCheckpoint = laik_checkpoint_create(data, NULL, redundancyCount,
+                                                            rotationDistance, world, LAIK_RO_None);
     TRACE_EVENT_S("CHECKPOINT-POST-NEW", "");
     TPRINTF("Checkpoint successful at iteration %i\n", iter);
 

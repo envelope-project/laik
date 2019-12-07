@@ -43,8 +43,7 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
     laik_switchto_partitioning(testData->data, testData->blockPartitioning, LAIK_DF_Preserve, LAIK_RO_None);
     test_assert(true, test_verify_sample_data(testData->data), "Distributed test data verification");
 
-    Laik_Checkpoint* checkpoint = laik_checkpoint_create(testData->inst,
-                                                         testData->space, testData->data, NULL,
+    Laik_Checkpoint* checkpoint = laik_checkpoint_create(testData->data, NULL,
                                                          0, 0, testData->world, LAIK_RO_None);
     test_assert(true, test_verify_sample_data(checkpoint->data), "Checkpoint test data verification");
     test_assert(true,
@@ -70,7 +69,7 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
     int nodeStatusTest[] = {LAIK_FT_NODE_OK, LAIK_FT_NODE_OK, LAIK_FT_NODE_FAULT, LAIK_FT_NODE_OK};
 
     //Check that missing redundancy is detected correctly
-    checkpoint = laik_checkpoint_create(testData->inst, testData->space, testData->data, NULL, 0, 0, NULL, LAIK_RO_None);
+    checkpoint = laik_checkpoint_create(testData->data, NULL, 0, 0, NULL, LAIK_RO_None);
     test_assert(false, laik_checkpoint_remove_failed_slices(checkpoint, testData->world, nodeStatusTest),
                 "Failed slice on non-redundant checkpoint causes data loss");
     laik_checkpoint_free(checkpoint);
@@ -83,7 +82,7 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
 //    laik_checkpoint_free(checkpoint);
 
     //Check that correct rotation distance is detected correctly
-    checkpoint = laik_checkpoint_create(testData->inst, testData->space, testData->data, NULL, 1, 1, NULL, LAIK_RO_None);
+    checkpoint = laik_checkpoint_create(testData->data, NULL, 1, 1, NULL, LAIK_RO_None);
 
     // Check that slices are assigned into different mappings, instead of allocating a large mapping.
     test_assert(testData->data->activeMappings->count * 2, checkpoint->data->activeMappings->count,
@@ -94,7 +93,7 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
     laik_checkpoint_free(checkpoint);
 
     // Simulate a failed node and do the restore
-    checkpoint = laik_checkpoint_create(testData->inst, testData->space, testData->data, NULL, 1, 1, NULL, LAIK_RO_None);
+    checkpoint = laik_checkpoint_create(testData->data, NULL, 1, 1, NULL, LAIK_RO_None);
     laik_checkpoint_remove_failed_slices(checkpoint, testData->world, nodeStatusTest);
     Laik_Partitioning* smallBlock = laik_new_partitioning(testData->blockPartitioner, smallWorld, testData->space, 0);
     laik_switchto_partitioning(testData->data, smallBlock, LAIK_DF_None, LAIK_RO_None);

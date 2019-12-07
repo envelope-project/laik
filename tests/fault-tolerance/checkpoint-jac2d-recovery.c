@@ -497,7 +497,7 @@ void exportDataFile(char *label, Laik_Data *data, bool allRanks, bool suppressRa
 // export the data to an image
 //    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_Master, 0, 0, world,
 //                                                               LAIK_RO_None);
-    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(inst, space, data, laik_All, 0, 0, world,
+    Laik_Checkpoint *exportCheckpoint = laik_checkpoint_create(data, laik_All, 0, 0, world,
                                                                LAIK_RO_None);
     if (laik_myid(world) == 0 || allRanks) {
         char filenamePrefix[1024];
@@ -547,7 +547,7 @@ void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool
     Laik_Checkpoint *newCheckpoint = NULL;
 //    if(iter < 20) {
 //        printf("CHECKPOINT ITER %i\n", iter);
-        newCheckpoint = laik_checkpoint_create(inst, space, dWrite, prWrite, redundancyCount,
+        newCheckpoint = laik_checkpoint_create(dWrite, prWrite, redundancyCount,
                                                rotationDistance, world, LAIK_RO_None);
 //        laik_log_begin(LAIK_LL_Warning);
 //        laik_log_SwitchStat(newCheckpoint->data->stat);

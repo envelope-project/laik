@@ -17,9 +17,11 @@ void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning
 
 void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget);
 
-Laik_Checkpoint *laik_checkpoint_create(Laik_Instance *laikInstance, Laik_Space *space, Laik_Data *data,
-                                        Laik_Partitioner *backupPartitioner, int redundancyCount, int rotationDistance,
-                                        Laik_Group *backupGroup, enum _Laik_ReductionOperation reductionOperation) {
+Laik_Checkpoint *
+laik_checkpoint_create(Laik_Data *data, Laik_Partitioner *backupPartitioner, int redundancyCount, int rotationDistance,
+                       Laik_Group *backupGroup, enum _Laik_ReductionOperation reductionOperation) {
+    Laik_Instance* laikInstance = laik_data_get_inst(data);
+    Laik_Space* space = laik_data_get_space(data);
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i for space %s data %s\n", iteration, space->name,
              data->name);
