@@ -16,3 +16,6 @@ foreach (test
             PRIVATE "m"
             )
 endforeach ()
+
+add_subdirectory("lulesh")
+add_subdirectory("osu")

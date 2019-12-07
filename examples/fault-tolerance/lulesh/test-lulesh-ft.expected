@@ -44,7 +44,6 @@ cycle = 29, time = 1.083436e-04, dt=4.183372e-06
 cycle = 30, time = 1.130908e-04, dt=4.747189e-06
 cycle = 31, time = 1.176481e-04, dt=4.557295e-06
 cycle = 32, time = 1.220514e-04, dt=4.403381e-06
-Oops. Process with rank 1 did something silly on iteration 32. Aborting!
 cycle = 33, time = 1.263491e-04, dt=4.297636e-06
 cycle = 34, time = 1.305781e-04, dt=4.229043e-06
 cycle = 35, time = 1.347762e-04, dt=4.198111e-06
