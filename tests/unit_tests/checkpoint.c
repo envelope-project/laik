@@ -59,7 +59,7 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
     test_assert(false, test_verify_sample_data(testData->data), "Test data scrambled verification");
 
     // Restore useful data from checkpoint over the garbage data
-    laik_checkpoint_restore(testData->inst, checkpoint, testData->space, testData->data);
+    laik_checkpoint_restore(checkpoint, testData->data);
     test_assert(true, test_verify_sample_data(testData->data), "Restored test data verification");
 
     laik_checkpoint_free(checkpoint);
@@ -97,7 +97,7 @@ Laik_Unit_Test_Data runTestWithData(Laik_Unit_Test_Data *testData) {// distribut
     laik_checkpoint_remove_failed_slices(checkpoint, testData->world, nodeStatusTest);
     Laik_Partitioning* smallBlock = laik_new_partitioning(testData->blockPartitioner, smallWorld, testData->space, 0);
     laik_switchto_partitioning(testData->data, smallBlock, LAIK_DF_None, LAIK_RO_None);
-    laik_checkpoint_restore(testData->inst, checkpoint, testData->space, testData->data);
+    laik_checkpoint_restore(checkpoint, testData->data);
     test_assert(true, test_verify_sample_data(testData->data), "Restored data successfully");
     laik_checkpoint_free(checkpoint);
 

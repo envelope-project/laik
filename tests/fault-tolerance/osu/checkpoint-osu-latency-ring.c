@@ -51,7 +51,7 @@ void createCheckpoints(int iter, int redundancyCount, int rotationDistance, bool
 void restoreCheckpoints() {
     TPRINTF("Restoring from checkpoint (checkpoint iteration %i)\n", restoreIteration);
 //    laik_partitioning_migrate(spaceCheckpoint->data->activePartitioning, world);
-    laik_checkpoint_restore(inst, spaceCheckpoint, space, data);
+    laik_checkpoint_restore(spaceCheckpoint, data);
     TPRINTF("Restore successful\n");
 }
 

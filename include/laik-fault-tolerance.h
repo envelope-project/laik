@@ -34,7 +34,7 @@ Laik_Checkpoint *
 laik_checkpoint_create(Laik_Data *data, Laik_Partitioner *backupPartitioner, int redundancyCount, int rotationDistance,
                        Laik_Group *backupGroup, enum _Laik_ReductionOperation reductionOperation);
 
-void laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data);
+void laik_checkpoint_restore(Laik_Checkpoint *checkpoint, Laik_Data *data);
 
 int laik_failure_check_nodes(Laik_Instance *laikInstance, Laik_Group *checkGroup, int (*failedNodes));
 int laik_failure_eliminate_nodes(Laik_Instance *instance, int count, int (*nodeStatuses));

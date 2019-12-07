@@ -126,7 +126,7 @@ void laik_vector<T>::restore(Laik_Checkpoint *checkpoint, Laik_Group *newGroup) 
     Laik_Partitioning* newPartitioning = laik_new_partitioning(laik_Master, newGroup, indexSpace, nullptr);
     laik_switchto_partitioning(data, newPartitioning, LAIK_DF_None, LAIK_RO_None);
 //    laik_partitioning_migrate(laik_data_get_partitioning(checkpoint->data), newGroup);
-    laik_checkpoint_restore(inst, checkpoint, indexSpace, data);
+    laik_checkpoint_restore(checkpoint, data);
 }
 
 #endif

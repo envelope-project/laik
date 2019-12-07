@@ -7,28 +7,35 @@
 #include <string.h>
 #include <inttypes.h>
 
-Laik_Checkpoint *initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data);
+Laik_Checkpoint *initCheckpoint(Laik_Space *space, const Laik_Data *data);
 
-Laik_Partitioner *
-create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance,
-                              bool suppressBackupSliceTag);
+Laik_Partitioner *create_checkpoint_partitioner(
+        Laik_Partitioner *currentPartitioner,
+        int redundancyCount,
+        int rotationDistance,
+        bool suppressBackupSliceTag);
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning);
 
 void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget);
 
-Laik_Checkpoint *
-laik_checkpoint_create(Laik_Data *data, Laik_Partitioner *backupPartitioner, int redundancyCount, int rotationDistance,
-                       Laik_Group *backupGroup, enum _Laik_ReductionOperation reductionOperation) {
-    Laik_Instance* laikInstance = laik_data_get_inst(data);
-    Laik_Space* space = laik_data_get_space(data);
+Laik_Checkpoint *laik_checkpoint_create(
+        Laik_Data *data,
+        Laik_Partitioner *backupPartitioner,
+        int redundancyCount,
+        int rotationDistance,
+        Laik_Group *backupGroup,
+        enum _Laik_ReductionOperation reductionOperation) {
+
+    Laik_Instance *laikInstance = laik_data_get_inst(data);
+    Laik_Space *space = laik_data_get_space(data);
     int iteration = laik_get_iteration(laikInstance);
     laik_log(LAIK_LL_Info, "Checkpoint requested at iteration %i for space %s data %s\n", iteration, space->name,
              data->name);
 
     Laik_Checkpoint *checkpoint;
 
-    checkpoint = initCheckpoint(laikInstance, space, data);
+    checkpoint = initCheckpoint(space, data);
 
     migrateData(data, checkpoint->data, data->activePartitioning);
 
@@ -69,21 +76,24 @@ laik_checkpoint_create(Laik_Data *data, Laik_Partitioner *backupPartitioner, int
     return checkpoint;
 }
 
+/// Restore from a Laik_Checkpoint onto the data container provided. Requires that the checkpoint no longer has
+/// duplicate slices or slices residing on unrechable nodes.
+/// \param checkpoint The checkpoint to restore data from.
+/// \param data The data container being restored to.
+void laik_checkpoint_restore(Laik_Checkpoint *checkpoint, Laik_Data *data) {
+    assert(checkpoint != NULL && data != NULL);
 
-void
-laik_checkpoint_restore(Laik_Instance *laikInstance, Laik_Checkpoint *checkpoint, Laik_Space *space, Laik_Data *data) {
-    int iteration = laik_get_iteration(laikInstance);
-    laik_log(LAIK_LL_Info, "Checkpoint restore requested at iteration %i for space %s data %s\n", iteration,
-             space->name, data->name);
+    int iteration = laik_get_iteration(laik_data_get_inst(checkpoint->data));
+    laik_log(LAIK_LL_Info, "Checkpoint restore requested at iteration %i for space %s data %s\n",
+            iteration, laik_data_get_space(data)->name, data->name);
 
-    assert(checkpoint->space);
-    assert(checkpoint->data);
-    assert(laik_space_size(space) == laik_space_size(checkpoint->space));
+    assert(checkpoint->space != NULL && checkpoint->data);
+    assert(laik_space_size(laik_data_get_space(data)) == laik_space_size(checkpoint->space));
 
     migrateData(checkpoint->data, data, data->activePartitioning);
 
     laik_log(LAIK_LL_Info, "Checkpoint restore completed at iteration %i for space %s data %s\n", iteration,
-             space->name, data->name);
+             laik_data_get_space(data)->name, data->name);
 }
 
 void migrateData(Laik_Data *sourceData, Laik_Data *targetData, Laik_Partitioning *partitioning) {
@@ -146,9 +156,7 @@ void bufCopy(Laik_Mapping *mappingSource, Laik_Mapping *mappingTarget) {
     }
 }
 
-Laik_Checkpoint *initCheckpoint(Laik_Instance *laikInstance, Laik_Space *space, const Laik_Data *data) {
-    //TODO: Temporarily unused
-    (void) laikInstance;
+Laik_Checkpoint *initCheckpoint(Laik_Space *space, const Laik_Data *data) {
 
     Laik_Checkpoint *checkpoint = malloc(sizeof(Laik_Checkpoint));
     if (checkpoint == NULL) {
@@ -190,9 +198,10 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
     for (int redundancyCount = 0; redundancyCount < checkpointPartitionerData->redundancyCounts; ++redundancyCount) {
         for (unsigned int i = 0; i < originalCount; i++) {
             Laik_TaskSlice_Gen duplicateSlice = receiver->array->tslice[i];
-            int taskId = (duplicateSlice.task + (redundancyCount + 1) * checkpointPartitionerData->rotationDistance) % receiver->params->group->size;
+            int taskId = (duplicateSlice.task + (redundancyCount + 1) * checkpointPartitionerData->rotationDistance) %
+                         receiver->params->group->size;
             int tag = checkpointPartitionerData->suppressBackupSliceTag ? 0 : duplicateSlice.tag;
-            if(duplicateSlice.task == taskId) {
+            if (duplicateSlice.task == taskId) {
                 laik_log_begin(LAIK_LL_Panic);
                 laik_log_append("A checkpoint slice (");
                 laik_log_Slice(&duplicateSlice.s);
@@ -207,11 +216,21 @@ void run_wrapped_partitioner(Laik_SliceReceiver *receiver, Laik_PartitionerParam
 }
 
 
-
-Laik_Partitioner *
-create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundancyCount, int rotationDistance,
-                              bool suppressBackupSliceTag) {
-    Laik_Partitioner *checkpointPartitioner = laik_new_partitioner("checkpoint-partitioner", run_wrapped_partitioner,
+/// Creates a partitioner that wraps around the supplied partitioner and creates redundant slices with specified
+/// distance (in terms of processes on which they reside). Optionally suppresses any slice tags, to prevent the
+/// duplicate slices using the same tag as the original and therefore being allocated in the same mapping.
+/// \param currentPartitioner The base partitioner to use to create the checkpoint partitioner.
+/// \param redundancyCount The number of duplicate slices created of the partitioning supplied by currentPartitioner.
+/// \param rotationDistance The distance (in terms of process ranks) between each slice copy.
+/// \param suppressBackupSliceTag Whether to remove tagging information to prevent duplicated slices using the same tag.
+/// \return A partitioner that augments the currentPartitioner with redundancy.
+Laik_Partitioner *create_checkpoint_partitioner(
+        Laik_Partitioner *currentPartitioner,
+        int redundancyCount,
+        int rotationDistance,
+        bool suppressBackupSliceTag) {
+    Laik_Partitioner *checkpointPartitioner = laik_new_partitioner("checkpoint-partitioner",
+                                                                   run_wrapped_partitioner,
                                                                    currentPartitioner,
                                                                    currentPartitioner->flags);
     LaikCheckpointPartitionerData *partitionerData;
@@ -228,8 +247,9 @@ create_checkpoint_partitioner(Laik_Partitioner *currentPartitioner, int redundan
     return checkpointPartitioner;
 }
 
+/// Makes the currently slice empty by setting both the start and end of all dimensions to INT64_MIN
+/// \param slice The slice to set to empty
 void set_slice_to_empty(Laik_Slice *slice) {
-    //TODO: Find out why this fix works
     (*slice).from.i[0] = INT64_MIN;
     (*slice).from.i[1] = INT64_MIN;
     (*slice).from.i[2] = INT64_MIN;
@@ -261,7 +281,7 @@ bool laik_checkpoint_remove_failed_slices(Laik_Checkpoint *checkpoint, Laik_Grou
     Laik_SliceArray *sliceArray = backupPartitioning->saList->slices;
     for (unsigned int oldIndex = 0; oldIndex < sliceArray->count; ++oldIndex) {
         Laik_TaskSlice_Gen *taskSlice = &sliceArray->tslice[oldIndex];
-        //TODO: export this to some sort of constant
+        //TODO@VB: export this to some sort of constant
         int taskIdInGroup = taskSlice->task;
 //        int taskIdInWorld = laik_location_get_world_offset(backupPartitioning->group, taskIdInGroup);
         if (nodeStatuses[taskIdInGroup] != LAIK_FT_NODE_OK) {
@@ -309,7 +329,7 @@ void laik_checkpoint_setupNDimAllocation(const Laik_Mapping *mappingSource, Laik
     (*allocation).base = mappingSource->base;
     uint64_t *strideSource = mappingSource->layout->stride;
     const uint64_t *sizeSource = mappingSource->size;
-    const int64_t  *fromSource = mappingSource->allocatedSlice.from.i;
+    const int64_t *fromSource = mappingSource->allocatedSlice.from.i;
 
     (*allocation).typeSize = mappingSource->data->type->size;
 
@@ -327,7 +347,7 @@ void laik_checkpoint_setupNDimAllocation(const Laik_Mapping *mappingSource, Laik
     allocation->globalStartY = fromSource[1];
     allocation->globalStartX = fromSource[0];
 
-    // Sets all dimension sizes above current dimension to 1 (so that loop is executed).
+    // Sets all dimension sizes above current dimension to 1 (so that loop is executed at least once).
     switch (mappingSource->layout->dims) {
         case 1:
             (*allocation).sizeY = 1;
