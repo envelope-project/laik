@@ -97,6 +97,8 @@ if (mpi-backend)
             target_compile_definitions("laik"
                     PRIVATE "USE_ULFM"
             )
+
+            target_sources("laik" PRIVATE "backend-ulfm.c")
             message (STATUS "Dependency check mpi found a ULFM compatible version, building!")
         else()
             message (STATUS "Depedency check mpi did not find ULFM support, deactivating.")

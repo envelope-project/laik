@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <laik-backend-ulfm.h>
 
 
 //program name
@@ -46,6 +47,15 @@ Laik_Instance* laik_init (int* argc, char*** argv)
 {
     const char* override = getenv("LAIK_BACKEND");
     Laik_Instance* inst = 0;
+
+#ifdef USE_ULFM
+    if (inst == NULL) {
+        // default to ULFM if available, or if explicitly wanted (superset of MPI)
+        if ((override == 0) || (strcmp(override, "ulfm") == 0)) {
+            inst = laik_init_ulfm(argc, argv);
+        }
+    }
+#endif
 
 #ifdef USE_MPI
     if (inst == 0) {
