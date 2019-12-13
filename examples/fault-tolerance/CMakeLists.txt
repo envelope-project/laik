@@ -17,5 +17,4 @@ foreach (test
             )
 endforeach ()
 
-add_subdirectory("lulesh")
 add_subdirectory("osu")
