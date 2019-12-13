@@ -17,6 +17,10 @@ SRCS += $(wildcard $(SDIR)src/backends/tcp/*.c)
 IFLAGS += $(TCP_INC)
 LDLIBS += $(TCP_LIBS)
 endif
+
+# Build fault tolerance
+SRCS += $(wildcard $(SDIR)src/fault-tolerance/*.c)
+
 HEADERS = $(wildcard $(SDIR)include/*.h $(SDIR)include/laik/*.h)
 OBJS = $(SRCS:$(SDIR)%.c=%.o)
 
@@ -62,6 +66,9 @@ examples: $(LAIKLIB)
 
 examples/c++: $(LAIKLIB)
 	cd examples/c++ && $(MAKE)
+
+tests/fault-tolerance: $(LAIKLIB)
+	cd tests/fault-tolerance && $(MAKE)
 
 
 # tests

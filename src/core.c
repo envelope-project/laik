@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <laik-backend-ulfm.h>
 
 
 //program name
@@ -46,6 +47,15 @@ Laik_Instance* laik_init (int* argc, char*** argv)
 {
     const char* override = getenv("LAIK_BACKEND");
     Laik_Instance* inst = 0;
+
+#ifdef USE_ULFM
+    if (inst == NULL) {
+        // default to ULFM if available, or if explicitly wanted (superset of MPI)
+        if ((override == 0) || (strcmp(override, "ulfm") == 0)) {
+            inst = laik_init_ulfm(argc, argv);
+        }
+    }
+#endif
 
 #ifdef USE_MPI
     if (inst == 0) {
@@ -125,10 +135,13 @@ void laik_finalize(Laik_Instance* inst)
         Laik_SwitchStat* ss = laik_newSwitchStat();
         for(int i=0; i<inst->data_count; i++) {
             Laik_Data* d = inst->data[i];
-            laik_addSwitchStat(ss, d->stat);
+            // Bugfix by VB: Check whether d was previously freed
+            if(d) {
+                laik_addSwitchStat(ss, d->stat);
 
-            laik_log_append("  data '%s': ", d->name);
-            laik_log_SwitchStat(d->stat);
+                laik_log_append("  data '%s': ", d->name);
+                laik_log_SwitchStat(d->stat);
+            }
         }
         if (inst->data_count > 1) {
             laik_log_append("  summary: ");
@@ -190,6 +203,7 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     instance->profiling = laik_init_profiling();
 
     instance->repart_ctrl = 0;
+    instance->errorHandler = NULL;
 
     // logging (TODO: multiple instances)
     laik_log_init(instance);
@@ -432,3 +446,93 @@ char* laik_get_guid(Laik_Instance* i){
 }
 
 
+Laik_Backend_Error_Handler* laik_error_handler_get(Laik_Instance* instance) {
+    if(instance == NULL) {
+        return NULL;
+    }
+    return instance->errorHandler;
+}
+
+void laik_error_handler_set(Laik_Instance* instance, Laik_Backend_Error_Handler* errorHandler) {
+    if(instance == NULL) {
+        return;
+    }
+    instance->errorHandler = errorHandler;
+}
+
+#include <sys/time.h>
+
+double getTime(Laik_Instance* inst) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (double)(now.tv_sec - inst->init_time.tv_sec) +
+           0.000001 * (now.tv_usec - inst->init_time.tv_usec);
+}
+
+double getWallTime() {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (double)(now.tv_sec) + 0.000001 * (now.tv_usec);
+}
+
+double getVSize() {
+    long rss = 0L;
+    FILE* fp = NULL;
+    if ( (fp = fopen( "/proc/self/statm", "r" )) == NULL )
+        return (size_t)0L;      /* Can't open? */
+    if ( fscanf( fp, "%*s%ld", &rss ) != 1 )
+    {
+        fclose( fp );
+        return (size_t)0L;      /* Can't read? */
+    }
+    fclose( fp );
+    return ((size_t)rss * (size_t)sysconf( _SC_PAGESIZE)) / 1024.0;
+}
+
+double getNSize(Laik_Instance *inst) {
+    size_t data = 0;
+    for(int i=0; i<inst->data_count; i++) {
+        Laik_Data* d = inst->data[i];
+        // This data may have been freed, so check that it still exists
+        if(d) {
+            data += d->stat->byteRecvCount;
+            data += d->stat->byteSendCount;
+            data += d->stat->byteReduceCount;
+        }
+    }
+    return data / 1024.0;
+}
+
+double start;
+
+void setStartTime(double startTime) {
+    start = startTime;
+}
+double getStartTime() {
+    return start;
+}
+
+int eventNum = 0;
+int getEventNum() {
+    return eventNum++;
+}
+
+bool TRACE_ENABLED = false;
+
+bool isTraceEnabled() {
+    return TRACE_ENABLED;
+}
+
+void setTraceEnabled(bool newTraceSetting) {
+    TRACE_ENABLED = newTraceSetting;
+}
+
+void TRACE_INIT(int myRank) {
+    char *envVar = getenv("LAIK_APPLICATION_TRACE_ENABLED");
+    if(envVar != NULL && strcmp(envVar, "1") == 0) {
+        setTraceEnabled(true);
+    }
+    if(isTraceEnabled() && myRank == 0) {
+        printf("===,EVENT_SEQ,EVENT_TYPE,RANK,TIME,DURATION,WALLTIME,ITER,MEM,NET,EXTRA\n");
+    }
+}

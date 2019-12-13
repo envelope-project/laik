@@ -23,7 +23,10 @@ add_library ("laik" SHARED
     "space.c"
     "slicearray.c"
     "type.c"
-)
+    "logging.c"
+    "kvs.c"
+    "fault-tolerance/checkpoint.c"
+    "fault-tolerance/failure_detector.c")
 
 SET_SOURCE_FILES_PROPERTIES(revinfo.c
     PROPERTIES OBJECT_DEPENDS
@@ -46,6 +49,7 @@ if (mpi-backend)
     # If pkg-config didn't find MPI above, also try CMake's native FindMPI
     # module since we really want to enable MPI support whenever possible!
     if (NOT TARGET "mpi")
+        message(STATUS "Pkgconfig find mpi failed, trying fallback")
         find_package (MPI)
         if (MPI_C_FOUND)
             # MPI_C_COMPILE_FLAGS and MPI_C_LINK_FLAGS really ought to be be
@@ -87,6 +91,18 @@ if (mpi-backend)
         target_link_libraries ("laik"
             PRIVATE "mpi"
         )
+
+        FIND_FILE(MPI_EXT_HEADER mpi-ext.h)
+        if(MPI_EXT_HEADER)
+            target_compile_definitions("laik"
+                    PRIVATE "USE_ULFM"
+            )
+
+            target_sources("laik" PRIVATE "backend-ulfm.c")
+            message (STATUS "Dependency check mpi found a ULFM compatible version, building!")
+        else()
+            message (STATUS "Depedency check mpi did not find ULFM support, deactivating.")
+        endif()
     elseif (skip-missing)
         message (STATUS "Dependency check for option 'mpi-backend' failed, skipping!")
     else ()

@@ -11,3 +11,12 @@ compile_commands.json
 /build*/
 *.so.dSYM/
 /messungen/
+*.exe
+.idea
+/lib/
+/cmake-build-*
+*.asv
+out/
+output/
+Testing/
+laik_experiments/

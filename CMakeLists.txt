@@ -1,11 +1,13 @@
-# Set the project name
-project ("laik")
-
 # Set the minimal CMake version required
 cmake_minimum_required (VERSION 3.5)
 
+# Set the project name
+project ("laik")
+
 # Enable testing with CMake's CTest
 enable_testing ()
+
+#set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # Set some global defaults
 add_compile_options (
@@ -87,3 +89,5 @@ add_subdirectory ("tests")
 add_subdirectory ("tests/mpi")
 add_subdirectory ("tests/tcp")
 add_subdirectory ("tests/src")
+add_subdirectory ("tests/fault-tolerance")
+add_subdirectory ("tests/unit_tests/")

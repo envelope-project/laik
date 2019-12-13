@@ -487,6 +487,13 @@ Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p)
     return p->group;
 }
 
+// public: return the partitioner a partitioning was created with
+Laik_Partitioner* laik_partitioning_get_partitioner(Laik_Partitioning* p)
+{
+    return p->partitioner;
+}
+
+
 // public/partitioner API: total number of slices in this partitioning
 // only allowed for offline partitioners, may be expensive
 int laik_partitioning_slicecount(Laik_Partitioning* p)
@@ -601,6 +608,9 @@ void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
     }
     else {
         // other cases not supported
+        laik_log(LAIK_LL_Error, "Error while migrating partitioning: "
+                                "group with id %i is not a parent or a child of new group %i.",
+                                p->group->gid, newg->gid);
         assert(0);
     }
 

@@ -27,4 +27,5 @@
 // returns the same object if called multiple times
 Laik_Instance* laik_init_mpi(int* argc, char*** argv);
 
+
 #endif // LAIK_BACKEND_MPI_H

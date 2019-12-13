@@ -1099,6 +1099,15 @@ void calcAddReductions(int tflags,
             lastTask = ts->task;
             lastMapNo = ts->mapNo;
         }
+        //Skip empty slices
+        if(laik_slice_isEmpty(&ts->s)) {
+#ifdef DEBUG_REDUCTIONSLICES
+            laik_log(1, "  skip add border %lld, task %d slice/map %d/%d (%s, %s)",
+                     (long long int) ts->s.from.i[0], ts->task, sliceNo, ts->mapNo,
+                     "empty", "input");
+#endif
+            continue;
+        }
         appendBorder(ts->s.from.i[0], ts->task, sliceNo, ts->mapNo, true, true);
         appendBorder(ts->s.to.i[0], ts->task, sliceNo, ts->mapNo, false, true);
         sliceNo++;
@@ -1112,6 +1121,15 @@ void calcAddReductions(int tflags,
             sliceNo = 0;
             lastTask = ts->task;
             lastMapNo = ts->mapNo;
+        }
+        //Skip empty slices
+        if(laik_slice_isEmpty(&ts->s)) {
+#ifdef DEBUG_REDUCTIONSLICES
+            laik_log(1, "  skip add border %lld, task %d slice/map %d/%d (%s, %s)",
+                     (long long int) ts->s.from.i[0], ts->task, sliceNo, ts->mapNo,
+                     "empty", "output");
+#endif
+            continue;
         }
         appendBorder(ts->s.from.i[0], ts->task, sliceNo, ts->mapNo, true, false);
         appendBorder(ts->s.to.i[0], ts->task, sliceNo, ts->mapNo, false, false);

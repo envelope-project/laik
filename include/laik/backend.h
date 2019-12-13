@@ -30,42 +30,50 @@
 
 // LAIK communication back-end
 struct _Laik_Backend {
-  char* name;
-  void (*finalize)(Laik_Instance*);
+    char *name;
 
-  // Record the actions required to do a transition on data, eventually
-  // using provided mappings (can be 0 if mappings are not allocated yet).
-  //
-  // Can be NULL to state that this communication backend driver does not
-  // support recording of actions.
-  //
-  // this function allows the backend driver to
-  // - allocate resources which can be reused when doing the same transition
-  //   multiple times (such as memory space for buffers, reductions, lists
-  //   of outstanding requests, or resources of the communication library).
-  //   For one LAIK data container, only one asynchronous transition can be
-  //   active at any time. Thus, resources can be shared among transition
-  //   plans for one data container.
-  // - prepare an optimized communcation schedule using the pre-allocated
-  //   resources
-  void (*prepare)(Laik_ActionSeq*);
+    void (*finalize)(Laik_Instance *);
 
-  // free resources allocated for an action sequence
-  void (*cleanup)(Laik_ActionSeq*);
+    // Record the actions required to do a transition on data, eventually
+    // using provided mappings (can be 0 if mappings are not allocated yet).
+    //
+    // Can be NULL to state that this communication backend driver does not
+    // support recording of actions.
+    //
+    // this function allows the backend driver to
+    // - allocate resources which can be reused when doing the same transition
+    //   multiple times (such as memory space for buffers, reductions, lists
+    //   of outstanding requests, or resources of the communication library).
+    //   For one LAIK data container, only one asynchronous transition can be
+    //   active at any time. Thus, resources can be shared among transition
+    //   plans for one data container.
+    // - prepare an optimized communcation schedule using the pre-allocated
+    //   resources
+    void (*prepare)(Laik_ActionSeq *);
 
-  // execute a action sequence
-  void (*exec)(Laik_ActionSeq*);
+    // free resources allocated for an action sequence
+    void (*cleanup)(Laik_ActionSeq *);
 
-  // update backend specific data for group if needed
-  void (*updateGroup)(Laik_Group*);
+    // execute a action sequence
+    void (*exec)(Laik_ActionSeq *);
 
-  // sync of key-value store
-  void (*sync)(Laik_KVStore* kvs);
+    // update backend specific data for group if needed
+    void (*updateGroup)(Laik_Group *);
 
-  // log backend-specific action, return true if handled (see laik_log_Action)
-  bool (*log_action)(Laik_Action* a);
+    // Remove nodes that have failed in the old group, forming the new group based on the status codes
+    void (*eliminateNodes)(Laik_Group *oldGroup, Laik_Group *newGroup, int *nodeStatuses);
+
+    // An external status consensus mechanism. If not set, the LAIK internal mechanism will be used.
+    // Performs check across the passed laik group and writes the node statuses into the status array (of group's size).
+    // Returns the number of failed nodes as well.
+    int (*statusCheck)(Laik_Group *, int *);
+
+    // sync of key-value store
+    void (*sync)(Laik_KVStore *kvs);
+
+    // log backend-specific action, return true if handled (see laik_log_Action)
+    bool (*log_action)(Laik_Action *a);
 };
-
 
 
 #endif // LAIK_BACKEND_H

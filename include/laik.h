@@ -27,5 +27,6 @@
 #include "laik/program.h"
 #include "laik/profiling.h"
 #include "laik/ext.h"
+#include "laik-fault-tolerance.h"
 
 #endif // LAIK_H

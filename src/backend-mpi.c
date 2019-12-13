@@ -20,10 +20,12 @@
 
 #include "laik-internal.h"
 #include "laik-backend-mpi.h"
+#include "laik-backend-mpi-internal.h"
 
 #include <assert.h>
 #include <stdlib.h>
 #include <mpi.h>
+#include <mpi-ext.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -31,16 +33,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
-
-// forward decls, types/structs , global variables
-
-static void laik_mpi_finalize(Laik_Instance*);
-static void laik_mpi_prepare(Laik_ActionSeq*);
-static void laik_mpi_cleanup(Laik_ActionSeq*);
-static void laik_mpi_exec(Laik_ActionSeq* as);
-static void laik_mpi_updateGroup(Laik_Group*);
-static bool laik_mpi_log_action(Laik_Action* a);
-static void laik_mpi_sync(Laik_KVStore* kvs);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_mpi = {
@@ -51,19 +43,11 @@ static Laik_Backend laik_backend_mpi = {
     .exec        = laik_mpi_exec,
     .updateGroup = laik_mpi_updateGroup,
     .log_action  = laik_mpi_log_action,
-    .sync        = laik_mpi_sync
+    .sync        = laik_mpi_sync,
 };
 
 static Laik_Instance* mpi_instance = 0;
 
-typedef struct {
-    MPI_Comm comm;
-    bool didInit;
-} MPIData;
-
-typedef struct {
-    MPI_Comm comm;
-} MPIGroupData;
 
 //----------------------------------------------------------------
 // MPI backend behavior configurable by environment variables
@@ -281,6 +265,18 @@ void laik_mpi_panic(int err)
     int len;
 
     assert(err != MPI_SUCCESS);
+
+    if(laik_error_handler_get(mpi_instance) != NULL) {
+
+        laik_log(LAIK_LL_Debug, "Error handler found, attempting to handle error.\n");
+        if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
+            strncpy(str, "Unknown MPI Error!", sizeof(str));
+        }
+        laik_error_handler_get(mpi_instance)(mpi_instance, str);
+//        fprintf(stderr, "[LAIK MPI Backend] Error handler exited, attempting to continue\n");
+        return;
+    }
+
     if (MPI_Error_string(err, str, &len) != MPI_SUCCESS)
         laik_panic("MPI backend: Unknown MPI error!");
     else
@@ -292,7 +288,11 @@ void laik_mpi_panic(int err)
 //----------------------------------------------------------------------------
 // backend interface implementation: initialization
 
-Laik_Instance* laik_init_mpi(int* argc, char*** argv)
+Laik_Instance* laik_init_mpi(int* argc, char*** argv) {
+    return laik_init_mpi_generic_backend(argc, argv, &laik_backend_mpi);
+}
+
+Laik_Instance* laik_init_mpi_generic_backend(int* argc, char*** argv, Laik_Backend* backendStruct)
 {
     if (mpi_instance) return mpi_instance;
 
@@ -345,7 +345,7 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     snprintf(processor_name + name_len, 15, ":%d", getpid());
 
     Laik_Instance* inst;
-    inst = laik_new_instance(&laik_backend_mpi, size, rank,
+    inst = laik_new_instance(backendStruct, size, rank,
                              processor_name, d, gd);
 
     sprintf(inst->guid, "%d", rank);

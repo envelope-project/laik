@@ -18,6 +18,7 @@
 #pragma once
 
 #include <stddef.h>  // for size_t, NULL
+#include <glib.h>
 
 typedef enum {
     LAIK_TCP_MINIMPI_DOUBLE,
@@ -38,6 +39,13 @@ typedef enum {
     LAIK_TCP_MINIMPI_LAND,
     LAIK_TCP_MINIMPI_LOR,
 } Laik_Tcp_MiniMpiOp;
+
+struct Laik_Tcp_MiniMpiComm {
+    GArray*  tasks;      // Mapping from per-communicator ranks to world ranks
+    size_t   rank;       // Our own rank in this communicator
+    size_t   generation; // The number of generations to the world communicator
+};
+
 
 typedef size_t Laik_Tcp_MiniMpiStatus;
 
@@ -71,6 +79,9 @@ int laik_tcp_minimpi_comm_size (const Laik_Tcp_MiniMpiComm* comm, int* size);
 
 __attribute__ ((warn_unused_result))
 int laik_tcp_minimpi_comm_split (const Laik_Tcp_MiniMpiComm* comm, int color, int hint, Laik_Tcp_MiniMpiComm** new_communicator);
+
+__attribute__ ((warn_unused_result))
+int laik_tcp_minimpi_comm_eliminate(const struct Laik_Tcp_MiniMpiComm* comm, int count, const int* rankStatus, int selfColor, struct Laik_Tcp_MiniMpiComm** newCommunicator);
 
 __attribute__ ((warn_unused_result))
 int laik_tcp_minimpi_error_string (int error_code, char *string, int *result_length);

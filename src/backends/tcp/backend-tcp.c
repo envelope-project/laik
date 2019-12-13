@@ -54,6 +54,7 @@ static void laik_tcp_cleanup(Laik_ActionSeq*);
 static void laik_tcp_exec(Laik_ActionSeq* as);
 static void laik_tcp_updateGroup(Laik_Group*);
 static void laik_tcp_sync(Laik_KVStore* kvs);
+static void laik_tcp_eliminate_nodes(Laik_Group *oldGroup, Laik_Group *newGroup, int *nodeStatuses);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_tcp = {
@@ -63,6 +64,7 @@ static Laik_Backend laik_backend_tcp = {
     .cleanup     = laik_tcp_cleanup,
     .exec        = laik_tcp_exec,
     .updateGroup = laik_tcp_updateGroup,
+    .eliminateNodes = laik_tcp_eliminate_nodes,
     .sync        = laik_tcp_sync
 };
 
@@ -103,6 +105,20 @@ void laik_tcp_panic(int err)
     int len;
 
     assert(err != MPI_SUCCESS);
+
+    if(laik_error_handler_get(tcp_instance) != NULL) {
+
+        laik_log(LAIK_LL_Debug, "Error handler found, attempting to handle error.\n");
+        if(MPI_Error_string(err, str, &len) != MPI_SUCCESS) {
+            strncpy(str, "Unknown MPI Error!", sizeof(str));
+        }
+        laik_tcp_set_errors(err, NULL);
+        laik_error_handler_get(tcp_instance)(tcp_instance, str);
+        laik_tcp_clear_errors();
+//        fprintf(stderr, "[LAIK TCP Backend] Error handler exited, attempting to continue\n");
+        return;
+    }
+
     if (MPI_Error_string(err, str, &len) != MPI_SUCCESS)
         laik_panic("TCP backend: Unknown mini-MPI error!");
     else
@@ -207,9 +223,20 @@ void laik_tcp_finalize(Laik_Instance* inst)
     }
 }
 
+static TCPGroupData *allocateBackendData(Laik_Group *g) {
+    TCPGroupData *gd = (TCPGroupData *) g->backend_data;
+    assert(gd == 0); // must not be updated yet
+    gd = malloc(sizeof(TCPGroupData));
+    if (!gd) {
+        laik_panic("Out of memory allocating TCPGroupData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    g->backend_data = gd;
+    return gd;
+}
+
 // update backend specific data for group if needed
-static
-void laik_tcp_updateGroup(Laik_Group* g)
+static void laik_tcp_updateGroup(Laik_Group* g)
 {
     // calculate MPI communicator for group <g>
     // TODO: only supports shrinking of parent for now
@@ -227,14 +254,7 @@ void laik_tcp_updateGroup(Laik_Group* g)
     TCPGroupData* gdParent = (TCPGroupData*) g->parent->backend_data;
     assert(gdParent);
 
-    TCPGroupData* gd = (TCPGroupData*) g->backend_data;
-    assert(gd == 0); // must not be updated yet
-    gd = malloc(sizeof(TCPGroupData));
-    if (!gd) {
-        laik_panic("Out of memory allocating TCPGroupData object");
-        exit(1); // not actually needed, laik_panic never returns
-    }
-    g->backend_data = gd;
+    TCPGroupData *gd = allocateBackendData(g);
 
     laik_log(1, "Comm_split: old myid %d => new myid %d",
              g->parent->myid, g->fromParent[g->parent->myid]);
@@ -242,6 +262,19 @@ void laik_tcp_updateGroup(Laik_Group* g)
     int err = MPI_Comm_split(gdParent->comm, g->myid < 0 ? MPI_UNDEFINED : 0,
                              g->myid, &(gd->comm));
     if (err != MPI_SUCCESS) laik_tcp_panic(err);
+}
+
+static void laik_tcp_eliminate_nodes(Laik_Group *oldGroup, Laik_Group *newGroup, int *nodeStatuses) {
+    laik_log(1, "TCP backend eliminate nodes");
+
+    TCPGroupData *gd = allocateBackendData(newGroup);
+
+    int err = MPI_Comm_eliminate(((TCPGroupData*)oldGroup->backend_data)->comm, oldGroup->size,
+                             nodeStatuses, LAIK_FT_NODE_OK, &gd->comm);
+    if (err != MPI_SUCCESS) laik_tcp_panic(err);
+
+    // Reset the TCP MiniMPI Comm World to the smaller group. To date, this is only used for MPI_Finalize.
+    LAIK_TCP_MINIMPI_COMM_WORLD = gd->comm;
 }
 
 static
@@ -610,7 +643,7 @@ void laik_tcp_exec(Laik_ActionSeq* as)
             // check that we received the expected number of elements
             err = MPI_Get_count(&st, dataType, &count);
             if (err != MPI_SUCCESS) laik_tcp_panic(err);
-            assert((int)ba->count == count);
+//            assert((int)ba->count == count);
             break;
         }
 
