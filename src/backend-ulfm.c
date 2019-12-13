@@ -2,6 +2,8 @@
 // Created by Vincent Bode on 13/12/2019.
 //
 
+#ifdef USE_ULFM
+
 #include <assert.h>
 #include <backends/tcp/mpi.h>
 #include <mpi.h>
@@ -34,8 +36,6 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv) {
 static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup, int* nodeStatuses) {
     (void) oldGroup; (void)newGroup; (void)nodeStatuses;
 
-#ifdef USE_ULFM
-
     int err;
     MPI_Comm oldComm = ((MPIGroupData *) oldGroup->backend_data)->comm;
 
@@ -65,15 +65,10 @@ static void laik_mpi_eliminate_nodes(Laik_Group* oldGroup, Laik_Group* newGroup,
         laik_log(LAIK_LL_Panic, "The size of the new mpi group (%i) is different to the new group size (%i).", newSize, newGroup->size);
         assert(0);
     }
-#else
     laik_log(LAIK_LL_Panic, "Application tried to eliminate nodes but no fault tolerance capability was built.");
-#endif
 }
 
 static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
-
-#ifdef USE_ULFM
-
     laik_log(LAIK_LL_Debug, "Starting agreement protocol\n");
 
 
@@ -118,10 +113,6 @@ static int laik_mpi_status_check(Laik_Group *group, int *nodeStatuses) {
     MPI_Group_free(&failedGroup);
     MPI_Group_free(&checkGroup);
     return n;
-#else
-    laik_log(LAIK_LL_Warning, "Application tried to perform a status check but no fault tolerance capability was built. Will assume that all nodes are reachable.");
-    for (int i = 0; i < laik_size(group); ++i) {
-        nodeStatuses[i] = LAIK_FT_NODE_OK;
-    }
-#endif
 }
+
+#endif
