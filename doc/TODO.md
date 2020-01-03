@@ -4,7 +4,11 @@
 
 * terms
   - "index space" = Laik_Space: correct term?
-  - perhaps better index range/index domain?
+    better "index domain"? ... no need, should be fine
+  - "slice" (Laik_Slice)
+    - this is "just" a consecutive range in an index space
+    - usually, the term "slice" is used in languages/libraries with data backing
+    better "range"
 
 * we should separate partitioning from access behavior because [DONE]
   - if partitioning is directly used without data, access behavior makes no sense
