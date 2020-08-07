@@ -109,7 +109,7 @@ void laik_reservation_add(Laik_Reservation* r, Laik_Partitioning* p);
 // allocate space for all partitionings registered in a reservation
 void laik_reservation_alloc(Laik_Reservation* r);
 
-// free the memory space allocated in this reservation
+// free reservation and the memory space allocated
 void laik_reservation_free(Laik_Reservation* r);
 
 // make data container aware of reservation:
@@ -279,6 +279,10 @@ typedef enum _Laik_MemoryPolicy {
 } Laik_MemoryPolicy;
 
 // allocator interface
+typedef void* (*Laik_malloc_t)(Laik_Data*, size_t);
+typedef void  (*Laik_free_t)(Laik_Data*, void*);
+typedef void* (*Laik_realloc_t)(Laik_Data*, void*, size_t);
+
 typedef struct _Laik_Allocator Laik_Allocator;
 struct _Laik_Allocator {
     Laik_MemoryPolicy policy;
@@ -286,9 +290,9 @@ struct _Laik_Allocator {
     // called by Laik for allocating resources for a data container
     // usually, Laik_Data parameter can be ignored, but may be used
     // to implement an application-specific policy for a container
-    void* (*malloc)(Laik_Data* d, size_t size);
-    void (*free)(Laik_Data* d, void* ptr);
-    void* (*realloc)(Laik_Data* d, void* ptr, size_t size);
+    Laik_malloc_t malloc;
+    Laik_free_t free;
+    Laik_realloc_t realloc;
 
     // notification to allocator that a part of the data is about to be
     // transfered by the communication backend and should be made consistent
@@ -296,9 +300,14 @@ struct _Laik_Allocator {
     void (*unmap)(Laik_Data* d, void* ptr, size_t length);
 };
 
-// returns an allocator with default policy LAIK_MP_NewAllocOnRepartition
-Laik_Allocator* laik_new_allocator(void);
+Laik_Allocator* laik_new_allocator(Laik_malloc_t, Laik_free_t, Laik_realloc_t);
 void laik_set_allocator(Laik_Data* d, Laik_Allocator* alloc);
 Laik_Allocator* laik_get_allocator(Laik_Data* d);
+// returns an allocator with default policy LAIK_MP_NewAllocOnRepartition
+Laik_Allocator* laik_new_allocator_def();
+
+// predefined allocator
+extern Laik_Allocator *laik_allocator_def;
+
 
 #endif // LAIK_DATA_H

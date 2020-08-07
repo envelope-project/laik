@@ -88,8 +88,7 @@ struct _Laik_Reservation {
     int count;    // number of partitionings registered for reservation
     int capacity; // number of entries allocated
     Laik_ReservationEntry* entry; // list of partitionings part of reservation
-    int mappingCount; // number of mappings needed for reservations
-    Laik_Mapping* mapping; // array of mappings for reservations
+    Laik_MappingList* mList; // mappings for reservations
 };
 
 // a data container
@@ -159,6 +158,7 @@ struct _Laik_Mapping {
     uint64_t capacity; // number of bytes allocated
     int reusedFor; // -1: not reused, otherwise map number used for
 
+    Laik_Allocator* allocator; // allocator to use when freeing the mapping
     Laik_Mapping* baseMapping; // mapping this one is embedded in
 };
 
@@ -174,6 +174,8 @@ void laik_data_init(void);
 // create the types pre-provided by LAIK, to be called at data module init
 void laik_type_init(void);
 
+// create mapping descriptors without allocation for <n> maps for a container
+Laik_MappingList* laik_mappinglist_new(Laik_Data* d, int n);
 
 // ensure that the mapping is backed by memory (called by backends)
 void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat *ss);
