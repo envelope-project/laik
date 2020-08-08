@@ -140,6 +140,12 @@ void laik_switchto_flow(Laik_Data* d, Laik_DataFlow flow, Laik_ReductionOperatio
 // returns 0 if partitioning is not set or slice number <n> is invalid
 Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 
+// set an initial partitioning for a container.
+// memory from a reservation can be used by calling laik_data_use_reservation() before.
+// otherwise, memory is not allocated and needs to be provided via laik_set_map_memory().
+void laik_set_initial_partitioning(Laik_Data* d, Laik_Partitioning* p);
+
+
 // convenience functions
 
 // switch to new partitioning calculated with given partitioner algorithm
@@ -192,6 +198,12 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
 
 // for a local index (1d/2d/3d), return offset into memory mapping
 int64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
+
+
+// provide memory resources for a mapping of own partition with ID <n> of container <d>.
+// starting at address <base> with <size> bytes.
+void laik_set_map_memory(Laik_Data* d, int n, void* start, uint64_t size);
+
 
 // get mapping of own partition into local memory for direct access
 //

@@ -295,28 +295,6 @@ Laik_MappingList* laik_mappinglist_new(Laik_Data* d, int n)
     return ml;
 }
 
-// provide memory resources covering a given slice for a mapping
-// - if a non-zero allocator is given, the mapping becomes owner of the
-//   provided memory allocation. On destruction mapping->free() is called
-// - TODO: support other layouts (this expects lexicographic layout)
-void laik_map_set_allocation(Laik_Mapping* m, Laik_Slice* slc,
-                             char* start, uint64_t size, Laik_Allocator* a)
-{
-    // not allocated yet
-    assert(m->start == 0);
-
-    // assume lexicographic layout
-    m->allocCount = laik_slice_size(slc);
-    m->allocatedSlice = *slc;
-    assert(size ==  m->allocCount * m->data->elemsize);
-
-    m->start = start;
-    m->capacity = size;
-
-    // use given allocator for deallocation
-    m->allocator = a;
-}
-
 static
 Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
 {
@@ -508,6 +486,64 @@ Laik_Layout* laik_new_layout_def_3d(uint64_t stride1, uint64_t stride2)
 }
 
 
+// provide memory resources covering the required slice for a mapping
+// - if a non-zero allocator is given, the mapping becomes owner of the
+//   provided memory allocation. On destruction mapping->free() is called
+// - TODO: support other layouts (this expects lexicographic layout)
+static
+void laik_map_set_allocation(Laik_Mapping* m,
+                             char* start, uint64_t size, Laik_Allocator* a)
+{
+    // should only be called if not embedded in another mapping
+    assert(m->baseMapping == 0);
+
+    // must not be allocated yet
+    // here, <base> (first used index) and <start> (allocation address) are actually
+    // the same, as we assume "dense" allocation just covering required slice
+    assert(m->start == 0);
+    assert(m->base == 0);
+
+    // count should be number if indexes in required slice
+    assert(m->count == laik_slice_size(&(m->requiredSlice)));
+    // make sure provided memory buffer is large enough
+    assert(size >=  m->count * m->data->elemsize);
+
+    // allocated size/count is same as size/count of required slice
+    m->allocCount = m->count;
+    m->allocatedSlice = m->requiredSlice;
+
+    m->base = start;
+    m->start = start;
+    m->capacity = size;
+
+    // use given allocator for deallocation
+    m->allocator = a;
+
+    // if a layout is given, it must be a layout hint: not fixed
+    if (m->layout) assert(m->layout->isFixed == false);
+
+    // TODO: for now, we always set a new, concrete layout
+    switch(m->data->space->dims) {
+    case 1:
+        m->layout = laik_new_layout_def_1d();
+        break;
+    case 2: {
+        uint64_t s = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
+        m->layout = laik_new_layout_def_2d(s);
+        break;
+    }
+    case 3:  {
+        uint64_t s1 = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
+        uint64_t s2 = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
+        m->layout = laik_new_layout_def_3d(s1, s2);
+        break;
+    }
+    default: assert(0);
+    }
+}
+
+
+
 void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
 {
     // should only be called if not embedded in another mapping
@@ -517,7 +553,7 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     if (m->count == 0) return;
     Laik_Data* d = m->data;
 
-    // number of bytes to allocate
+    // number of bytes to allocate: no space around required indexes
     uint64_t size = m->count * d->elemsize;
     laik_switchstat_malloc(ss, size);
 
@@ -535,32 +571,7 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
         exit(1); // not actually needed, laik_log never returns
     }
 
-
-    // no space around valid indexes
-    laik_map_set_allocation(m, &(m->requiredSlice), start, size, a);
-    m->base = start;
-
-    // if a layout is given, it must be a layout hint: not fixed
-    if (m->layout) assert(m->layout->isFixed == false);
-
-    // TODO: for now, we always set a new, concrete layout
-    switch(d->space->dims) {
-    case 1:
-        m->layout = laik_new_layout_def_1d();
-        break;
-    case 2: {
-        uint64_t s = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
-        m->layout = laik_new_layout_def_2d(s);
-        break;
-    }
-    case 3:  {
-        uint64_t s1 = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
-        uint64_t s2 = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
-        m->layout = laik_new_layout_def_3d(s1, s2);
-        break;
-    }
-    default: assert(0);
-    }
+    laik_map_set_allocation(m, start, size, a);
 
     laik_log(1, "allocateMap: for '%s'/%d: %llu x %d (%llu B) at %p"
              "\n  layout: %dd, strides (%llu/%llu/%llu)",
@@ -1434,6 +1445,19 @@ Laik_Partitioning* laik_switchto_new_partitioning(Laik_Data* d, Laik_Group* g,
     return p;
 }
 
+// set an initial partitioning for a container.
+void laik_set_initial_partitioning(Laik_Data* d, Laik_Partitioning* p)
+{
+    assert(d->activePartitioning == 0);
+    assert(d->activeMappings == 0);
+
+    laik_log(1, "set initial partitioning of data '%s' to '%s'",
+             d->name, p->name);
+
+    d->activeMappings = prepareMaps(d, p);
+    d->activePartitioning = p;
+}
+
 
 void laik_fill_double(Laik_Data* d, double v)
 {
@@ -1755,8 +1779,9 @@ unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
     return count;
 }
 
-// get mapping of own partition into local memory for direct access
-Laik_Mapping* laik_get_map(Laik_Data* d, int n)
+// make sure this process has own partition and mapping descriptors for container <d>
+static
+void checkOwnParticipation(Laik_Data* d)
 {
     // we must have an active partitioning
     assert(d->activePartitioning);
@@ -1764,13 +1789,42 @@ Laik_Mapping* laik_get_map(Laik_Data* d, int n)
     if (g->myid == -1) {
         laik_log(LAIK_LL_Error,
                  "laik_map called for data '%s' defined on process group %d.\n"
-                 "This task is NOT part of the group. Fix your application!\n"
+                 "This process is NOT part of the group. Fix your application!\n"
                  "(may crash now if returned address is dereferenced)",
                  d->name, g->gid);
     }
 
     // we must have existing mappings
     assert(d->activeMappings != 0);
+}
+
+// provide memory resources for a mapping of own partition with ID <n>
+void laik_set_map_memory(Laik_Data* d, int n, void* start, uint64_t size)
+{
+    checkOwnParticipation(d);
+
+    // FIXME: signal user error instead of assertion
+    assert((n>=0) && (n < d->activeMappings->count));
+    Laik_Mapping* m = &(d->activeMappings->map[n]);
+
+    // allocator set to 0: never deallocated by Laik
+    laik_map_set_allocation(m, start, size, 0);
+
+    laik_log(1, "set_map_memory: for '%s'/%d: %llu x %d (%llu B) at %p"
+             "\n  layout: %dd, strides (%llu/%llu/%llu)",
+             d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
+             (unsigned long long) m->capacity, (void*) m->base,
+             m->layout->dims,
+             (unsigned long long) m->layout->stride[0],
+             (unsigned long long) m->layout->stride[1],
+             (unsigned long long) m->layout->stride[2]);
+}
+
+
+// get mapping of own partition into local memory for direct access
+Laik_Mapping* laik_get_map(Laik_Data* d, int n)
+{
+    checkOwnParticipation(d);
 
     if ((n<0) || (n >= d->activeMappings->count))
         return 0;
