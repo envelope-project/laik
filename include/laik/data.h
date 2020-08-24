@@ -200,8 +200,9 @@ Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
 int64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
 
 
-// provide memory resources for a mapping of own partition with ID <n> of container <d>.
-// starting at address <base> with <size> bytes.
+// provide memory resources for a mapping of own partition with ID <n> of container <d>,
+// starting at address <base> with <size> bytes. Memory will not be freed by LAIK, and
+// it has to cover memory requirements of switches unless reserved memory is provided.
 void laik_set_map_memory(Laik_Data* d, int n, void* start, uint64_t size);
 
 

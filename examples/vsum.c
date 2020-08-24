@@ -155,9 +155,9 @@ int main(int argc, char* argv[])
     sumpart2 = laik_new_partitioning(laik_Master, world, sumspace, 0);
     laik_switchto_partitioning(sumdata, sumpart2, LAIK_DF_Preserve, LAIK_RO_Sum);
     if (laik_myid(world) == 0) {
-        laik_get_map_1d(sumdata, 0, (void**) &base, &count);
+        // access via own provided memory
         printf("Total sums: %.0f, %.0f, %.0f, %.0f\n",
-               base[0], base[1], base[2], base[3]);
+               mysum[0], mysum[1], mysum[2], mysum[3]);
     }
 
     laik_finalize(inst);

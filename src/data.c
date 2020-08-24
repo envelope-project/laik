@@ -266,8 +266,8 @@ void initMapping(Laik_Mapping* m, Laik_Data* d)
     m->base = 0;
     m->layout = 0;
 
-    // no allocater set
-    m->allocator = 0;
+    // use default allocater of container to allocate memory
+    m->allocator = d->allocator;
 
     // not embedded in another mapping
     m->baseMapping = 0;
@@ -557,8 +557,8 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     uint64_t size = m->count * d->elemsize;
     laik_switchstat_malloc(ss, size);
 
-    // allocator to use for this container
-    Laik_Allocator* a = d->allocator;
+    // use the allocator of the mapping
+    Laik_Allocator* a = m->allocator;
     assert(a != 0);
     assert(a->malloc != 0);
     char* start = (a->malloc)(d, size);
@@ -728,8 +728,8 @@ void initEmbeddedMapping(Laik_Mapping* toMap, Laik_Mapping* fromMap)
 
 // try to reuse already allocated memory from old mapping
 // we reuse mapping if it has same or larger size
-// and if old mapping covered all indexed needed in new mapping.
-// TODO: use a policy setting
+// and if old mapping covers all indexes needed in new mapping.
+// If no allocator is set, memory must be reusable
 static
 void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
 {
@@ -771,6 +771,12 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
                                (unsigned long long) fromMap->capacity,
                                toMap->base);
             }
+        }
+        if (toMap->allocator == 0) {
+            // When allocator is not set, no re-allocation is
+            // possible, so old memory must be reusable
+            // FIXME: failed assertion is a user error
+            assert(toMap->start != 0);
         }
     }
 }
@@ -833,6 +839,9 @@ void allocateMappings(Laik_MappingList* toList, Laik_SwitchStat* ss)
 
         // with reservation, all allocations must have happened before
         assert(toList->res == 0);
+
+        // to be able to allocate memory, an allocator must be set
+        assert(map->allocator != 0);
 
         laik_allocateMap(map, ss);
     }
@@ -1807,7 +1816,8 @@ void laik_set_map_memory(Laik_Data* d, int n, void* start, uint64_t size)
     assert((n>=0) && (n < d->activeMappings->count));
     Laik_Mapping* m = &(d->activeMappings->map[n]);
 
-    // allocator set to 0: never deallocated by Laik
+    // allocator set to 0: not freed by Laik, and must be re-usable
+    // on switches
     laik_map_set_allocation(m, start, size, 0);
 
     laik_log(1, "set_map_memory: for '%s'/%d: %llu x %d (%llu B) at %p"
