@@ -118,25 +118,42 @@ struct _Laik_Data {
     Laik_SwitchStat* stat;
 };
 
+// signatures for layout interface
+typedef unsigned int (*laik_layout_pack_t)(
+    const Laik_Mapping* m, const Laik_Slice* s,
+    Laik_Index* idx, char* buf, unsigned int size);
+typedef unsigned int (*laik_layout_unpack_t)(
+    const Laik_Mapping* m, const Laik_Slice* s,
+    Laik_Index* idx, char* buf, unsigned int size);
+typedef char* (*laik_layout_describe_t)(Laik_Layout*);
+
+// a layout defines order of indexes into memory
 struct _Laik_Layout {
-    Laik_LayoutType type;
-    bool isFixed; // still variable, or fixed to a given layout
-    int dims, order[3]; // at most 3 dimensions
-    uint64_t stride[3];
+    int dims;
 
     // pack data of slice in given mapping with this layout into <buf>,
     // using at most <size> bytes, starting at index <idx>.
     // called iteratively by backends, using <idx> to remember position
     // accross multiple calls. <idx> must be set first to index at beginning.
     // returns the number of elements written (or 0 if finished)
-    unsigned int (*pack)(const Laik_Mapping* m, const Laik_Slice* s,
-                         Laik_Index* idx, char* buf, unsigned int size);
+    laik_layout_pack_t pack;
 
     // unpack data from <buf> with <size> bytes length into given slice of
     // memory space provided by mapping, incrementing index accordingly.
     // returns number of elements unpacked.
-    unsigned int (*unpack)(const Laik_Mapping* m, const Laik_Slice* s,
-                           Laik_Index* idx, char* buf, unsigned int size);
+    laik_layout_unpack_t unpack;
+
+    // return string describing the layout (for debug output)
+    laik_layout_describe_t describe;
+};
+
+// lexicographical layout: 1d, 2d, 3d
+typedef struct _Laik_Layout_Lex Laik_Layout_Lex;
+struct _Laik_Layout_Lex {
+    Laik_Layout h;
+
+    int order[3];
+    uint64_t stride[3];
 };
 
 // a mapping of data elements for global index range given by <validSlice>,

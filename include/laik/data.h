@@ -165,16 +165,6 @@ void laik_fill_double(Laik_Data* data, double v);
 // local indexes are always unsigned, as the index into an address range
 //  starting from a base address
 
-typedef enum _Laik_LayoutType {
-    LAIK_LT_Invalid = 0,
-    // not specified, can cope with arbitrary layout
-    LAIK_LT_None,
-    // possibly multiple slices, each ordered innermost dim 1, then 2, 3
-    LAIK_LT_Default,
-    // same as Default, but explictily only 1 slice
-    LAIK_LT_Default1Slice
-} Laik_LayoutType;
-
 // a serialisation order of a LAIK container
 typedef struct _Laik_Layout Laik_Layout;
 
@@ -184,17 +174,11 @@ typedef struct _Laik_Mapping Laik_Mapping;
 // list of mappings for all multiple slices
 typedef struct _Laik_MappingList Laik_MappingList;
 
-// allocate new layout object with a layout hint, to use in laik_map
-Laik_Layout* laik_new_layout(Laik_LayoutType t);
+// allocate new layout object for lexicographical layouts
+Laik_Layout* laik_new_lex_layout(int dims);
 
 // return the layout used by a mapping
 Laik_Layout* laik_map_layout(Laik_Mapping* m);
-
-// return the layout type of a specific layout
-Laik_LayoutType laik_layout_type(Laik_Layout* l);
-
-// return the layout type used in a mapping
-Laik_LayoutType laik_map_layout_type(Laik_Mapping* m);
 
 // for a local index (1d/2d/3d), return offset into memory mapping
 int64_t laik_offset(Laik_Index* idx, Laik_Layout* l);

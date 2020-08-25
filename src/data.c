@@ -27,9 +27,9 @@
 #include <stdio.h>
 
 // forward decl
-unsigned int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s,
+unsigned int laik_pack_lex(const Laik_Mapping* m, const Laik_Slice* s,
                            Laik_Index* idx, char* buf, unsigned int size);
-unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
+unsigned int laik_unpack_lex(const Laik_Mapping* m, const Laik_Slice* s,
                              Laik_Index* idx, char* buf, unsigned int size);
 
 // provided allocators
@@ -393,8 +393,8 @@ uint64_t freeMap(Laik_Mapping* m, Laik_Data* d, Laik_SwitchStat* ss)
              d->name, m->mapNo,
              (unsigned long long) m->capacity, (void*) m->base, (void*) m->start);
 
-    // concrete, fixed layouts are only used once: free
-    if (m->layout && m->layout->isFixed) {
+    // free concrete layout
+    if (m->layout) {
         free(m->layout);
         m->layout = 0;
     }
@@ -437,52 +437,80 @@ uint64_t freeMappingList(Laik_MappingList* ml, Laik_SwitchStat* ss)
     return freed;
 }
 
-// always the same layout
-static
-Laik_Layout* laik_new_layout_def_1d()
+void laik_init_layout(Laik_Layout* l, int dims,
+                      laik_layout_pack_t pack,
+                      laik_layout_unpack_t unpack,
+                      laik_layout_describe_t describe)
 {
-    static Laik_Layout* l = 0;
+    l->dims = dims;
+    l->pack = pack;
+    l->unpack = unpack;
+    l->describe = describe;
+}
+
+static
+char* laik_layout_describe_lex(Laik_Layout* l)
+{
+    static char s[100];
+
+    assert(l->describe == laik_layout_describe_lex);
+    Laik_Layout_Lex* layout = (Laik_Layout_Lex*) l;
+
+    sprintf(s, "lex %dd, strides (%llu/%llu/%llu)",
+             l->dims,
+             (unsigned long long) layout->stride[0],
+             (unsigned long long) layout->stride[1],
+             (unsigned long long) layout->stride[2]);
+
+    return s;
+}
+
+// allocate new layout object describing lexicographical layout
+Laik_Layout_Lex* laik_new_layout_lex(int dims)
+{
+    Laik_Layout_Lex* l = malloc(sizeof(Laik_Layout_Lex));
     if (!l) {
-        l = laik_new_layout(LAIK_LT_Default);
-        l->dims = 1;
-        l->stride[0] = 1;
-        l->stride[1] = 0;
-        l->stride[2] = 0;
-        l->isFixed = false; // this prohibits free() on layout
-        l->pack = laik_pack_def;
-        l->unpack = laik_unpack_def;
+        laik_panic("Out of memory allocating Laik_Layout_Lex object");
+        exit(1); // not actually needed, laik_panic never returns
     }
+    laik_init_layout(&(l->h), dims,
+                     laik_pack_lex, laik_unpack_lex,
+                     laik_layout_describe_lex);
+
     return l;
 }
 
 static
-Laik_Layout* laik_new_layout_def_2d(uint64_t stride)
+Laik_Layout* laik_new_layout_lex1d()
 {
-    Laik_Layout* l = laik_new_layout(LAIK_LT_Default);
-    l->dims = 2;
+    Laik_Layout_Lex* l = laik_new_layout_lex(1);
+    l->stride[0] = 1;
+    l->stride[1] = 0;
+    l->stride[2] = 0;
+
+    return (Laik_Layout*) l;
+}
+
+static
+Laik_Layout* laik_new_layout_lex2d(uint64_t stride)
+{
+    Laik_Layout_Lex* l = laik_new_layout_lex(2);
     l->stride[0] = 1;
     l->stride[1] = stride;
     l->stride[2] = 0;
-    l->isFixed = true;
-    l->pack = laik_pack_def;
-    l->unpack = laik_unpack_def;
 
-    return l;
+    return (Laik_Layout*) l;
 }
 
 static
-Laik_Layout* laik_new_layout_def_3d(uint64_t stride1, uint64_t stride2)
+Laik_Layout* laik_new_layout_lex3d(uint64_t stride1, uint64_t stride2)
 {
-    Laik_Layout* l = laik_new_layout(LAIK_LT_Default);
-    l->dims = 3;
+    Laik_Layout_Lex* l = laik_new_layout_lex(3);
     l->stride[0] = 1;
     l->stride[1] = stride1;
     l->stride[2] = stride1 * stride2;
-    l->isFixed = true;
-    l->pack = laik_pack_def;
-    l->unpack = laik_unpack_def;
 
-    return l;
+    return (Laik_Layout*) l;
 }
 
 
@@ -519,23 +547,23 @@ void laik_map_set_allocation(Laik_Mapping* m,
     // use given allocator for deallocation
     m->allocator = a;
 
-    // if a layout is given, it must be a layout hint: not fixed
-    if (m->layout) assert(m->layout->isFixed == false);
-
-    // TODO: for now, we always set a new, concrete layout
+    // set a concrete lexicographical layout for this mapping
+    //  exactly covering the required slice
+    // TODO: use a layout factory for custom layouts
+    assert(m->layout == 0);
     switch(m->data->space->dims) {
     case 1:
-        m->layout = laik_new_layout_def_1d();
+        m->layout = laik_new_layout_lex1d();
         break;
     case 2: {
         uint64_t s = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
-        m->layout = laik_new_layout_def_2d(s);
+        m->layout = laik_new_layout_lex2d(s);
         break;
     }
     case 3:  {
         uint64_t s1 = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
         uint64_t s2 = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
-        m->layout = laik_new_layout_def_3d(s1, s2);
+        m->layout = laik_new_layout_lex3d(s1, s2);
         break;
     }
     default: assert(0);
@@ -574,13 +602,10 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
     laik_map_set_allocation(m, start, size, a);
 
     laik_log(1, "allocateMap: for '%s'/%d: %llu x %d (%llu B) at %p"
-             "\n  layout: %dd, strides (%llu/%llu/%llu)",
+             "\n  layout: %s",
              d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
              (unsigned long long) m->capacity, (void*) m->base,
-             m->layout->dims,
-             (unsigned long long) m->layout->stride[0],
-             (unsigned long long) m->layout->stride[1],
-             (unsigned long long) m->layout->stride[2]);
+             m->layout->describe(m->layout));
 }
 
 static
@@ -678,16 +703,20 @@ void copyMaps(Laik_Transition* t,
         if (ss)
             ss->copiedBytes += ccount * d->elemsize;
 
+        // FIXME: assume lex layout
+        Laik_Layout_Lex* fromLayout = (Laik_Layout_Lex*) fromMap->layout;
+        Laik_Layout_Lex* toLayout = (Laik_Layout_Lex*) toMap->layout;
+
         for(int64_t i3 = 0; i3 < count.i[2]; i3++) {
             char *fromPtr2 = fromPtr;
             char *toPtr2 = toPtr;
             for(int64_t i2 = 0; i2 < count.i[1]; i2++) {
                 memcpy(toPtr2, fromPtr2, count.i[0] * d->elemsize);
-                fromPtr2 += fromMap->layout->stride[1] * d->elemsize;
-                toPtr2   += toMap->layout->stride[1] * d->elemsize;
+                fromPtr2 += fromLayout->stride[1] * d->elemsize;
+                toPtr2   += toLayout->stride[1] * d->elemsize;
             }
-            fromPtr += fromMap->layout->stride[2] * d->elemsize;
-            toPtr   += toMap->layout->stride[2] * d->elemsize;
+            fromPtr += fromLayout->stride[2] * d->elemsize;
+            toPtr   += toLayout->stride[2] * d->elemsize;
         }
     }
 }
@@ -1481,24 +1510,6 @@ void laik_fill_double(Laik_Data* d, double v)
 }
 
 
-// allocate new layout object with a layout hint, to use in laik_map
-Laik_Layout* laik_new_layout(Laik_LayoutType t)
-{
-    Laik_Layout* l = malloc(sizeof(Laik_Layout));
-    if (!l) {
-        laik_panic("Out of memory allocating Laik_Layout object");
-        exit(1); // not actually needed, laik_panic never returns
-    }
-
-    l->type = t;
-    l->isFixed = false;
-    l->dims = 0; // invalid
-    l->unpack = 0;
-    l->pack = 0;
-
-    return l;
-}
-
 // return the layout used by a mapping
 Laik_Layout* laik_map_layout(Laik_Mapping* m)
 {
@@ -1506,49 +1517,40 @@ Laik_Layout* laik_map_layout(Laik_Mapping* m)
     return m->layout;
 }
 
-// return the layout type of a specific layout
-Laik_LayoutType laik_layout_type(Laik_Layout* l)
-{
-    assert(l);
-    return l->type;
-}
-
-// return the layout type used in a mapping
-Laik_LayoutType laik_map_layout_type(Laik_Mapping* m)
-{
-    assert(m && m->layout);
-    return m->layout->type;
-}
-
 // for a local index (1d/2d/3d), return offset into memory mapping
 // e.g. for (0) / (0,0) / (0,0,0) it returns offset 0
-int64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
+int64_t laik_offset(Laik_Index* idx, Laik_Layout* ll)
 {
-    assert(l);
+    // FIXME: we assume lexicographical layout
+    assert(ll && (ll->pack == laik_pack_lex));
+    Laik_Layout_Lex* l = (Laik_Layout_Lex*) ll;
+    int dims = ll->dims;
 
     // TODO: only default layout with order 1/2/3
     assert(l->stride[0] == 1);
-    if (l->dims > 1) {
+    if (dims > 1) {
         assert(l->stride[0] <= l->stride[1]);
-        if (l->dims > 2)
+        if (dims > 2)
             assert(l->stride[1] <= l->stride[2]);
     }
 
     int64_t off = idx->i[0];
-    if (l->dims > 1) {
+    if (dims > 1) {
         off += idx->i[1] * l->stride[1];
-        if (l->dims > 2) {
+        if (dims > 2) {
             off += idx->i[2] * l->stride[2];
         }
     }
     return off;
 }
 
-// pack/unpack routines for default layout
-unsigned int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s,
+// pack/unpack routines for lexicographical layout
+unsigned int laik_pack_lex(const Laik_Mapping* m, const Laik_Slice* s,
                            Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
+    assert(m->layout->pack == laik_pack_lex);
+    Laik_Layout_Lex* layout = (Laik_Layout_Lex*) m->layout;
     int dims = m->layout->dims;
 
     if (laik_index_isEqual(dims, idx, &(s->to))) {
@@ -1557,11 +1559,11 @@ unsigned int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s,
     }
 
     // TODO: only default layout with order 1/2/3
-    assert(m->layout->stride[0] == 1);
+    assert(layout->stride[0] == 1);
     if (dims > 1) {
-        assert(m->layout->stride[0] <= m->layout->stride[1]);
+        assert(layout->stride[0] <= layout->stride[1]);
         if (dims > 2)
-            assert(m->layout->stride[1] <= m->layout->stride[2]);
+            assert(layout->stride[1] <= layout->stride[2]);
     }
 
     // slice to pack must within local valid slice of mapping
@@ -1591,9 +1593,9 @@ unsigned int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s,
     count = 0;
 
     // elements to skip after to0 reached
-    int64_t skip0 = m->layout->stride[1] - (to0 - from0);
+    int64_t skip0 = layout->stride[1] - (to0 - from0);
     // elements to skip after to1 reached
-    int64_t skip1 = m->layout->stride[2] - m->layout->stride[1] * (to1 - from1);
+    int64_t skip1 = layout->stride[2] - layout->stride[1] * (to1 - from1);
 
     if (laik_log_begin(1)) {
         Laik_Index slcsize, localFrom;
@@ -1667,10 +1669,12 @@ unsigned int laik_pack_def(const Laik_Mapping* m, const Laik_Slice* s,
     return count;
 }
 
-unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
+unsigned int laik_unpack_lex(const Laik_Mapping* m, const Laik_Slice* s,
                              Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
+    assert(m->layout->unpack == laik_unpack_lex);
+    Laik_Layout_Lex* layout = (Laik_Layout_Lex*) m->layout;
     int dims = m->layout->dims;
 
     // there should be something to unpack
@@ -1678,11 +1682,11 @@ unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
     assert(!laik_index_isEqual(dims, idx, &(s->to)));
 
     // TODO: only default layout with order 1/2/3
-    assert(m->layout->stride[0] == 1);
+    assert(layout->stride[0] == 1);
     if (dims > 1) {
-        assert(m->layout->stride[0] <= m->layout->stride[1]);
+        assert(layout->stride[0] <= layout->stride[1]);
         if (dims > 2)
-            assert(m->layout->stride[1] <= m->layout->stride[2]);
+            assert(layout->stride[1] <= layout->stride[2]);
     }
 
     // slice to unpack into must be within local valid slice of mapping
@@ -1712,9 +1716,9 @@ unsigned int laik_unpack_def(const Laik_Mapping* m, const Laik_Slice* s,
     count = 0;
 
     // elements to skip after to0 reached
-    uint64_t skip0 = m->layout->stride[1] - (to0 - from0);
+    uint64_t skip0 = layout->stride[1] - (to0 - from0);
     // elements to skip after to1 reached
-    uint64_t skip1 = m->layout->stride[2] - m->layout->stride[1] * (to1 - from1);
+    uint64_t skip1 = layout->stride[2] - layout->stride[1] * (to1 - from1);
 
     if (laik_log_begin(1)) {
         Laik_Index slcsize, localFrom;
@@ -1821,13 +1825,10 @@ void laik_set_map_memory(Laik_Data* d, int n, void* start, uint64_t size)
     laik_map_set_allocation(m, start, size, 0);
 
     laik_log(1, "set_map_memory: for '%s'/%d: %llu x %d (%llu B) at %p"
-             "\n  layout: %dd, strides (%llu/%llu/%llu)",
+             "\n  layout: %s",
              d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
              (unsigned long long) m->capacity, (void*) m->base,
-             m->layout->dims,
-             (unsigned long long) m->layout->stride[0],
-             (unsigned long long) m->layout->stride[1],
-             (unsigned long long) m->layout->stride[2]);
+             m->layout->describe(m->layout));
 }
 
 
@@ -1880,10 +1881,13 @@ Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n,
         laik_log(LAIK_LL_Error, "Querying 2d mapping of an %dd space!",
                  l->dims);
 
+    // this assumes lexicographical layout
+    assert(l->pack == laik_pack_lex);
+
     if (base)    *base    = m->base;
     if (xsize)   *xsize   = m->size[0];
     if (ysize)   *ysize   = m->size[1];
-    if (ystride) *ystride = l->stride[1];
+    if (ystride) *ystride = ((Laik_Layout_Lex*)l)->stride[1];
     return m;
 }
 
@@ -1908,12 +1912,15 @@ Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
         laik_log(LAIK_LL_Error, "Querying 3d mapping of %dd space!",
                  l->dims);
 
+    // this assumes lexicographical layout
+    assert(l->pack == laik_pack_lex);
+
     if (base)    *base    = m->base;
     if (xsize)   *xsize   = m->size[0];
     if (ysize)   *ysize   = m->size[1];
-    if (ystride) *ystride = l->stride[1];
+    if (ystride) *ystride = ((Laik_Layout_Lex*)l)->stride[1];
     if (zsize)   *zsize   = m->size[2];
-    if (zstride) *zstride = l->stride[2];
+    if (zstride) *zstride = ((Laik_Layout_Lex*)l)->stride[2];
     return m;
 }
 
