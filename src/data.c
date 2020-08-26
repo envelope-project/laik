@@ -256,9 +256,6 @@ void initMapping(Laik_Mapping* m, Laik_Data* d)
     m->requiredSlice.space = 0;
 
     m->count = 0;
-    m->size[0] = 0;
-    m->size[1] = 0;
-    m->size[2] = 0;
 
     // not backed by memory yet
     m->capacity = 0;
@@ -303,7 +300,6 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
     int myid = laik_myid(p->group);
     if (myid == -1) return 0; // this task is not part of the task group
     assert(myid < p->group->size);
-    int dims = d->space->dims;
 
     // reserved and already allocated?
     Laik_Reservation* r = d->activeReservation;
@@ -354,9 +350,6 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
         lastOff = o;
         m->requiredSlice = slc;
         m->count = laik_slice_size(&slc);
-        m->size[0] = slc.to.i[0] - slc.from.i[0];
-        m->size[1] = (dims > 1) ? (slc.to.i[1] - slc.from.i[1]) : 0;
-        m->size[2] = (dims > 2) ? (slc.to.i[2] - slc.from.i[2]) : 0;
 
         if (laik_log_begin(1)) {
             laik_log_append("    mapNo %d: req.slice ", mapNo);
@@ -1207,7 +1200,6 @@ void laik_reservation_alloc(Laik_Reservation* res)
     // (3) link per-partitioning descriptor to corresponding combined one
     //     and determine required space for each mapping
 
-    int dims = data->space->dims;
     for(unsigned int i = 0; i < groupCount; i++) {
         int idx = glist[i].partIndex;
 
@@ -1258,9 +1250,6 @@ void laik_reservation_alloc(Laik_Reservation* res)
         total += count;
 
         m->count = count;
-        m->size[0] = slc->to.i[0] - slc->from.i[0];
-        m->size[1] = (dims > 1) ? (slc->to.i[1] - slc->from.i[1]) : 0;
-        m->size[2] = (dims > 2) ? (slc->to.i[2] - slc->from.i[2]) : 0;
 
         laik_allocateMap(m, data->stat);
 
@@ -1287,9 +1276,6 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
             Laik_Slice* slc = &(m->requiredSlice);
             m->count = laik_slice_size(slc);
-            m->size[0] = slc->to.i[0] - slc->from.i[0];
-            m->size[1] = (dims > 1) ? (slc->to.i[1] - slc->from.i[1]) : 0;
-            m->size[2] = (dims > 2) ? (slc->to.i[2] - slc->from.i[2]) : 0;
 
             initEmbeddedMapping(m, m->baseMapping);
 
@@ -1502,6 +1488,7 @@ void laik_fill_double(Laik_Data* d, double v)
     double* base;
     uint64_t count, i;
 
+    // FIXME: this assumes 1d lexicographical layout
     // TODO: partitioning can have multiple slices
     laik_get_map_1d(d, 0, (void**) &base, &count);
     assert(laik_my_slicecount(d->activePartitioning) == 1);
@@ -1881,13 +1868,17 @@ Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n,
         laik_log(LAIK_LL_Error, "Querying 2d mapping of an %dd space!",
                  l->dims);
 
-    // this assumes lexicographical layout
+    // this requires lexicographical layout
     assert(l->pack == laik_pack_lex);
 
-    if (base)    *base    = m->base;
-    if (xsize)   *xsize   = m->size[0];
-    if (ysize)   *ysize   = m->size[1];
-    if (ystride) *ystride = ((Laik_Layout_Lex*)l)->stride[1];
+    if (base)
+        *base = m->base;
+    if (xsize)
+        *xsize = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
+    if (ysize)
+        *ysize = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
+    if (ystride)
+        *ystride = ((Laik_Layout_Lex*)l)->stride[1];
     return m;
 }
 
@@ -1912,15 +1903,21 @@ Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
         laik_log(LAIK_LL_Error, "Querying 3d mapping of %dd space!",
                  l->dims);
 
-    // this assumes lexicographical layout
+    // this requires lexicographical layout
     assert(l->pack == laik_pack_lex);
 
-    if (base)    *base    = m->base;
-    if (xsize)   *xsize   = m->size[0];
-    if (ysize)   *ysize   = m->size[1];
-    if (ystride) *ystride = ((Laik_Layout_Lex*)l)->stride[1];
-    if (zsize)   *zsize   = m->size[2];
-    if (zstride) *zstride = ((Laik_Layout_Lex*)l)->stride[2];
+    if (base)
+        *base = m->base;
+    if (xsize)
+        *xsize = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
+    if (ysize)
+        *ysize = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
+    if (ystride)
+        *ystride = ((Laik_Layout_Lex*)l)->stride[1];
+    if (zsize)
+        *zsize = m->requiredSlice.to.i[2] - m->requiredSlice.from.i[2];
+    if (zstride)
+        *zstride = ((Laik_Layout_Lex*)l)->stride[2];
     return m;
 }
 
