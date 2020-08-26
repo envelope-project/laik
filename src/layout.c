@@ -30,18 +30,36 @@
 void laik_init_layout(Laik_Layout* l, int dims,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
-                      laik_layout_describe_t describe)
+                      laik_layout_describe_t describe,
+                      laik_layout_offset_t offset)
 {
     l->dims = dims;
     l->pack = pack;
     l->unpack = unpack;
     l->describe = describe;
+    l->offset = offset;
 }
 
 
 
 // interface implementation of lexicographical layout
 
+static
+int64_t laik_offset_lex(Laik_Layout* l, Laik_Index* idx)
+{
+    Laik_Layout_Lex* ll = laik_is_layout_lex(l);
+    assert(ll);
+    int dims = l->dims;
+
+    int64_t off = idx->i[0] * ll->stride[0];
+    if (dims > 1) {
+        off += idx->i[1] * ll->stride[1];
+        if (dims > 2) {
+            off += idx->i[2] * ll->stride[2];
+        }
+    }
+    return off;
+}
 
 // pack/unpack routines for lexicographical layout
 static
@@ -320,7 +338,7 @@ Laik_Layout_Lex* laik_new_layout_lex(int dims)
     }
     laik_init_layout(&(l->h), dims,
                      laik_pack_lex, laik_unpack_lex,
-                     laik_layout_describe_lex);
+                     laik_layout_describe_lex, laik_offset_lex);
 
     return l;
 }
@@ -367,4 +385,13 @@ Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l)
         return (Laik_Layout_Lex*) l;
 
     return 0; // not a lexicographical layout
+}
+
+// return stride for dimension <d> in lex layout
+uint64_t laik_layout_lex_stride(Laik_Layout* l, int d)
+{
+    Laik_Layout_Lex* ll = laik_is_layout_lex(l);
+    assert((d >= 0) && (d < l->dims));
+
+    return ll->stride[d];
 }

@@ -125,13 +125,13 @@ struct _Laik_Layout {
     laik_layout_pack_t pack;
     laik_layout_unpack_t unpack;
     laik_layout_describe_t describe;
+    laik_layout_offset_t offset;
 };
 
 // lexicographical layout: 1d, 2d, 3d
 struct _Laik_Layout_Lex {
     Laik_Layout h;
 
-    int order[3];
     uint64_t stride[3];
 };
 

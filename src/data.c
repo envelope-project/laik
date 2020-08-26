@@ -1427,31 +1427,11 @@ Laik_Layout* laik_map_layout(Laik_Mapping* m)
 
 // for a local index (1d/2d/3d), return offset into memory mapping
 // e.g. for (0) / (0,0) / (0,0,0) it returns offset 0
-int64_t laik_offset(Laik_Index* idx, Laik_Layout* ll)
+int64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
 {
-    // FIXME: we assume lexicographical layout
-    Laik_Layout_Lex* l = laik_is_layout_lex(ll);
-    assert(l);
-    int dims = ll->dims;
-
-    // TODO: only default layout with order 1/2/3
-    assert(l->stride[0] == 1);
-    if (dims > 1) {
-        assert(l->stride[0] <= l->stride[1]);
-        if (dims > 2)
-            assert(l->stride[1] <= l->stride[2]);
-    }
-
-    int64_t off = idx->i[0];
-    if (dims > 1) {
-        off += idx->i[1] * l->stride[1];
-        if (dims > 2) {
-            off += idx->i[2] * l->stride[2];
-        }
-    }
-    return off;
+    assert(l && l->offset);
+    return (l->offset)(l, idx);
 }
-
 
 // make sure this process has own partition and mapping descriptors for container <d>
 static
@@ -1524,6 +1504,7 @@ Laik_Mapping* laik_get_map_1d(Laik_Data* d, int n, void** base, uint64_t* count)
 }
 
 // for 2d mapping with ID n, describe mapping in output parameters
+// this requires lexicographical layout
 Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n,
                               void** base, uint64_t* ysize,
                               uint64_t* ystride, uint64_t* xsize)
@@ -1542,10 +1523,6 @@ Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n,
         laik_log(LAIK_LL_Error, "Querying 2d mapping of an %dd space!",
                  l->dims);
 
-    // this requires lexicographical layout
-    Laik_Layout_Lex* ll = laik_is_layout_lex(l);
-    assert(ll);
-
     if (base)
         *base = m->base;
     if (xsize)
@@ -1553,11 +1530,12 @@ Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n,
     if (ysize)
         *ysize = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
     if (ystride)
-        *ystride = ll->stride[1];
+        *ystride = laik_layout_lex_stride(l, 1);
     return m;
 }
 
 // for 3d mapping with ID n, describe mapping in output parameters
+// this requires lexicographical layout
 Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
                           uint64_t* zsize, uint64_t* zstride,
                           uint64_t* ysize, uint64_t* ystride,
@@ -1578,10 +1556,6 @@ Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
         laik_log(LAIK_LL_Error, "Querying 3d mapping of %dd space!",
                  l->dims);
 
-    // this requires lexicographical layout
-    Laik_Layout_Lex* ll = laik_is_layout_lex(l);
-    assert(ll);
-
     if (base)
         *base = m->base;
     if (xsize)
@@ -1589,11 +1563,11 @@ Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
     if (ysize)
         *ysize = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
     if (ystride)
-        *ystride = ll->stride[1];
+        *ystride = laik_layout_lex_stride(l, 1);
     if (zsize)
         *zsize = m->requiredSlice.to.i[2] - m->requiredSlice.from.i[2];
     if (zstride)
-        *zstride = ll->stride[2];
+        *zstride = laik_layout_lex_stride(l, 2);
     return m;
 }
 

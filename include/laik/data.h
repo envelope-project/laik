@@ -265,6 +265,10 @@ bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
 
 // signatures for layout interface
 
+// return offset into memory mapping for a relative index,
+// such that index at origin returns offset 0
+typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, Laik_Index*);
+
 // pack data of slice in given mapping with this layout into <buf>,
 // using at most <size> bytes, starting at index <idx>.
 // called iteratively by backends, using <idx> to remember position
@@ -287,7 +291,8 @@ typedef char* (*laik_layout_describe_t)(Laik_Layout*);
 void laik_init_layout(Laik_Layout* l, int dims,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
-                      laik_layout_describe_t describe);
+                      laik_layout_describe_t describe,
+                      laik_layout_offset_t offset);
 
 
 // lexicographical layout: 1d, 2d, 3d
@@ -306,6 +311,8 @@ Laik_Layout* laik_new_layout_lex3d(uint64_t stride1, uint64_t stride2);
 // return lex layout if given layout is a lexicographical layout
 Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l);
 
+// return stride for dimension <d> in lex layout
+uint64_t laik_layout_lex_stride(Laik_Layout* l, int d);
 
 //----------------------------------
 // Allocator interface
