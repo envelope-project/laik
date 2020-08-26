@@ -165,7 +165,7 @@ void laik_fill_double(Laik_Data* data, double v);
 // local indexes are always unsigned, as the index into an address range
 //  starting from a base address
 
-// a serialisation order of a LAIK container
+// a serialisation order of a LAIK container (for address offsets)
 typedef struct _Laik_Layout Laik_Layout;
 
 // one slice mapped to local memory space
@@ -173,9 +173,6 @@ typedef struct _Laik_Mapping Laik_Mapping;
 
 // list of mappings for all multiple slices
 typedef struct _Laik_MappingList Laik_MappingList;
-
-// allocate new layout object for lexicographical layouts
-Laik_Layout* laik_new_lex_layout(int dims);
 
 // return the layout used by a mapping
 Laik_Layout* laik_map_layout(Laik_Mapping* m);
@@ -258,6 +255,57 @@ Laik_Mapping* laik_global2local_2d(Laik_Data* d, int64_t gx, int64_t gy,
 //  (gx/gy) and return true, otherwise return false
 bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
                            int64_t* gx, int64_t* gy);
+
+
+//----------------------------------
+// Layout
+//
+// a layout is a serialisation order of a LAIK container,
+// e.g. to define how indexes are layed out in memory
+
+// signatures for layout interface
+
+// pack data of slice in given mapping with this layout into <buf>,
+// using at most <size> bytes, starting at index <idx>.
+// called iteratively by backends, using <idx> to remember position
+// accross multiple calls. <idx> must be set first to index at beginning.
+// returns the number of elements written (or 0 if finished)
+typedef unsigned int (*laik_layout_pack_t)(
+    const Laik_Mapping* m, const Laik_Slice* s,
+    Laik_Index* idx, char* buf, unsigned int size);
+
+// unpack data from <buf> with <size> bytes length into given slice of
+// memory space provided by mapping, incrementing index accordingly.
+// returns number of elements unpacked.
+typedef unsigned int (*laik_layout_unpack_t)(
+    const Laik_Mapping* m, const Laik_Slice* s,
+    Laik_Index* idx, char* buf, unsigned int size);
+
+// return string describing the layout (for debug output)
+typedef char* (*laik_layout_describe_t)(Laik_Layout*);
+
+void laik_init_layout(Laik_Layout* l, int dims,
+                      laik_layout_pack_t pack,
+                      laik_layout_unpack_t unpack,
+                      laik_layout_describe_t describe);
+
+
+// lexicographical layout: 1d, 2d, 3d
+
+typedef struct _Laik_Layout_Lex Laik_Layout_Lex;
+
+// create layout object for dense 1d lexicographical layout
+Laik_Layout* laik_new_layout_lex1d();
+// create layout object for 2d lexicographical layout
+// with stride 1 in dimension X and <stride> in dimension Y
+Laik_Layout* laik_new_layout_lex2d(uint64_t stride);
+// create layout object for 3d lexicographical layout
+// with strides 1 in X, <stride1> in Y and <stride2> in Z
+Laik_Layout* laik_new_layout_lex3d(uint64_t stride1, uint64_t stride2);
+
+// return lex layout if given layout is a lexicographical layout
+Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l);
+
 
 //----------------------------------
 // Allocator interface
