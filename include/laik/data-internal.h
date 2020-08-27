@@ -126,6 +126,8 @@ struct _Laik_Layout {
     laik_layout_unpack_t unpack;
     laik_layout_describe_t describe;
     laik_layout_offset_t offset;
+    laik_layout_first_t first;
+    laik_layout_next_t next;
 };
 
 // lexicographical layout: 1d, 2d, 3d

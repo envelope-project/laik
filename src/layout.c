@@ -31,15 +31,18 @@ void laik_init_layout(Laik_Layout* l, int dims,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
                       laik_layout_describe_t describe,
-                      laik_layout_offset_t offset)
+                      laik_layout_offset_t offset,
+                      laik_layout_first_t first,
+                      laik_layout_next_t next)
 {
     l->dims = dims;
     l->pack = pack;
     l->unpack = unpack;
     l->describe = describe;
     l->offset = offset;
+    l->first = first;
+    l->next = next;
 }
-
 
 
 // interface implementation of lexicographical layout
@@ -59,6 +62,56 @@ int64_t laik_offset_lex(Laik_Layout* l, Laik_Index* idx)
         }
     }
     return off;
+}
+
+static
+int64_t laik_first_lex(Laik_Layout* l,
+                       Laik_Slice* slc, Laik_Index* idx)
+{
+    *idx = slc->from;
+    return laik_offset_lex(l, idx);
+}
+
+// return number of possible increments in x
+static
+int correct_idx(Laik_Slice* slc, Laik_Index* idx)
+{
+    assert(idx->i[0] >= slc->from.i[0]);
+    if (idx->i[0] >= slc->to.i[0]) {
+        idx->i[0] = slc->from.i[0];
+        idx->i[1]++;
+    }
+
+    assert(idx->i[1] >= slc->from.i[1]);
+    if (idx->i[1] >= slc->to.i[1]) {
+        idx->i[0] = slc->from.i[0];
+        idx->i[1] = slc->from.i[1];
+        idx->i[2]++;
+    }
+
+    assert(idx->i[2] >= slc->from.i[2]);
+    if (idx->i[2] >= slc->to.i[2]) return 0;
+
+    return slc->to.i[0] - idx->i[0];
+}
+
+static
+int64_t laik_next_lex(Laik_Layout* l,
+                      Laik_Slice* slc, Laik_Index* idx, int max)
+{
+    (void) l; // not used, but part of interface
+
+    int steps = correct_idx(slc, idx);
+    if (steps == 0) return 0;
+
+    if (steps > max) steps = max;
+    idx->i[0] += steps;
+
+    // ensure idx is valid if traversal not finished:
+    //  user may want to call laik_offset on it
+    correct_idx(slc, idx);
+
+    return steps;
 }
 
 // pack/unpack routines for lexicographical layout
@@ -338,7 +391,8 @@ Laik_Layout_Lex* laik_new_layout_lex(int dims)
     }
     laik_init_layout(&(l->h), dims,
                      laik_pack_lex, laik_unpack_lex,
-                     laik_layout_describe_lex, laik_offset_lex);
+                     laik_layout_describe_lex, laik_offset_lex,
+                     laik_first_lex, laik_next_lex);
 
     return l;
 }
