@@ -463,23 +463,7 @@ void laik_map_set_allocation(Laik_Mapping* m,
     //  exactly covering the required slice
     // TODO: use a layout factory for custom layouts
     assert(m->layout == 0);
-    switch(m->data->space->dims) {
-    case 1:
-        m->layout = laik_new_layout_lex1d();
-        break;
-    case 2: {
-        uint64_t s = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
-        m->layout = laik_new_layout_lex2d(s);
-        break;
-    }
-    case 3:  {
-        uint64_t s1 = m->requiredSlice.to.i[0] - m->requiredSlice.from.i[0];
-        uint64_t s2 = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
-        m->layout = laik_new_layout_lex3d(s1, s2);
-        break;
-    }
-    default: assert(0);
-    }
+    m->layout = laik_new_layout_lex(&(m->requiredSlice));
 }
 
 
@@ -569,11 +553,11 @@ void copyMaps(Laik_Transition* t,
 
         // no copy needed if mapping reused
         if (fromMap->reusedFor == op->toMapNo) {
-            uint64_t fromOff = laik_offset(&fromStart, fromMap->layout);
-            uint64_t toOff = laik_offset(&toStart, toMap->layout);
+            uint64_t fromOff = laik_offset(&(s->from), fromMap->layout);
+            uint64_t toOff = laik_offset(&(s->from), toMap->layout);
 
-            assert(fromMap->base + fromOff * d->elemsize ==
-                   toMap->base   + toOff * d->elemsize);
+            assert(fromMap->start + fromOff * d->elemsize ==
+                   toMap->start   + toOff * d->elemsize);
 
             if (laik_log_begin(1)) {
                 laik_log_append("copy map for '%s': (%lu x %lu x %lu)",
@@ -593,10 +577,10 @@ void copyMaps(Laik_Transition* t,
 
         assert(toMap->base);
 
-        uint64_t fromOff  = laik_offset(&fromStart, fromMap->layout);
-        uint64_t toOff    = laik_offset(&toStart, toMap->layout);
-        char*    fromPtr  = fromMap->base + fromOff * d->elemsize;
-        char*    toPtr    = toMap->base   + toOff * d->elemsize;
+        uint64_t fromOff  = laik_offset(&(s->from), fromMap->layout);
+        uint64_t toOff    = laik_offset(&(s->from), toMap->layout);
+        char*    fromPtr  = fromMap->start + fromOff * d->elemsize;
+        char*    toPtr    = toMap->start   + toOff * d->elemsize;
 
         if (laik_log_begin(1)) {
             laik_log_append("copy map for '%s': (%lu x %lu x %lu)",
@@ -661,11 +645,7 @@ void initEmbeddedMapping(Laik_Mapping* toMap, Laik_Mapping* fromMap)
     fromMap->allocator = 0;
 
     // set <base> of embedded mapping according to required vs. allocated
-    Laik_Index idx;
-    laik_sub_index(&idx,
-                   &(toMap->requiredSlice.from),
-                   &(toMap->allocatedSlice.from));
-    uint64_t off = laik_offset(&idx, toMap->layout);
+    uint64_t off = laik_offset(&(toMap->requiredSlice.from), toMap->layout);
     toMap->base = toMap->start + off * data->elemsize;
 }
 

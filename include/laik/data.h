@@ -177,7 +177,7 @@ typedef struct _Laik_MappingList Laik_MappingList;
 // return the layout used by a mapping
 Laik_Layout* laik_map_layout(Laik_Mapping* m);
 
-// for a local index (1d/2d/3d), return offset into memory mapping
+// offset for a index inside a slice covered by a layout (1d/2d/3d)
 int64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
 
 
@@ -265,8 +265,7 @@ bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
 
 // signatures for layout interface
 
-// return offset into memory mapping for a relative index,
-// such that index at origin returns offset 0
+// return offset into memory mapping for a given index
 typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, Laik_Index*);
 
 // set index to index with lowest offset for traversing a given slice,
@@ -299,7 +298,7 @@ typedef unsigned int (*laik_layout_unpack_t)(
 // return string describing the layout (for debug output)
 typedef char* (*laik_layout_describe_t)(Laik_Layout*);
 
-void laik_init_layout(Laik_Layout* l, int dims,
+void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
                       laik_layout_describe_t describe,
@@ -308,18 +307,13 @@ void laik_init_layout(Laik_Layout* l, int dims,
                       laik_layout_next_t next);
 
 
-// lexicographical layout: 1d, 2d, 3d
+// lexicographical layout covering one 1d, 2d, 3d slice
 
 typedef struct _Laik_Layout_Lex Laik_Layout_Lex;
 
-// create layout object for dense 1d lexicographical layout
-Laik_Layout* laik_new_layout_lex1d();
-// create layout object for 2d lexicographical layout
-// with stride 1 in dimension X and <stride> in dimension Y
-Laik_Layout* laik_new_layout_lex2d(uint64_t stride);
-// create layout object for 3d lexicographical layout
-// with strides 1 in X, <stride1> in Y and <stride2> in Z
-Laik_Layout* laik_new_layout_lex3d(uint64_t stride1, uint64_t stride2);
+// create layout object for 1d/2d/3d lexicographical layout
+// with innermost dim x, then y, z, fully covering given slice
+Laik_Layout* laik_new_layout_lex(Laik_Slice* slc);
 
 // return lex layout if given layout is a lexicographical layout
 Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l);

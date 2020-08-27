@@ -27,7 +27,7 @@
 // - generic interface
 // - implementation of lexicographical layout
 
-void laik_init_layout(Laik_Layout* l, int dims,
+void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
                       laik_layout_describe_t describe,
@@ -36,6 +36,8 @@ void laik_init_layout(Laik_Layout* l, int dims,
                       laik_layout_next_t next)
 {
     l->dims = dims;
+    l->count = count;
+
     l->pack = pack;
     l->unpack = unpack;
     l->describe = describe;
@@ -54,13 +56,14 @@ int64_t laik_offset_lex(Laik_Layout* l, Laik_Index* idx)
     assert(ll);
     int dims = l->dims;
 
-    int64_t off = idx->i[0] * ll->stride[0];
+    int64_t off = idx->i[0] - ll->slc.from.i[0];
     if (dims > 1) {
-        off += idx->i[1] * ll->stride[1];
+        off += (idx->i[1] - ll->slc.from.i[1]) * ll->stride[1];
         if (dims > 2) {
-            off += idx->i[2] * ll->stride[2];
+            off += (idx->i[2] - ll->slc.from.i[2]) * ll->stride[2];
         }
     }
+    assert((off >= 0) && (off < (int64_t) l->count));
     return off;
 }
 
@@ -140,10 +143,8 @@ unsigned int laik_pack_lex(const Laik_Mapping* m, const Laik_Slice* s,
     assert(laik_slice_within_slice(s, &(m->requiredSlice)));
 
     // calculate address of starting index
-    Laik_Index localIdx;
-    laik_sub_index(&localIdx, idx, &(m->requiredSlice.from));
-    uint64_t idxOff = laik_offset(&localIdx, m->layout);
-    char* idxPtr = m->base + idxOff * elemsize;
+    uint64_t idxOff = laik_offset(idx, m->layout);
+    char* idxPtr = m->start + idxOff * elemsize;
 
     int64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
     from0 = s->from.i[0];
@@ -263,10 +264,8 @@ unsigned int laik_unpack_lex(const Laik_Mapping* m, const Laik_Slice* s,
     assert(laik_slice_within_slice(s, &(m->requiredSlice)));
 
     // calculate address of starting index
-    Laik_Index localIdx;
-    laik_sub_index(&localIdx, idx, &(m->requiredSlice.from));
-    uint64_t idxOff = laik_offset(&localIdx, m->layout);
-    char* idxPtr = m->base + idxOff * elemsize;
+    uint64_t idxOff = laik_offset(idx, m->layout);
+    char* idxPtr = m->start + idxOff * elemsize;
 
     int64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
     from0 = s->from.i[0];
@@ -379,58 +378,42 @@ char* laik_layout_describe_lex(Laik_Layout* l)
     return s;
 }
 
-// allocate new layout object describing lexicographical layout
-// helper for laik_new_layout_lex1d/2d/3d
-static
-Laik_Layout_Lex* laik_new_layout_lex(int dims)
+// allocate new layout object for lexicographical layout
+Laik_Layout* laik_new_layout_lex(Laik_Slice* slc)
 {
+    int dims = slc->space->dims;
     Laik_Layout_Lex* l = malloc(sizeof(Laik_Layout_Lex));
     if (!l) {
         laik_panic("Out of memory allocating Laik_Layout_Lex object");
         exit(1); // not actually needed, laik_panic never returns
     }
-    laik_init_layout(&(l->h), dims,
+    laik_init_layout(&(l->h), dims, laik_slice_size(slc),
                      laik_pack_lex, laik_unpack_lex,
                      laik_layout_describe_lex, laik_offset_lex,
                      laik_first_lex, laik_next_lex);
 
-    return l;
-}
+    l->slc = *slc;
 
-// create layout object for dense 1d lexicographical layout
-Laik_Layout* laik_new_layout_lex1d()
-{
-    Laik_Layout_Lex* l = laik_new_layout_lex(1);
+    assert(slc->from.i[0] < slc->to.i[0]);
     l->stride[0] = 1;
-    l->stride[1] = 0;
-    l->stride[2] = 0;
+
+    if (dims > 1) {
+        l->stride[1] = slc->to.i[0] - slc->from.i[0];
+        assert(slc->from.i[1] < slc->to.i[1]);
+    }
+    else
+        l->stride[1] = 0; // invalid, not used
+
+    if (dims > 2) {
+        l->stride[2] = l->stride[1] * (slc->to.i[1] - slc->from.i[1]);
+        assert(slc->from.i[2] < slc->to.i[2]);
+    }
+    else
+        l->stride[2] = 0; // invalid, not used
 
     return (Laik_Layout*) l;
 }
 
-// create layout object for 2d lexicographical layout
-// with stride 1 in dimension X and <stride> in dimension Y
-Laik_Layout* laik_new_layout_lex2d(uint64_t stride)
-{
-    Laik_Layout_Lex* l = laik_new_layout_lex(2);
-    l->stride[0] = 1;
-    l->stride[1] = stride;
-    l->stride[2] = 0;
-
-    return (Laik_Layout*) l;
-}
-
-// create layout object for 3d lexicographical layout
-// with strides 1 in X, <stride1> in Y and <stride2> in Z
-Laik_Layout* laik_new_layout_lex3d(uint64_t stride1, uint64_t stride2)
-{
-    Laik_Layout_Lex* l = laik_new_layout_lex(3);
-    l->stride[0] = 1;
-    l->stride[1] = stride1;
-    l->stride[2] = stride1 * stride2;
-
-    return (Laik_Layout*) l;
-}
 
 // return lex layout if given layout is a lexicographical layout
 Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l)
