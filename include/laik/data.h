@@ -268,6 +268,10 @@ bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
 // return offset into memory mapping for a given index
 typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, Laik_Index*);
 
+// copy data in a slice among mappings with same layout type
+typedef void (*laik_layout_copy_t)(Laik_Slice* slc,
+    Laik_Mapping* from, Laik_Mapping* to);
+
 // set index to index with lowest offset for traversing a given slice,
 // return the offset (index 0 maps to offset 0)
 typedef int64_t (*laik_layout_first_t)(
@@ -303,8 +307,10 @@ void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
                       laik_layout_unpack_t unpack,
                       laik_layout_describe_t describe,
                       laik_layout_offset_t offset,
+                      laik_layout_copy_t copy,
                       laik_layout_first_t first,
                       laik_layout_next_t next);
+
 
 
 // lexicographical layout covering one 1d, 2d, 3d slice

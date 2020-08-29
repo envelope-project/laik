@@ -23,28 +23,97 @@
 
 // a layout is a serialisation order of a LAIK container,
 // e.g. to define how indexes are layed out in memory
-//
-// - generic interface
+
+// this file:
+// - generic interface implementations
 // - implementation of lexicographical layout
 
+
+// generic variants of layout interface functions
+// just using offset function
+
+// helper for laik_layout_copy_gen: lexicographical traversal
+static
+bool next_lex(Laik_Slice* slc, Laik_Index* idx)
+{
+    if (idx->i[0] < slc->to.i[0]) {
+        idx->i[0]++;
+        return true;
+    }
+    if (slc->space->dims == 1) return false;
+
+    if (idx->i[1] < slc->to.i[1]) {
+        idx->i[1]++;
+        idx->i[0] = slc->from.i[0];
+        return true;
+    }
+    if (slc->space->dims == 2) return false;
+
+    if (idx->i[2] < slc->to.i[2]) {
+        idx->i[2]++;
+        idx->i[1] = slc->from.i[1];
+        return true;
+    }
+    return false;
+}
+
+// (slow) generic copy just using offset function from layout interface
+void laik_layout_copy_gen(Laik_Slice* slc,
+                          Laik_Mapping* from, Laik_Mapping* to)
+{
+    Laik_Index idx = slc->from;
+    Laik_Layout* fromLayout = from->layout;
+    Laik_Layout* toLayout = to->layout;
+    unsigned int elemsize = from->data->elemsize;
+    assert(elemsize == to->data->elemsize);
+
+    if (laik_log_begin(1)) {
+        laik_log_append("generic copy of slice ");
+        laik_log_Slice(slc);
+        laik_log_append(" (count %llu) from data '%s'/%d (elemsize %d, layout %s) ",
+            laik_slice_size(slc), from->data->name, from->mapNo,
+            elemsize, fromLayout->describe(fromLayout));
+        laik_log_flush("to data '%s'/%d (layout %s)",
+            to->data->name, to->mapNo, toLayout->describe(toLayout));
+    }
+
+    uint64_t count = 0;
+    do {
+        void* fromPtr = from->start + fromLayout->offset(fromLayout, &idx);
+        void* toPtr = to->start + toLayout->offset(toLayout, &idx);
+        memcpy(toPtr, fromPtr, elemsize);
+        count++;
+    } while(next_lex(slc, &idx));
+    assert(count == laik_slice_size(slc));
+}
+
+
+// initialize generic members of a layout
 void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
                       laik_layout_describe_t describe,
                       laik_layout_offset_t offset,
+                      laik_layout_copy_t copy,
                       laik_layout_first_t first,
                       laik_layout_next_t next)
 {
     l->dims = dims;
     l->count = count;
 
+    // the offset function must be provided
+    assert(offset != 0);
+
     l->pack = pack;
     l->unpack = unpack;
     l->describe = describe;
     l->offset = offset;
+    l->copy = copy ? copy : laik_layout_copy_gen;
     l->first = first;
     l->next = next;
 }
+
+
 
 
 // interface implementation of lexicographical layout
@@ -66,6 +135,61 @@ int64_t laik_offset_lex(Laik_Layout* l, Laik_Index* idx)
     assert((off >= 0) && (off < (int64_t) l->count));
     return off;
 }
+
+static
+void laik_layout_copy_lex(Laik_Slice* slc,
+                          Laik_Mapping* from, Laik_Mapping* to)
+{
+    Laik_Layout_Lex* fromLayout = laik_is_layout_lex(from->layout);
+    Laik_Layout_Lex* toLayout = laik_is_layout_lex(to->layout);
+    assert(fromLayout != 0);
+    assert(toLayout != 0);
+
+    unsigned int elemsize = from->data->elemsize;
+    assert(elemsize == to->data->elemsize);
+    int dims = from->layout->dims;
+    assert(dims == to->layout->dims);
+
+    Laik_Index count;
+    laik_sub_index(&count, &(slc->to), &(slc->from));
+    if (dims < 3) {
+        count.i[2] = 1;
+        if (dims < 2)
+            count.i[1] = 1;
+    }
+    uint64_t ccount = count.i[0] * count.i[1] * count.i[2];
+    assert(ccount > 0);
+
+    uint64_t fromOff  = laik_offset_lex(from->layout, &(slc->from));
+    uint64_t toOff    = laik_offset_lex(to->layout, &(slc->from));
+    char*    fromPtr  = from->start + fromOff * elemsize;
+    char*    toPtr    = to->start   + toOff * elemsize;
+
+    if (laik_log_begin(1)) {
+        laik_log_append("lex copy of slice ");
+        laik_log_Slice(slc);
+        laik_log_append("(count %llu) from data '%s'/%d (elemsize %d, layout %s) ",
+            ccount, from->data->name, from->mapNo,
+            elemsize, from->layout->describe(from->layout));
+        laik_log_flush("to data '%s'/%d (layout %s), ",
+            to->data->name, to->mapNo, to->layout->describe(to->layout));
+        laik_log_flush("local off %lu (ptr%p) => %lu (%p)",
+            fromOff, fromPtr, toOff, toPtr);
+    }
+
+    for(int64_t i3 = 0; i3 < count.i[2]; i3++) {
+        char *fromPtr2 = fromPtr;
+        char *toPtr2 = toPtr;
+        for(int64_t i2 = 0; i2 < count.i[1]; i2++) {
+            memcpy(toPtr2, fromPtr2, count.i[0] * elemsize);
+            fromPtr2 += fromLayout->stride[1] * elemsize;
+            toPtr2   += toLayout->stride[1] * elemsize;
+        }
+        fromPtr += fromLayout->stride[2] * elemsize;
+        toPtr   += toLayout->stride[2] * elemsize;
+    }
+}
+
 
 static
 int64_t laik_first_lex(Laik_Layout* l,
@@ -390,6 +514,7 @@ Laik_Layout* laik_new_layout_lex(Laik_Slice* slc)
     laik_init_layout(&(l->h), dims, laik_slice_size(slc),
                      laik_pack_lex, laik_unpack_lex,
                      laik_layout_describe_lex, laik_offset_lex,
+                     laik_layout_copy_lex,
                      laik_first_lex, laik_next_lex);
 
     l->slc = *slc;
