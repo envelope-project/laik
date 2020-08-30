@@ -1,5 +1,12 @@
 # Open Issues
 
+## Layouts
+
+* generic unpack
+* allow custom layout factory
+* use one layout for all mappings of a container
+* modify jac3d to use custom layout
+
 ## API Design
 
 * terms
