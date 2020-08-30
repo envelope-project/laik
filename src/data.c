@@ -508,18 +508,6 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
 void laik_data_copy(Laik_Slice* slc,
                     Laik_Mapping* from, Laik_Mapping* to)
 {
-    // for debugging, use of specific copy can be prohibited by
-    //  defining environment variable LAIK_DO_GENERIC_COPY
-    static int do_generic_copy = -1;
-    if (do_generic_copy < 0) {
-        char* str = getenv("LAIK_DO_GENERIC_COPY");
-        do_generic_copy = str ? 1 : 0;
-    }
-    if (do_generic_copy) {
-       laik_layout_copy_gen(slc, from, to);
-       return;
-    }
-
     if (from->layout->copy && (from->layout->copy == to->layout->copy)) {
         // same layout providing specific copy implementation: use it
         (from->layout->copy)(slc, from, to);

@@ -292,7 +292,7 @@ typedef int64_t (*laik_layout_next_t)(
 // accross multiple calls. <idx> must be set first to index at beginning.
 // returns the number of elements written (or 0 if finished)
 typedef unsigned int (*laik_layout_pack_t)(
-    const Laik_Mapping* m, const Laik_Slice* s,
+    Laik_Mapping* m, Laik_Slice* s,
     Laik_Index* idx, char* buf, unsigned int size);
 
 // unpack data from <buf> with <size> bytes length into given slice of

@@ -32,7 +32,7 @@
 // generic variants of layout interface functions
 // just using offset function
 
-// helper for laik_layout_copy_gen: lexicographical traversal
+// helper for laik_layout_copy/pack_gen: lexicographical traversal
 static
 bool next_lex(Laik_Slice* slc, Laik_Index* idx)
 {
@@ -94,6 +94,68 @@ void laik_layout_copy_gen(Laik_Slice* slc,
     assert(count == laik_slice_size(slc));
 }
 
+// (slow) generic pack just using offset function from layout interface
+// TODO: allow for traversals other than lexicographical
+unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
+                                  Laik_Index* idx, char* buf, unsigned int size)
+{
+    unsigned int elemsize = m->data->elemsize;
+    Laik_Layout* layout = m->layout;
+    int dims = m->layout->dims;
+
+    if (laik_index_isEqual(dims, idx, &(slc->to))) {
+        // nothing left to pack
+        return 0;
+    }
+
+    // slice to pack must within local valid slice of mapping
+    assert(laik_slice_within_slice(slc, &(m->requiredSlice)));
+
+    if (laik_log_begin(1)) {
+        laik_log_append("        generic packing of slice ");
+        laik_log_Slice(slc);
+        laik_log_append(" (count %llu, elemsize %d) of mapping %p",
+            laik_slice_size(slc), elemsize, m->start);
+        laik_log_append(" (data '%s'/%d, %s) into buf (size %d) from idx ",
+            m->data->name, m->mapNo, layout->describe(layout), size);
+        laik_log_Index(dims, idx);
+        laik_log_flush(0);
+    }
+
+    unsigned int count = 0;
+    while(size >= elemsize) {
+        int64_t off = layout->offset(layout, idx);
+        void* idxPtr = m->start + off * elemsize;
+#if 0
+        if (laik_log_begin(1)) {
+            laik_log_append(" idx ");
+            laik_log_Index(dims, &idx);
+            laik_log_flush(": off %lu (ptr %p), left %d", off, ptr, size);
+        }
+#endif
+        // copy element into buffer
+        memcpy(buf, idxPtr, elemsize);
+        size -= elemsize;
+        buf += elemsize;
+        count++;
+
+        if (!next_lex(slc, idx)) {
+            *idx = slc->to;
+            break;
+        }
+    }
+
+    if (laik_log_begin(1)) {
+        laik_log_append("        packed '%s': end (", m->data->name);
+        laik_log_Index(dims, idx);
+        laik_log_flush("), %lu elems = %lu bytes, %d left",
+                       count, count * elemsize, size);
+    }
+
+    return count;
+}
+
+
 
 // initialize generic members of a layout
 void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
@@ -111,7 +173,13 @@ void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
     // the offset function must be provided
     assert(offset != 0);
 
-    l->pack = pack;
+    // for testing, LAIK_LAYOUT_GENERIC enforces use of generic variants
+    if (getenv("LAIK_LAYOUT_GENERIC")) {
+        copy = 0;
+        pack = 0;
+    }
+
+    l->pack = pack ? pack : laik_layout_pack_gen;
     l->unpack = unpack;
     l->describe = describe;
     l->offset = offset;
@@ -253,7 +321,7 @@ int64_t laik_next_lex(Laik_Layout* l,
 
 // pack/unpack routines for lexicographical layout
 static
-unsigned int laik_pack_lex(const Laik_Mapping* m, const Laik_Slice* s,
+unsigned int laik_pack_lex(Laik_Mapping* m, Laik_Slice* s,
                            Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
@@ -553,7 +621,7 @@ Laik_Layout* laik_new_layout_lex(Laik_Slice* slc)
 // return lex layout if given layout is a lexicographical layout
 Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l)
 {
-    if (l->pack == laik_pack_lex)
+    if (l->offset == laik_offset_lex)
         return (Laik_Layout_Lex*) l;
 
     return 0; // not a lexicographical layout
