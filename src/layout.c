@@ -36,24 +36,18 @@
 static
 bool next_lex(Laik_Slice* slc, Laik_Index* idx)
 {
-    if (idx->i[0] < slc->to.i[0]) {
-        idx->i[0]++;
-        return true;
-    }
+    idx->i[0]++;
+    if (idx->i[0] < slc->to.i[0]) return true;
     if (slc->space->dims == 1) return false;
 
-    if (idx->i[1] < slc->to.i[1]) {
-        idx->i[1]++;
-        idx->i[0] = slc->from.i[0];
-        return true;
-    }
+    idx->i[1]++;
+    idx->i[0] = slc->from.i[0];
+    if (idx->i[1] < slc->to.i[1]) return true;
     if (slc->space->dims == 2) return false;
 
-    if (idx->i[2] < slc->to.i[2]) {
-        idx->i[2]++;
-        idx->i[1] = slc->from.i[1];
-        return true;
-    }
+    idx->i[2]++;
+    idx->i[1] = slc->from.i[1];
+    if (idx->i[2] < slc->to.i[2]) return true;
     return false;
 }
 
@@ -61,7 +55,6 @@ bool next_lex(Laik_Slice* slc, Laik_Index* idx)
 void laik_layout_copy_gen(Laik_Slice* slc,
                           Laik_Mapping* from, Laik_Mapping* to)
 {
-    Laik_Index idx = slc->from;
     Laik_Layout* fromLayout = from->layout;
     Laik_Layout* toLayout = to->layout;
     unsigned int elemsize = from->data->elemsize;
@@ -70,17 +63,31 @@ void laik_layout_copy_gen(Laik_Slice* slc,
     if (laik_log_begin(1)) {
         laik_log_append("generic copy of slice ");
         laik_log_Slice(slc);
-        laik_log_append(" (count %llu) from data '%s'/%d (elemsize %d, layout %s) ",
-            laik_slice_size(slc), from->data->name, from->mapNo,
-            elemsize, fromLayout->describe(fromLayout));
-        laik_log_flush("to data '%s'/%d (layout %s)",
-            to->data->name, to->mapNo, toLayout->describe(toLayout));
+        laik_log_append(" (count %llu, elemsize %d) from mapping %p",
+            laik_slice_size(slc), elemsize, from->start);
+        laik_log_append(" (data '%s'/%d, %s) ",
+            from->data->name, from->mapNo,
+            from->layout->describe(from->layout));
+        laik_log_flush("to mapping %p (data '%s'/%d, layout %s): ",
+            to->start, to->data->name, to->mapNo,
+            to->layout->describe(to->layout));
     }
 
+    Laik_Index idx = slc->from;
     uint64_t count = 0;
     do {
-        void* fromPtr = from->start + fromLayout->offset(fromLayout, &idx);
-        void* toPtr = to->start + toLayout->offset(toLayout, &idx);
+        int64_t fromOffset = fromLayout->offset(fromLayout, &idx);
+        int64_t toOffset = toLayout->offset(toLayout, &idx);
+        void* fromPtr = from->start + fromOffset * elemsize;
+        void* toPtr = to->start + toOffset * elemsize;
+#if 0
+        if (laik_log_begin(1)) {
+            laik_log_append(" copy idx ");
+            laik_log_Index(slc->space->dims, &idx);
+            laik_log_flush(" from off %lu (ptr %p) to %lu (%p)",
+                           fromOffset, fromPtr, toOffset, toPtr);
+        }
+#endif
         memcpy(toPtr, fromPtr, elemsize);
         count++;
     } while(next_lex(slc, &idx));
@@ -168,12 +175,15 @@ void laik_layout_copy_lex(Laik_Slice* slc,
     if (laik_log_begin(1)) {
         laik_log_append("lex copy of slice ");
         laik_log_Slice(slc);
-        laik_log_append("(count %llu) from data '%s'/%d (elemsize %d, layout %s) ",
-            ccount, from->data->name, from->mapNo,
-            elemsize, from->layout->describe(from->layout));
-        laik_log_flush("to data '%s'/%d (layout %s), ",
-            to->data->name, to->mapNo, to->layout->describe(to->layout));
-        laik_log_flush("local off %lu (ptr%p) => %lu (%p)",
+        laik_log_append(" (count %llu, elemsize %d) from mapping %p",
+            ccount, elemsize, from->start);
+        laik_log_append(" (data '%s'/%d, %s) ",
+            from->data->name, from->mapNo,
+            from->layout->describe(from->layout));
+        laik_log_append("to mapping %p (data '%s'/%d, layout %s): ",
+            to->start, to->data->name, to->mapNo,
+            to->layout->describe(to->layout));
+        laik_log_flush("local off %lu (ptr %p) => %lu (ptr %p)",
             fromOff, fromPtr, toOff, toPtr);
     }
 
@@ -493,7 +503,7 @@ char* laik_layout_describe_lex(Laik_Layout* l)
     assert(l->describe == laik_layout_describe_lex);
     Laik_Layout_Lex* layout = (Laik_Layout_Lex*) l;
 
-    sprintf(s, "lex %dd, strides (%llu/%llu/%llu)",
+    sprintf(s, "lex %dd, strides %llu/%llu/%llu",
              l->dims,
              (unsigned long long) layout->stride[0],
              (unsigned long long) layout->stride[1],

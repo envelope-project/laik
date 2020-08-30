@@ -180,6 +180,9 @@ Laik_Layout* laik_map_layout(Laik_Mapping* m);
 // offset for a index inside a slice covered by a layout (1d/2d/3d)
 int64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
 
+// copy data in a slice between mappings
+void laik_data_copy(Laik_Slice* slc, Laik_Mapping* from, Laik_Mapping* to);
+
 
 // provide memory resources for a mapping of own partition with ID <n> of container <d>,
 // starting at address <base> with <size> bytes. Memory will not be freed by LAIK, and
@@ -311,6 +314,9 @@ void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
                       laik_layout_first_t first,
                       laik_layout_next_t next);
 
+// (slow) generic copy just using offset function from layout interface
+void laik_layout_copy_gen(Laik_Slice* slc,
+                          Laik_Mapping* from, Laik_Mapping* to);
 
 
 // lexicographical layout covering one 1d, 2d, 3d slice

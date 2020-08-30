@@ -9,6 +9,7 @@ if ("USE_MPI" IN_LIST definitions)
         "test-jac2d-1000-mpi-1.sh"
         "test-jac2d-1000-mpi-4.sh"
         "test-jac2dn-1000-mpi-4.sh"
+        "test-jac2d-gencopy-1000-mpi-4.sh"
         "test-jac3d-100-mpi-1.sh"
         "test-jac3d-100-mpi-4.sh"
         "test-jac3dn-100-mpi-4.sh"

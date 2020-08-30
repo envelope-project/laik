@@ -504,6 +504,33 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
              m->layout->describe(m->layout));
 }
 
+// copy data in a slice between mappings
+void laik_data_copy(Laik_Slice* slc,
+                    Laik_Mapping* from, Laik_Mapping* to)
+{
+    // for debugging, use of specific copy can be prohibited by
+    //  defining environment variable LAIK_DO_GENERIC_COPY
+    static int do_generic_copy = -1;
+    if (do_generic_copy < 0) {
+        char* str = getenv("LAIK_DO_GENERIC_COPY");
+        do_generic_copy = str ? 1 : 0;
+    }
+    if (do_generic_copy) {
+       laik_layout_copy_gen(slc, from, to);
+       return;
+    }
+
+    if (from->layout->copy && (from->layout->copy == to->layout->copy)) {
+        // same layout providing specific copy implementation: use it
+        (from->layout->copy)(slc, from, to);
+        return;
+    }
+
+    // different layouts in mappings or no specific copy implementation:
+    // use generic variant
+    laik_layout_copy_gen(slc, from, to);
+}
+
 static
 void copyMaps(Laik_Transition* t,
               Laik_MappingList* toList, Laik_MappingList* fromList,
@@ -524,8 +551,6 @@ void copyMaps(Laik_Transition* t,
         Laik_Mapping* toMap = &(toList->map[op->toMapNo]);
 
         assert(toMap->data == fromMap->data);
-        int dims = fromMap->data->space->dims;
-        assert((dims>0) && (dims<=3));
         if (toMap->count == 0) {
             // no elements to copy to
             continue;
@@ -535,87 +560,29 @@ void copyMaps(Laik_Transition* t,
             continue;
         }
 
-        // calculate overlapping range between fromMap and toMap
         Laik_Data* d = toMap->data;
         Laik_Slice* s = &(op->slc);
-        Laik_Index count, fromStart, toStart;
-        laik_sub_index(&count, &(s->to), &(s->from));
-        laik_sub_index(&fromStart, &(s->from), &(fromMap->requiredSlice.from));
-        laik_sub_index(&toStart, &(s->from), &(toMap->requiredSlice.from));
-        if (dims < 3) {
-            count.i[2] = 1;
-            if (dims < 2) {
-                count.i[1] = 1;
-            }
-        }
-        uint64_t ccount = count.i[0] * count.i[1] * count.i[2];
-        assert(ccount > 0);
+
+        laik_log(1, "copy data for '%s': slc/map %d/%d ==> %d/%d",
+                 d->name, op->fromSliceNo, op->fromMapNo,
+                 op->toSliceNo, op->toMapNo);
 
         // no copy needed if mapping reused
         if (fromMap->reusedFor == op->toMapNo) {
+            // check that start address of source and destination is same
             uint64_t fromOff = laik_offset(&(s->from), fromMap->layout);
             uint64_t toOff = laik_offset(&(s->from), toMap->layout);
-
             assert(fromMap->start + fromOff * d->elemsize ==
                    toMap->start   + toOff * d->elemsize);
 
-            if (laik_log_begin(1)) {
-                laik_log_append("copy map for '%s': (%lu x %lu x %lu)",
-                                d->name, count.i[0], count.i[1], count.i[2]);
-                laik_log_append(" x %d from global (", d->elemsize);
-                laik_log_Index(dims, &(s->from));
-                laik_log_append("): local (");
-                laik_log_Index(dims, &fromStart);
-                laik_log_append(") slc/map %d/%d ==> (",
-                                op->fromSliceNo, op->fromMapNo);
-                laik_log_Index(dims, &toStart);
-                laik_log_flush(") slc/map %d/%d, using old map\n",
-                               op->toSliceNo, op->toMapNo);
-            }
+            laik_log(1, " mapping reused, no copy done");
             continue;
         }
 
-        assert(toMap->base);
-
-        uint64_t fromOff  = laik_offset(&(s->from), fromMap->layout);
-        uint64_t toOff    = laik_offset(&(s->from), toMap->layout);
-        char*    fromPtr  = fromMap->start + fromOff * d->elemsize;
-        char*    toPtr    = toMap->start   + toOff * d->elemsize;
-
-        if (laik_log_begin(1)) {
-            laik_log_append("copy map for '%s': (%lu x %lu x %lu)",
-                            d->name, count.i[0], count.i[1], count.i[2]);
-            laik_log_append(" x %d from global (", d->elemsize);
-            laik_log_Index(dims, &(s->from));
-            laik_log_append("): local (");
-            laik_log_Index(dims, &fromStart);
-            laik_log_append(") slc/map %d/%d off %lu/%p ==> (",
-                            op->fromSliceNo, op->fromMapNo, fromOff, fromPtr);
-            laik_log_Index(dims, &toStart);
-            laik_log_flush(") slc/map %d/%d off %lu/%p",
-                           op->toSliceNo, op->toMapNo, toOff, toPtr);
-        }
-
         if (ss)
-            ss->copiedBytes += ccount * d->elemsize;
+            ss->copiedBytes += laik_slice_size(s) * d->elemsize;
 
-        // FIXME: assume lex layout
-        Laik_Layout_Lex* fromLayout = laik_is_layout_lex(fromMap->layout);
-        assert(fromLayout != 0);
-        Laik_Layout_Lex* toLayout = laik_is_layout_lex(toMap->layout);
-        assert(toLayout != 0);
-
-        for(int64_t i3 = 0; i3 < count.i[2]; i3++) {
-            char *fromPtr2 = fromPtr;
-            char *toPtr2 = toPtr;
-            for(int64_t i2 = 0; i2 < count.i[1]; i2++) {
-                memcpy(toPtr2, fromPtr2, count.i[0] * d->elemsize);
-                fromPtr2 += fromLayout->stride[1] * d->elemsize;
-                toPtr2   += toLayout->stride[1] * d->elemsize;
-            }
-            fromPtr += fromLayout->stride[2] * d->elemsize;
-            toPtr   += toLayout->stride[2] * d->elemsize;
-        }
+        laik_data_copy(s, fromMap, toMap);
     }
 }
 
