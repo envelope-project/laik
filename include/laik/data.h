@@ -299,7 +299,7 @@ typedef unsigned int (*laik_layout_pack_t)(
 // memory space provided by mapping, incrementing index accordingly.
 // returns number of elements unpacked.
 typedef unsigned int (*laik_layout_unpack_t)(
-    const Laik_Mapping* m, const Laik_Slice* s,
+    Laik_Mapping* m, Laik_Slice* s,
     Laik_Index* idx, char* buf, unsigned int size);
 
 // return string describing the layout (for debug output)

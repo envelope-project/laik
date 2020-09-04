@@ -51,7 +51,7 @@ bool next_lex(Laik_Slice* slc, Laik_Index* idx)
     return false;
 }
 
-// (slow) generic copy just using offset function from layout interface
+// generic copy just using offset function from layout interface
 void laik_layout_copy_gen(Laik_Slice* slc,
                           Laik_Mapping* from, Laik_Mapping* to)
 {
@@ -94,8 +94,9 @@ void laik_layout_copy_gen(Laik_Slice* slc,
     assert(count == laik_slice_size(slc));
 }
 
-// (slow) generic pack just using offset function from layout interface
-// TODO: allow for traversals other than lexicographical
+// generic pack just using offset function from layout interface.
+// this packs data according to lexicographical traversal
+// return number of elements packed into provided buffer
 unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
                                   Laik_Index* idx, char* buf, unsigned int size)
 {
@@ -114,12 +115,12 @@ unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
     if (laik_log_begin(1)) {
         laik_log_append("        generic packing of slice ");
         laik_log_Slice(slc);
-        laik_log_append(" (count %llu, elemsize %d) of mapping %p",
+        laik_log_append(" (count %llu, elemsize %d) from mapping %p",
             laik_slice_size(slc), elemsize, m->start);
-        laik_log_append(" (data '%s'/%d, %s) into buf (size %d) from idx ",
-            m->data->name, m->mapNo, layout->describe(layout), size);
+        laik_log_append(" (data '%s'/%d, %s) at idx ",
+            m->data->name, m->mapNo, layout->describe(layout));
         laik_log_Index(dims, idx);
-        laik_log_flush(0);
+        laik_log_flush(" into buf (size %d)", size);
     }
 
     unsigned int count = 0;
@@ -155,6 +156,67 @@ unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
     return count;
 }
 
+// generic unpack just using offset function from layout interface
+// this expects provided data to be packed according to lexicographical traversal
+// return number of elements unpacked from provided buffer
+unsigned int laik_layout_unpack_gen(Laik_Mapping* m, Laik_Slice* slc,
+                                    Laik_Index* idx, char* buf, unsigned int size)
+{
+    unsigned int elemsize = m->data->elemsize;
+    Laik_Layout* layout = m->layout;
+    int dims = m->layout->dims;
+
+    // there should be something to unpack
+    assert(size > 0);
+    assert(!laik_index_isEqual(dims, idx, &(slc->to)));
+
+    // slice to unpack into must be within local valid slice of mapping
+    assert(laik_slice_within_slice(slc, &(m->requiredSlice)));
+
+    if (laik_log_begin(1)) {
+        laik_log_append("        generic unpacking of slice ");
+        laik_log_Slice(slc);
+        laik_log_append(" (count %llu, elemsize %d) into mapping %p",
+            laik_slice_size(slc), elemsize, m->start);
+        laik_log_append(" (data '%s'/%d, %s) at idx ",
+            m->data->name, m->mapNo, layout->describe(layout));
+        laik_log_Index(dims, idx);
+        laik_log_flush(" from buf (size %d)", size);
+    }
+
+    unsigned int count = 0;
+    while(size >= elemsize) {
+        int64_t off = layout->offset(layout, idx);
+        void* idxPtr = m->start + off * elemsize;
+#if 0
+        if (laik_log_begin(1)) {
+            laik_log_append(" idx ");
+            laik_log_Index(dims, &idx);
+            laik_log_flush(": off %lu (ptr %p), left %d", off, ptr, size);
+        }
+#endif
+        // copy element from buffer into mapping
+        memcpy(idxPtr, buf, elemsize);
+        size -= elemsize;
+        buf += elemsize;
+        count++;
+
+        if (!next_lex(slc, idx)) {
+            *idx = slc->to;
+            break;
+        }
+    }
+
+    if (laik_log_begin(1)) {
+        laik_log_append("        unpacked '%s': end (", m->data->name);
+        laik_log_Index(dims, idx);
+        laik_log_flush("), %lu elems = %lu bytes, %d left",
+                       count, count * elemsize, size);
+    }
+
+    return count;
+}
+
 
 
 // initialize generic members of a layout
@@ -177,13 +239,19 @@ void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
     if (getenv("LAIK_LAYOUT_GENERIC")) {
         copy = 0;
         pack = 0;
+        unpack = 0;
     }
 
-    l->pack = pack ? pack : laik_layout_pack_gen;
+    // if no specific version provided for pack/unpack/copy, use generic
+    if (!pack)   pack   = laik_layout_pack_gen;
+    if (!unpack) unpack = laik_layout_unpack_gen;
+    if (!copy)   copy   = laik_layout_copy_gen;
+
+    l->pack = pack;
     l->unpack = unpack;
     l->describe = describe;
     l->offset = offset;
-    l->copy = copy ? copy : laik_layout_copy_gen;
+    l->copy = copy;
     l->first = first;
     l->next = next;
 }
@@ -443,7 +511,7 @@ unsigned int laik_pack_lex(Laik_Mapping* m, Laik_Slice* s,
 }
 
 static
-unsigned int laik_unpack_lex(const Laik_Mapping* m, const Laik_Slice* s,
+unsigned int laik_unpack_lex(Laik_Mapping* m, Laik_Slice* s,
                              Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;

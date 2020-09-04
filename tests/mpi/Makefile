@@ -8,8 +8,8 @@ TESTS= \
     test-spmv test-spmv2 test-spmv2r \
     test-spmv2-shrink test-spmv2-shrink-inc \
     test-jac1d test-jac1d-repart \
-    test-jac2d test-jac2d-noc test-jac2d-gen \
-    test-jac3d test-jac3dr test-jac3d-noc test-jac3dr-noc \
+    test-jac2d test-jac2d-gen test-jac2d-noc \
+    test-jac3d test-jac3d-gen test-jac3dr test-jac3d-noc test-jac3dr-noc \
     test-jac3de test-jac3der test-jac3da test-jac3dar \
     test-jac3dri test-jac3deri test-jac3dari test-jac3d-rgx3 \
     test-markov test-markov2 test-markov2-f \
@@ -58,15 +58,18 @@ test-jac2d:
 	$(SDIR)./test-jac2d-1000-mpi-1.sh
 	$(SDIR)./test-jac2d-1000-mpi-4.sh
 
-test-jac2d-noc:
-	$(SDIR)./test-jac2dn-1000-mpi-4.sh
-
 test-jac2d-gen:
 	$(SDIR)./test-jac2d-gen-1000-mpi-4.sh
+
+test-jac2d-noc:
+	$(SDIR)./test-jac2dn-1000-mpi-4.sh
 
 test-jac3d:
 	$(SDIR)./test-jac3d-100-mpi-1.sh
 	$(SDIR)./test-jac3d-100-mpi-4.sh
+
+test-jac3d-gen:
+	$(SDIR)./test-jac3d-gen-100-mpi-4.sh
 
 test-jac3dr:
 	$(SDIR)./test-jac3dr-100-mpi-1.sh
