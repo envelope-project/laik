@@ -84,7 +84,16 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
     }
 }
 
+//--------------------------------------------------------------
+// custom layout factory (used with '-l'): just return lex layout
+static Laik_Layout* mylayout_new(Laik_Slice* slc)
+{
+    return laik_new_layout_lex(slc);
+}
 
+
+//--------------------------------------------------------------
+// main function
 int main(int argc, char* argv[])
 {
     Laik_Instance* inst = laik_init (&argc, &argv);
@@ -99,6 +108,7 @@ int main(int argc, char* argv[])
     bool do_exec = false;
     bool do_actions = false;
     bool do_grid = false;
+    bool use_own_layout = false;
     int xblocks = 0, yblocks = 0, zblocks = 0; // for grid partitioner
     int iter_shrink = 0; // number iterations between shrinks (0: disable)
 
@@ -111,6 +121,7 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'e') do_exec = true;
         if (argv[arg][1] == 'a') do_actions = true;
         if (argv[arg][1] == 'g') do_grid = true;
+        if (argv[arg][1] == 'l') use_own_layout = true;
         if (argv[arg][1] == 'x' && argc > arg+1) {
             xblocks = atoi(argv[++arg]);
             do_grid = true;
@@ -128,6 +139,7 @@ int main(int argc, char* argv[])
                    " -e        : pre-calculate transitions to exec in iteration loop\n"
                    " -a        : pre-calculate action sequence to exec (includes -e)\n"
                    " -i <iter> : remove master every <iter> iterations (0: disable)\n"
+                   " -l        : test layouts: use own minimal custom layout\n"
                    " -h        : print this help text and exit\n",
                    argv[0]);
             exit(1);
@@ -189,6 +201,11 @@ int main(int argc, char* argv[])
     Laik_Space* space = laik_new_space_3d(inst, size, size, size);
     Laik_Data* data1 = laik_new_data(space, laik_Double);
     Laik_Data* data2 = laik_new_data(space, laik_Double);
+
+    if (use_own_layout) {
+        laik_data_set_layout_factory(data1, mylayout_new);
+        laik_data_set_layout_factory(data2, mylayout_new);
+    }
 
     // we use two types of partitioners algorithms:
     // - prWrite: cells to update (disjunctive partitioning)

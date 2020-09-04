@@ -178,6 +178,7 @@ Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
     d->activeMappings = 0;
     assert(laik_allocator_def);
     d->allocator = laik_allocator_def; // malloc/free + reuse if possible
+    d->layout_factory = laik_new_layout_lex; // by default, use lex layouts
     d->stat = laik_newSwitchStat();
 
     d->activeReservation = 0;
@@ -240,6 +241,12 @@ Laik_Partitioning* laik_data_get_partitioning(Laik_Data* d)
     return d->activePartitioning;
 }
 
+// change layout factory to use for generating mapping layouts
+void laik_data_set_layout_factory(Laik_Data* d, laik_layout_factory_t lf)
+{
+    d->layout_factory = lf;
+}
+
 static
 void initMapping(Laik_Mapping* m, Laik_Data* d)
 {
@@ -249,14 +256,13 @@ void initMapping(Laik_Mapping* m, Laik_Data* d)
 
     // set requiredSlice to invalid
     m->requiredSlice.space = 0;
-
+    m->layout = 0;
     m->count = 0;
 
     // not backed by memory yet
     m->capacity = 0;
     m->start = 0;
     m->base = 0;
-    m->layout = 0;
 
     // use default allocater of container to allocate memory
     m->allocator = d->allocator;
@@ -346,10 +352,14 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
         m->requiredSlice = slc;
         m->count = laik_slice_size(&slc);
 
+        // generate layout using layout factory given in data object
+        m->layout = (d->layout_factory)(&slc);
+
         if (laik_log_begin(1)) {
             laik_log_append("    mapNo %d: req.slice ", mapNo);
             laik_log_Slice(&slc);
-            laik_log_flush(", tslices %d - %d, count %d, elemsize %d\n",
+            laik_log_flush(", layout %s, tslices %d - %d, count %d, elemsize %d\n",
+                           (m->layout->describe)(m->layout),
                            firstOff, lastOff, m->count, d->elemsize);
         }
     }
@@ -443,7 +453,7 @@ void laik_map_set_allocation(Laik_Mapping* m,
     assert(m->start == 0);
     assert(m->base == 0);
 
-    // count should be number if indexes in required slice
+    // count should be number of indexes in required slice
     assert(m->count == laik_slice_size(&(m->requiredSlice)));
     // make sure provided memory buffer is large enough
     assert(size >=  m->count * m->data->elemsize);
@@ -458,12 +468,6 @@ void laik_map_set_allocation(Laik_Mapping* m,
 
     // use given allocator for deallocation
     m->allocator = a;
-
-    // set a concrete lexicographical layout for this mapping
-    //  exactly covering the required slice
-    // TODO: use a layout factory for custom layouts
-    assert(m->layout == 0);
-    m->layout = laik_new_layout_lex(&(m->requiredSlice));
 }
 
 
@@ -497,11 +501,9 @@ void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat* ss)
 
     laik_map_set_allocation(m, start, size, a);
 
-    laik_log(1, "allocateMap: for '%s'/%d: %llu x %d (%llu B) at %p"
-             "\n  layout: %s",
+    laik_log(1, "allocateMap: for '%s'/%d: %llu x %d (%llu B) at %p",
              d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
-             (unsigned long long) m->capacity, (void*) m->base,
-             m->layout->describe(m->layout));
+             (unsigned long long) m->capacity, (void*) m->base);
 }
 
 // copy data in a slice between mappings
@@ -1101,18 +1103,21 @@ void laik_reservation_alloc(Laik_Reservation* res)
     for(int i = 0; i < mCount; i++) {
         Laik_Mapping* m = &(res->mList->map[i]);
         Laik_Slice* slc = &(m->requiredSlice);
+
         uint64_t count = laik_slice_size(slc);
         assert(count > 0);
         total += count;
-
         m->count = count;
+
+        // generate layout using layout factory given in data object
+        m->layout = (data->layout_factory)(slc);
 
         laik_allocateMap(m, data->stat);
 
         if (laik_log_begin(1)) {
             laik_log_append(" map [%d] ", m->mapNo);
             laik_log_Slice(&(m->allocatedSlice));
-            laik_log_flush(0);
+            laik_log_flush(", layout %s", (m->layout->describe)(m->layout));
         }
     }
 

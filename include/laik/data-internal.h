@@ -109,7 +109,11 @@ struct _Laik_Data {
     // when switching to a partitioning, we check for reservations first
     Laik_Reservation* activeReservation;
 
+    // allocator to use for memory allocation of mappings
     Laik_Allocator* allocator;
+
+    // layout factory for generating layouts to use with mappings
+    laik_layout_factory_t layout_factory;
 
     // can be set by backend
     void* backend_data;
@@ -118,18 +122,6 @@ struct _Laik_Data {
     Laik_SwitchStat* stat;
 };
 
-
-// a layout defines order of indexes into memory
-struct _Laik_Layout {
-    int dims;
-    uint64_t count; // number of covered indexes
-
-    laik_layout_offset_t offset;
-    laik_layout_describe_t describe;
-    laik_layout_pack_t pack;
-    laik_layout_unpack_t unpack;
-    laik_layout_copy_t copy;
-};
 
 // lexicographical layout covering one 1d, 2d, 3d slice
 struct _Laik_Layout_Lex {

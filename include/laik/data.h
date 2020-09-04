@@ -66,6 +66,9 @@ void laik_type_set_reduce(Laik_Type* type, laik_reduce_t reduce);
 
 typedef struct _Laik_Data Laik_Data;
 
+// a serialisation order of a LAIK container (for address offsets)
+typedef struct _Laik_Layout Laik_Layout;
+
 /**
  * Define a LAIK container shared by a LAIK task group.
  * This is a collective operation of all tasks in the group.
@@ -93,6 +96,13 @@ Laik_Partitioning* laik_data_get_partitioning(Laik_Data* d);
 
 // free resources for a data container
 void laik_free(Laik_Data*);
+
+// type for layout factory: create new layout, given a slice to cover
+typedef Laik_Layout* (*laik_layout_factory_t)(Laik_Slice* slc);
+
+// change layout factory to use for generating mapping layouts
+void laik_data_set_layout_factory(Laik_Data* d, laik_layout_factory_t);
+
 
 //
 // Reservations for data containers
@@ -165,8 +175,6 @@ void laik_fill_double(Laik_Data* data, double v);
 // local indexes are always unsigned, as the index into an address range
 //  starting from a base address
 
-// a serialisation order of a LAIK container (for address offsets)
-typedef struct _Laik_Layout Laik_Layout;
 
 // one slice mapped to local memory space
 typedef struct _Laik_Mapping Laik_Mapping;
@@ -294,6 +302,18 @@ typedef unsigned int (*laik_layout_unpack_t)(
 // return string describing the layout (for debug output)
 typedef char* (*laik_layout_describe_t)(Laik_Layout*);
 
+// public as it is the header of custom layouts
+struct _Laik_Layout {
+    int dims;
+    uint64_t count; // number of covered indexes
+
+    laik_layout_offset_t offset;
+    laik_layout_describe_t describe;
+    laik_layout_pack_t pack;
+    laik_layout_unpack_t unpack;
+    laik_layout_copy_t copy;
+};
+
 void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
                       laik_layout_offset_t offset,
                       laik_layout_describe_t describe,
@@ -319,6 +339,7 @@ Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l);
 
 // return stride for dimension <d> in lex layout
 uint64_t laik_layout_lex_stride(Laik_Layout* l, int d);
+
 
 //----------------------------------
 // Allocator interface

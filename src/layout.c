@@ -296,7 +296,7 @@ char* describe_lex(Laik_Layout* l)
     assert(l->describe == describe_lex);
     Laik_Layout_Lex* layout = (Laik_Layout_Lex*) l;
 
-    sprintf(s, "lex %dd, strides %llu/%llu/%llu",
+    sprintf(s, "lex (%dd, strides %llu/%llu/%llu)",
              l->dims,
              (unsigned long long) layout->stride[0],
              (unsigned long long) layout->stride[1],
@@ -660,6 +660,7 @@ Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l)
 uint64_t laik_layout_lex_stride(Laik_Layout* l, int d)
 {
     Laik_Layout_Lex* ll = laik_is_layout_lex(l);
+    assert(ll != 0);
     assert((d >= 0) && (d < l->dims));
 
     return ll->stride[d];
