@@ -7,6 +7,7 @@ git-version.h
 Makefile.config
 *.DS_Store
 .vscode
+.ccls-cache
 compile_commands.json
 /build*/
 *.so.dSYM/
