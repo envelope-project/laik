@@ -275,17 +275,6 @@ typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, Laik_Index*);
 typedef void (*laik_layout_copy_t)(Laik_Slice* slc,
     Laik_Mapping* from, Laik_Mapping* to);
 
-// set index to index with lowest offset for traversing a given slice,
-// return the offset (index 0 maps to offset 0)
-typedef int64_t (*laik_layout_first_t)(
-    Laik_Layout*, Laik_Slice*, Laik_Index*);
-
-// iteratively traverse a given slice, starting from a given index,
-// return the number of consecutive elements possible with a maximum
-// of <max> elements. Updates index accordingly
-typedef int64_t (*laik_layout_next_t)(
-    Laik_Layout*, Laik_Slice*, Laik_Index*, int max);
-
 // pack data of slice in given mapping with this layout into <buf>,
 // using at most <size> bytes, starting at index <idx>.
 // called iteratively by backends, using <idx> to remember position
@@ -306,13 +295,11 @@ typedef unsigned int (*laik_layout_unpack_t)(
 typedef char* (*laik_layout_describe_t)(Laik_Layout*);
 
 void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
+                      laik_layout_offset_t offset,
+                      laik_layout_describe_t describe,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
-                      laik_layout_describe_t describe,
-                      laik_layout_offset_t offset,
-                      laik_layout_copy_t copy,
-                      laik_layout_first_t first,
-                      laik_layout_next_t next);
+                      laik_layout_copy_t copy);
 
 // (slow) generic copy just using offset function from layout interface
 void laik_layout_copy_gen(Laik_Slice* slc,

@@ -217,17 +217,24 @@ unsigned int laik_layout_unpack_gen(Laik_Mapping* m, Laik_Slice* slc,
     return count;
 }
 
+// placeholder for "describe" function of layout interface if not implemented
+static
+char* laik_layout_describe_gen(Laik_Layout* l)
+{
+    static char s[100];
+
+    sprintf(s, "unspecified %dd", l->dims);
+    return s;
+}
 
 
 // initialize generic members of a layout
 void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
+                      laik_layout_offset_t offset,
+                      laik_layout_describe_t describe,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
-                      laik_layout_describe_t describe,
-                      laik_layout_offset_t offset,
-                      laik_layout_copy_t copy,
-                      laik_layout_first_t first,
-                      laik_layout_next_t next)
+                      laik_layout_copy_t copy)
 {
     l->dims = dims;
     l->count = count;
@@ -242,27 +249,29 @@ void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
         unpack = 0;
     }
 
-    // if no specific version provided for pack/unpack/copy, use generic
+    // pack/unpack/copy are optional. If not given, use generic versions
     if (!pack)   pack   = laik_layout_pack_gen;
     if (!unpack) unpack = laik_layout_unpack_gen;
     if (!copy)   copy   = laik_layout_copy_gen;
+
+    // describe is optional
+    if (!describe) describe = laik_layout_describe_gen;
 
     l->pack = pack;
     l->unpack = unpack;
     l->describe = describe;
     l->offset = offset;
     l->copy = copy;
-    l->first = first;
-    l->next = next;
 }
 
 
 
-
+//--------------------------------------------------------------
 // interface implementation of lexicographical layout
+//
 
 static
-int64_t laik_offset_lex(Laik_Layout* l, Laik_Index* idx)
+int64_t offset_lex(Laik_Layout* l, Laik_Index* idx)
 {
     Laik_Layout_Lex* ll = laik_is_layout_lex(l);
     assert(ll);
@@ -280,8 +289,25 @@ int64_t laik_offset_lex(Laik_Layout* l, Laik_Index* idx)
 }
 
 static
-void laik_layout_copy_lex(Laik_Slice* slc,
-                          Laik_Mapping* from, Laik_Mapping* to)
+char* describe_lex(Laik_Layout* l)
+{
+    static char s[100];
+
+    assert(l->describe == describe_lex);
+    Laik_Layout_Lex* layout = (Laik_Layout_Lex*) l;
+
+    sprintf(s, "lex %dd, strides %llu/%llu/%llu",
+             l->dims,
+             (unsigned long long) layout->stride[0],
+             (unsigned long long) layout->stride[1],
+             (unsigned long long) layout->stride[2]);
+
+    return s;
+}
+
+static
+void copy_lex(Laik_Slice* slc,
+              Laik_Mapping* from, Laik_Mapping* to)
 {
     Laik_Layout_Lex* fromLayout = laik_is_layout_lex(from->layout);
     Laik_Layout_Lex* toLayout = laik_is_layout_lex(to->layout);
@@ -303,8 +329,8 @@ void laik_layout_copy_lex(Laik_Slice* slc,
     uint64_t ccount = count.i[0] * count.i[1] * count.i[2];
     assert(ccount > 0);
 
-    uint64_t fromOff  = laik_offset_lex(from->layout, &(slc->from));
-    uint64_t toOff    = laik_offset_lex(to->layout, &(slc->from));
+    uint64_t fromOff  = offset_lex(from->layout, &(slc->from));
+    uint64_t toOff    = offset_lex(to->layout, &(slc->from));
     char*    fromPtr  = from->start + fromOff * elemsize;
     char*    toPtr    = to->start   + toOff * elemsize;
 
@@ -337,60 +363,10 @@ void laik_layout_copy_lex(Laik_Slice* slc,
 }
 
 
-static
-int64_t laik_first_lex(Laik_Layout* l,
-                       Laik_Slice* slc, Laik_Index* idx)
-{
-    *idx = slc->from;
-    return laik_offset_lex(l, idx);
-}
-
-// return number of possible increments in x
-static
-int correct_idx(Laik_Slice* slc, Laik_Index* idx)
-{
-    assert(idx->i[0] >= slc->from.i[0]);
-    if (idx->i[0] >= slc->to.i[0]) {
-        idx->i[0] = slc->from.i[0];
-        idx->i[1]++;
-    }
-
-    assert(idx->i[1] >= slc->from.i[1]);
-    if (idx->i[1] >= slc->to.i[1]) {
-        idx->i[0] = slc->from.i[0];
-        idx->i[1] = slc->from.i[1];
-        idx->i[2]++;
-    }
-
-    assert(idx->i[2] >= slc->from.i[2]);
-    if (idx->i[2] >= slc->to.i[2]) return 0;
-
-    return slc->to.i[0] - idx->i[0];
-}
-
-static
-int64_t laik_next_lex(Laik_Layout* l,
-                      Laik_Slice* slc, Laik_Index* idx, int max)
-{
-    (void) l; // not used, but part of interface
-
-    int steps = correct_idx(slc, idx);
-    if (steps == 0) return 0;
-
-    if (steps > max) steps = max;
-    idx->i[0] += steps;
-
-    // ensure idx is valid if traversal not finished:
-    //  user may want to call laik_offset on it
-    correct_idx(slc, idx);
-
-    return steps;
-}
-
 // pack/unpack routines for lexicographical layout
 static
-unsigned int laik_pack_lex(Laik_Mapping* m, Laik_Slice* s,
-                           Laik_Index* idx, char* buf, unsigned int size)
+unsigned int pack_lex(Laik_Mapping* m, Laik_Slice* s,
+                      Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
     Laik_Layout_Lex* layout = laik_is_layout_lex(m->layout);
@@ -511,8 +487,8 @@ unsigned int laik_pack_lex(Laik_Mapping* m, Laik_Slice* s,
 }
 
 static
-unsigned int laik_unpack_lex(Laik_Mapping* m, Laik_Slice* s,
-                             Laik_Index* idx, char* buf, unsigned int size)
+unsigned int unpack_lex(Laik_Mapping* m, Laik_Slice* s,
+                        Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
     Laik_Layout_Lex* layout = laik_is_layout_lex(m->layout);
@@ -631,22 +607,6 @@ unsigned int laik_unpack_lex(Laik_Mapping* m, Laik_Slice* s,
     return count;
 }
 
-static
-char* laik_layout_describe_lex(Laik_Layout* l)
-{
-    static char s[100];
-
-    assert(l->describe == laik_layout_describe_lex);
-    Laik_Layout_Lex* layout = (Laik_Layout_Lex*) l;
-
-    sprintf(s, "lex %dd, strides %llu/%llu/%llu",
-             l->dims,
-             (unsigned long long) layout->stride[0],
-             (unsigned long long) layout->stride[1],
-             (unsigned long long) layout->stride[2]);
-
-    return s;
-}
 
 // allocate new layout object for lexicographical layout
 Laik_Layout* laik_new_layout_lex(Laik_Slice* slc)
@@ -658,10 +618,11 @@ Laik_Layout* laik_new_layout_lex(Laik_Slice* slc)
         exit(1); // not actually needed, laik_panic never returns
     }
     laik_init_layout(&(l->h), dims, laik_slice_size(slc),
-                     laik_pack_lex, laik_unpack_lex,
-                     laik_layout_describe_lex, laik_offset_lex,
-                     laik_layout_copy_lex,
-                     laik_first_lex, laik_next_lex);
+                     offset_lex,
+                     describe_lex,
+                     pack_lex,
+                     unpack_lex,
+                     copy_lex);
 
     l->slc = *slc;
 
@@ -689,7 +650,7 @@ Laik_Layout* laik_new_layout_lex(Laik_Slice* slc)
 // return lex layout if given layout is a lexicographical layout
 Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l)
 {
-    if (l->offset == laik_offset_lex)
+    if (l->offset == offset_lex)
         return (Laik_Layout_Lex*) l;
 
     return 0; // not a lexicographical layout
