@@ -21,6 +21,7 @@
 ../src/external.c
 ../src/kvs.c
 ../src/layout.c
+../src/layout_lex.c
 ../src/logging.c
 ../src/partitioner.c
 ../src/partitioning.c

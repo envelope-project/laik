@@ -123,13 +123,6 @@ struct _Laik_Data {
 };
 
 
-// lexicographical layout covering one 1d, 2d, 3d slice
-struct _Laik_Layout_Lex {
-    Laik_Layout h;
-
-    Laik_Slice slc;
-    uint64_t stride[3];
-};
 
 // a mapping of data elements for global index range given by <validSlice>,
 // with index <validSlice.from> mapped to address <base>.

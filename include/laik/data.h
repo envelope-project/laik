@@ -328,14 +328,10 @@ void laik_layout_copy_gen(Laik_Slice* slc,
 
 // lexicographical layout covering one 1d, 2d, 3d slice
 
-typedef struct _Laik_Layout_Lex Laik_Layout_Lex;
 
 // create layout object for 1d/2d/3d lexicographical layout
 // with innermost dim x, then y, z, fully covering given slice
 Laik_Layout* laik_new_layout_lex(Laik_Slice* slc);
-
-// return lex layout if given layout is a lexicographical layout
-Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l);
 
 // return stride for dimension <d> in lex layout
 uint64_t laik_layout_lex_stride(Laik_Layout* l, int d);
