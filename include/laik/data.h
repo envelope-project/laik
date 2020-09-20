@@ -97,8 +97,8 @@ Laik_Partitioning* laik_data_get_partitioning(Laik_Data* d);
 // free resources for a data container
 void laik_free(Laik_Data*);
 
-// type for layout factory: create new layout, given a slice to cover
-typedef Laik_Layout* (*laik_layout_factory_t)(Laik_Slice* slc);
+// type for layout factory: create new layout, given <n> slices to cover
+typedef Laik_Layout* (*laik_layout_factory_t)(int n, Laik_Slice*);
 
 // change layout factory to use for generating mapping layouts
 void laik_data_set_layout_factory(Laik_Data* d, laik_layout_factory_t);
@@ -276,8 +276,11 @@ bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
 
 // signatures for layout interface
 
-// return offset into memory mapping for a given index
-typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, Laik_Index*);
+// return map number for a given index
+typedef int (*laik_layout_mapno_t)(Laik_Layout*, Laik_Index*);
+
+// return offset into memory mapping <n> for a given index
+typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, int n, Laik_Index*);
 
 // copy data in a slice among mappings with same layout type
 typedef void (*laik_layout_copy_t)(Laik_Slice* slc,
@@ -305,8 +308,10 @@ typedef char* (*laik_layout_describe_t)(Laik_Layout*);
 // public as it is the header of custom layouts
 struct _Laik_Layout {
     int dims;
+    int map_count; // number of allocated mappings required for this layout
     uint64_t count; // number of covered indexes
 
+    laik_layout_mapno_t mapno;
     laik_layout_offset_t offset;
     laik_layout_describe_t describe;
     laik_layout_pack_t pack;
@@ -314,7 +319,8 @@ struct _Laik_Layout {
     laik_layout_copy_t copy;
 };
 
-void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
+void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
+                      laik_layout_mapno_t mapno,
                       laik_layout_offset_t offset,
                       laik_layout_describe_t describe,
                       laik_layout_pack_t pack,
@@ -330,11 +336,11 @@ void laik_layout_copy_gen(Laik_Slice* slc,
 
 
 // create layout object for 1d/2d/3d lexicographical layout
-// with innermost dim x, then y, z, fully covering given slice
-Laik_Layout* laik_new_layout_lex(Laik_Slice* slc);
+// with innermost dim x, then y, z, fully covering given slices
+Laik_Layout* laik_new_layout_lex(int n, Laik_Slice* slc);
 
-// return stride for dimension <d> in lex layout
-uint64_t laik_layout_lex_stride(Laik_Layout* l, int d);
+// return stride for dimension <d> in lex layout mapping <n>
+uint64_t laik_layout_lex_stride(Laik_Layout* l, int n, int d);
 
 
 //----------------------------------

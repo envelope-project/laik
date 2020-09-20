@@ -76,8 +76,8 @@ void laik_layout_copy_gen(Laik_Slice* slc,
     Laik_Index idx = slc->from;
     uint64_t count = 0;
     do {
-        int64_t fromOffset = fromLayout->offset(fromLayout, &idx);
-        int64_t toOffset = toLayout->offset(toLayout, &idx);
+        int64_t fromOffset = fromLayout->offset(fromLayout, 0, &idx);
+        int64_t toOffset = toLayout->offset(toLayout, 0, &idx);
         void* fromPtr = from->start + fromOffset * elemsize;
         void* toPtr = to->start + toOffset * elemsize;
 #if 0
@@ -125,7 +125,7 @@ unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
 
     unsigned int count = 0;
     while(size >= elemsize) {
-        int64_t off = layout->offset(layout, idx);
+        int64_t off = layout->offset(layout, 0, idx);
         void* idxPtr = m->start + off * elemsize;
 #if 0
         if (laik_log_begin(1)) {
@@ -186,7 +186,7 @@ unsigned int laik_layout_unpack_gen(Laik_Mapping* m, Laik_Slice* slc,
 
     unsigned int count = 0;
     while(size >= elemsize) {
-        int64_t off = layout->offset(layout, idx);
+        int64_t off = layout->offset(layout, 0, idx);
         void* idxPtr = m->start + off * elemsize;
 #if 0
         if (laik_log_begin(1)) {
@@ -229,7 +229,8 @@ char* laik_layout_describe_gen(Laik_Layout* l)
 
 
 // initialize generic members of a layout
-void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
+void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
+                      laik_layout_mapno_t mapno,
                       laik_layout_offset_t offset,
                       laik_layout_describe_t describe,
                       laik_layout_pack_t pack,
@@ -237,10 +238,12 @@ void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
                       laik_layout_copy_t copy)
 {
     l->dims = dims;
+    l->map_count = map_count;
     l->count = count;
 
-    // the offset function must be provided
+    // the offset and mapno functions must be provided
     assert(offset != 0);
+    assert(mapno != 0);
 
     // for testing, LAIK_LAYOUT_GENERIC enforces use of generic variants
     if (getenv("LAIK_LAYOUT_GENERIC")) {
@@ -257,10 +260,11 @@ void laik_init_layout(Laik_Layout* l, int dims, uint64_t count,
     // describe is optional
     if (!describe) describe = laik_layout_describe_gen;
 
+    l->mapno = mapno;
+    l->offset = offset;
     l->pack = pack;
     l->unpack = unpack;
     l->describe = describe;
-    l->offset = offset;
     l->copy = copy;
 }
 

@@ -353,7 +353,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
         m->count = laik_slice_size(&slc);
 
         // generate layout using layout factory given in data object
-        m->layout = (d->layout_factory)(&slc);
+        m->layout = (d->layout_factory)(1, &slc);
 
         if (laik_log_begin(1)) {
             laik_log_append("    mapNo %d: req.slice ", mapNo);
@@ -1110,7 +1110,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
         m->count = count;
 
         // generate layout using layout factory given in data object
-        m->layout = (data->layout_factory)(slc);
+        m->layout = (data->layout_factory)(1, slc);
 
         laik_allocateMap(m, data->stat);
 
@@ -1370,7 +1370,7 @@ Laik_Layout* laik_map_layout(Laik_Mapping* m)
 int64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
 {
     assert(l && l->offset);
-    return (l->offset)(l, idx);
+    return (l->offset)(l, 0, idx); // FIXME: <idx> is not always in map 0
 }
 
 // make sure this process has own partition and mapping descriptors for container <d>
@@ -1470,7 +1470,7 @@ Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n,
     if (ysize)
         *ysize = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
     if (ystride)
-        *ystride = laik_layout_lex_stride(l, 1);
+        *ystride = laik_layout_lex_stride(l, 0, 1);
     return m;
 }
 
@@ -1503,11 +1503,11 @@ Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
     if (ysize)
         *ysize = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
     if (ystride)
-        *ystride = laik_layout_lex_stride(l, 1);
+        *ystride = laik_layout_lex_stride(l, 0, 1);
     if (zsize)
         *zsize = m->requiredSlice.to.i[2] - m->requiredSlice.from.i[2];
     if (zstride)
-        *zstride = laik_layout_lex_stride(l, 2);
+        *zstride = laik_layout_lex_stride(l, 0, 2);
     return m;
 }
 
