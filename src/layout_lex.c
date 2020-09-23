@@ -158,8 +158,8 @@ void copy_lex(Laik_Slice* slc,
     uint64_t ccount = count.i[0] * count.i[1] * count.i[2];
     assert(ccount > 0);
 
-    uint64_t fromOff  = offset_lex(from->layout, 0, &(slc->from));
-    uint64_t toOff    = offset_lex(to->layout, 0, &(slc->from));
+    uint64_t fromOff  = offset_lex(from->layout, from->layoutSection, &(slc->from));
+    uint64_t toOff    = offset_lex(to->layout, to->layoutSection, &(slc->from));
     char*    fromPtr  = from->start + fromOff * elemsize;
     char*    toPtr    = to->start   + toOff * elemsize;
 
@@ -219,7 +219,7 @@ unsigned int pack_lex(Laik_Mapping* m, Laik_Slice* s,
     assert(laik_slice_within_slice(s, &(m->requiredSlice)));
 
     // calculate address of starting index
-    uint64_t idxOff = offset_lex(m->layout, 0, idx);
+    uint64_t idxOff = offset_lex(m->layout, m->layoutSection, idx);
     char* idxPtr = m->start + idxOff * elemsize;
 
     int64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
@@ -341,7 +341,7 @@ unsigned int unpack_lex(Laik_Mapping* m, Laik_Slice* s,
     assert(laik_slice_within_slice(s, &(m->requiredSlice)));
 
     // calculate address of starting index
-    uint64_t idxOff = offset_lex(m->layout, 0, idx);
+    uint64_t idxOff = offset_lex(m->layout, m->layoutSection, idx);
     char* idxPtr = m->start + idxOff * elemsize;
 
     int64_t i0, i1, i2, from0, from1, to0, to1, to2, count;
