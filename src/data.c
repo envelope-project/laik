@@ -274,7 +274,7 @@ void initMapping(Laik_Mapping* m, Laik_Data* d)
 
 // create mapping descriptors for <n> maps for data container <d>
 // resulting mappings are not backed by memory (yet)
-Laik_MappingList* laik_mappinglist_new(Laik_Data* d, int n)
+Laik_MappingList* laik_mappinglist_new(Laik_Data* d, int n, Laik_Layout* l)
 {
     Laik_MappingList* ml;
     ml = malloc(sizeof(Laik_MappingList) + n * sizeof(Laik_Mapping));
@@ -284,6 +284,7 @@ Laik_MappingList* laik_mappinglist_new(Laik_Data* d, int n)
     }
     ml->res = 0;
     ml->count = n;
+    ml->layout = l;
 
     for(int mapNo = 0; mapNo < n; mapNo++) {
         Laik_Mapping* m = &(ml->map[mapNo]);
@@ -292,6 +293,38 @@ Laik_MappingList* laik_mappinglist_new(Laik_Data* d, int n)
     }
 
     return ml;
+}
+
+// helper for prepareMaps
+// alloc list of slices required for mappings of a slice array
+static
+Laik_Slice* coveringSlices(int n, Laik_SliceArray* sa, int myid)
+{
+    if (n == 0) return 0;
+    Laik_Slice* slices = (Laik_Slice*) malloc(n * sizeof(Laik_Slice));
+
+    laik_log(1, "coveringSlices: %d maps", n);
+
+    int mapNo = 0;
+    for(unsigned int o = sa->off[myid]; o < sa->off[myid+1]; o++, mapNo++) {
+        unsigned int firstOff = o;
+        assert(mapNo == sa->tslice[o].mapNo);
+        Laik_Slice* slc = &(slices[mapNo]);
+
+        // slice covering all task slices for a given map number
+        *slc = sa->tslice[o].s;
+        while((o+1 < sa->off[myid+1]) && (sa->tslice[o+1].mapNo == mapNo)) {
+            o++;
+            laik_slice_expand(slc, &(sa->tslice[o].s));
+        }
+
+        if (laik_log_begin(1)) {
+            laik_log_append("    mapNo %d: covering slice ", mapNo);
+            laik_log_Slice(slc);
+            laik_log_flush(", tslices %d - %d\n", firstOff, o);
+        }
+    }
+    return slices;
 }
 
 static
@@ -329,43 +362,24 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
     if (sn > 0)
         n = sa->tslice[sa->off[myid+1] - 1].mapNo + 1;
 
-    Laik_MappingList* ml = laik_mappinglist_new(d, n);
-
     laik_log(1, "prepareMaps: %d maps for data '%s' (partitioning '%s')",
              n, d->name, p->name);
 
-    if (n == 0) return ml;
+    // create layout
+    Laik_Slice* slices = coveringSlices(n, sa, myid);
+    Laik_Layout* layout = (n>0) ? (d->layout_factory)(n, slices) : 0;
 
-    unsigned int firstOff, lastOff;
-    int mapNo = 0;
-    for(unsigned int o = sa->off[myid]; o < sa->off[myid+1]; o++, mapNo++) {
-        assert(mapNo == sa->tslice[o].mapNo);
+    Laik_MappingList* ml = laik_mappinglist_new(d, n, layout);
+
+    for(int mapNo = 0; mapNo < n; mapNo++) {
         Laik_Mapping* m = &(ml->map[mapNo]);
-
-        // required space
-        Laik_Slice slc = sa->tslice[o].s;
-        firstOff = o;
-        while((o+1 < sa->off[myid+1]) && (sa->tslice[o+1].mapNo == mapNo)) {
-            o++;
-            laik_slice_expand(&slc, &(sa->tslice[o].s));
-        }
-        lastOff = o;
-        m->requiredSlice = slc;
-        m->count = laik_slice_size(&slc);
-
-        // generate layout using layout factory given in data object
-        m->layout = (d->layout_factory)(1, &slc);
-        m->layoutSection = 0;
-
-        if (laik_log_begin(1)) {
-            laik_log_append("    mapNo %d: req.slice ", mapNo);
-            laik_log_Slice(&slc);
-            laik_log_flush(", layout %s, tslices %d - %d, count %d, elemsize %d\n",
-                           (m->layout->describe)(m->layout),
-                           firstOff, lastOff, m->count, d->elemsize);
-        }
+        m->requiredSlice = slices[mapNo];
+        m->count = laik_slice_size(&(slices[mapNo]));
+        m->layout = layout;       // all maps use same layout
+        m->layoutSection = mapNo; // but different sections of it
     }
-    assert(n == mapNo);
+
+    free(slices);  // just allocated here for layout factory function
 
     return ml;
 }
@@ -392,12 +406,6 @@ uint64_t freeMap(Laik_Mapping* m, Laik_Data* d, Laik_SwitchStat* ss)
     laik_log(1, "free map for data '%s' mapNo %d (capacity %llu, base %p, start %p)\n",
              d->name, m->mapNo,
              (unsigned long long) m->capacity, (void*) m->base, (void*) m->start);
-
-    // free concrete layout
-    if (m->layout) {
-        free(m->layout);
-        m->layout = 0;
-    }
 
     // if allocator is given, use it to free memory
     uint64_t freed = 0;
@@ -429,9 +437,11 @@ uint64_t freeMappingList(Laik_MappingList* ml, Laik_SwitchStat* ss)
         Laik_Mapping* m = &(ml->map[i]);
         assert(m != 0);
 
+        //if (ml->layout != m->layout) free(m->layout);
         freed += freeMap(m, m->data, ss);
     }
 
+    //free(ml->layout);
     free(ml);
 
     return freed;
@@ -598,6 +608,7 @@ void initEmbeddedMapping(Laik_Mapping* toMap, Laik_Mapping* fromMap)
     toMap->allocCount = fromMap->allocCount;
     toMap->capacity = fromMap->capacity;
     toMap->layout = fromMap->layout;
+    toMap->layoutSection = fromMap->layoutSection;
 
     // use allocator of fromMap to deallocate memory
     toMap->allocator = fromMap->allocator;
@@ -1048,11 +1059,11 @@ void laik_reservation_alloc(Laik_Reservation* res)
     //     - combined descriptors for same tag in all partitionings, and
     //     - per-partitioning descriptors
 
-    res->mList = laik_mappinglist_new(res->data, mCount);
+    res->mList = laik_mappinglist_new(res->data, mCount, 0);
     for(int i = 0; i < res->count; i++) {
         Laik_Partitioning* p = res->entry[i].p;
         Laik_SliceArray* sa = laik_partitioning_myslices(p);
-        Laik_MappingList* mList = laik_mappinglist_new(res->data, sa->map_count);
+        Laik_MappingList* mList = laik_mappinglist_new(res->data, sa->map_count, 0);
         mList->res = res;
         res->entry[i].mList = mList;
     }

@@ -150,6 +150,7 @@ struct _Laik_Mapping {
 struct _Laik_MappingList {
     Laik_Reservation* res; // mappings belong to this reservation, may be 0
     int count;
+    Laik_Layout* layout; // layout covering all n mappings
     Laik_Mapping map[]; // a C99 "flexible array member"
 };
 
@@ -160,7 +161,7 @@ void laik_data_init(void);
 void laik_type_init(void);
 
 // create mapping descriptors without allocation for <n> maps for a container
-Laik_MappingList* laik_mappinglist_new(Laik_Data* d, int n);
+Laik_MappingList* laik_mappinglist_new(Laik_Data* d, int n, Laik_Layout* l);
 
 // ensure that the mapping is backed by memory (called by backends)
 void laik_allocateMap(Laik_Mapping* m, Laik_SwitchStat *ss);
