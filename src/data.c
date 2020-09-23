@@ -1360,14 +1360,6 @@ void laik_fill_double(Laik_Data* d, double v)
         base[i] = v;
 }
 
-
-// return the layout used by a mapping
-Laik_Layout* laik_map_layout(Laik_Mapping* m)
-{
-    assert(m);
-    return m->layout;
-}
-
 // for a local index (1d/2d/3d), return offset into memory mapping
 // e.g. for (0) / (0,0) / (0,0,0) it returns offset 0
 int64_t laik_offset(Laik_Layout* l, int section, Laik_Index* idx)

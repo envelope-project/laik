@@ -182,9 +182,6 @@ typedef struct _Laik_Mapping Laik_Mapping;
 // list of mappings for all multiple slices
 typedef struct _Laik_MappingList Laik_MappingList;
 
-// return the layout used by a mapping
-Laik_Layout* laik_map_layout(Laik_Mapping* m);
-
 // offset for an index inside a layout section (1d/2d/3d)
 int64_t laik_offset(Laik_Layout* l, int section, Laik_Index* idx);
 
