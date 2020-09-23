@@ -230,6 +230,7 @@ char* laik_layout_describe_gen(Laik_Layout* l)
 
 // initialize generic members of a layout
 void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
+                      laik_layout_section_t section,
                       laik_layout_mapno_t mapno,
                       laik_layout_offset_t offset,
                       laik_layout_describe_t describe,
@@ -260,6 +261,7 @@ void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
     // describe is optional
     if (!describe) describe = laik_layout_describe_gen;
 
+    l->section = section;
     l->mapno = mapno;
     l->offset = offset;
     l->pack = pack;

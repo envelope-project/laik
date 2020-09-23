@@ -55,9 +55,9 @@ Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l)
 
 // return map number whose slice contains index <idx>
 static
-int mapno_lex(Laik_Layout* l, Laik_Index* idx)
+int section_lex(Laik_Layout* l, Laik_Index* idx)
 {
-    assert(l->mapno == mapno_lex);
+    assert(l->section == section_lex);
     Laik_Layout_Lex* ll = (Laik_Layout_Lex*) l;
 
     int dims = ll->h.dims;
@@ -76,6 +76,15 @@ int mapno_lex(Laik_Layout* l, Laik_Index* idx)
     }
     return -1; // not found
 }
+
+// section is allocation number
+static
+int mapno_lex(Laik_Layout* l, int n)
+{
+    assert(n < l->map_count);
+    return n;
+}
+
 
 // return offset for <idx> in map <n> of this layout
 static
@@ -441,6 +450,7 @@ Laik_Layout* laik_new_layout_lex(int n, Laik_Slice* s)
     }
     // count calculated later
     laik_init_layout(&(l->h), dims, n, 0,
+                     section_lex,
                      mapno_lex,
                      offset_lex,
                      describe_lex,

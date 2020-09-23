@@ -293,7 +293,10 @@ bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
 // LAIK users can define their own, custom layouts
 
 // return section of layout which contains a given index (if unique)
-typedef int (*laik_layout_mapno_t)(Laik_Layout*, Laik_Index*);
+typedef int (*laik_layout_section_t)(Laik_Layout*, Laik_Index*);
+
+// return allocation number which section <n> of layout belongs to
+typedef int (*laik_layout_mapno_t)(Laik_Layout*, int n);
 
 // return offset for a given index in layout section <n>
 typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, int n, Laik_Index*);
@@ -327,6 +330,7 @@ struct _Laik_Layout {
     int map_count; // number of allocated mappings required for this layout
     uint64_t count; // number of covered indexes
 
+    laik_layout_section_t section;
     laik_layout_mapno_t mapno;
     laik_layout_offset_t offset;
     laik_layout_describe_t describe;
@@ -336,6 +340,7 @@ struct _Laik_Layout {
 };
 
 void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
+                      laik_layout_section_t section,
                       laik_layout_mapno_t mapno,
                       laik_layout_offset_t offset,
                       laik_layout_describe_t describe,
