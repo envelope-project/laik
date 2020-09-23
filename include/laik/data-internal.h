@@ -133,6 +133,7 @@ struct _Laik_Mapping {
     Laik_Data* data;
     int mapNo; // index of this map in local mapping list
     Laik_Layout* layout; // memory layout used
+    int layoutSection; // section of layout used for this mapping
     Laik_Slice allocatedSlice; // slice (global) covered by this mapping
     Laik_Slice requiredSlice; // sub-slice (global) containing used slices
     uint64_t count, allocCount; // number of elements in req/allcSlice

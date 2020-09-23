@@ -185,8 +185,8 @@ typedef struct _Laik_MappingList Laik_MappingList;
 // return the layout used by a mapping
 Laik_Layout* laik_map_layout(Laik_Mapping* m);
 
-// offset for a index inside a slice covered by a layout (1d/2d/3d)
-int64_t laik_offset(Laik_Index* idx, Laik_Layout* l);
+// offset for an index inside a layout section (1d/2d/3d)
+int64_t laik_offset(Laik_Layout* l, int section, Laik_Index* idx);
 
 // copy data in a slice between mappings
 void laik_data_copy(Laik_Slice* slc, Laik_Mapping* from, Laik_Mapping* to);
@@ -271,15 +271,31 @@ bool laik_local2global1_2d(Laik_Data* d, int64_t lx, int64_t ly,
 //----------------------------------
 // Layout
 //
-// a layout is a serialisation order of a LAIK container,
-// e.g. to define how indexes are layed out in memory
+// A layout specifies how indexes within the index space
+// of a LAIK container are mapped to (alloc,offset) tuples,
+// from which the address of an container entry can be
+// calculated. Layouts are used to specify how process-local
+// partitions of a container are stored in memory.
+//
+// For flexibility, N allocations may be used to cover local
+// partitions of a container. Thus, a layout maps an index
+// to an allocation number [0 .. N-1] and to an offset within
+// that allocation.
+// For fast lookup, layouts can consist of sections with
+// regular mapping, with all indexes within a section mapped
+// to offsets within the same allocation.
+// If it is known that a set of indexes fall into the same section,
+// for a traversal of these indexes, there is no need to lookup
+// the allocation for each index independently.
+// Different sections may even contain the same index, allowing
+// to specify that multiple copies of an container entry exist.
+//
+// LAIK users can define their own, custom layouts
 
-// signatures for layout interface
-
-// return map number for a given index
+// return section of layout which contains a given index (if unique)
 typedef int (*laik_layout_mapno_t)(Laik_Layout*, Laik_Index*);
 
-// return offset into memory mapping <n> for a given index
+// return offset for a given index in layout section <n>
 typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, int n, Laik_Index*);
 
 // copy data in a slice among mappings with same layout type

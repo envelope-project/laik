@@ -257,6 +257,7 @@ void initMapping(Laik_Mapping* m, Laik_Data* d)
     // set requiredSlice to invalid
     m->requiredSlice.space = 0;
     m->layout = 0;
+    m->layoutSection = 0;
     m->count = 0;
 
     // not backed by memory yet
@@ -354,6 +355,7 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
 
         // generate layout using layout factory given in data object
         m->layout = (d->layout_factory)(1, &slc);
+        m->layoutSection = 0;
 
         if (laik_log_begin(1)) {
             laik_log_append("    mapNo %d: req.slice ", mapNo);
@@ -560,8 +562,8 @@ void copyMaps(Laik_Transition* t,
         // no copy needed if mapping reused
         if (fromMap->reusedFor == op->toMapNo) {
             // check that start address of source and destination is same
-            uint64_t fromOff = laik_offset(&(s->from), fromMap->layout);
-            uint64_t toOff = laik_offset(&(s->from), toMap->layout);
+            uint64_t fromOff = laik_offset(fromMap->layout, fromMap->layoutSection, &(s->from));
+            uint64_t toOff = laik_offset(toMap->layout, toMap->layoutSection, &(s->from));
             assert(fromMap->start + fromOff * d->elemsize ==
                    toMap->start   + toOff * d->elemsize);
 
@@ -602,7 +604,7 @@ void initEmbeddedMapping(Laik_Mapping* toMap, Laik_Mapping* fromMap)
     fromMap->allocator = 0;
 
     // set <base> of embedded mapping according to required vs. allocated
-    uint64_t off = laik_offset(&(toMap->requiredSlice.from), toMap->layout);
+    uint64_t off = laik_offset(toMap->layout, toMap->layoutSection, &(toMap->requiredSlice.from));
     toMap->base = toMap->start + off * data->elemsize;
 }
 
@@ -1111,6 +1113,7 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
         // generate layout using layout factory given in data object
         m->layout = (data->layout_factory)(1, slc);
+        m->layoutSection = 0;
 
         laik_allocateMap(m, data->stat);
 
@@ -1367,10 +1370,10 @@ Laik_Layout* laik_map_layout(Laik_Mapping* m)
 
 // for a local index (1d/2d/3d), return offset into memory mapping
 // e.g. for (0) / (0,0) / (0,0,0) it returns offset 0
-int64_t laik_offset(Laik_Index* idx, Laik_Layout* l)
+int64_t laik_offset(Laik_Layout* l, int section, Laik_Index* idx)
 {
     assert(l && l->offset);
-    return (l->offset)(l, 0, idx); // FIXME: <idx> is not always in map 0
+    return (l->offset)(l, section, idx);
 }
 
 // make sure this process has own partition and mapping descriptors for container <d>
@@ -1470,7 +1473,7 @@ Laik_Mapping* laik_get_map_2d(Laik_Data* d, int n,
     if (ysize)
         *ysize = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
     if (ystride)
-        *ystride = laik_layout_lex_stride(l, 0, 1);
+        *ystride = laik_layout_lex_stride(l, m->layoutSection, 1);
     return m;
 }
 
@@ -1503,11 +1506,11 @@ Laik_Mapping* laik_get_map_3d(Laik_Data* d, int n, void** base,
     if (ysize)
         *ysize = m->requiredSlice.to.i[1] - m->requiredSlice.from.i[1];
     if (ystride)
-        *ystride = laik_layout_lex_stride(l, 0, 1);
+        *ystride = laik_layout_lex_stride(l, m->layoutSection, 1);
     if (zsize)
         *zsize = m->requiredSlice.to.i[2] - m->requiredSlice.from.i[2];
     if (zstride)
-        *zstride = laik_layout_lex_stride(l, 0, 2);
+        *zstride = laik_layout_lex_stride(l, m->layoutSection, 2);
     return m;
 }
 

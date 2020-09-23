@@ -76,8 +76,8 @@ void laik_layout_copy_gen(Laik_Slice* slc,
     Laik_Index idx = slc->from;
     uint64_t count = 0;
     do {
-        int64_t fromOffset = fromLayout->offset(fromLayout, 0, &idx);
-        int64_t toOffset = toLayout->offset(toLayout, 0, &idx);
+        int64_t fromOffset = fromLayout->offset(fromLayout, from->layoutSection, &idx);
+        int64_t toOffset = toLayout->offset(toLayout, to->layoutSection, &idx);
         void* fromPtr = from->start + fromOffset * elemsize;
         void* toPtr = to->start + toOffset * elemsize;
 #if 0
@@ -125,7 +125,7 @@ unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
 
     unsigned int count = 0;
     while(size >= elemsize) {
-        int64_t off = layout->offset(layout, 0, idx);
+        int64_t off = layout->offset(layout, m->layoutSection, idx);
         void* idxPtr = m->start + off * elemsize;
 #if 0
         if (laik_log_begin(1)) {
@@ -186,7 +186,7 @@ unsigned int laik_layout_unpack_gen(Laik_Mapping* m, Laik_Slice* slc,
 
     unsigned int count = 0;
     while(size >= elemsize) {
-        int64_t off = layout->offset(layout, 0, idx);
+        int64_t off = layout->offset(layout, m->layoutSection, idx);
         void* idxPtr = m->start + off * elemsize;
 #if 0
         if (laik_log_begin(1)) {
