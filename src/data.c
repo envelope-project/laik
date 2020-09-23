@@ -1368,6 +1368,18 @@ int64_t laik_offset(Laik_Layout* l, int section, Laik_Index* idx)
     return (l->offset)(l, section, idx);
 }
 
+// get address if entry for index <idx> in mapping <m>
+char* laik_get_map_addr(Laik_Data* d, int n, Laik_Index* idx)
+{
+    Laik_Mapping* m = laik_get_map(d, n);
+    if (!m) return 0;
+
+    int64_t off = laik_offset(m->layout, m->layoutSection, idx);
+    return m->base + off * d->elemsize;
+}
+
+
+
 // make sure this process has own partition and mapping descriptors for container <d>
 static
 void checkOwnParticipation(Laik_Data* d)

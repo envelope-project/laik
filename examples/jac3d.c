@@ -378,6 +378,12 @@ int main(int argc, char* argv[])
             // ghost cells from back neighbor at z=0, move that to -1
             baseR += zstrideR;
         }
+        // instead of relocating baseR, we can query address via index g1
+        // check this (addr is zero if slice empty - this can happen!)
+        Laik_Index g1;
+        laik_index_init(&g1, gx1, gy1, gz1);
+        double* baseR2 = (double*) laik_get_map_addr(dRead, 0, &g1);
+        if (baseR2) assert(baseR == baseR2);
 
         // for reservation API test: check that write pointer stay the same
         if (do_reservation) {
