@@ -301,6 +301,10 @@ typedef int (*laik_layout_mapno_t)(Laik_Layout*, int n);
 // return offset for a given index in layout section <n>
 typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, int n, Laik_Index*);
 
+// for a mapping in a new layout, can a map from an old layout be reused?
+// If yes, modify new layout and return true
+typedef bool (*laik_layout_reuse_t)(Laik_Layout*, int, Laik_Layout* old, int);
+
 // copy data in a slice among mappings with same layout type
 typedef void (*laik_layout_copy_t)(Laik_Slice* slc,
     Laik_Mapping* from, Laik_Mapping* to);
@@ -333,6 +337,7 @@ struct _Laik_Layout {
     laik_layout_section_t section;
     laik_layout_mapno_t mapno;
     laik_layout_offset_t offset;
+    laik_layout_reuse_t reuse;
     laik_layout_describe_t describe;
     laik_layout_pack_t pack;
     laik_layout_unpack_t unpack;
@@ -343,6 +348,7 @@ void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
                       laik_layout_section_t section,
                       laik_layout_mapno_t mapno,
                       laik_layout_offset_t offset,
+                      laik_layout_reuse_t reuse,
                       laik_layout_describe_t describe,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,

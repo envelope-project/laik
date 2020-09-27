@@ -233,6 +233,7 @@ void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
                       laik_layout_section_t section,
                       laik_layout_mapno_t mapno,
                       laik_layout_offset_t offset,
+                      laik_layout_reuse_t reuse,
                       laik_layout_describe_t describe,
                       laik_layout_pack_t pack,
                       laik_layout_unpack_t unpack,
@@ -264,6 +265,7 @@ void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
     l->section = section;
     l->mapno = mapno;
     l->offset = offset;
+    l->reuse = reuse;
     l->pack = pack;
     l->unpack = unpack;
     l->describe = describe;

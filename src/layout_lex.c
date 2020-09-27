@@ -21,11 +21,14 @@
 #include <stdio.h>
 #include <string.h>
 
-// lexicographical layout covering one 1d, 2d, 3d slice
+// this file implements a layout providing lexicographical ordering (1d/2d/3d)
+// for multiple slices, requesting a separate allocation for each slice
 
+// parameters for one slice
 typedef struct _Lex_Entry Lex_Entry;
 struct _Lex_Entry {
     Laik_Slice slc;
+    uint64_t count;
     uint64_t stride[3];
 };
 
@@ -103,9 +106,10 @@ int64_t offset_lex(Laik_Layout* l, int n, Laik_Index* idx)
             off += (idx->i[2] - e->slc.from.i[2]) * e->stride[2];
         }
     }
-    assert((off >= 0) && (off < (int64_t) l->count));
+    assert((off >= 0) && (off < (int64_t) e->count));
     return off;
 }
+
 
 static
 char* describe_lex(Laik_Layout* l)
@@ -131,6 +135,40 @@ char* describe_lex(Laik_Layout* l)
 
     return s;
 }
+
+static
+bool reuse_lex(Laik_Layout* l, int n, Laik_Layout* old, int nold)
+{
+    Laik_Layout_Lex* lnew = laik_is_layout_lex(l);
+    assert(lnew);
+    Laik_Layout_Lex* lold = laik_is_layout_lex(old);
+    assert(lold);
+    assert((n >= 0) && (n < l->map_count));
+
+    if (laik_log_begin(1)) {
+        laik_log_append("reuse_lex: check reuse for map %d in %s",
+                        n, describe_lex(l));
+        laik_log_flush(" using map %d in old %s", nold, describe_lex(old));
+    }
+
+    Lex_Entry* eNew = &(lnew->e[n]);
+    Lex_Entry* eOld = &(lold->e[nold]);
+    if (!laik_slice_within_slice(&(eNew->slc), &(eOld->slc))) {
+        // no, cannot reuse
+        return false;
+    }
+    laik_log(1, "reuse_lex: old map %d can be reused (count %lu -> %lu)",
+             nold, eNew->count, eOld->count);
+
+    l->count += eOld->count - eNew->count;
+    eNew->count = eOld->count;
+    eNew->slc = eOld->slc;
+    eNew->stride[0] = eOld->stride[0];
+    eNew->stride[1] = eOld->stride[1];
+    eNew->stride[2] = eOld->stride[2];
+    return true;
+}
+
 
 static
 void copy_lex(Laik_Slice* slc,
@@ -453,6 +491,7 @@ Laik_Layout* laik_new_layout_lex(int n, Laik_Slice* s)
                      section_lex,
                      mapno_lex,
                      offset_lex,
+                     reuse_lex,
                      describe_lex,
                      pack_lex,
                      unpack_lex,
@@ -463,7 +502,8 @@ Laik_Layout* laik_new_layout_lex(int n, Laik_Slice* s)
         Lex_Entry* e = &(l->e[i]);
         Laik_Slice* slc = &s[i];
 
-        count += laik_slice_size(slc);
+        e->count = laik_slice_size(slc);
+        count += e->count;
 
         e->slc = *slc;
         assert(slc->from.i[0] < slc->to.i[0]);

@@ -437,11 +437,11 @@ uint64_t freeMappingList(Laik_MappingList* ml, Laik_SwitchStat* ss)
         Laik_Mapping* m = &(ml->map[i]);
         assert(m != 0);
 
-        //if (ml->layout != m->layout) free(m->layout);
+        if (ml->layout != m->layout) free(m->layout);
         freed += freeMap(m, m->data, ss);
     }
 
-    //free(ml->layout);
+    free(ml->layout);
     free(ml);
 
     return freed;
@@ -607,8 +607,6 @@ void initEmbeddedMapping(Laik_Mapping* toMap, Laik_Mapping* fromMap)
     toMap->allocatedSlice = fromMap->allocatedSlice;
     toMap->allocCount = fromMap->allocCount;
     toMap->capacity = fromMap->capacity;
-    toMap->layout = fromMap->layout;
-    toMap->layoutSection = fromMap->layoutSection;
 
     // use allocator of fromMap to deallocate memory
     toMap->allocator = fromMap->allocator;
@@ -627,44 +625,51 @@ static
 void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
 {
     // reuse only possible if old mappings exist
-    if (!fromList) return;
+    if ((fromList == 0) || (fromList->count ==0)) return;
     if ((toList == 0) || (toList->count ==0)) return;
 
     // no automatic reuse check allowed if reservations are involved
     // (if we stay in same reservation, space is reused anyways)
     if ((fromList->res != 0) || (toList->res != 0)) return;
 
+    // reuse-check implemented in layout interface and same layout type?
+    if ((fromList->layout->reuse == 0) ||
+        (fromList->layout->reuse != toList->layout->reuse)) return;
+
     for(int i = 0; i < toList->count; i++) {
         Laik_Mapping* toMap = &(toList->map[i]);
-        for(int sNo = 0; sNo < fromList->count; sNo++) {
-            Laik_Mapping* fromMap = &(fromList->map[sNo]);
+
+        Laik_Mapping* fromMap;
+        int sNo;
+        for(sNo = 0; sNo < fromList->count; sNo++) {
+            fromMap = &(fromList->map[sNo]);
             if (fromMap->base == 0) continue;
             if (fromMap->reusedFor >= 0) continue; // only reuse once
 
-            // does index range fit into old?
-            if (!laik_slice_within_slice(&(toMap->requiredSlice),
-                                         &(fromMap->allocatedSlice))) {
-                // no, cannot reuse
-                continue;
-            }
-
-            // always reuse larger mapping
-            initEmbeddedMapping(toMap, fromMap);
-
-            // mark as reused by slice <i>: this prohibits delete of memory
-            fromMap->reusedFor = i;
-
-            if (laik_log_begin(1)) {
-                laik_log_append("map reuse for '%s'/%d ", toMap->data->name, i);
-                laik_log_Slice(&(toMap->requiredSlice));
-                laik_log_append(" (in ");
-                laik_log_Slice(&(toMap->allocatedSlice));
-                laik_log_flush(" with byte-off %llu), %llu Bytes at %p)\n",
-                               (unsigned long long) (toMap->base - toMap->start),
-                               (unsigned long long) fromMap->capacity,
-                               toMap->base);
-            }
+            // does new mapping fit into old?
+            bool reuse = (toList->layout->reuse)(toList->layout, i, fromList->layout, sNo);
+            if (!reuse) continue;
+            break; // found
         }
+        if (sNo == fromList->count) continue;
+
+        // always reuse larger mapping
+        initEmbeddedMapping(toMap, fromMap);
+
+        // mark as reused by slice <i>: this prohibits delete of memory
+        fromMap->reusedFor = i;
+
+        if (laik_log_begin(1)) {
+            laik_log_append("map reuse for '%s'/%d ", toMap->data->name, i);
+            laik_log_Slice(&(toMap->requiredSlice));
+            laik_log_append(" (in ");
+            laik_log_Slice(&(toMap->allocatedSlice));
+            laik_log_flush(" with byte-off %llu), %llu Bytes at %p)\n",
+                           (unsigned long long) (toMap->base - toMap->start),
+                           (unsigned long long) fromMap->capacity,
+                           toMap->base);
+        }
+
         if (toMap->allocator == 0) {
             // When allocator is not set, no re-allocation is
             // possible, so old memory must be reusable
@@ -1151,6 +1156,9 @@ void laik_reservation_alloc(Laik_Reservation* res)
 
             Laik_Slice* slc = &(m->requiredSlice);
             m->count = laik_slice_size(slc);
+
+            m->layout = m->baseMapping->layout;
+            m->layoutSection = m->baseMapping->layoutSection;
 
             initEmbeddedMapping(m, m->baseMapping);
 
