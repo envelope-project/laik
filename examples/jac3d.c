@@ -111,6 +111,7 @@ int main(int argc, char* argv[])
     bool use_own_layout = false;
     int xblocks = 0, yblocks = 0, zblocks = 0; // for grid partitioner
     int iter_shrink = 0; // number iterations between shrinks (0: disable)
+    int shrink_count = 1;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
@@ -127,6 +128,7 @@ int main(int argc, char* argv[])
             do_grid = true;
         }
         if (argv[arg][1] == 'i' && argc > arg+1) { iter_shrink = atoi(argv[++arg]); }
+        if (argv[arg][1] == 'c' && argc > arg+1) { shrink_count = atoi(argv[++arg]); }
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter>\n\n"
                    "Options:\n"
@@ -139,6 +141,7 @@ int main(int argc, char* argv[])
                    " -e        : pre-calculate transitions to exec in iteration loop\n"
                    " -a        : pre-calculate action sequence to exec (includes -e)\n"
                    " -i <iter> : remove master every <iter> iterations (0: disable)\n"
+                   " -c <count>: remove <count> first processes (requires -i)\n"
                    " -l        : test layouts: use own minimal custom layout\n"
                    " -h        : print this help text and exit\n",
                    argv[0]);
@@ -180,7 +183,7 @@ int main(int argc, char* argv[])
         if (!use_cornerhalo)
             printf(" (halo without corners)");
         if (iter_shrink > 0)
-            printf(" (shrink every %d iterations)", iter_shrink);
+            printf(" (shrink every %d iterations by %d)", iter_shrink, shrink_count);
         printf("\n");
     }
 
@@ -475,10 +478,15 @@ int main(int argc, char* argv[])
         laik_writeout_profile();
 
         // shrink? TODO: allow repartitioning via external control
-        if ((iter_shrink > 0) && (iter == next_shrink) && (laik_size(world) > 1)) {
+        if ((iter_shrink > 0) && (iter == next_shrink) &&
+            (laik_size(world) > shrink_count)) {
+            static int plist[200];
+            assert(shrink_count < 200);
+            for(int i = 0; i < shrink_count; i++) plist[i] = i;
+
             next_shrink += iter_shrink;
 
-            Laik_Group* newWorld = laik_new_shrinked_group(world, 1, & (int) {0});
+            Laik_Group* newWorld = laik_new_shrinked_group(world, shrink_count, plist);
             laik_log(2, "shrinking to size %d (id %d)", laik_size(newWorld), laik_myid(newWorld));
 
             // run partitioners for shrinked group
