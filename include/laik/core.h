@@ -36,53 +36,86 @@ typedef struct _Laik_Group Laik_Group;
 /* Core LAIK API: task groups and elasticity
  *********************************************************************/
 
-// allocate space for a new LAIK instance
+/**
+ * Generic LAIK initialization function for programs which do not require
+ * a specific backend. Users can choose the backend by setting the
+ * LAIK_BACKEND environment variable.
+ *
+ * In contrast, if a program wants to use LAIK together with a specific
+ * communication library, it should call the backend initialization directly.
+ *
+ * For example, with MPI, this function will call MPI_Init. However, if
+ * a program already called MPI_Init itself, it should use laik_mpi_init
+ * to enable cooperative usage of MPI between the application and LAIK,
+ * by passing an MPI communicator to specify the ranks which LAIK is allowed
+ * to use.
+ */
+Laik_Instance* laik_init(int* argc, char*** argv);
+
+// allocate space for a new LAIK instance.
+// not to be used directly, but called from backend initialization
 Laik_Instance* laik_new_instance(const Laik_Backend* b, int size, int myid,
                                  char* location, void* data, void *gdata);
 
 //! shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance* inst);
 
-//! return a backend-dependant string for the location of the calling task
+//! return a backend-dependent string for the location of the calling process
 char* laik_mylocation(Laik_Instance*);
 
 //! create a group to be used in this LAIK instance
 Laik_Group* laik_create_group(Laik_Instance*, int maxsize);
 
-//! get default group with all active processes in this instance
+/**
+ * Get group of all processes in this instance marked as active.
+ *
+ * After LAIK initialization, all processes known to the communication
+ * backend are active. LAIK applications can mark processes inactive
+ * by collectively calling laik_set_world giving a group not containing
+ * these processes.
+ */
 Laik_Group* laik_world(Laik_Instance* i);
 
-//! set new default group of active processes for this instance
-void laik_set_world(Laik_Instance* i, Laik_Group* world);
+/**
+ * Specify a new group of active processes for this instance
+ *
+ * This function must be called collectively by all active
+ * processes in the instance.
+ * Processes not in the new world will get deactivated and
+ * can call laik_finalized or laik_wait for reactivation.
+ * The new group may include newly joining processes
+ * not yet part of this instance, still waiting in LAIK
+ * initalization or reactivation. Create a group with such
+ * waiting processes by calling laik_new_joining_group.
+ */
+void laik_set_world(Laik_Instance* i, Laik_Group* newworld);
 
-//! get instance the group is created in
+//! Get instance the group is created in
 Laik_Instance* laik_inst(Laik_Group*);
 
-//! return number of LAIK tasks available (within this instance)
+//! Return number of processes in a LAIK process group
 int laik_size(Laik_Group*);
 
-//! return my task id in group <g>. By default, the group master
-// has task ID 0, which can be changed.
-// Warning: on every shrinking/enlarging, task IDs may change!
+//! Return the id of the calling process in a LAIK process group
 int laik_myid(Laik_Group*);
 
-//! create a clone of <g>, derived from <g>.
+//! Create a clone of process group
 Laik_Group* laik_clone_group(Laik_Group* g);
 
-// TODO: API for...
-// Shrinking controlled by master in a group (collective).
-// <len>/<list> only needs to be valid at master, and provides a
-// list of task IDs to remove from group. Master cannot be removed.
-// For successful shrinking, in any partitionings defined on this group,
-// partitions of tasks to be removed need to be empty. Furthermore, any
-// groups derived from this group also get shrinked.
-// On shrinking, task IDs may change.
-
-//! Returns shrinked group, by removing the <len> tasks in <list>
+//! Create group by removing <len> processes from <g> as given in <list>
 Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
 
-//! Enlarging controlled by master in a group (collective)
-bool laik_enlarge_group(Laik_Group* g, int len, char** list);
+/**
+ * Create group by growing a given group with new about-to-join processes
+ * being identified locally by the communication backends of the given group.
+ *
+ * This function needs to be called by all processes in the given group.
+ * It will wait for at least <min> processes to join and will add at most
+ * <max> processes, adding them only if their location matches <match>.
+ * To finally add them to the active processes of this LAIK instance, call
+ * laik_set_world with the returned group.
+ */
+Laik_Group* laik_new_joining_group(Laik_Group* g, int min, int max, char* match);
 
 // get location ID from process ID in given group
 int laik_group_locationid(Laik_Group *group, int id);
@@ -173,10 +206,6 @@ bool laik_log_begin(int level);
 void laik_log_append(const char* msg, ...);
 // finalize the log message build with laik_log_begin/append and print it
 void laik_log_flush(const char* msg, ...);
-
-// Provide a generic LAIK initialization function for programs which don't care
-// which backend LAIK actually uses (e.g. the examples).
-Laik_Instance* laik_init (int* argc, char*** argv);
 
 
 /*********************************************************************/

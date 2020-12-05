@@ -42,7 +42,7 @@ extern const char *__progname;
 // see corresponding backend code for non-generic initialization of LAIK
 
 // generic LAIK init function
-Laik_Instance* laik_init (int* argc, char*** argv)
+Laik_Instance* laik_init(int* argc, char*** argv)
 {
     const char* override = getenv("LAIK_BACKEND");
     Laik_Instance* inst = 0;
@@ -81,7 +81,7 @@ Laik_Instance* laik_init (int* argc, char*** argv)
         // create dummy backend for laik_log to work
         laik_init_single();
         laik_log(LAIK_LL_Panic,
-                 "Unknwown backend '%s' requested by LAIK_BACKEND", override);
+                 "Unknown backend '%s' requested by LAIK_BACKEND", override);
         exit (1);
     }
 
@@ -285,13 +285,13 @@ Laik_Group* laik_world(Laik_Instance* i)
     return i->world;
 }
 
-void laik_set_world(Laik_Instance* i, Laik_Group* world)
+void laik_set_world(Laik_Instance* i, Laik_Group* newworld)
 {
     // TODO: check that removed processes do not appear in any
     //       active group of this instance
 
-    assert(world->inst == i);
-    i->world = world;
+    assert(newworld->inst == i);
+    i->world = newworld;
 }
 
 // create a clone of <g>, derived from <g>.
@@ -353,6 +353,17 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
 
     return g2;
 }
+
+Laik_Group* laik_new_joining_group(Laik_Group* g, int min, int max, char* match)
+{
+    (void)match;
+    (void)max;
+
+    // TOOD: for now, just return given group and check that we do not have to grow
+    assert(min == 0);
+    return g;
+}
+
 
 int laik_group_locationid(Laik_Group *group, int id)
 {
