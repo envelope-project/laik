@@ -20,6 +20,7 @@
 #include <laik-backend-mpi.h>
 #include <laik-backend-single.h>
 #include <laik-backend-tcp.h>
+#include <laik-backend-tcp2.h>
 
 // for string.h to declare strdup
 #define __STDC_WANT_LIB_EXT2__ 1
@@ -56,6 +57,14 @@ Laik_Instance* laik_init(int* argc, char*** argv)
     }
 #endif
 
+#ifdef USE_TCP2
+    if (inst == 0) {
+        if ((override == 0) || (strcmp(override, "tcp2") == 0)) {
+            inst = laik_init_tcp2(argc, argv);
+        }
+    }
+#endif
+
     if (inst == 0) {
         // fall-back to "single" backend as default if MPI is not available, or
         // if "single" backend is explicitly requested
@@ -80,8 +89,20 @@ Laik_Instance* laik_init(int* argc, char*** argv)
 
         // create dummy backend for laik_log to work
         laik_init_single();
-        laik_log(LAIK_LL_Panic,
+        laik_log(LAIK_LL_Error,
                  "Unknown backend '%s' requested by LAIK_BACKEND", override);
+        laik_log(LAIK_LL_Panic,
+                 "Supported backends: "
+#ifdef USE_MPI
+                 "mpi "
+#endif
+#ifdef USE_TCP2
+                 "tcp2 "
+#endif
+#ifdef USE_TCP
+                 "tcp "
+#endif
+                 "single");
         exit (1);
     }
 

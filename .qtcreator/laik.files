@@ -15,6 +15,7 @@
 ../src/backend.c
 ../src/backend-mpi.c
 ../src/backend-single.c
+../src/backend-tcp2.c
 ../src/core.c
 ../src/data.c
 ../src/debug.c
@@ -35,6 +36,7 @@
 ../include/laik-internal.h
 ../include/laik-backend-single.h
 ../include/laik-backend-mpi.h
+../include/laik-backend-tcp2.h
 
 ../include/laik/action.h
 ../include/laik/action-internal.h

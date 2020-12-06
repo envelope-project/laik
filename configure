@@ -141,6 +141,12 @@ else:
         print("  On Ubuntu, install 'libglib2.0-dev'")
 
 #------------------------------------
+# TCP2 backend support: always enable
+print("TCP2 backend enabled")
+defs += " -DUSE_TCP2"
+miscvars += "USE_TCP2=1\n"
+
+#------------------------------------
 # C++ support
 # LAIK does not use C++ itself, but there is a C++ example
 
