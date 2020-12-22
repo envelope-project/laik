@@ -32,6 +32,9 @@ typedef struct _Laik_Backend Laik_Backend;
 // a task group over which a index space gets distributed
 typedef struct _Laik_Group Laik_Group;
 
+// forward decl (for laik_log_set_time)
+struct timeval;
+
 /*********************************************************************/
 /* Core LAIK API: task groups and elasticity
  *********************************************************************/
@@ -178,8 +181,14 @@ typedef enum _Laik_LogLevel {
 // initialize logging for instance <i>
 void laik_log_init(Laik_Instance* i);
 
+// for early-init before instance is known
+void laik_log_init_loc(char* mylocation);
+
 // cleanup logging of instance <i>
 void laik_log_cleanup(Laik_Instance* i);
+
+// reset start time for log output
+void laik_log_set_time(struct timeval* t);
 
 // increment logging counter used in logging prefix
 void laik_log_inc(void);

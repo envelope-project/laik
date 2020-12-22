@@ -25,20 +25,28 @@
 
 // default log level
 static int laik_loglevel = LAIK_LL_Error;
+// file descriptor to write to instead of stderr
 static FILE* laik_logfile = NULL;
-static int laik_logprefix = 2; // 0: none, 1: short, 2:long
+// formatting choice:  // 0: none, 1: short, 2:long
+static int laik_logprefix = 2;
+// time of initialization, may be synced by backends
+static struct timeval laik_log_init_time;
+// active instance
 static Laik_Instance* laik_loginst = 0;
+// without instance, use a location as context (laik_log_init_loc)
+static char* laik_log_mylocation = 0;
 static int laik_logctr = 0;
 // filter
 static int laik_log_fromtask = -1;
 static int laik_log_totask = -1;
 
-// initialize logging for instance <instance>
-// TODO: enable for multiple instances
-void laik_log_init(Laik_Instance* i)
+void laik_log_init_internal()
 {
-    assert(laik_loginst == 0);
-    laik_loginst = i;
+    static bool init_done = false;
+    if (init_done) return;
+    init_done = true;
+
+    gettimeofday(&laik_log_init_time, NULL);
 
     char* str = getenv("LAIK_LOG");
     if (str) {
@@ -83,17 +91,45 @@ void laik_log_init(Laik_Instance* i)
         stderr = laik_logfile;
         stdout = laik_logfile;
     }
+
+}
+
+// initialize logging for instance <instance>
+// TODO: enable for multiple instances
+void laik_log_init(Laik_Instance* i)
+{
+    assert(laik_loginst == 0);
+    laik_loginst = i;
+
+    laik_log_init_internal();
+}
+
+// call this function at beginning of backend initilization,
+// before a full backend instance is created, to get log output
+void laik_log_init_loc(char* mylocation)
+{
+    laik_log_mylocation = mylocation;
+
+    laik_log_init_internal();
 }
 
 // cleanup logging of instance <i>
 void laik_log_cleanup(Laik_Instance* i)
 {
-    if (laik_loginst != i) return;
+    if (i) {
+        if (laik_loginst != i) return;
+    }
 
     laik_log_flush(0);
 
     if (laik_logfile)
         fclose(laik_logfile);
+}
+
+// reset start time for log output
+void laik_log_set_time(struct timeval* t)
+{
+    laik_log_init_time = *t;
 }
 
 // to overwrite environment variable LAIK_LOG
@@ -143,8 +179,7 @@ bool laik_log_begin(int l)
         current_logLevel = LAIK_LL_None;
         return false;
     }
-    if (laik_log_fromtask >= 0) {
-        assert(laik_loginst != 0);
+    if ((laik_log_fromtask >= 0) && (laik_loginst != 0)) {
         assert(laik_log_totask >= laik_log_fromtask);
         if ((laik_loginst->mylocationid < laik_log_fromtask) ||
             (laik_loginst->mylocationid > laik_log_totask)) {
@@ -165,7 +200,7 @@ bool laik_log_begin(int l)
 }
 
 static
-    void log_append(const char *format, va_list ap)
+void log_append(const char *format, va_list ap)
 {
     if (current_logLevel == LAIK_LL_None) return;
 
@@ -214,7 +249,7 @@ void laik_log_inc()
 }
 
 static
-    void log_flush()
+void log_flush()
 {
     if (current_logLevel == LAIK_LL_None) return;
     if ((current_logPos == 0) || (current_logBuffer == 0)) return;
@@ -231,7 +266,6 @@ static
     static int counter = 0;
     static int last_logctr = 0;
     int line_counter = 0;
-    assert(laik_loginst != 0);
     if (last_logctr != laik_logctr) {
         counter = 0;
         last_logctr = laik_logctr;
@@ -250,8 +284,8 @@ static
 
     struct timeval now;
     gettimeofday(&now, NULL);
-    double wtime = (double)(now.tv_sec - laik_loginst->init_time.tv_sec) +
-                   0.000001 * (now.tv_usec - laik_loginst->init_time.tv_usec);
+    double wtime = (double)(now.tv_sec - laik_log_init_time.tv_sec) +
+                   0.000001 * (now.tv_usec - laik_log_init_time.tv_usec);
     int wtime_min = (int) (wtime/60.0);
     double wtime_s = wtime - 60.0 * wtime_min;
 
@@ -262,14 +296,21 @@ static
         // sorting makes chunks from output of each MPI task
         line_counter++;
         off2 = sprintf(buf2, "%s ", (line_counter == 1) ? "==" : "..");
-        if (laik_logprefix == 1)
-            off2 += sprintf(buf2+off2, "T%02d | ", laik_loginst->mylocationid);
-        else if (laik_logprefix == 2)
-            off2 += sprintf(buf2+off2,
-                            "LAIK-%04d-T%02d %04d.%02d %2d:%06.3f | ",
-                            laik_logctr, laik_loginst->mylocationid,
-                            counter, line_counter,
-                            wtime_min, wtime_s);
+        if (laik_loginst == 0) {
+            off2 += sprintf(buf2+off2, "%-7s: ",
+                            laik_log_mylocation ? laik_log_mylocation : "");
+
+        }
+        else {
+            if (laik_logprefix == 1)
+                off2 += sprintf(buf2+off2, "T%02d | ", laik_loginst->mylocationid);
+            else if (laik_logprefix == 2)
+                off2 += sprintf(buf2+off2,
+                                "LAIK-%04d-T%02d %04d.%02d %2d:%06.3f | ",
+                                laik_logctr, laik_loginst->mylocationid,
+                                counter, line_counter,
+                                wtime_min, wtime_s);
+        }
         if (lstr)
             off2 += sprintf(buf2+off2, "%-7s: ",
                             (line_counter == 1) ? lstr : "");
