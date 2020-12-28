@@ -40,13 +40,13 @@ funtionality via repartitioning is enough. This example shows the use of a
 simple LAIK data container.
 
 ```C
-#include "laik-backend-mpi.h"
+#include <laik.h>
 #include <stdio.h>
 
 int main(int argc, char* argv[])
 {
-    // use provided MPI backend, let LAIK do MPI_Init
-    Laik_Instance* inst = laik_init_mpi(&argc, &argv);
+    // use generic init function
+    Laik_Instance* inst = laik_init(&argc, &argv);
     Laik_Group* world = laik_world(inst);
     // global 1d double array: 1 mio entries
     Laik_Data* a = laik_new_data_1d(inst, laik_Double, 1000000);
