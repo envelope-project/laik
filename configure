@@ -32,7 +32,9 @@ if "CC" in os.environ:
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--no-tcp", help="disable TCP backend", action="store_true")
+parser.add_argument("--no-mpi", help="disable MPI backend", action="store_true")
 args = parser.parse_args()
+use_mpi = not args.no_mpi
 use_tcp = not args.no_tcp
 
 #------------------------------------
@@ -82,27 +84,30 @@ subdirs += " external/simple"
 
 #  check for mpicc, if found we enable MPI
 mpicc = ""
-if "MPICC" in os.environ:
-    mpicc = os.environ['MPICC']
-if not mpicc:
-    mpicc = "mpicc"
-mpi_found = distutils.spawn.find_executable(mpicc)
-
-if not mpi_found:
-    print("LAIK MPI backend driver disabled ('"+ mpicc +"' not found).")
-    print("  Set MPICC to specify the MPI C compiler wrapper, or install MPI.")
-    print("  On Ubuntu, install e.g. 'libopenmpi-dev'.")
-    mpicc = ""
-else:
-    print("MPI enabled (using '" + mpicc + "' as compiler wrapper).")
+if use_mpi:
+    if "MPICC" in os.environ:
+        mpicc = os.environ['MPICC']
+    if not mpicc:
+        mpicc = "mpicc"
+    mpi_found = distutils.spawn.find_executable(mpicc)
+if use_mpi and mpi_found:
+    print("MPI backend enabled (using '" + mpicc + "' as compiler wrapper).")
     defs += " -DUSE_MPI"
     test_subdirs += " mpi"
     mpiversion = os.popen('mpirun --version').read().strip()
     if "Open MPI" in mpiversion:
-        print("  Detected Open MPI")
+        print("  Detected OpenMPI")
         # required for tests with OpenMPI, otherwise tests may fail
         # with "not enough slots" error on small machines
         exports = "export MPIEXEC=mpiexec --oversubscribe --mca btl_base_warn_component_unused 0"
+else:
+    if not use_mpi:
+        print("MPI backend disabled.")
+    elif not mpi_found:
+        print("  MPI backend disabled ('"+ mpicc +"' not found).")
+        print("  Install MPI, or point MPICC to the compiler wrapper of an installed MPI.")
+        print("  On Ubuntu, install e.g. 'libopenmpi-dev'.")
+        mpicc = ""
 
 #------------------------------------
 # TCP backend support
@@ -123,7 +128,7 @@ if use_tcp and pkgc_found and glib_inc and glib_versionok:
     test_subdirs += " tcp"
 else:
     if not use_tcp:
-        print("TCP backend disabled")
+        print("TCP backend disabled.")
     elif not pkgc_found:
         print("TCP backend disabled: pkg-config required to detect glib-2.0 dependency")
     elif not glib_versionok:
