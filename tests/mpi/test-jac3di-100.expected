@@ -1,4 +1,4 @@
-100 x 100 x 100 cells (mem 16.0 MB), running 50 iterations with 4 tasks (shrink every 10 iterations)
+100 x 100 x 100 cells (mem 16.0 MB), running 50 iterations with 4 tasks (shrink every 10 iterations by 1)
 Residuum after  1 iters: 3088288.333333
 Residuum after 11 iters: 11612.580828
 Residuum after 21 iters: 3544.954272
