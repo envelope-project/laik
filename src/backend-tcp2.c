@@ -114,6 +114,8 @@
 
 #define MAX_PEERS 256
 #define MAX_LOOPFD 256
+// receive buffer length
+#define RBUF_LEN 256
 
 // forward decl
 void tcp2_exec(Laik_ActionSeq* as);
@@ -137,6 +139,8 @@ typedef struct {
     int port;       // port to connect to at host
     char* host;     // remote host, if 0 localhost
     char* location; // location string of peer
+    int rbuf_left;  // valid bytes in receive buffer
+    char rbuf[RBUF_LEN]; // receive buffer
 } Peer;
 
 // registrations for active fds in event loop
@@ -245,7 +249,7 @@ int check_local(char* host)
 }
 
 // forward decl
-void got_msg(InstData* d, int fd);
+void got_data(InstData* d, int fd);
 
 // make sure we have an open connection to peer <id>
 void check_id(InstData* d, int id)
@@ -280,7 +284,8 @@ void check_id(InstData* d, int id)
         exit(1);
     }
     d->peer[id].fd = fd;
-    add_rfd(d, fd, got_msg);
+    d->peer[id].rbuf_left = 0;
+    add_rfd(d, fd, got_data);
     d->cb[fd].id = id;
 }
 
@@ -295,29 +300,11 @@ void send_msg(InstData* d, int id, char* msg)
     //        msg, len, id, d->peer[id].fd);
 }
 
-void got_msg(InstData* d, int fd)
+
+void got_cmd(InstData* d, int fd, char* msg, int len)
 {
-    char msg[256];
-
     int id = d->cb[fd].id;
-    int len = read(fd, msg, 255);
-    if (len == 0) {
-        // other side closed connection
-        close(fd);
-        rm_rfd(d, fd);
-
-        if (id >= 0)
-            d->peer[id].fd = -1;
-
-        laik_log(1, "TCP2 FD %d closed (peer ID %d, location %s)\n",
-                 fd, id, (id >= 0) ? d->peer[id].location : "-");
-        return;
-    }
-
-    msg[len] = 0;
-    if (msg[len-1] == '\n') msg[--len] = 0;
-
-    laik_log(1, "TCP2 Got msg '%s' (len %d) from ID %d (FD %d)\n",
+    laik_log(1, "TCP2 Got cmd '%s' (len %d) from ID %d (FD %d)\n",
             msg, len, id, fd);
 
     if (msg[0] == 'r') {
@@ -329,14 +316,14 @@ void got_msg(InstData* d, int fd)
         char cmd[20], l[50], h[50];
         int p;
         if (sscanf(msg, "%20s %50s %50s %d", cmd, l, h, &p) < 4) {
-            laik_log(2, "cannot parse register command '%s'", msg);
+            laik_log(LAIK_LL_Panic, "cannot parse register command '%s'", msg);
             return;
         }
 
         id = ++d->maxid;
         d->cb[fd].id = id;
         assert(id < MAX_PEERS);
-        laik_log(1, "registered new ID %d: location %s at host %s port %d",
+        laik_log(1, "TCP2 registered new ID %d: location %s at host %s port %d",
                  id, l, h, p);
 
         assert(d->peer[id].port == -1);
@@ -344,6 +331,7 @@ void got_msg(InstData* d, int fd)
         d->peer[id].host = strdup(h);
         d->peer[id].location = strdup(l);
         d->peer[id].port = p;
+        d->peer[id].rbuf_left = 0;
 
         // send ID info: "id <id> <location> <host> <port>"
         // new registered id to all already registered peers
@@ -370,7 +358,7 @@ void got_msg(InstData* d, int fd)
         char cmd[20], l[50], h[50];
         int p;
         if (sscanf(msg, "%20s %d %50s %50s %d", cmd, &id, l, h, &p) < 5) {
-            laik_log(2, "cannot parse id command '%s'", msg);
+            laik_log(LAIK_LL_Panic, "cannot parse id command '%s'", msg);
             return;
         }
 
@@ -392,7 +380,7 @@ void got_msg(InstData* d, int fd)
             if (id != d->id) d->peers++;
         }
         if (id > d->maxid) d->maxid = id;
-        laik_log(1, "seen ID %d (location %s%s), active peers %d",
+        laik_log(1, "TCP2 seen ID %d (location %s%s), active peers %d",
                  id, l, (id == d->id) ? ", my ID":"", d->peers);
         return;
     }
@@ -406,16 +394,69 @@ void got_msg(InstData* d, int fd)
         char cmd[20];
         int phase;
         if (sscanf(msg, "%20s %d", cmd, &phase) < 2) {
-            laik_log(2, "cannot parse phase command '%s'", msg);
+            laik_log(LAIK_LL_Panic, "cannot parse phase command '%s'", msg);
             return;
         }
-        laik_log(1, "got phase %d", phase);
+        laik_log(1, "TCP2 got phase %d", phase);
         d->phase = phase;
         d->exit = 1;
         return;
     }
 
     laik_log(LAIK_LL_Panic, "TCP2 from ID %d unknown msg '%s'", id, msg);
+}
+
+
+void got_data(InstData* d, int fd)
+{
+    int id = d->cb[fd].id;
+
+    // use a per-id receive buffer to not mix partially sent commands
+    char* rbuf = d->peer[id].rbuf;
+    int left = d->peer[id].rbuf_left;
+
+    int len = read(fd, rbuf + left, RBUF_LEN - left);
+    if (len == -1) {
+        laik_log(1, "TCP2 warning: read error on FD %d\n", fd);
+        return;
+    }
+    if (len == 0) {
+        // other side closed connection
+
+        // still a command in the buffer?
+        // can only be one, as left-over bytes in buffer is just one line
+        if (left > 0) {
+            got_cmd(d, fd, rbuf, left);
+            d->peer[id].rbuf_left = 0;
+        }
+
+        close(fd);
+        rm_rfd(d, fd);
+
+        if (id >= 0)
+            d->peer[id].fd = -1;
+
+        laik_log(1, "TCP2 FD %d closed (peer ID %d, location %s)\n",
+                 fd, id, (id >= 0) ? d->peer[id].location : "-");
+        return;
+    }
+
+    laik_log(1, "TCP2 got_data(FD %d, peer ID %d): read %d bytes (left: %d)\n",
+             fd, id, len, left);
+
+    int pos1 = 0, pos2 = 0;
+    while(pos2 < left + len) {
+        if (rbuf[pos2] == '\n') {
+            rbuf[pos2] = 0;
+            got_cmd(d, fd, rbuf + pos1, pos2 - pos1);
+            pos1 = pos2+1;
+        }
+        pos2++;
+    }
+    left = 0;
+    while(pos1 < pos2)
+        rbuf[left++] = rbuf[pos1++];
+    d->peer[id].rbuf_left = left;
 }
 
 void got_connect(InstData* d, int fd)
@@ -428,7 +469,7 @@ void got_connect(InstData* d, int fd)
         exit(1);
     }
 
-    add_rfd(d, newfd, got_msg);
+    add_rfd(d, newfd, got_data);
 
     char str[20];
     if (saddr.sa_family == AF_INET)
