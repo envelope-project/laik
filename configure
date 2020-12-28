@@ -33,38 +33,41 @@ if "CC" in os.environ:
 parser = argparse.ArgumentParser()
 parser.add_argument("--no-tcp", help="disable TCP backend", action="store_true")
 parser.add_argument("--no-mpi", help="disable MPI backend", action="store_true")
+parser.add_argument("--no-mqtt", help="disable MQTT support", action="store_true")
 args = parser.parse_args()
 use_mpi = not args.no_mpi
 use_tcp = not args.no_tcp
+use_mqtt = not args.no_mqtt
 
 #------------------------------------
 # Mosquitto/MQTT
 
-# check for mosquitto header
-for ipath in ipaths:
-    mosq_found = os.path.isfile(ipath + "/mosquitto.h")
-    if mosq_found:
-        mosq_ipath = ipath
-        break
+if use_mqtt:
+    # check for mosquitto header
+    for ipath in ipaths:
+        mosq_found = os.path.isfile(ipath + "/mosquitto.h")
+        if mosq_found:
+            mosq_ipath = ipath
+            break
+    # check for protobuf header
+    # on precise/trusty header is in /usr/include/google
+    for ipath in ipaths + ["/usr/include/google"]:
+        protobuf_found = os.path.isfile(ipath + "/protobuf-c/protobuf-c.h")
+        if protobuf_found:
+            protobuf_ipath = ipath
+            break
+    # check for protobuf compiler
+    protoc_found = distutils.spawn.find_executable("protoc-c")
 
-# check for protobuf header
-# on precise/trusty header is in /usr/include/google
-for ipath in ipaths + ["/usr/include/google"]:
-    protobuf_found = os.path.isfile(ipath + "/protobuf-c/protobuf-c.h")
-    if protobuf_found:
-        protobuf_ipath = ipath
-        break
-
-# check for protobuf compiler
-protoc_found = distutils.spawn.find_executable("protoc-c")
-
-mqtt_enabled = mosq_found and protobuf_found and protoc_found
+mqtt_enabled = use_mqtt and mosq_found and protobuf_found and protoc_found
 if mqtt_enabled:
-    print("MQTT enabled (mosquitto + protobuf found).")
+    print("MQTT support enabled (mosquitto + protobuf found).")
     defs += " -I" + protobuf_ipath + " -I" + mosq_ipath
     subdirs += " external/MQTT"
+elif not use_mqtt:
+    print("MQTT support disabled.")
 else:
-    print("MQTT support disabled:")
+    print("MQTT support disabled because:")
     if not mosq_found:
         print(" Mosquitto include file not found.")
         print("  On Ubuntu, install 'libmosquitto-dev' or 'libmosquitto0-dev' (trusty).")
