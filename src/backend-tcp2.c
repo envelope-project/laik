@@ -134,6 +134,8 @@ static Laik_Instance* instance = 0;
 
 // structs for instance
 
+// communicating peer
+// can be connected (fd >=0) or not
 typedef struct {
     int fd;         // -1 if not connected
     int port;       // port to connect to at host
@@ -141,6 +143,14 @@ typedef struct {
     char* location; // location string of peer
     int rbuf_left;  // valid bytes in receive buffer
     char rbuf[RBUF_LEN]; // receive buffer
+
+    // data we are currently receiving from peer
+    int rcount;    // element count in receive
+    int relemsize; // expected byte count per element
+    int roff;      // receive offset
+    Laik_Mapping* rmap; // mapping to write received data to
+    Laik_Slice* rslc; // slice to write received data to
+    Laik_Index ridx; // index representing receive progress
 } Peer;
 
 // registrations for active fds in event loop
@@ -173,6 +183,44 @@ typedef struct {
     int count;
     int* id;
 } GroupData;
+
+
+// helpers for send/receive of LAIK containers
+
+// index traversal over slice
+// return true if index was successfully incremented, false if traversal done
+// (copied from src/layout.c)
+static
+bool next_lex(Laik_Slice* slc, Laik_Index* idx)
+{
+    idx->i[0]++;
+    if (idx->i[0] < slc->to.i[0]) return true;
+    if (slc->space->dims == 1) return false;
+
+    idx->i[1]++;
+    idx->i[0] = slc->from.i[0];
+    if (idx->i[1] < slc->to.i[1]) return true;
+    if (slc->space->dims == 2) return false;
+
+    idx->i[2]++;
+    idx->i[1] = slc->from.i[1];
+    if (idx->i[2] < slc->to.i[2]) return true;
+    return false;
+}
+
+static
+char* istr(int dims, Laik_Index* idx)
+{
+    static char str[50];
+
+    if (dims == 1) sprintf(str,"%lu", idx->i[0]);
+    if (dims == 2) sprintf(str,"%lu/%lu", idx->i[0], idx->i[1]);
+    if (dims == 3) sprintf(str,"%lu/%lu/%lu",
+                           idx->i[0], idx->i[1], idx->i[2]);
+    return str;
+}
+
+
 
 
 // event loop functions
@@ -249,7 +297,7 @@ int check_local(char* host)
 }
 
 // forward decl
-void got_data(InstData* d, int fd);
+void got_bytes(InstData* d, int fd);
 
 // make sure we have an open connection to peer <id>
 void check_id(InstData* d, int id)
@@ -284,22 +332,90 @@ void check_id(InstData* d, int id)
         exit(1);
     }
     d->peer[id].fd = fd;
-    d->peer[id].rbuf_left = 0;
-    add_rfd(d, fd, got_data);
+    add_rfd(d, fd, got_bytes);
     d->cb[fd].id = id;
+
+    // on reconnect, nothing should be left to receive
+    assert(d->peer[id].rbuf_left == 0); // receive buffer empty
+    assert(d->peer[id].rcount == 0); // nothing to receive
 }
 
 
-void send_msg(InstData* d, int id, char* msg)
+void send_cmd(InstData* d, int id, char* cmd)
 {
     assert(id >= 0);
     check_id(d, id);
-    int len = strlen(msg);
-    write(d->peer[id].fd, msg, len);
-    //laik_log(1, "TCP2 Sent msg '%s' (len %d) to ID %d (FD %d)\n",
-    //        msg, len, id, d->peer[id].fd);
+    int len = strlen(cmd);
+    laik_log(1, "TCP2 Sent cmd '%s' (len %d) to ID %d (FD %d)\n",
+             cmd, len, id, d->peer[id].fd);
+    write(d->peer[id].fd, cmd, len);
+    write(d->peer[id].fd, "\n", 1);
 }
 
+void got_data(InstData* d, int id, char* msg)
+{
+    // data <len> <hexbyte> ...
+    char cmd[20];
+    int len, i;
+    if (sscanf(msg, "%20s %d %n", cmd, &len, &i) < 2) {
+        laik_log(LAIK_LL_Panic, "cannot parse data command '%s'", msg);
+        return;
+    }
+
+    Peer* p = &(d->peer[id]);
+    assert(p->rcount > 0);
+    // assume only one element per data command
+    assert(p->relemsize == len);
+    Laik_Mapping* m = p->rmap;
+    assert(m != 0);
+    Laik_Layout* ll = m->layout;
+    int64_t off = ll->offset(ll, m->layoutSection, &(p->ridx));
+    char* idxPtr = m->start + off * p->relemsize;
+    char* vp = idxPtr;
+
+    // position string for check
+    char pstr[50];
+    int dims = p->rslc->space->dims;
+    int s = sprintf(pstr, "(%d:%s)", p->roff, istr(dims, &(p->ridx)));
+
+    if (msg[i] == '(') {
+        assert(strncmp(msg+i, pstr, s) == 0);
+        i += s;
+        while(msg[i] && (msg[i] == ' ')) i++;
+    }
+
+    // parse hex bytes
+    unsigned char c;
+    int l = len, v = 0;
+    while(1) {
+        c = msg[i++];
+        if ((c == ' ') || (c == 0)) {
+            assert(len >= 0);
+            *idxPtr = v;
+            idxPtr++;
+            v = 0;
+            l--;
+            if ((c == 0) || (len == 0)) break;
+            continue;
+        }
+        assert((c >= '0') && (c <= 'f'));
+        assert((c <= '9') || (c >= 'a'));
+        v = 16 * v + ((c > '9') ? c - 'a' + 10 : c - '0');
+    }
+    assert(l == 0);
+
+    if (len == 8) laik_log(1, " %s: %f\n", pstr, *((double*)vp));
+
+    laik_log(1, "TCP2 got data, len %d, received %d/%d",
+             len, p->roff, p->rcount);
+
+    p->roff++;
+    bool inTraversal = next_lex(p->rslc, &(p->ridx));
+    assert(inTraversal == (p->roff < p->rcount));
+
+    if (p->roff == p->rcount)
+        d->exit = 1;
+}
 
 void got_cmd(InstData* d, int fd, char* msg, int len)
 {
@@ -331,17 +447,19 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
         d->peer[id].host = strdup(h);
         d->peer[id].location = strdup(l);
         d->peer[id].port = p;
+        // first time we use this id for a peer: init receive
         d->peer[id].rbuf_left = 0;
+        d->peer[id].rcount = 0;
 
         // send ID info: "id <id> <location> <host> <port>"
         // new registered id to all already registered peers
-        sprintf(msg, "id %d %s %s %d\n", id, l, h, p);
+        sprintf(msg, "id %d %s %s %d", id, l, h, p);
         for(int i = 1; i <= d->maxid; i++)
-            send_msg(d, i, msg);
+            send_cmd(d, i, msg);
         for(int i = 0; i < d->maxid; i++) {
-            sprintf(msg, "id %d %s %s %d\n", i,
+            sprintf(msg, "id %d %s %s %d", i,
                     d->peer[i].location, d->peer[i].host, d->peer[i].port);
-            send_msg(d, id, msg);
+            send_cmd(d, id, msg);
         }
 
         d->peers++;
@@ -377,6 +495,10 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
             d->peer[id].host = strdup(h);
             d->peer[id].location = strdup(l);
             d->peer[id].port = p;
+            // first time we see this peer: init receive
+            d->peer[id].rbuf_left = 0;
+            d->peer[id].rcount = 0;
+
             if (id != d->id) d->peers++;
         }
         if (id > d->maxid) d->maxid = id;
@@ -403,11 +525,16 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
         return;
     }
 
+    if (msg[0] == 'd') {
+        got_data(d, id, msg);
+        return;
+    }
+
     laik_log(LAIK_LL_Panic, "TCP2 from ID %d unknown msg '%s'", id, msg);
 }
 
 
-void got_data(InstData* d, int fd)
+void got_bytes(InstData* d, int fd)
 {
     int id = d->cb[fd].id;
 
@@ -441,7 +568,7 @@ void got_data(InstData* d, int fd)
         return;
     }
 
-    laik_log(1, "TCP2 got_data(FD %d, peer ID %d): read %d bytes (left: %d)\n",
+    laik_log(1, "TCP2 got_bytes(FD %d, peer ID %d): read %d bytes (left: %d)\n",
              fd, id, len, left);
 
     int pos1 = 0, pos2 = 0;
@@ -469,7 +596,7 @@ void got_connect(InstData* d, int fd)
         exit(1);
     }
 
-    add_rfd(d, newfd, got_data);
+    add_rfd(d, newfd, got_bytes);
 
     char str[20];
     if (saddr.sa_family == AF_INET)
@@ -611,13 +738,13 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         // send all peers to start at phase 0
         d->phase = 0;
         for(int i = 1; i <= d->maxid; i++)
-            send_msg(d, i, "phase 0\n");
+            send_cmd(d, i, "phase 0");
     }
     else {
         // register with master, get world size
         char msg[100];
-        sprintf(msg, "register %.30s %.30s %d\n", location, host, d->listenport);
-        send_msg(d, 0, msg);
+        sprintf(msg, "register %.30s %.30s %d", location, host, d->listenport);
+        send_cmd(d, 0, msg);
         while(d->phase == -1)
             run_loop(d);
         world_size = d->peers + 1;
@@ -630,51 +757,117 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     return instance;
 }
 
+
+// helper for exec
+
+// sending count/idx allows check at receiver
+void send_data(int count, int dims, Laik_Index* idx, int id, void* p, int s)
+{
+    char str[100];
+    int o = 0;
+    o += sprintf(str, "data %d (%d:%s)", s, count, istr(dims, idx));
+    for(int i = 0; i < s; i++) {
+        int v = ((unsigned char*)p)[i];
+        o += sprintf(str+o, " %02x", v);
+    }
+    if (s == 8) laik_log(1, " %s: %f\n", istr(dims, idx), *((double*)p));
+
+    send_cmd((InstData*)instance->backend_data, id, str);
+}
+
+
+
 void tcp2_exec(Laik_ActionSeq* as)
 {
+    if (as->actionCount == 0) {
+        laik_log(1, "TCP2 exec: nothing to do\n");
+        return;
+    }
+
     if (as->backend == 0) {
         as->backend = &laik_backend;
+
+        // do minimal transformations, sorting send/recv
+        laik_log(1, "TCP2 exec: prepare before exec\n");
+        laik_log_ActionSeqIfChanged(true, as, "Original sequence");
+        bool changed = laik_aseq_splitTransitionExecs(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After splitting texecs");
+        changed = laik_aseq_sort_2phases(as);
+        laik_log_ActionSeqIfChanged(changed, as, "After sorting");
+
         laik_aseq_calc_stats(as);
+        as->backend = 0; // this tells LAIK that no cleanup needed
     }
-    // we only support 1 transition exec action
-    assert(as->actionCount == 1);
-    assert(as->action[0].type == LAIK_AT_TExec);
+
     Laik_TransitionContext* tc = as->context[0];
-    Laik_Data* d = tc->data;
-    Laik_Transition* t = tc->transition;
-    Laik_MappingList* fromList = tc->fromList;
-    Laik_MappingList* toList = tc->toList;
+    int dims = tc->data->space->dims;
+    Laik_Action* a = as->action;
+    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+        switch(a->type) {
+        case LAIK_AT_MapPackAndSend: {
+            Laik_A_MapPackAndSend* aa = (Laik_A_MapPackAndSend*) a;
+            int es = tc->data->elemsize;
+            laik_log(1, "TCP2 MapPackAndSend to %d, %d x %dB\n",
+                     aa->to_rank, aa->count, es);
+            assert(tc->fromList && (aa->fromMapNo < tc->fromList->count));
+            Laik_Mapping* m = &(tc->fromList->map[aa->fromMapNo]);
+            assert(m->start != 0);
+            Laik_Layout* l = m->layout;
+            Laik_Index idx = aa->slc->from;
+            int count = 0;
+            while(1) {
+                int64_t off = l->offset(l, m->layoutSection, &idx);
+                void* idxPtr = m->start + off * es;
+                send_data(count, dims, &idx, aa->to_rank, idxPtr, es);
+                count++;
+                if (!next_lex(aa->slc, &idx)) break;
+            }
+            assert(count == (int)aa->count);
+            break;
+        }
+        case LAIK_AT_MapRecvAndUnpack: {
+            Laik_A_MapRecvAndUnpack* aa = (Laik_A_MapRecvAndUnpack*) a;
+            laik_log(1, "TCP2 MapRecvAndUnpack from %d, %d x %dB\n",
+                     aa->from_rank, aa->count, tc->data->elemsize);
+            // check no data still registered to be received from aa->from_rank
+            InstData* d = (InstData*)instance->backend_data;
+            Peer* p = &(d->peer[aa->from_rank]);
+            assert(p->rcount == 0);
 
-    if (t->redCount > 0) {
-        assert(fromList->count == 1);
-        assert(toList->count == 1);
-        Laik_Mapping* fromMap = &(fromList->map[0]);
-        Laik_Mapping* toMap = &(toList->map[0]);
-        char* fromBase = fromMap ? fromMap->base : 0;
-        char* toBase = toMap ? toMap->base : 0;
+            // write outstanding receive info into peer
+            assert(aa->count > 0);
+            p->rcount = aa->count;
+            p->roff = 0;
+            p->relemsize = tc->data->elemsize;
+            assert(tc->toList && (aa->toMapNo < tc->toList->count));
+            p->rmap = &(tc->toList->map[aa->toMapNo]);
+            assert(p->rmap->start != 0);
+            p->rslc = aa->slc;
+            p->ridx = aa->slc->from;
 
-        for(int i=0; i < t->redCount; i++) {
-            assert(d->space->dims == 1);
-            struct redTOp* op = &(t->red[i]);
-            int64_t from = op->slc.from.i[0];
-            int64_t to   = op->slc.to.i[0];
-            assert(fromBase != 0);
-            assert(laik_trans_isInGroup(t, op->outputGroup, t->group->myid));
-            assert(toBase != 0);
-            assert(to > from);
+            // wait until data received from peer
+            while(p->roff < p->rcount)
+                run_loop(d);
 
-            laik_log(1, "TCP2 reduce: "
-                        "from %lld, to %lld, elemsize %d, base from/to %p/%p\n",
-                     (long long int) from, (long long int) to,
-                     d->elemsize, (void*) fromBase, (void*) toBase);
+            // done
+            p->rcount = 0;
+            break;
+        }
 
-            memcpy(toBase, fromBase, (to-from) * fromMap->data->elemsize);
+        case LAIK_AT_MapGroupReduce: {
+            Laik_BackendAction* aa = (Laik_BackendAction*) a;
+            laik_log(1, "TCP2 MapGroupReduce %d x %dB\n",
+                     aa->count, tc->data->elemsize);
+            // TODO
+            break;
+
+        }
+
+        default:
+            assert(0);
+            break;
         }
     }
-
-    // TODO: currently no send/recv actions supported
-    assert(t->recvCount == 0);
-    assert(t->sendCount == 0);
 }
 
 void tcp2_sync(Laik_KVStore* kvs)
