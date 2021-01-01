@@ -151,6 +151,7 @@ typedef struct {
     Laik_Mapping* rmap; // mapping to write received data to
     Laik_Slice* rslc; // slice to write received data to
     Laik_Index ridx; // index representing receive progress
+    Laik_ReductionOperation rro; // reduction with existing value
 } Peer;
 
 // registrations for active fds in event loop
@@ -371,7 +372,6 @@ void got_data(InstData* d, int id, char* msg)
     Laik_Layout* ll = m->layout;
     int64_t off = ll->offset(ll, m->layoutSection, &(p->ridx));
     char* idxPtr = m->start + off * p->relemsize;
-    char* vp = idxPtr;
 
     // position string for check
     char pstr[50];
@@ -384,27 +384,38 @@ void got_data(InstData* d, int id, char* msg)
         while(msg[i] && (msg[i] == ' ')) i++;
     }
 
+    char data_in[100];
+    assert(len < 100);
+    int l = 0;
+
     // parse hex bytes
     unsigned char c;
-    int l = len, v = 0;
+    int v = 0;
     while(1) {
         c = msg[i++];
         if ((c == ' ') || (c == 0)) {
-            assert(len >= 0);
-            *idxPtr = v;
-            idxPtr++;
+            assert(l < len);
+            data_in[l++] = v;
             v = 0;
-            l--;
-            if ((c == 0) || (len == 0)) break;
+            if ((c == 0) || (l == len)) break;
             continue;
         }
         assert((c >= '0') && (c <= 'f'));
         assert((c <= '9') || (c >= 'a'));
         v = 16 * v + ((c > '9') ? c - 'a' + 10 : c - '0');
     }
-    assert(l == 0);
+    assert(l == len);
 
-    if (len == 8) laik_log(1, " %s: %f\n", pstr, *((double*)vp));
+    assert(l == p->relemsize);
+    if (p->rro == LAIK_RO_None)
+        memcpy(idxPtr, data_in, len);
+    else {
+        Laik_Type* t = p->rmap->data->type;
+        assert(t->reduce);
+        (t->reduce)(idxPtr, idxPtr, data_in, 1, p->rro);
+    }
+
+    if (len == 8) laik_log(1, " pos %s: in %f res %f\n", pstr, *((double*)data_in), *((double*)idxPtr));
 
     laik_log(1, "TCP2 got data, len %d, received %d/%d",
              len, p->roff, p->rcount);
@@ -760,21 +771,146 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
 
 // helper for exec
 
-// sending count/idx allows check at receiver
-void send_data(int count, int dims, Laik_Index* idx, int id, void* p, int s)
+// send data with one element of size <s> at pointer <p> to process <id>
+// position <n/idx> added only to allow check at receiver
+static
+void send_data(int n, int dims, Laik_Index* idx, int id, void* p, int s)
 {
     char str[100];
     int o = 0;
-    o += sprintf(str, "data %d (%d:%s)", s, count, istr(dims, idx));
+    o += sprintf(str, "data %d (%d:%s)", s, n, istr(dims, idx));
     for(int i = 0; i < s; i++) {
         int v = ((unsigned char*)p)[i];
         o += sprintf(str+o, " %02x", v);
     }
-    if (s == 8) laik_log(1, " %s: %f\n", istr(dims, idx), *((double*)p));
+    if (s == 8) laik_log(1, " pos %s: %f\n", istr(dims, idx), *((double*)p));
 
     send_cmd((InstData*)instance->backend_data, id, str);
 }
 
+// send a slice of data from mapping <m> to process <id>
+static
+void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int to)
+{
+    Laik_Layout* l = fromMap->layout;
+    int esize = fromMap->data->elemsize;
+    int dims = slc->space->dims;
+    assert(fromMap->start != 0); // must be backed by memory
+
+    Laik_Index idx = slc->from;
+    int ecount = 0;
+    while(1) {
+        int64_t off = l->offset(l, fromMap->layoutSection, &idx);
+        void* idxPtr = fromMap->start + off * esize;
+        send_data(ecount, dims, &idx, to, idxPtr, esize);
+        ecount++;
+        if (!next_lex(slc, &idx)) break;
+    }
+    assert(ecount == (int) laik_slice_size(slc));
+}
+
+// <ro> allows to request reduction with existing value
+// (use RO_None to overwrite with received value)
+static
+void recv_slice(Laik_Slice* slc, int fromID, Laik_Mapping* toMap, Laik_ReductionOperation ro)
+{
+    assert(toMap->start != 0); // must be backed by memory
+    // check no data still registered to be received from <fromID>
+    InstData* d = (InstData*)instance->backend_data;
+    Peer* p = &(d->peer[fromID]);
+    assert(p->rcount == 0);
+
+    // write outstanding receive info into peer structure
+    p->rcount = laik_slice_size(slc);
+    assert(p->rcount > 0);
+    p->roff = 0;
+    p->relemsize = toMap->data->elemsize;
+    p->rmap = toMap;
+    p->rslc = slc;
+    p->ridx = slc->from;
+    p->rro = ro;
+
+    // wait until data received from peer
+    while(p->roff < p->rcount)
+        run_loop(d);
+
+    // done
+    p->rcount = 0;
+}
+
+/* reduction at one process using send/recv
+ * 
+ * One process is chosen to do the reduction (reduceProcess): this is selected
+ * to be the process with smallest id of all processes which are interested in the
+ * result (input group). All other processes with input send their data to the
+ * reduceProcess. It does the reduction, and then it sends the result to all
+ * processes interested in the result (output group)
+*/
+static
+void exec_reduce(Laik_TransitionContext* tc,
+                 Laik_BackendAction* a)
+{
+    assert(a->h.type == LAIK_AT_MapGroupReduce);
+    Laik_Transition* t = tc->transition;
+
+    // do the manual reduction on smallest rank of output group
+    int reduceTask = laik_trans_taskInGroup(t, a->outputGroup, 0);
+    laik_log(1, "      exec reduce at T%d", reduceTask);
+
+    int myid = t->group->myid;
+    if (myid != reduceTask) {
+        // not the reduce process: eventually send input and recv result
+
+        if (laik_trans_isInGroup(t, a->inputGroup, myid)) {
+            laik_log(1, "        exec send to T%d", reduceTask);
+            assert(tc->fromList && (a->fromMapNo < tc->fromList->count));
+            Laik_Mapping* m = &(tc->fromList->map[a->fromMapNo]);
+            send_slice(m, a->slc, reduceTask);
+        }
+        if (laik_trans_isInGroup(t, a->outputGroup, myid)) {
+            laik_log(1, "        exec recv from T%d", reduceTask);
+            assert(tc->toList && (a->toMapNo < tc->toList->count));
+            Laik_Mapping* m = &(tc->toList->map[a->toMapNo]);
+            recv_slice(a->slc, reduceTask, m, LAIK_RO_None);
+        }
+        return;
+    }
+
+    // this is the reduce process
+
+    assert(tc->toList && (a->toMapNo < tc->toList->count));
+    Laik_Mapping* m = &(tc->toList->map[a->toMapNo]);
+
+    // do receive & reduce with all input processes
+    Laik_ReductionOperation op = a->redOp;
+    if (!laik_trans_isInGroup(t, a->inputGroup, myid)) {
+        // no input from me: overwrite my values
+        op = LAIK_RO_None;
+    }
+    int inCount = laik_trans_groupCount(t, a->inputGroup);
+    for(int i = 0; i< inCount; i++) {
+        int inTask = laik_trans_taskInGroup(t, a->inputGroup, i);
+        if (inTask == myid) continue;
+
+        laik_log(1, "  reduce process: recv+%s from T%d (count %d)",
+                 (op == LAIK_RO_None) ? "overwrite":"reduce", inTask, a->count);
+        recv_slice(a->slc, inTask, m, op);
+        op = a->redOp; // eventually reset to reduction op from None
+    }
+
+    // send result to processes in output group
+    int outCount = laik_trans_groupCount(t, a->outputGroup);
+    for(int i = 0; i< outCount; i++) {
+        int outTask = laik_trans_taskInGroup(t, a->outputGroup, i);
+        if (outTask == myid) {
+            // that's myself: nothing to do
+            continue;
+        }
+
+        laik_log(1, "  reduce process: send result to T%d", outTask);
+        send_slice(m, a->slc, outTask);
+    }
+}
 
 
 void tcp2_exec(Laik_ActionSeq* as)
@@ -800,57 +936,25 @@ void tcp2_exec(Laik_ActionSeq* as)
     }
 
     Laik_TransitionContext* tc = as->context[0];
-    int dims = tc->data->space->dims;
     Laik_Action* a = as->action;
     for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
         switch(a->type) {
         case LAIK_AT_MapPackAndSend: {
             Laik_A_MapPackAndSend* aa = (Laik_A_MapPackAndSend*) a;
-            int es = tc->data->elemsize;
             laik_log(1, "TCP2 MapPackAndSend to %d, %d x %dB\n",
-                     aa->to_rank, aa->count, es);
+                     aa->to_rank, aa->count, tc->data->elemsize);
             assert(tc->fromList && (aa->fromMapNo < tc->fromList->count));
             Laik_Mapping* m = &(tc->fromList->map[aa->fromMapNo]);
-            assert(m->start != 0);
-            Laik_Layout* l = m->layout;
-            Laik_Index idx = aa->slc->from;
-            int count = 0;
-            while(1) {
-                int64_t off = l->offset(l, m->layoutSection, &idx);
-                void* idxPtr = m->start + off * es;
-                send_data(count, dims, &idx, aa->to_rank, idxPtr, es);
-                count++;
-                if (!next_lex(aa->slc, &idx)) break;
-            }
-            assert(count == (int)aa->count);
+            send_slice(m, aa->slc, aa->to_rank);
             break;
         }
         case LAIK_AT_MapRecvAndUnpack: {
             Laik_A_MapRecvAndUnpack* aa = (Laik_A_MapRecvAndUnpack*) a;
             laik_log(1, "TCP2 MapRecvAndUnpack from %d, %d x %dB\n",
                      aa->from_rank, aa->count, tc->data->elemsize);
-            // check no data still registered to be received from aa->from_rank
-            InstData* d = (InstData*)instance->backend_data;
-            Peer* p = &(d->peer[aa->from_rank]);
-            assert(p->rcount == 0);
-
-            // write outstanding receive info into peer
-            assert(aa->count > 0);
-            p->rcount = aa->count;
-            p->roff = 0;
-            p->relemsize = tc->data->elemsize;
             assert(tc->toList && (aa->toMapNo < tc->toList->count));
-            p->rmap = &(tc->toList->map[aa->toMapNo]);
-            assert(p->rmap->start != 0);
-            p->rslc = aa->slc;
-            p->ridx = aa->slc->from;
-
-            // wait until data received from peer
-            while(p->roff < p->rcount)
-                run_loop(d);
-
-            // done
-            p->rcount = 0;
+            Laik_Mapping* m = &(tc->toList->map[aa->toMapNo]);
+            recv_slice(aa->slc, aa->from_rank, m, LAIK_RO_None);
             break;
         }
 
@@ -858,9 +962,8 @@ void tcp2_exec(Laik_ActionSeq* as)
             Laik_BackendAction* aa = (Laik_BackendAction*) a;
             laik_log(1, "TCP2 MapGroupReduce %d x %dB\n",
                      aa->count, tc->data->elemsize);
-            // TODO
+            exec_reduce(tc, aa);
             break;
-
         }
 
         default:
