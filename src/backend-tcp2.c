@@ -222,8 +222,6 @@ char* istr(int dims, Laik_Index* idx)
 }
 
 
-
-
 // event loop functions
 
 void add_rfd(InstData* d, int fd, loop_cb_t cb)
@@ -645,6 +643,12 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
 
     // enable early logging
     laik_log_init_loc(location);
+    if (laik_log_begin(1)) {
+        laik_log_append("TCP2 init: cmdline '%s", (*argv)[0]);
+        for(int i = 0; i < *argc; i++)
+            laik_log_append(" %s", (*argv)[i]);
+        laik_log_flush("'\n");
+    }
 
     // setting of home location: host/port to register with
     str = getenv("LAIK_TCP2_HOST");
@@ -855,20 +859,20 @@ void exec_reduce(Laik_TransitionContext* tc,
 
     // do the manual reduction on smallest rank of output group
     int reduceTask = laik_trans_taskInGroup(t, a->outputGroup, 0);
-    laik_log(1, "      exec reduce at T%d", reduceTask);
+    laik_log(1, "  reduce process is T%d", reduceTask);
 
     int myid = t->group->myid;
     if (myid != reduceTask) {
         // not the reduce process: eventually send input and recv result
 
         if (laik_trans_isInGroup(t, a->inputGroup, myid)) {
-            laik_log(1, "        exec send to T%d", reduceTask);
+            laik_log(1, "  not reduce process: send to T%d", reduceTask);
             assert(tc->fromList && (a->fromMapNo < tc->fromList->count));
             Laik_Mapping* m = &(tc->fromList->map[a->fromMapNo]);
             send_slice(m, a->slc, reduceTask);
         }
         if (laik_trans_isInGroup(t, a->outputGroup, myid)) {
-            laik_log(1, "        exec recv from T%d", reduceTask);
+            laik_log(1, "  not reduce process: recv from T%d", reduceTask);
             assert(tc->toList && (a->toMapNo < tc->toList->count));
             Laik_Mapping* m = &(tc->toList->map[a->toMapNo]);
             recv_slice(a->slc, reduceTask, m, LAIK_RO_None);
@@ -892,7 +896,7 @@ void exec_reduce(Laik_TransitionContext* tc,
         int inTask = laik_trans_taskInGroup(t, a->inputGroup, i);
         if (inTask == myid) continue;
 
-        laik_log(1, "  reduce process: recv+%s from T%d (count %d)",
+        laik_log(1, "  reduce process: recv + %s from T%d (count %d)",
                  (op == LAIK_RO_None) ? "overwrite":"reduce", inTask, a->count);
         recv_slice(a->slc, inTask, m, op);
         op = a->redOp; // eventually reset to reduction op from None
