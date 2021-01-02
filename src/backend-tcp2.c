@@ -375,7 +375,7 @@ bool got_data(InstData* d, int id, char* msg)
     }
 
     Peer* p = &(d->peer[id]);
-    if (p->rcount == 0) {
+    if ((p->rcount == 0) || (p->rcount == p->roff)) {
         laik_log(1, "TCP2 got data without receive, pushing back");
         return false;
     }
