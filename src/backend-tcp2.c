@@ -351,15 +351,19 @@ void check_id(InstData* d, int id)
 }
 
 // send command <cmd> to peer <id>
+// if id is negative, receiver has no id but is at fd (-id)
 void send_cmd(InstData* d, int id, char* cmd)
 {
-    assert(id >= 0);
-    check_id(d, id);
+    int fd = -id;
+    if (id >= 0) {
+        check_id(d, id);
+        fd = d->peer[id].fd;
+    }
     int len = strlen(cmd);
     laik_log(1, "TCP2 Sent cmd '%s' (len %d) to ID %d (FD %d)\n",
-             cmd, len, id, d->peer[id].fd);
-    write(d->peer[id].fd, cmd, len);
-    write(d->peer[id].fd, "\n", 1);
+             cmd, len, id, fd);
+    write(fd, cmd, len);
+    write(fd, "\n", 1);
 }
 
 // "data" command received
@@ -453,6 +457,8 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
     laik_log(1, "TCP2 Got cmd '%s' (len %d) from ID %d (FD %d)\n",
             msg, len, id, fd);
 
+    // first part of commands are accepted without assigned ID
+
     if (msg[0] == 'r') {
         // register <location> <host> <port>
 
@@ -543,11 +549,72 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
         return true;
     }
 
-    // ignore if sender unknown (only register allowed from yet-unknown sender)
-    if (id < 0) {
-        laik_log(LAIK_LL_Panic, "command '%s' from unknown sender", msg);
+    if (msg[0] == 'h') {
+        laik_log(1, "TCP2 Sending usage because of help command");
+
+        if (id == -1) id = -fd;
+        send_cmd(d, id, "# Usage (first char of command is enough):");
+        send_cmd(d, id, "#  data <len> [pos] <hex> ...   : data from a LAIK container");
+        send_cmd(d, id, "#  help                         : this help text");
+        send_cmd(d, id, "#  id <id> <loc> <host> <port>  : announce id info");
+        send_cmd(d, id, "#  kill                         : ask process to terminate");
+        send_cmd(d, id, "#  myid <id>                    : identify yourself");
+        send_cmd(d, id, "#  phase <phase>                : announce current phase");
+        send_cmd(d, id, "#  quit                         : close connection");
+        send_cmd(d, id, "#  register <loc> <host> <port> : request assignment of id");
+        send_cmd(d, id, "#  status                       : request status output");
         return true;
     }
+
+    if (msg[0] == 'k') {
+        // kill command - meant for interactive control
+        laik_log(1, "TCP2 Exiting because of kill command");
+
+        if (id == -1) id = -fd;
+        send_cmd(d, id, "# Exiting. Bye");
+        exit(1);
+    }
+
+    if (msg[0] == 'q') {
+        // quit command - meant for interactive control
+        laik_log(1, "TCP2 Closing connection because of quit command");
+
+        close(fd);
+        rm_rfd(d, fd);
+        if (id >= 0) d->peer[id].fd = -1;
+        return true;
+    }
+
+    if (msg[0] == '#') {
+        // accept but ignore comments: this is for interactive use via nc/telnet
+        laik_log(1, "TCP2 Got comment %s", msg);
+        return true;
+    }
+
+    if (msg[0] == 's') {
+        // status command
+        laik_log(1, "TCP2 Sending status becaue of status command");
+        if (id == -1) id = -fd;
+        sprintf(msg, "# My ID is %d", d->id);
+        send_cmd(d, id, msg);
+        send_cmd(d, id, "# Processes in world:");
+        for(int i = 0; i <= d->maxid; i++) {
+            sprintf(msg, "#  ID %2d loc '%s' at %s:%d", i,
+                    d->peer[i].location, d->peer[i].host, d->peer[i].port);
+            send_cmd(d, id, msg);
+        }
+        return true;
+    }
+
+    // ignore if sender unknown (only register allowed from yet-unknown sender)
+    if (id < 0) {
+        laik_log(LAIK_LL_Warning, "ignoring command '%s' from unknown sender", msg);
+        if (id == -1) id = -fd;
+        send_cmd(d, id, "# first register, see 'help'");
+        return true;
+    }
+
+    // second part of commands are accepted only with ID assigned by master
 
     if (msg[0] == 'i') {
         // id <id> <location> <host> <port>
@@ -619,7 +686,7 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
         return got_data(d, id, msg);
     }
 
-    laik_log(LAIK_LL_Panic, "TCP2 from ID %d unknown msg '%s'", id, msg);
+    laik_log(LAIK_LL_Warning, "TCP2 got from ID %d unknown msg '%s'", id, msg);
     return true;
 }
 
@@ -640,6 +707,10 @@ void process_rbuf(InstData* d, int fd, int id)
 
     int pos1 = 0, pos2 = 0;
     while(pos2 < left) {
+        if (rbuf[pos2] == 13) {
+            // change CR to whitespace (sent by telnet)
+            rbuf[pos2] = ' ';
+        }
         if (rbuf[pos2] == '\n') {
             rbuf[pos2] = 0;
             if (!got_cmd(d, fd, id, rbuf + pos1, pos2 - pos1)) {
@@ -712,8 +783,16 @@ void got_bytes(InstData* d, int fd)
             rbuf[left] = '\n';
         }
         else {
-            laik_log(1, "TCP2 got_bytes(FD %d, peer ID %d, left %d): read %d bytes\n",
-                     fd, id, left, len);
+            if (laik_log_begin(1)) {
+                char lstr[40];
+                int i, o;
+                o = sprintf(lstr, "%02x", rbuf[left]);
+                for(i = 1; (i < len) && (i < 8); i++)
+                    o += sprintf(lstr + o, " %02x", rbuf[left + i]);
+                if (i < len) sprintf(lstr + o, "...");
+                laik_log_flush("TCP2 got_bytes(FD %d, peer ID %d, left %d): read %d bytes (%s)\n",
+                     fd, id, left, len, lstr);
+            }
             d->peer[rid].rbuf_left = left + len;
         }
     }
@@ -739,6 +818,8 @@ void got_connect(InstData* d, int fd)
     if (saddr.sa_family == AF_INET6)
         inet_ntop(AF_INET6, &(((struct sockaddr_in6*)&saddr)->sin6_addr), str, 20);
     laik_log(1, "TCP2 Got connection on FD %d from %s\n", newfd, str);
+
+    send_cmd(d, -newfd, "# Here is LAIK TCP2");
 }
 
 
