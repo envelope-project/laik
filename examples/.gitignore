@@ -2,6 +2,7 @@
 *profiling.txt
 *.csv
 *.out
+min
 vsum
 vsum2
 spmv
