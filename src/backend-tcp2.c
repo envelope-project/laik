@@ -852,7 +852,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     laik_log_init_loc(location);
     if (laik_log_begin(1)) {
         laik_log_append("TCP2 init: cmdline '%s", (*argv)[0]);
-        for(int i = 0; i < *argc; i++)
+        for(int i = 1; i < *argc; i++)
             laik_log_append(" %s", (*argv)[i]);
         laik_log_flush("'\n");
     }
@@ -897,33 +897,50 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
 
     // create socket to listen for incoming TCP connections
     //  if <home_host> is not set, try to aquire local port <home_port>
-    int listenfd = socket(PF_INET, SOCK_STREAM, 0);
-    if (listenfd < 0) {
-        laik_panic("TCP2 cannot create listening socket");
-        exit(1); // not actually needed, laik_panic never returns
-    }
+    // we may need to try creating the listening socket twice
     struct sockaddr_in sin;
-    if (d->id == 0) {
-        // mainly for development: avoid wait time to bind to same port
-        if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR,
-                       &(int){1}, sizeof(int)) < 0) {
-            laik_panic("TCP2 cannot set SO_REUSEADDR");
+    int listenfd = -1;
+    while(1) {
+        listenfd = socket(PF_INET, SOCK_STREAM, 0);
+        if (listenfd < 0) {
+            laik_panic("TCP2 cannot create listening socket");
             exit(1); // not actually needed, laik_panic never returns
         }
+        if (d->id == 0) {
+            // mainly for development: avoid wait time to bind to same port
+            if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR,
+                           &(int){1}, sizeof(int)) < 0) {
+                laik_panic("TCP2 cannot set SO_REUSEADDR");
+                exit(1); // not actually needed, laik_panic never returns
+            }
 
-        sin.sin_family = AF_INET;
-        sin.sin_addr.s_addr = htonl(INADDR_ANY);
-        sin.sin_port = htons(home_port);
-        if (bind(listenfd, (struct sockaddr *) &sin, sizeof(sin)) < 0)
-            d->id = -1; // already somebody else, still need to determine
-        else
-            d->listenport = home_port;
+            sin.sin_family = AF_INET;
+            sin.sin_addr.s_addr = htonl(INADDR_ANY);
+            sin.sin_port = htons(home_port);
+            if (bind(listenfd, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+                d->id = -1; // already somebody else, still need to determine
+            }
+            else {
+                // listen on successfully bound socket
+                // if this fails, another process started listening first
+                // and we need to open another socket, as we cannot unbind
+                if (listen(listenfd, 5) < 0) {
+                    laik_log(1,"listen failed, opening new socket");
+                    close(listenfd);
+                    continue;
+                }
+                d->listenport = home_port;
+                break;
+            }
+        }
+        // not bound yet: will bind to random port
+        if (listen(listenfd, 5) < 0) {
+            laik_panic("TCP2 cannot listen on socket");
+            exit(1); // not actually needed, laik_panic never returns
+        }
+        break;
     }
-    // will bind to random port if not bound yet
-    if (listen(listenfd, 5) < 0) {
-        laik_panic("TCP2 cannot listen on socket");
-        exit(1); // not actually needed, laik_panic never returns
-    }
+
     if (d->id < 0) {
         socklen_t len = sizeof(sin);
         if (getsockname(listenfd, (struct sockaddr *)&sin, &len) == -1) {
