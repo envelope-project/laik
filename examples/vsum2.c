@@ -30,7 +30,7 @@
 // for element-wise weighted partitioning: same as index
 double getEW(Laik_Index* i, const void* d)
 {
-    (void) d; /* FIXME: Why have this parameter if it's never used */
+    (void) d; /* suppress compiler warning, par mandatory in interface */
 
     return (double) i->i[0];
 }
@@ -43,6 +43,10 @@ int main(int argc, char* argv[])
     Laik_Instance* inst = laik_init (&argc, &argv);
     Laik_Group* world = laik_world(inst);
 
+    int size = 0;
+    if (argc > 1) size = atoi(argv[1]);
+    if (size == 0) size = 1000000;
+
     laik_set_phase(inst, 0, "init", NULL);
 
     double *base;
@@ -51,8 +55,8 @@ int main(int argc, char* argv[])
     // do partial sums using different partitionings
     double mysum[4] = { 0.0, 0.0, 0.0, 0.0 };
 
-    // allocate global 1d double array: 1 mio entries
-    Laik_Data* a = laik_new_data_1d(inst, laik_Double, 1000000);
+    // allocate global 1d double array: <size> entries (default: 1 mio)
+    Laik_Data* a = laik_new_data_1d(inst, laik_Double, size);
 
     laik_set_phase(inst, 1, "master-only", NULL);
 
