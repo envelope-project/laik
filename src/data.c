@@ -639,7 +639,7 @@ void checkMapReuse(Laik_MappingList* toList, Laik_MappingList* fromList)
     for(int i = 0; i < toList->count; i++) {
         Laik_Mapping* toMap = &(toList->map[i]);
 
-        Laik_Mapping* fromMap;
+        Laik_Mapping* fromMap = 0;
         int sNo;
         for(sNo = 0; sNo < fromList->count; sNo++) {
             fromMap = &(fromList->map[sNo]);

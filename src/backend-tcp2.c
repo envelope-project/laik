@@ -221,13 +221,13 @@ char* istr(int dims, Laik_Index* idx)
     static char str[50];
 
     if (dims == 1)
-        sprintf(str,"%llu", (unsigned long long) idx->i[0]);
+        sprintf(str, "%llu", (unsigned long long) idx->i[0]);
     if (dims == 2)
-        sprintf(str,"%llu/%llu",
+        sprintf(str, "%llu/%llu",
                 (unsigned long long) idx->i[0],
                 (unsigned long long) idx->i[1]);
     if (dims == 3)
-        sprintf(str,"%llu/%llu/%llu",
+        sprintf(str, "%llu/%llu/%llu",
                 (unsigned long long) idx->i[0],
                 (unsigned long long) idx->i[1],
                 (unsigned long long) idx->i[2]);
@@ -383,8 +383,20 @@ void send_cmd(InstData* d, int id, char* cmd)
     int len = strlen(cmd);
     laik_log(1, "TCP2 Sent cmd '%s' (len %d) to ID %d (FD %d)\n",
              cmd, len, id, fd);
-    write(fd, cmd, len);
-    write(fd, "\n", 1);
+
+    // write cmd + NL (cope with partial writes and errors)
+    int res, written = 0;
+    while(written < len) {
+        res = write(fd, cmd + written, len - written);
+        if (res < 0) break;
+        written += res;
+    }
+    if (res >= 0) while((res = write(fd, "\n", 1)) == 0);
+    if (res < 0) {
+        int e = errno;
+        laik_log(LAIK_LL_Warning, "TCP2 write error on FD %d: %s\n",
+                 fd, strerror(e));
+    }
 }
 
 // "data" command received
@@ -414,7 +426,7 @@ bool got_data(InstData* d, int id, char* msg)
     char* idxPtr = m->start + off * p->relemsize;
 
     // position string for check
-    char pstr[50];
+    char pstr[70];
     int dims = p->rslc->space->dims;
     int s = sprintf(pstr, "(%d:%s)", p->roff, istr(dims, &(p->ridx)));
 
