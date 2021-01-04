@@ -107,7 +107,7 @@ else:
     if not use_mpi:
         print("MPI backend disabled.")
     elif not mpi_found:
-        print("  MPI backend disabled ('"+ mpicc +"' not found).")
+        print("MPI backend disabled ('"+ mpicc +"' not found).")
         print("  Install MPI, or point MPICC to the compiler wrapper of an installed MPI.")
         print("  On Ubuntu, install e.g. 'libopenmpi-dev'.")
         mpicc = ""
@@ -120,10 +120,10 @@ if use_tcp:
     if pkgc_found:
         # check gio version
         glib_versionok = not subprocess.call(['pkg-config', '--atleast-version=2.44', 'gio-2.0'])
-        glib_inc = os.popen('pkg-config --cflags gio-2.0').read().strip()
-if use_tcp and pkgc_found and glib_inc and glib_versionok:
-    glib_libs = os.popen('pkg-config --libs gio-2.0').read().strip()
+if use_tcp and pkgc_found and glib_versionok:
     print("TCP backend enabled (glib-2.0/gio-2.0 found).")
+    glib_inc = os.popen('pkg-config --cflags gio-2.0').read().strip()
+    glib_libs = os.popen('pkg-config --libs gio-2.0').read().strip()
     defs += " -DUSE_TCP"
     miscvars += "USE_TCP=1\n"
     miscvars += "TCP_INC=" + glib_inc + "\n"
@@ -133,16 +133,14 @@ else:
     if not use_tcp:
         print("TCP backend disabled.")
     elif not pkgc_found:
-        print("TCP backend disabled: pkg-config required to detect glib-2.0 dependency")
-    elif not glib_versionok:
-        print("TCP backend disabled: glib-2.0/gio-2.0 version < 2.44")
+        print("TCP backend disabled: pkg-config required to detect glib-2.0 dependency.")
     else:
-        print("TCP backend disabled: glib-2.0/gio-2.0 not found")
+        print("TCP backend disabled: glib-2.0/gio-2.0 not found.")
         print("  On Ubuntu, install 'libglib2.0-dev'")
 
 #------------------------------------
 # TCP2 backend support: always enable
-print("TCP2 backend enabled")
+print("TCP2 backend enabled.")
 defs += " -DUSE_TCP2"
 test_subdirs += " tcp2"
 
