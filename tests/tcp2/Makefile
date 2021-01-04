@@ -11,7 +11,9 @@ TDIR=$(SDIR)./../common
 TESTS= \
     test-vsum test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
-    test-spmv2-shrink test-spmv2-shrink-inc
+    test-spmv2-shrink test-spmv2-shrink-inc \
+    test-jac1d test-jac1d-repart \
+    test-jac2d test-jac2d-gen test-jac2d-noc
 
 TESTS_TODO= \
     test-vsum test-vsum2 \
@@ -57,22 +59,22 @@ test-spmv2-shrink-inc:
 	$(TDIR)/test-spmv2-shrink-inc-4.sh
 
 test-jac1d:
-	$(TDIR)/test-jac1d-100-1.sh
-	$(TDIR)/test-jac1d-100-4.sh
+	$(TDIR)/test-jac1d-1.sh
+	$(TDIR)/test-jac1d-4.sh
 
 test-jac1d-repart:
-	$(TDIR)/test-jac1d-1000-repart-1.sh
-	$(TDIR)/test-jac1d-1000-repart-4.sh
+	$(TDIR)/test-jac1d-repart-1.sh
+	$(TDIR)/test-jac1d-repart-4.sh
 
 test-jac2d:
-	$(TDIR)/test-jac2d-1000-1.sh
-	$(TDIR)/test-jac2d-1000-4.sh
+	$(TDIR)/test-jac2d-1.sh
+	$(TDIR)/test-jac2d-4.sh
 
 test-jac2d-gen:
-	$(TDIR)/test-jac2d-gen-1000-4.sh
+	$(TDIR)/test-jac2d-gen-4.sh
 
 test-jac2d-noc:
-	$(TDIR)/test-jac2dn-1000-4.sh
+	$(TDIR)/test-jac2d-noc-4.sh
 
 test-jac3d:
 	$(TDIR)/test-jac3d-100-1.sh
