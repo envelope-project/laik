@@ -9,7 +9,7 @@ TESTS= \
 
 -include ../Makefile.config
 
-.PHONY: mpi tcp $(TESTS)
+.PHONY: mpi tcp tcp2 $(TESTS)
 
 all: testbins $(TESTS) $(TEST_SUBDIRS)
 
@@ -21,6 +21,9 @@ mpi:
 
 tcp:
 	+$(MAKE) -C tcp
+
+tcp2:
+	+$(MAKE) -C tcp2
 
 test-vsum:
 	$(SDIR)./test-vsum-single.sh

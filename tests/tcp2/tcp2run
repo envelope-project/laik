@@ -1,0 +1,26 @@
+#!/bin/bash
+
+trap 'jobs -p | xargs -r kill' SIGINT SIGTERM
+
+procs=1
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -n) procs="$2"; shift ;;
+        -*) echo "Unknown parameter passed: $1"; exit 1 ;;
+        *) break;;
+    esac
+    shift
+done
+
+if [ -z "$1" ]; then
+    echo "Error: no command given"
+    exit 1
+fi
+
+export LAIK_BACKEND=tcp2
+export LAIK_SIZE=$procs
+for (( i=1; i<=$procs; i++ )); do
+    # echo Running $@
+    $@ &
+done
+wait
