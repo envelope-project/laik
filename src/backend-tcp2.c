@@ -220,10 +220,17 @@ char* istr(int dims, Laik_Index* idx)
 {
     static char str[50];
 
-    if (dims == 1) sprintf(str,"%lu", idx->i[0]);
-    if (dims == 2) sprintf(str,"%lu/%lu", idx->i[0], idx->i[1]);
-    if (dims == 3) sprintf(str,"%lu/%lu/%lu",
-                           idx->i[0], idx->i[1], idx->i[2]);
+    if (dims == 1)
+        sprintf(str,"%llu", (unsigned long long) idx->i[0]);
+    if (dims == 2)
+        sprintf(str,"%llu/%llu",
+                (unsigned long long) idx->i[0],
+                (unsigned long long) idx->i[1]);
+    if (dims == 3)
+        sprintf(str,"%llu/%llu/%llu",
+                (unsigned long long) idx->i[0],
+                (unsigned long long) idx->i[1],
+                (unsigned long long) idx->i[2]);
     return str;
 }
 

@@ -157,8 +157,10 @@ bool reuse_lex(Laik_Layout* l, int n, Laik_Layout* old, int nold)
         // no, cannot reuse
         return false;
     }
-    laik_log(1, "reuse_lex: old map %d can be reused (count %lu -> %lu)",
-             nold, eNew->count, eOld->count);
+    laik_log(1, "reuse_lex: old map %d can be reused (count %llu -> %llu)",
+             nold,
+             (unsigned long long) eNew->count,
+             (unsigned long long) eOld->count);
 
     l->count += eOld->count - eNew->count;
     eNew->count = eOld->count;
