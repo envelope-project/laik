@@ -95,7 +95,9 @@
 #include "laik-backend-tcp2.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -113,7 +115,7 @@
 #define TCP2_PORT 7777
 
 #define MAX_PEERS 256
-#define MAX_LOOPFD 256
+#define MAX_FDS 256
 // receive buffer length
 #define RBUF_LEN 256
 
@@ -141,8 +143,10 @@ typedef struct {
     int port;       // port to connect to at host
     char* host;     // remote host, if 0 localhost
     char* location; // location string of peer
-    int rbuf_left;  // valid bytes in receive buffer
-    char rbuf[RBUF_LEN]; // receive buffer
+
+    // only used when fd got closed
+    int rbuf_used;
+    char* rbuf;
 
     // data we are currently receiving from peer
     int rcount;    // element count in receive
@@ -159,7 +163,9 @@ typedef void (*loop_cb_t)(InstData* d, int fd);
 typedef struct {
     int id;          // peer
     loop_cb_t cb;
-} LoopCB;
+    int rbuf_used;
+    char* rbuf;
+} FDState;
 
 struct _InstData {
     int id;           // my id in world
@@ -174,7 +180,7 @@ struct _InstData {
     int maxfds;       // highest fd in rset
     fd_set rset;      // read set for select
     int exit;         // set to exit event loop
-    LoopCB cb[MAX_LOOPFD];
+    FDState fds[MAX_FDS];
 
     int peers;        // number of active peers, can be 0 only at master
     Peer peer[0];
@@ -226,24 +232,28 @@ char* istr(int dims, Laik_Index* idx)
 
 void add_rfd(InstData* d, int fd, loop_cb_t cb)
 {
-    assert(fd < MAX_LOOPFD);
-    assert(d->cb[fd].cb == 0);
+    assert(fd < MAX_FDS);
+    assert(d->fds[fd].cb == 0);
 
     FD_SET(fd, &d->rset);
     if (fd > d->maxfds) d->maxfds = fd;
-    d->cb[fd].cb = cb;
-    d->cb[fd].id = -1;
+    d->fds[fd].cb = cb;
+    d->fds[fd].id = -1;
+    d->fds[fd].rbuf = malloc(RBUF_LEN);
+    d->fds[fd].rbuf_used = 0;
 }
 
 void rm_rfd(InstData* d, int fd)
 {
-    assert(fd < MAX_LOOPFD);
-    assert(d->cb[fd].cb != 0);
+    assert(fd < MAX_FDS);
+    assert(d->fds[fd].cb != 0);
 
     FD_CLR(fd, &d->rset);
     if (fd == d->maxfds)
         while(!FD_ISSET(d->maxfds, &d->rset)) d->maxfds--;
-    d->cb[fd].cb = 0;
+    d->fds[fd].cb = 0;
+    free(d->fds[fd].rbuf);
+    d->fds[fd].rbuf = 0;
 }
 
 void run_loop(InstData* d)
@@ -254,8 +264,8 @@ void run_loop(InstData* d)
         if (select(d->maxfds+1, &rset, 0, 0, 0) >= 0) {
             for(int i = 0; i <= d->maxfds; i++)
                 if (FD_ISSET(i, &rset)) {
-                    assert(d->cb[i].cb != 0);
-                    (d->cb[i].cb)(d, i);
+                    assert(d->fds[i].cb != 0);
+                    (d->fds[i].cb)(d, i);
                 }
         }
     }
@@ -334,13 +344,17 @@ void check_id(InstData* d, int id)
     }
     d->peer[id].fd = fd;
     add_rfd(d, fd, got_bytes);
-    d->cb[fd].id = id;
+    d->fds[fd].id = id;
     laik_log(1, "TCP2 connected to ID %d (host %s, port %d)",
              id, d->peer[id].host, d->peer[id].port);
 
     // on reconnect, nothing should be left to receive
-    assert(d->peer[id].rbuf_left == 0); // receive buffer empty
-    assert(d->peer[id].rcount == 0); // nothing to receive
+    assert(d->peer[id].rcount == 0);
+
+    // eventually free rbuf from old connection
+    free(d->peer[id].rbuf);
+    d->peer[id].rbuf = 0;
+    d->peer[id].rbuf_used = 0;
 
     if (d->id >= 0) {
         // make myself known to peer: send my id
@@ -481,7 +495,8 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
         }
 
         id = ++d->maxid;
-        d->cb[fd].id = id;
+        assert(fd >= 0);
+        d->fds[fd].id = id;
         assert(id < MAX_PEERS);
         laik_log(1, "TCP2 registered new ID %d: location %s at host %s port %d",
                  id, l, h, p);
@@ -492,8 +507,10 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
         d->peer[id].location = strdup(l);
         d->peer[id].port = p;
         // first time we use this id for a peer: init receive
-        d->peer[id].rbuf_left = 0;
         d->peer[id].rcount = 0;
+        // rbuf of peer struct not used if fd open
+        d->peer[id].rbuf = 0;
+        d->peer[id].rbuf_used = 0;
 
         // send ID info: "id <id> <location> <host> <port>"
         // new registered id to all already registered peers
@@ -537,12 +554,16 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
         assert((id >= 0) && (id < MAX_PEERS));
         assert(id <= d->maxid);
         d->peer[id].fd = fd;
-        d->cb[fd].id = id;
+        assert(fd >= 0);
+        d->fds[fd].id = id;
 
         // must already be known, announced by master
         assert(d->peer[id].location != 0);
         assert(d->peer[id].host != 0);
         assert(d->peer[id].port >= 0);
+        // rbuf of peer struct not used if fd open
+        d->peer[id].rbuf = 0;
+        d->peer[id].rbuf_used = 0;
 
         laik_log(1, "TCP2 seen ID %d (location %s) at FD %d",
                  id, d->peer[id].location, fd);
@@ -552,6 +573,7 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
     if (msg[0] == 'h') {
         laik_log(1, "TCP2 Sending usage because of help command");
 
+        assert(fd > 0);
         if (id == -1) id = -fd;
         send_cmd(d, id, "# Usage (first char of command is enough):");
         send_cmd(d, id, "#  data <len> [pos] <hex> ...   : data from a LAIK container");
@@ -570,6 +592,7 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
         // kill command - meant for interactive control
         laik_log(1, "TCP2 Exiting because of kill command");
 
+        assert(fd > 0);
         if (id == -1) id = -fd;
         send_cmd(d, id, "# Exiting. Bye");
         exit(1);
@@ -579,6 +602,7 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
         // quit command - meant for interactive control
         laik_log(1, "TCP2 Closing connection because of quit command");
 
+        assert(fd >= 0);
         close(fd);
         rm_rfd(d, fd);
         if (id >= 0) d->peer[id].fd = -1;
@@ -594,6 +618,7 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
     if (msg[0] == 's') {
         // status command
         laik_log(1, "TCP2 Sending status becaue of status command");
+        assert(fd > 0);
         if (id == -1) id = -fd;
         sprintf(msg, "# My ID is %d", d->id);
         send_cmd(d, id, msg);
@@ -609,6 +634,7 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
     // ignore if sender unknown (only register allowed from yet-unknown sender)
     if (id < 0) {
         laik_log(LAIK_LL_Warning, "ignoring command '%s' from unknown sender", msg);
+        assert(fd > 0);
         if (id == -1) id = -fd;
         send_cmd(d, id, "# first register, see 'help'");
         return true;
@@ -650,7 +676,6 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
             d->peer[id].location = strdup(l);
             d->peer[id].port = p;
             // first time we see this peer: init receive
-            d->peer[id].rbuf_left = 0;
             d->peer[id].rcount = 0;
 
             if (id != d->id) d->peers++;
@@ -692,112 +717,127 @@ bool got_cmd(InstData* d, int fd, int id, char* msg, int len)
 
 void process_rbuf(InstData* d, int fd, int id)
 {
-    // if peer ID is yet unknown, redirect to peer struct of my ID (otherwise unused)
-    int rid = (id < 0) ? d->id : id;
+    char* rbuf;
+    int used;
 
-    char* rbuf = d->peer[rid].rbuf;
-    int left = d->peer[rid].rbuf_left;
-    laik_log(1, "TCP2 handle commands in receive buf of ID %d (left %d)\n", id, left);
+    if (fd >= 0) {
+        // fd open: rbuf is attached to fd
+        assert(fd < MAX_FDS);
+        rbuf = d->fds[fd].rbuf;
+        used = d->fds[fd].rbuf_used;
+        id = d->fds[fd].id;
+    } else {
+        // fd closed: use rbuf state in peer struct
+        assert((id >= 0) && (id < MAX_PEERS));
+        rbuf = d->peer[id].rbuf;
+        used = d->peer[id].rbuf_used;
+    }
 
-    // the id of a process at <fd> may get changed by executing "register"
-    // or "myid" command (ie. switching from unknown ID to known ID).
-    // if this happens, set <moved_id> to new ID, as we need to migrate
-    // unprocessed received bytes to new buffer
-    int moved_id = -1;
+    laik_log(1, "TCP2 handle commands in receive buf of FD %d (ID %d, %d bytes)\n",
+             fd, id, used);
+
+    if (rbuf == 0) {
+        // may happen if neither connected nor rbuf moved to peer struct
+        // (e.g. when called by recv_slice)
+        laik_log(1, "  No buffer\n");
+        return;
+    }
 
     int pos1 = 0, pos2 = 0;
-    while(pos2 < left) {
+    while(pos2 < used) {
         if (rbuf[pos2] == 13) {
             // change CR to whitespace (sent by telnet)
             rbuf[pos2] = ' ';
         }
         if (rbuf[pos2] == '\n') {
             rbuf[pos2] = 0;
+            if (fd >= 0) id = d->fds[fd].id; // may change during processing
             if (!got_cmd(d, fd, id, rbuf + pos1, pos2 - pos1)) {
                 // cannot yet be processed: keep it back
                 laik_log(1, "  keep '%s' back (at off %d, used %d)\n",
-                         rbuf + pos1, pos1, left);
+                         rbuf + pos1, pos1, used);
                 rbuf[pos2] = '\n';
-                pos2 = left;
+                pos2 = used;
                 break;
             }
             pos1 = pos2+1;
-
-            if ((fd >= 0) && (d->cb[fd].id != id)) {
-                // new ID
-                laik_log(1, "  ID changed from %d (unknown) to %d\n", id, d->cb[fd].id);
-                id = d->cb[fd].id;
-                moved_id = id;
-            }
         }
         pos2++;
     }
     if (pos1 > 0) {
-        left = 0;
+        used = 0;
         while(pos1 < pos2)
-            rbuf[left++] = rbuf[pos1++];
+            rbuf[used++] = rbuf[pos1++];
     }
-    d->peer[rid].rbuf_left = left;
-
-    if (moved_id >= 0) {
-        laik_log(1, "TCP2 migrating %d received bytes to buffer of ID %d\n",
-                 left, moved_id);
-        assert(d->peer[moved_id].rbuf_left == 0);
-        memcpy(d->peer[moved_id].rbuf, d->peer[rid].rbuf, left);
-        d->peer[moved_id].rbuf_left = left;
-        d->peer[rid].rbuf_left = 0;
-    }
+    if (fd >= 0)
+        d->fds[fd].rbuf_used = used;
+    else
+        d->peer[id].rbuf_used = used;
 }
 
 void got_bytes(InstData* d, int fd)
 {
-    int id = d->cb[fd].id;
+    // use a per-fd receive buffer to not mix partially sent commands
+    assert((fd >= 0) && (fd < MAX_FDS));
+    int used = d->fds[fd].rbuf_used;
 
-    // if peer ID is yet unknown, redirect to peer struct of my ID (otherwise unused)
-    int rid = (id < 0) ? d->id : id;
-    if (rid < 0) {
-        laik_panic("TCP2 Error receving from unknown ID while own ID unknown\n");
-        exit(1);
+    if (used == RBUF_LEN) {
+        // buffer full: try to consume messages in buffer
+        process_rbuf(d, fd, -1);
+        return;
     }
 
-    // use a per-id receive buffer to not mix partially sent commands
-    char* rbuf = d->peer[rid].rbuf;
-    int left = d->peer[rid].rbuf_left;
-
-    if (left < RBUF_LEN) {
-        int len = read(fd, rbuf + left, RBUF_LEN - left);
-        if (len == -1) {
-            laik_log(1, "TCP2 warning: read error on FD %d\n", fd);
-            return;
-        }
-        else if (len == 0) {
-            // other side closed connection
-            close(fd);
-            rm_rfd(d, fd);
-            if (id >= 0) d->peer[id].fd = -1;
-
-            laik_log(1, "TCP2 FD %d closed (peer ID %d, location %s)\n",
-                     fd, id, (id >= 0) ? d->peer[id].location : "-");
-            fd = -1;
-            // process left-over commands, add NL for last command to process
-            rbuf[left] = '\n';
-        }
-        else {
-            if (laik_log_begin(1)) {
-                char lstr[40];
-                int i, o;
-                o = sprintf(lstr, "%02x", rbuf[left]);
-                for(i = 1; (i < len) && (i < 8); i++)
-                    o += sprintf(lstr + o, " %02x", rbuf[left + i]);
-                if (i < len) sprintf(lstr + o, "...");
-                laik_log_flush("TCP2 got_bytes(FD %d, peer ID %d, left %d): read %d bytes (%s)\n",
-                     fd, id, left, len, lstr);
-            }
-            d->peer[rid].rbuf_left = left + len;
-        }
+    char* rbuf = d->fds[fd].rbuf;
+    int len = read(fd, rbuf + used, RBUF_LEN - used);
+    if (len == -1) {
+        int e = errno;
+        laik_log(1, "TCP2 warning: read error on FD %d: %s\n",
+                 fd, strerror(e));
+        return;
     }
-    // fd is -1 if closed, but commands still should be processed: must provide ID
-    process_rbuf(d, fd, id);
+    if (len == 0) {
+        // other side closed connection
+
+        // process left-over commands, add NL for last command to process
+        rbuf[used] = '\n';
+        process_rbuf(d, fd, -1);
+
+        // if id known and still commands left, attach rbuf to peer
+        int id = d->fds[fd].id;
+        if (id >= 0) {
+            laik_log(1, "TCP2 rbuf of FD %d moved (peer ID %d)\n", fd, id);
+            d->peer[id].rbuf = rbuf;
+            d->peer[id].rbuf_used = used;
+            d->peer[id].fd = -1;
+            // detach rbuf from fd
+            d->fds[fd].rbuf = 0;
+            d->fds[fd].rbuf_used = 0;
+        }
+
+        laik_log(1, "TCP2 FD %d closed (peer ID %d, location %s)\n",
+                 fd, id, (id >= 0) ? d->peer[id].location : "-");
+
+        close(fd);
+        rm_rfd(d, fd);
+
+        if (id >= 0)
+            process_rbuf(d, -1, id);
+        return;
+    }
+
+    if (laik_log_begin(1)) {
+        char lstr[40];
+        int i, o;
+        o = sprintf(lstr, "%02x", rbuf[used]);
+        for(i = 1; (i < len) && (i < 8); i++)
+            o += sprintf(lstr + o, " %02x", rbuf[used + i]);
+        if (i < len) sprintf(lstr + o, "...");
+        laik_log_flush("TCP2 got_bytes(FD %d, peer ID %d, used %d): read %d bytes (%s)\n",
+                       fd, d->fds[fd].id, used, len, lstr);
+    }
+
+    d->fds[fd].rbuf_used = used + len;
+    process_rbuf(d, fd, -1);
 }
 
 void got_connect(InstData* d, int fd)
@@ -838,6 +878,11 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     if (instance)
         return instance;
 
+    // this is required to not get spurious SIGPIPE signals
+    // from opened sockets, e.g. if other side closes connection
+    // TODO: LAIK as library should not touch global signal handlers...
+    signal(SIGPIPE, SIG_IGN);
+
     // my location: hostname:PID
     char location[100];
     if (gethostname(location, 100) != 0) {
@@ -877,15 +922,16 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         d->peer[i].fd = -1;   // not connected
         d->peer[i].host = 0;
         d->peer[i].location = 0;
-        d->peer[i].rbuf_left = 0;
+        d->peer[i].rbuf = 0;
+        d->peer[i].rbuf_used = 0;
         d->peer[i].rcount = 0;
     }
 
     FD_ZERO(&d->rset);
     d->maxfds = 0;
     d->exit = 0;
-    for(int i = 0; i < MAX_LOOPFD; i++)
-        d->cb[i].cb = 0;
+    for(int i = 0; i < MAX_FDS; i++)
+        d->fds[i].cb = 0;
 
     d->host = host;
     d->location = strdup(location);
@@ -1063,7 +1109,7 @@ void recv_slice(Laik_Slice* slc, int fromID, Laik_Mapping* toMap, Laik_Reduction
     p->ridx = slc->from;
     p->rro = ro;
 
-    // check commands of <fromID> (may have been pushed back)
+    // check commands (may have been pushed back)
     process_rbuf(d, p->fd, fromID);
 
     // wait until data received from peer
