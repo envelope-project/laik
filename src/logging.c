@@ -356,6 +356,7 @@ void log_flush()
         // TODO: allow to go to debug file
         fprintf(stderr, "%s", buf2);
     }
+    current_logPos = 0;
 
     // stop program on panic with failed assertion
     if (current_logLevel == LAIK_LL_Panic) assert(0);
