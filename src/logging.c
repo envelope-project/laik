@@ -37,8 +37,8 @@ static Laik_Instance* laik_loginst = 0;
 static char* laik_log_mylocation = 0;
 static int laik_logctr = 0;
 // filter
-static int laik_log_fromtask = -1;
-static int laik_log_totask = -1;
+static int laik_log_fromLID = -1;
+static int laik_log_toLID = -1;
 
 void laik_log_init_internal()
 {
@@ -59,26 +59,26 @@ void laik_log_init_internal()
         else {
             // exit with some help text
             fprintf(stderr, "Unknown LAIK_LOG syntax. Use\n\n"
-                            "    LAIK_LOG=[option]level[:rank[-torank]]\n\n"
+                            "    LAIK_LOG=[option]level[:locID[-toID]]\n\n"
                             " option : logging option (characters, defaults to none)\n"
                             "            n - no line prefix\n"
                             "            s - use short prefix\n"
                             " level  : minimum logging level (digit, defaults to 0: no logging)\n"
-                            " rank   : only log if process has given rank (number, default: no filter)\n"
-                            " torank : allow logging for range of ranks [rank;torank] (number)\n");
+                            " locID  : only log if process has given location ID (number, default: no filter)\n"
+                            " toID   : allow logging for range of location IDs [locID;toID] (number)\n");
             exit(1);
         }
         char* p = index(str, ':');
         if (p) {
             p++;
-            laik_log_fromtask = atoi(p);
+            laik_log_fromLID = atoi(p);
             p = index(p, '-');
             if (p) {
                 p++;
-                laik_log_totask = atoi(p);
+                laik_log_toLID = atoi(p);
             }
             else
-                laik_log_totask = laik_log_fromtask;
+                laik_log_toLID = laik_log_fromLID;
         }
     }
 
@@ -179,10 +179,10 @@ bool laik_log_begin(int l)
         current_logLevel = LAIK_LL_None;
         return false;
     }
-    if ((laik_log_fromtask >= 0) && (laik_loginst != 0)) {
-        assert(laik_log_totask >= laik_log_fromtask);
-        if ((laik_loginst->mylocationid < laik_log_fromtask) ||
-            (laik_loginst->mylocationid > laik_log_totask)) {
+    if ((laik_log_fromLID >= 0) && (laik_loginst != 0)) {
+        assert(laik_log_toLID >= laik_log_fromLID);
+        if ((laik_loginst->mylocationid < laik_log_fromLID) ||
+            (laik_loginst->mylocationid > laik_log_toLID)) {
             current_logLevel = LAIK_LL_None;
             return false;
         }
@@ -303,10 +303,10 @@ void log_flush()
         }
         else {
             if (laik_logprefix == 1)
-                off2 += sprintf(buf2+off2, "T%02d | ", laik_loginst->mylocationid);
+                off2 += sprintf(buf2+off2, "L%02d | ", laik_loginst->mylocationid);
             else if (laik_logprefix == 2)
                 off2 += sprintf(buf2+off2,
-                                "LAIK-%04d-T%02d %04d.%02d %2d:%06.3f | ",
+                                "LAIK-%04d-L%02d %04d.%02d %2d:%06.3f | ",
                                 laik_logctr, laik_loginst->mylocationid,
                                 counter, line_counter,
                                 wtime_min, wtime_s);
