@@ -10,7 +10,8 @@ TDIR=$(SDIR)./../common
 
 TESTS= \
     test-vsum test-vsum2 \
-    test-spmv test-spmv2 test-spmv2r
+    test-spmv test-spmv2 test-spmv2r \
+    test-spmv2-shrink test-spmv2-shrink-inc
 
 TESTS_TODO= \
     test-vsum test-vsum2 \

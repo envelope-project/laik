@@ -1156,23 +1156,24 @@ void exec_reduce(Laik_TransitionContext* tc,
 
     // do the manual reduction on smallest rank of output group
     int reduceTask = laik_trans_taskInGroup(t, a->outputGroup, 0);
-    laik_log(1, "  reduce process is T%d", reduceTask);
+    int reduceLID = laik_group_locationid(t->group, reduceTask);
+    laik_log(1, "  reduce process is %d (locID %d)", reduceTask, reduceLID);
 
     int myid = t->group->myid;
     if (myid != reduceTask) {
         // not the reduce process: eventually send input and recv result
 
         if (laik_trans_isInGroup(t, a->inputGroup, myid)) {
-            laik_log(1, "  not reduce process: send to T%d", reduceTask);
+            laik_log(1, "  not reduce process: send to T%d/L%d", reduceTask, reduceLID);
             assert(tc->fromList && (a->fromMapNo < tc->fromList->count));
             Laik_Mapping* m = &(tc->fromList->map[a->fromMapNo]);
-            send_slice(m, a->slc, reduceTask);
+            send_slice(m, a->slc, reduceLID);
         }
         if (laik_trans_isInGroup(t, a->outputGroup, myid)) {
-            laik_log(1, "  not reduce process: recv from T%d", reduceTask);
+            laik_log(1, "  not reduce process: recv from T%d/L%d", reduceTask, reduceLID);
             assert(tc->toList && (a->toMapNo < tc->toList->count));
             Laik_Mapping* m = &(tc->toList->map[a->toMapNo]);
-            recv_slice(a->slc, reduceTask, m, LAIK_RO_None);
+            recv_slice(a->slc, reduceLID, m, LAIK_RO_None);
         }
         return;
     }
@@ -1189,13 +1190,14 @@ void exec_reduce(Laik_TransitionContext* tc,
         op = LAIK_RO_None;
     }
     int inCount = laik_trans_groupCount(t, a->inputGroup);
-    for(int i = 0; i< inCount; i++) {
+    for(int i = 0; i < inCount; i++) {
         int inTask = laik_trans_taskInGroup(t, a->inputGroup, i);
         if (inTask == myid) continue;
+        int inLID = laik_group_locationid(t->group, inTask);
 
-        laik_log(1, "  reduce process: recv + %s from T%d (count %d)",
-                 (op == LAIK_RO_None) ? "overwrite":"reduce", inTask, a->count);
-        recv_slice(a->slc, inTask, m, op);
+        laik_log(1, "  reduce process: recv + %s from T%d/L%d (count %d)",
+                 (op == LAIK_RO_None) ? "overwrite":"reduce", inTask, inLID, a->count);
+        recv_slice(a->slc, inLID, m, op);
         op = a->redOp; // eventually reset to reduction op from None
     }
 
@@ -1207,9 +1209,10 @@ void exec_reduce(Laik_TransitionContext* tc,
             // that's myself: nothing to do
             continue;
         }
+        int outLID = laik_group_locationid(t->group, outTask);
 
-        laik_log(1, "  reduce process: send result to T%d", outTask);
-        send_slice(m, a->slc, outTask);
+        laik_log(1, "  reduce process: send result to T%d/L%d", outTask, outLID);
+        send_slice(m, a->slc, outLID);
     }
 }
 
@@ -1242,20 +1245,22 @@ void tcp2_exec(Laik_ActionSeq* as)
         switch(a->type) {
         case LAIK_AT_MapPackAndSend: {
             Laik_A_MapPackAndSend* aa = (Laik_A_MapPackAndSend*) a;
-            laik_log(1, "TCP2 MapPackAndSend to %d, %d x %dB\n",
-                     aa->to_rank, aa->count, tc->data->elemsize);
+            int toLID = laik_group_locationid(tc->transition->group, aa->to_rank);
+            laik_log(1, "TCP2 MapPackAndSend to T%d/L%d, %d x %dB\n",
+                     aa->to_rank, toLID, aa->count, tc->data->elemsize);
             assert(tc->fromList && (aa->fromMapNo < tc->fromList->count));
             Laik_Mapping* m = &(tc->fromList->map[aa->fromMapNo]);
-            send_slice(m, aa->slc, aa->to_rank);
+            send_slice(m, aa->slc, toLID);
             break;
         }
         case LAIK_AT_MapRecvAndUnpack: {
             Laik_A_MapRecvAndUnpack* aa = (Laik_A_MapRecvAndUnpack*) a;
-            laik_log(1, "TCP2 MapRecvAndUnpack from %d, %d x %dB\n",
-                     aa->from_rank, aa->count, tc->data->elemsize);
+            int fromLID = laik_group_locationid(tc->transition->group, aa->from_rank);
+            laik_log(1, "TCP2 MapRecvAndUnpack from T%d/L%d, %d x %dB\n",
+                     aa->from_rank, fromLID, aa->count, tc->data->elemsize);
             assert(tc->toList && (aa->toMapNo < tc->toList->count));
             Laik_Mapping* m = &(tc->toList->map[aa->toMapNo]);
-            recv_slice(aa->slc, aa->from_rank, m, LAIK_RO_None);
+            recv_slice(aa->slc, fromLID, m, LAIK_RO_None);
             break;
         }
 
