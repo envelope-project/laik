@@ -396,7 +396,7 @@ void got_data(InstData* d, int lid, char* msg)
     char cmd[20];
     int len, i;
     if (sscanf(msg, "%20s %d %n", cmd, &len, &i) < 2) {
-        laik_log(LAIK_LL_Panic, "cannot parse data command '%s'", msg);
+        laik_log(LAIK_LL_Warning, "cannot parse data command '%s'; ignoring", msg);
         return;
     }
 
@@ -471,168 +471,270 @@ void got_data(InstData* d, int lid, char* msg)
     return;
 }
 
+void got_register(InstData* d, int fd, int lid, char* msg)
+{
+    // register <location> <host> <port>
+
+    // ignore if not master
+    if (d->mylid != 0) {
+        laik_log(LAIK_LL_Warning, "ignoring register command '%s', not master", msg);
+        return;
+    }
+
+    if (lid >= 0) {
+        laik_log(LAIK_LL_Warning, "cannot re-register; already registered with locID %d", lid);
+        return;
+    }
+
+    char cmd[20], l[50], h[50];
+    int p;
+    if (sscanf(msg, "%20s %50s %50s %d", cmd, l, h, &p) < 4) {
+        laik_log(LAIK_LL_Warning, "cannot parse register command '%s'; ignoring", msg);
+        return;
+    }
+
+    lid = ++d->maxid;
+    assert(fd >= 0);
+    d->fds[fd].lid = lid;
+    assert(lid < MAX_PEERS);
+    laik_log(1, "TCP2 registered new LID %d: location %s at host %s port %d",
+             lid, l, h, p);
+
+    assert(d->peer[lid].port == -1);
+    d->peer[lid].fd = fd;
+    d->peer[lid].host = strdup(h);
+    d->peer[lid].location = strdup(l);
+    d->peer[lid].port = p;
+    // first time we use this id for a peer: init receive
+    d->peer[lid].rcount = 0;
+    d->peer[lid].scount = 0;
+
+    // send location ID info: "id <lid> <location> <host> <port>"
+    // new registered id to all already registered peers
+    char str[150];
+    sprintf(str, "id %d %s %s %d", lid, l, h, p);
+    for(int i = 1; i <= d->maxid; i++)
+        send_cmd(d, i, str);
+    for(int i = 0; i < d->maxid; i++) {
+        sprintf(str, "id %d %s %s %d", i,
+                d->peer[i].location, d->peer[i].host, d->peer[i].port);
+        send_cmd(d, lid, str);
+    }
+
+    d->peers++;
+    d->exit = 1;
+}
+
+void got_myid(InstData* d, int fd, int lid, char* msg)
+{
+    // myid <lid>
+    // used on re-connection of other peer: peer must already be known
+
+    char cmd[20];
+    int peerid;
+    if (sscanf(msg, "%20s %d", cmd, &peerid) < 2) {
+        laik_log(LAIK_LL_Warning, "cannot parse myid command '%s'; ignoring", msg);
+        return;
+    }
+
+    if (lid >= 0) {
+        // if peer already known, id must be same
+        if (lid != peerid)
+            laik_log(LAIK_LL_Warning, "got ID %d from peer known by LID %d; ignoring", peerid, lid);
+        return;
+    }
+
+    if (d->mylid == peerid) {
+        laik_log(LAIK_LL_Warning, "got ID %d from peer which is my own LID; ignoring", peerid);
+        return;
+    }
+
+    lid = peerid;
+    assert((lid >= 0) && (lid < MAX_PEERS));
+    assert(lid <= d->maxid);
+    d->peer[lid].fd = fd;
+    assert(fd >= 0);
+    d->fds[fd].lid = lid;
+
+    // must already be known, announced by master
+    assert(d->peer[lid].location != 0);
+    assert(d->peer[lid].host != 0);
+    assert(d->peer[lid].port >= 0);
+
+    laik_log(1, "TCP2 seen LID %d (location %s) at FD %d",
+             lid, d->peer[lid].location, fd);
+}
+
+void got_help(InstData* d, int fd, int lid)
+{
+    // help
+    laik_log(1, "TCP2 Sending usage because of help command");
+
+    assert(fd > 0);
+    if (lid == -1) lid = -fd;
+    send_cmd(d, lid, "# Interactive usage (unambigous prefix is enough):");
+    send_cmd(d, lid, "#  help                         : this help text");
+    send_cmd(d, lid, "#  kill                         : ask process to terminate");
+    send_cmd(d, lid, "#  quit                         : close connection");
+    send_cmd(d, lid, "#  status                       : request status output");
+    send_cmd(d, lid, "# Protocol messages:");
+    send_cmd(d, lid, "#  allowsend <count> <esize>    : give send right");
+    send_cmd(d, lid, "#  data <len> [pos] <hex> ...   : data from a LAIK container");
+    send_cmd(d, lid, "#  id <id> <loc> <host> <port>  : announce location id info");
+    send_cmd(d, lid, "#  myid <id>                    : identify your location id");
+    send_cmd(d, lid, "#  phase <phase>                : announce current phase");
+    send_cmd(d, lid, "#  register <loc> <host> <port> : request assignment of id");
+}
+
+void got_kill(InstData* d, int fd, int lid)
+{
+    // kill
+    laik_log(1, "TCP2 Exiting because of kill command");
+
+    assert(fd > 0);
+    if (lid == -1) lid = -fd;
+    send_cmd(d, lid, "# Exiting. Bye");
+    exit(1);
+}
+
+void got_quit(InstData* d, int fd, int lid)
+{
+    // quit
+    laik_log(1, "TCP2 Closing connection because of quit command");
+
+    assert(fd >= 0);
+    close(fd);
+    rm_rfd(d, fd);
+    if (lid >= 0) d->peer[lid].fd = -1;
+}
+
+void got_status(InstData* d, int fd, int lid)
+{
+    // status command
+    laik_log(1, "TCP2 Sending status becaue of status command");
+
+    char msg[100];
+    sprintf(msg, "# My locID is %d", d->mylid);
+    assert(fd > 0);
+    if (lid == -1) lid = -fd;
+    send_cmd(d, lid, msg);
+    send_cmd(d, lid, "# Processes in world:");
+    for(int i = 0; i <= d->maxid; i++) {
+        sprintf(msg, "#  LID %2d loc '%s' at %s port %d", i,
+                d->peer[i].location, d->peer[i].host, d->peer[i].port);
+        send_cmd(d, lid, msg);
+    }
+}
+
+void got_id(InstData* d, int lid, char* msg)
+{
+    // id <lid> <location> <host> <port>
+
+    // ignore if master
+    if (d->mylid == 0) {
+        laik_log(LAIK_LL_Warning, "ignoring id command '%s' as master", msg);
+        return;
+    }
+
+    char cmd[20], l[50], h[50];
+    int p;
+    if (sscanf(msg, "%20s %d %50s %50s %d", cmd, &lid, l, h, &p) < 5) {
+        laik_log(LAIK_LL_Warning, "cannot parse id command '%s'; ignoring", msg);
+        return;
+    }
+
+    assert((lid >= 0) && (lid < MAX_PEERS));
+    if (d->mylid < 0) {
+        // is this my location id?
+        if (strcmp(d->location, l) == 0)
+            d->mylid = lid;
+    }
+    if (d->peer[lid].location != 0) {
+        // already known, announced by master
+        assert(lid <= d->maxid);
+        assert(strcmp(d->peer[lid].location, l) == 0);
+        assert(strcmp(d->peer[lid].host, h) == 0);
+        assert(d->peer[lid].port == p);
+    }
+    else {
+        d->peer[lid].host = strdup(h);
+        d->peer[lid].location = strdup(l);
+        d->peer[lid].port = p;
+        // first time we see this peer: init receive
+        d->peer[lid].rcount = 0;
+        d->peer[lid].scount = 0;
+
+        if (lid != d->mylid) d->peers++;
+        if (lid > d->maxid) d->maxid = lid;
+    }
+    laik_log(1, "TCP2 seen %slocID %d (location %s), active peers %d",
+             (lid == d->mylid) ? "my ":"", lid, l,  d->peers);
+}
+
+void got_phase(InstData* d, char* msg)
+{
+    // phase <phaseid>
+
+    // ignore if master
+    if (d->mylid == 0) {
+        laik_log(LAIK_LL_Warning, "ignoring phase command '%s' as master", msg);
+        return;
+    }
+
+    char cmd[20];
+    int phase;
+    if (sscanf(msg, "%20s %d", cmd, &phase) < 2) {
+        laik_log(LAIK_LL_Warning, "cannot parse phase command '%s'; ignoring", msg);
+        return;
+    }
+    laik_log(1, "TCP2 got phase %d", phase);
+    d->phase = phase;
+
+    d->exit = 1;
+}
+
+void got_allowsend(InstData* d, int lid, char* msg)
+{
+    // allowsend <count> <elemsize>
+    char cmd[20];
+    int count, esize;
+    if (sscanf(msg, "%20s %d %d", cmd, &count, &esize) < 3) {
+        laik_log(LAIK_LL_Warning, "cannot parse allowsend command '%s'; ignoring", msg);
+        return;
+    }
+
+    laik_log(1, "TCP2 got allowsend %d %d", count, esize);
+    if (d->peer[lid].scount != 0) {
+        laik_log(LAIK_LL_Warning, "already have send right; ignoring");
+        return;
+    }
+
+    d->peer[lid].scount = count;
+    d->peer[lid].selemsize = esize;
+    d->exit = 1;
+}
+
+
+
 // a command was received from a peer, and should be processed
 // return false if command cannot be processed yet
 //   this only happens with "data" command without matching receive
 void got_cmd(InstData* d, int fd, char* msg, int len)
 {
     int lid = d->fds[fd].lid;
-    laik_log(1, "TCP2 Got cmd '%s' (len %d) from locID %d (FD %d)\n",
+    laik_log(1, "TCP2 Got cmd '%s' (len %d) from LID %d (FD %d)\n",
             msg, len, lid, fd);
 
     // first part of commands are accepted without assigned ID
-
-    if (msg[0] == 'r') {
-        // register <location> <host> <port>
-
-        // ignore if not master
-        if (d->mylid != 0) {
-            laik_log(LAIK_LL_Warning, "ignoring register command '%s', not master", msg);
-            return;
-        }
-
-        if (lid >= 0) {
-            laik_log(LAIK_LL_Warning, "cannot re-register; already registered with locID %d", lid);
-            return;
-        }
-
-        char cmd[20], l[50], h[50];
-        int p;
-        if (sscanf(msg, "%20s %50s %50s %d", cmd, l, h, &p) < 4) {
-            laik_log(LAIK_LL_Panic, "cannot parse register command '%s'", msg);
-            return;
-        }
-
-        lid = ++d->maxid;
-        assert(fd >= 0);
-        d->fds[fd].lid = lid;
-        assert(lid < MAX_PEERS);
-        laik_log(1, "TCP2 registered new locID %d: location %s at host %s port %d",
-                 lid, l, h, p);
-
-        assert(d->peer[lid].port == -1);
-        d->peer[lid].fd = fd;
-        d->peer[lid].host = strdup(h);
-        d->peer[lid].location = strdup(l);
-        d->peer[lid].port = p;
-        // first time we use this id for a peer: init receive
-        d->peer[lid].rcount = 0;
-        d->peer[lid].scount = 0;
-
-        // send location ID info: "id <lid> <location> <host> <port>"
-        // new registered id to all already registered peers
-        sprintf(msg, "id %d %s %s %d", lid, l, h, p);
-        for(int i = 1; i <= d->maxid; i++)
-            send_cmd(d, i, msg);
-        for(int i = 0; i < d->maxid; i++) {
-            sprintf(msg, "id %d %s %s %d", i,
-                    d->peer[i].location, d->peer[i].host, d->peer[i].port);
-            send_cmd(d, lid, msg);
-        }
-
-        d->peers++;
-        d->exit = 1;
-        return;
-    }
-
-    if (msg[0] == 'm') {
-        // myid <lid>
-        // used on re-connection of other peer: peer must already be known
-
-        char cmd[20];
-        int peerid;
-        if (sscanf(msg, "%20s %d", cmd, &peerid) < 2) {
-            laik_log(LAIK_LL_Panic, "cannot parse myid command '%s'", msg);
-            return;
-        }
-
-        if (lid >= 0) {
-            // if peer already known, id must be same
-            if (lid != peerid)
-                laik_log(LAIK_LL_Panic, "got ID %d from peer already known with locID %d", peerid, lid);
-            return;
-        }
-        if (d->mylid == peerid) {
-            laik_log(LAIK_LL_Panic, "got ID %d from peer which is my own location ID", peerid);
-            return;
-        }
-
-        lid = peerid;
-        assert((lid >= 0) && (lid < MAX_PEERS));
-        assert(lid <= d->maxid);
-        d->peer[lid].fd = fd;
-        assert(fd >= 0);
-        d->fds[fd].lid = lid;
-
-        // must already be known, announced by master
-        assert(d->peer[lid].location != 0);
-        assert(d->peer[lid].host != 0);
-        assert(d->peer[lid].port >= 0);
-
-        laik_log(1, "TCP2 seen location ID %d (location %s) at FD %d",
-                 lid, d->peer[lid].location, fd);
-        return;
-    }
-
-    if (msg[0] == 'h') {
-        laik_log(1, "TCP2 Sending usage because of help command");
-
-        assert(fd > 0);
-        if (lid == -1) lid = -fd;
-        send_cmd(d, lid, "# Usage (first char of command is enough):");
-        send_cmd(d, lid, "#  data <len> [pos] <hex> ...   : data from a LAIK container");
-        send_cmd(d, lid, "#  help                         : this help text");
-        send_cmd(d, lid, "#  id <id> <loc> <host> <port>  : announce location id info");
-        send_cmd(d, lid, "#  kill                         : ask process to terminate");
-        send_cmd(d, lid, "#  myid <id>                    : identify your location id");
-        send_cmd(d, lid, "#  phase <phase>                : announce current phase");
-        send_cmd(d, lid, "#  quit                         : close connection");
-        send_cmd(d, lid, "#  register <loc> <host> <port> : request assignment of id");
-        send_cmd(d, lid, "#  status                       : request status output");
-        return;
-    }
-
-    if (msg[0] == 'k') {
-        // kill command - meant for interactive control
-        laik_log(1, "TCP2 Exiting because of kill command");
-
-        assert(fd > 0);
-        if (lid == -1) lid = -fd;
-        send_cmd(d, lid, "# Exiting. Bye");
-        exit(1);
-    }
-
-    if (msg[0] == 'q') {
-        // quit command - meant for interactive control
-        laik_log(1, "TCP2 Closing connection because of quit command");
-
-        assert(fd >= 0);
-        close(fd);
-        rm_rfd(d, fd);
-        if (lid >= 0) d->peer[lid].fd = -1;
-        return;
-    }
-
-    if (msg[0] == '#') {
-        // accept but ignore comments: this is for interactive use via nc/telnet
-        laik_log(1, "TCP2 Got comment %s", msg);
-        return;
-    }
-
-    if (msg[0] == 's') {
-        // status command
-        laik_log(1, "TCP2 Sending status becaue of status command");
-        assert(fd > 0);
-        if (lid == -1) lid = -fd;
-        sprintf(msg, "# My locID is %d", d->mylid);
-        send_cmd(d, lid, msg);
-        send_cmd(d, lid, "# Processes in world:");
-        for(int i = 0; i <= d->maxid; i++) {
-            sprintf(msg, "#  LID %2d loc '%s' at %s:%d", i,
-                    d->peer[i].location, d->peer[i].host, d->peer[i].port);
-            send_cmd(d, lid, msg);
-        }
-        return;
+    switch(msg[0]) {
+    case 'r': got_register(d, fd, lid, msg); return; // register <location> <host> <port>
+    case 'm': got_myid(d, fd, lid, msg); return; // myid <lid>
+    case 'h': got_help(d, fd, lid); return;
+    case 'k': got_kill(d, fd, lid); return;
+    case 'q': got_kill(d, fd, lid); return;
+    case 's': got_status(d, fd, lid); return;
+    case '#': return; // # - comment, ignore
+    default: break;
     }
 
     // ignore if sender unknown (only register allowed from yet-unknown sender)
@@ -645,94 +747,12 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     }
 
     // second part of commands are accepted only with ID assigned by master
-
-    if (msg[0] == 'i') {
-        // id <lid> <location> <host> <port>
-
-        // ignore if master
-        if (d->mylid == 0) {
-            laik_log(LAIK_LL_Warning, "ignoring id command '%s' as master", msg);
-            return;
-        }
-
-        char cmd[20], l[50], h[50];
-        int p;
-        if (sscanf(msg, "%20s %d %50s %50s %d", cmd, &lid, l, h, &p) < 5) {
-            laik_log(LAIK_LL_Panic, "cannot parse id command '%s'", msg);
-            return;
-        }
-
-        assert((lid >= 0) && (lid < MAX_PEERS));
-        if (d->mylid < 0) {
-            // is this my location id?
-            if (strcmp(d->location, l) == 0)
-                d->mylid = lid;
-        }
-        if (d->peer[lid].location != 0) {
-            // already known, announced by master
-            assert(lid <= d->maxid);
-            assert(strcmp(d->peer[lid].location, l) == 0);
-            assert(strcmp(d->peer[lid].host, h) == 0);
-            assert(d->peer[lid].port == p);
-        }
-        else {
-            d->peer[lid].host = strdup(h);
-            d->peer[lid].location = strdup(l);
-            d->peer[lid].port = p;
-            // first time we see this peer: init receive
-            d->peer[lid].rcount = 0;
-            d->peer[lid].scount = 0;
-
-            if (lid != d->mylid) d->peers++;
-            if (lid > d->maxid) d->maxid = lid;
-        }
-        laik_log(1, "TCP2 seen %slocID %d (location %s), active peers %d",
-                 (lid == d->mylid) ? "my ":"", lid, l,  d->peers);
-        return;
-    }
-
-    if (msg[0] == 'p') {
-        // phase <phaseid>
-
-        // ignore if master
-        if (d->mylid == 0) {
-            laik_log(LAIK_LL_Warning, "ignoring phase command '%s' as master", msg);
-            return;
-        }
-
-        char cmd[20];
-        int phase;
-        if (sscanf(msg, "%20s %d", cmd, &phase) < 2) {
-            laik_log(LAIK_LL_Panic, "cannot parse phase command '%s'", msg);
-            return;
-        }
-        laik_log(1, "TCP2 got phase %d", phase);
-        d->phase = phase;
-        d->exit = 1;
-        return;
-    }
-
-    if (msg[0] == 'a') {
-        // allowsend <count> <elemsize>
-
-        char cmd[20];
-        int count, esize;
-        if (sscanf(msg, "%20s %d %d", cmd, &count, &esize) < 3) {
-            laik_log(LAIK_LL_Panic, "cannot parse allowsend command '%s'", msg);
-            return;
-        }
-        laik_log(1, "TCP2 got allowsend %d %d", count, esize);
-        assert(d->peer[lid].scount == 0);
-        d->peer[lid].scount = count;
-        d->peer[lid].selemsize = esize;
-        d->exit = 1;
-        return;
-    }
-
-    if (msg[0] == 'd') {
-        // data <len> [(<pos>)] <hex> ...
-        got_data(d, lid, msg);
-        return;
+    switch(msg[0]) {
+    case 'i': got_id(d, lid, msg); return; // id <lid> <location> <host> <port>
+    case 'p': got_phase(d, msg); return; // phase <phaseid>
+    case 'a': got_allowsend(d, lid, msg); return; // allowsend <count> <elemsize>
+    case 'd': got_data(d, lid, msg); return; // data <len> [(<pos>)] <hex> ...
+    default: break;
     }
 
     laik_log(LAIK_LL_Warning, "TCP2 got from lID %d unknown msg '%s'", lid, msg);
