@@ -156,6 +156,10 @@ typedef struct {
     Laik_Slice* rslc; // slice to write received data to
     Laik_Index ridx; // index representing receive progress
     Laik_ReductionOperation rro; // reduction with existing value
+
+    // allowed to send data to peer?
+    int scount;    // element count allowed to send, 0 if not
+    int selemsize; // byte count expected per element
 } Peer;
 
 // registrations for active fds in event loop
@@ -351,9 +355,6 @@ void ensure_conn(InstData* d, int lid)
     laik_log(1, "TCP2 connected to LocID %d (host %s, port %d)",
              lid, d->peer[lid].host, d->peer[lid].port);
 
-    // on reconnect, nothing should be left to receive
-    assert(d->peer[lid].rcount == 0);
-
     // eventually free rbuf from old connection
     free(d->peer[lid].rbuf);
     d->peer[lid].rbuf = 0;
@@ -410,7 +411,8 @@ bool got_data(InstData* d, int lid, char* msg)
 
     Peer* p = &(d->peer[lid]);
     if ((p->rcount == 0) || (p->rcount == p->roff)) {
-        laik_log(1, "TCP2 got data without receive, pushing back");
+        // laik_log(1, "TCP2 got data without receive, pushing back");
+        laik_log(LAIK_LL_Panic, "TCP2 got data without receive, pushing back");
         return false;
     }
 
@@ -524,6 +526,7 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         d->peer[lid].port = p;
         // first time we use this id for a peer: init receive
         d->peer[lid].rcount = 0;
+        d->peer[lid].scount = 0;
         // rbuf of peer struct not used if fd open
         d->peer[lid].rbuf = 0;
         d->peer[lid].rbuf_used = 0;
@@ -693,6 +696,7 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
             d->peer[lid].port = p;
             // first time we see this peer: init receive
             d->peer[lid].rcount = 0;
+            d->peer[lid].scount = 0;
 
             if (lid != d->mylid) d->peers++;
             if (lid > d->maxid) d->maxid = lid;
@@ -723,7 +727,25 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         return true;
     }
 
+    if (msg[0] == 'a') {
+        // allowsend <count> <elemsize>
+
+        char cmd[20];
+        int count, esize;
+        if (sscanf(msg, "%20s %d %d", cmd, &count, &esize) < 3) {
+            laik_log(LAIK_LL_Panic, "cannot parse allowsend command '%s'", msg);
+            return true;
+        }
+        laik_log(1, "TCP2 got allowsend %d %d", count, esize);
+        assert(d->peer[lid].scount == 0);
+        d->peer[lid].scount = count;
+        d->peer[lid].selemsize = esize;
+        d->exit = 1;
+        return true;
+    }
+
     if (msg[0] == 'd') {
+        // data <len> [(<pos>)] <hex> ...
         return got_data(d, lid, msg);
     }
 
@@ -941,6 +963,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         d->peer[i].rbuf = 0;
         d->peer[i].rbuf_used = 0;
         d->peer[i].rcount = 0;
+        d->peer[i].scount = 0;
     }
 
     FD_ZERO(&d->rset);
@@ -1084,6 +1107,9 @@ void send_data(int n, int dims, Laik_Index* idx, int toLID, void* p, int s)
 }
 
 // send a slice of data from mapping <m> to process <lid>
+// if not yet allowed to send data, we have to wait.
+// the action sequence ordering makes sure that there must
+// be a matching receive action on the receiver side
 static
 void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int toLID)
 {
@@ -1091,6 +1117,16 @@ void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int toLID)
     int esize = fromMap->data->elemsize;
     int dims = slc->space->dims;
     assert(fromMap->start != 0); // must be backed by memory
+
+    InstData* d = (InstData*)instance->backend_data;
+    Peer* p = &(d->peer[toLID]);
+    if (p->scount == 0) {
+        // we need to wait for right to send data
+        while(p->scount == 0)
+            run_loop(d);
+    }
+    assert(p->scount == (int) laik_slice_size(slc));
+    assert(p->selemsize == esize);
 
     Laik_Index idx = slc->from;
     int ecount = 0;
@@ -1102,8 +1138,12 @@ void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int toLID)
         if (!next_lex(slc, &idx)) break;
     }
     assert(ecount == (int) laik_slice_size(slc));
+
+    // withdraw our right to send further data
+    p->scount = 0;
 }
 
+// queue receive action and run event loop until all data received
 // <ro> allows to request reduction with existing value
 // (use RO_None to overwrite with received value)
 static
@@ -1125,10 +1165,12 @@ void recv_slice(Laik_Slice* slc, int fromLID, Laik_Mapping* toMap, Laik_Reductio
     p->ridx = slc->from;
     p->rro = ro;
 
-    // check commands (may have been pushed back)
-    process_rbuf(d, p->fd, fromLID);
+    // give peer the right to start sending data consisting of given number of elements
+    char msg[50];
+    sprintf(msg, "allowsend %d %d", p->rcount, p->relemsize);
+    send_cmd(d, fromLID, msg);
 
-    // wait until data received from peer
+    // wait until all data received from peer
     while(p->roff < p->rcount)
         run_loop(d);
 
