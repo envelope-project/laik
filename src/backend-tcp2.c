@@ -144,10 +144,6 @@ typedef struct {
     char* host;     // remote host, if 0 localhost
     char* location; // location string of peer
 
-    // only used when fd got closed
-    int rbuf_used;
-    char* rbuf;
-
     // data we are currently receiving from peer
     int rcount;    // element count in receive
     int relemsize; // expected byte count per element
@@ -345,20 +341,15 @@ void ensure_conn(InstData* d, int lid)
         close(fd);
     }
     if (p == 0) {
-        laik_log(LAIK_LL_Panic, "TCP2 cannot connect to locID %d (host %s, port %d)",
+        laik_log(LAIK_LL_Panic, "TCP2 cannot connect to LID %d (host %s, port %d)",
                  lid, d->peer[lid].host, d->peer[lid].port);
         exit(1);
     }
     d->peer[lid].fd = fd;
     add_rfd(d, fd, got_bytes);
     d->fds[fd].lid = lid;
-    laik_log(1, "TCP2 connected to LocID %d (host %s, port %d)",
+    laik_log(1, "TCP2 connected to LID %d (host %s, port %d)",
              lid, d->peer[lid].host, d->peer[lid].port);
-
-    // eventually free rbuf from old connection
-    free(d->peer[lid].rbuf);
-    d->peer[lid].rbuf = 0;
-    d->peer[lid].rbuf_used = 0;
 
     if (d->mylid >= 0) {
         // make myself known to peer: send my location id
@@ -399,21 +390,20 @@ void send_cmd(InstData* d, int lid, char* cmd)
 
 // "data" command received
 // return false if command cannot be processed yet, no matching receive
-bool got_data(InstData* d, int lid, char* msg)
+void got_data(InstData* d, int lid, char* msg)
 {
     // data <len> <hexbyte> ...
     char cmd[20];
     int len, i;
     if (sscanf(msg, "%20s %d %n", cmd, &len, &i) < 2) {
         laik_log(LAIK_LL_Panic, "cannot parse data command '%s'", msg);
-        return true;
+        return;
     }
 
     Peer* p = &(d->peer[lid]);
     if ((p->rcount == 0) || (p->rcount == p->roff)) {
-        // laik_log(1, "TCP2 got data without receive, pushing back");
-        laik_log(LAIK_LL_Panic, "TCP2 got data without receive, pushing back");
-        return false;
+        laik_log(LAIK_LL_Warning, "TCP2 ignoring data from LID %d without send permission", lid);
+        return;
     }
 
     // assume only one element per data command
@@ -478,14 +468,15 @@ bool got_data(InstData* d, int lid, char* msg)
     if (p->roff == p->rcount)
         d->exit = 1;
 
-    return true;
+    return;
 }
 
 // a command was received from a peer, and should be processed
 // return false if command cannot be processed yet
 //   this only happens with "data" command without matching receive
-bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
+void got_cmd(InstData* d, int fd, char* msg, int len)
 {
+    int lid = d->fds[fd].lid;
     laik_log(1, "TCP2 Got cmd '%s' (len %d) from locID %d (FD %d)\n",
             msg, len, lid, fd);
 
@@ -497,19 +488,19 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         // ignore if not master
         if (d->mylid != 0) {
             laik_log(LAIK_LL_Warning, "ignoring register command '%s', not master", msg);
-            return true;
+            return;
         }
 
         if (lid >= 0) {
             laik_log(LAIK_LL_Warning, "cannot re-register; already registered with locID %d", lid);
-            return true;
+            return;
         }
 
         char cmd[20], l[50], h[50];
         int p;
         if (sscanf(msg, "%20s %50s %50s %d", cmd, l, h, &p) < 4) {
             laik_log(LAIK_LL_Panic, "cannot parse register command '%s'", msg);
-            return true;
+            return;
         }
 
         lid = ++d->maxid;
@@ -527,9 +518,6 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         // first time we use this id for a peer: init receive
         d->peer[lid].rcount = 0;
         d->peer[lid].scount = 0;
-        // rbuf of peer struct not used if fd open
-        d->peer[lid].rbuf = 0;
-        d->peer[lid].rbuf_used = 0;
 
         // send location ID info: "id <lid> <location> <host> <port>"
         // new registered id to all already registered peers
@@ -544,7 +532,7 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
 
         d->peers++;
         d->exit = 1;
-        return true;
+        return;
     }
 
     if (msg[0] == 'm') {
@@ -555,18 +543,18 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         int peerid;
         if (sscanf(msg, "%20s %d", cmd, &peerid) < 2) {
             laik_log(LAIK_LL_Panic, "cannot parse myid command '%s'", msg);
-            return true;
+            return;
         }
 
         if (lid >= 0) {
             // if peer already known, id must be same
             if (lid != peerid)
                 laik_log(LAIK_LL_Panic, "got ID %d from peer already known with locID %d", peerid, lid);
-            return true;
+            return;
         }
         if (d->mylid == peerid) {
             laik_log(LAIK_LL_Panic, "got ID %d from peer which is my own location ID", peerid);
-            return true;
+            return;
         }
 
         lid = peerid;
@@ -580,13 +568,10 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         assert(d->peer[lid].location != 0);
         assert(d->peer[lid].host != 0);
         assert(d->peer[lid].port >= 0);
-        // rbuf of peer struct not used if fd open
-        d->peer[lid].rbuf = 0;
-        d->peer[lid].rbuf_used = 0;
 
         laik_log(1, "TCP2 seen location ID %d (location %s) at FD %d",
                  lid, d->peer[lid].location, fd);
-        return true;
+        return;
     }
 
     if (msg[0] == 'h') {
@@ -604,7 +589,7 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         send_cmd(d, lid, "#  quit                         : close connection");
         send_cmd(d, lid, "#  register <loc> <host> <port> : request assignment of id");
         send_cmd(d, lid, "#  status                       : request status output");
-        return true;
+        return;
     }
 
     if (msg[0] == 'k') {
@@ -625,13 +610,13 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         close(fd);
         rm_rfd(d, fd);
         if (lid >= 0) d->peer[lid].fd = -1;
-        return true;
+        return;
     }
 
     if (msg[0] == '#') {
         // accept but ignore comments: this is for interactive use via nc/telnet
         laik_log(1, "TCP2 Got comment %s", msg);
-        return true;
+        return;
     }
 
     if (msg[0] == 's') {
@@ -647,7 +632,7 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
                     d->peer[i].location, d->peer[i].host, d->peer[i].port);
             send_cmd(d, lid, msg);
         }
-        return true;
+        return;
     }
 
     // ignore if sender unknown (only register allowed from yet-unknown sender)
@@ -656,7 +641,7 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         assert(fd > 0);
         if (lid == -1) lid = -fd;
         send_cmd(d, lid, "# first register, see 'help'");
-        return true;
+        return;
     }
 
     // second part of commands are accepted only with ID assigned by master
@@ -667,14 +652,14 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         // ignore if master
         if (d->mylid == 0) {
             laik_log(LAIK_LL_Warning, "ignoring id command '%s' as master", msg);
-            return true;
+            return;
         }
 
         char cmd[20], l[50], h[50];
         int p;
         if (sscanf(msg, "%20s %d %50s %50s %d", cmd, &lid, l, h, &p) < 5) {
             laik_log(LAIK_LL_Panic, "cannot parse id command '%s'", msg);
-            return true;
+            return;
         }
 
         assert((lid >= 0) && (lid < MAX_PEERS));
@@ -703,7 +688,7 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         }
         laik_log(1, "TCP2 seen %slocID %d (location %s), active peers %d",
                  (lid == d->mylid) ? "my ":"", lid, l,  d->peers);
-        return true;
+        return;
     }
 
     if (msg[0] == 'p') {
@@ -712,19 +697,19 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         // ignore if master
         if (d->mylid == 0) {
             laik_log(LAIK_LL_Warning, "ignoring phase command '%s' as master", msg);
-            return true;
+            return;
         }
 
         char cmd[20];
         int phase;
         if (sscanf(msg, "%20s %d", cmd, &phase) < 2) {
             laik_log(LAIK_LL_Panic, "cannot parse phase command '%s'", msg);
-            return true;
+            return;
         }
         laik_log(1, "TCP2 got phase %d", phase);
         d->phase = phase;
         d->exit = 1;
-        return true;
+        return;
     }
 
     if (msg[0] == 'a') {
@@ -734,52 +719,37 @@ bool got_cmd(InstData* d, int fd, int lid, char* msg, int len)
         int count, esize;
         if (sscanf(msg, "%20s %d %d", cmd, &count, &esize) < 3) {
             laik_log(LAIK_LL_Panic, "cannot parse allowsend command '%s'", msg);
-            return true;
+            return;
         }
         laik_log(1, "TCP2 got allowsend %d %d", count, esize);
         assert(d->peer[lid].scount == 0);
         d->peer[lid].scount = count;
         d->peer[lid].selemsize = esize;
         d->exit = 1;
-        return true;
+        return;
     }
 
     if (msg[0] == 'd') {
         // data <len> [(<pos>)] <hex> ...
-        return got_data(d, lid, msg);
+        got_data(d, lid, msg);
+        return;
     }
 
-    laik_log(LAIK_LL_Warning, "TCP2 got from locID %d unknown msg '%s'", lid, msg);
-    return true;
+    laik_log(LAIK_LL_Warning, "TCP2 got from lID %d unknown msg '%s'", lid, msg);
 }
 
-void process_rbuf(InstData* d, int fd, int lid)
+void process_rbuf(InstData* d, int fd)
 {
     char* rbuf;
     int used;
 
-    if (fd >= 0) {
-        // fd open: rbuf is attached to fd
-        assert(fd < MAX_FDS);
-        rbuf = d->fds[fd].rbuf;
-        used = d->fds[fd].rbuf_used;
-        lid = d->fds[fd].lid;
-    } else {
-        // fd closed: use rbuf state in peer struct
-        assert((lid >= 0) && (lid < MAX_PEERS));
-        rbuf = d->peer[lid].rbuf;
-        used = d->peer[lid].rbuf_used;
-    }
+    assert((fd >= 0) && (fd < MAX_FDS));
+    rbuf = d->fds[fd].rbuf;
+    assert(rbuf != 0);
+    used = d->fds[fd].rbuf_used;
 
-    laik_log(1, "TCP2 handle commands in receive buf of FD %d (locID %d, %d bytes)\n",
-             fd, lid, used);
-
-    if (rbuf == 0) {
-        // may happen if neither connected nor rbuf moved to peer struct
-        // (e.g. when called by recv_slice)
-        laik_log(1, "  No buffer\n");
-        return;
-    }
+    laik_log(1, "TCP2 handle commands in receive buf of FD %d (LID %d, %d bytes)\n",
+             fd, d->fds[fd].lid, used);
 
     int pos1 = 0, pos2 = 0;
     while(pos2 < used) {
@@ -789,15 +759,7 @@ void process_rbuf(InstData* d, int fd, int lid)
         }
         if (rbuf[pos2] == '\n') {
             rbuf[pos2] = 0;
-            if (fd >= 0) lid = d->fds[fd].lid; // may change during processing
-            if (!got_cmd(d, fd, lid, rbuf + pos1, pos2 - pos1)) {
-                // cannot yet be processed: keep it back
-                laik_log(1, "  keep '%s' back (at off %d, used %d)\n",
-                         rbuf + pos1, pos1, used);
-                rbuf[pos2] = '\n';
-                pos2 = used;
-                break;
-            }
+            got_cmd(d, fd, rbuf + pos1, pos2 - pos1);
             pos1 = pos2+1;
         }
         pos2++;
@@ -807,10 +769,7 @@ void process_rbuf(InstData* d, int fd, int lid)
         while(pos1 < pos2)
             rbuf[used++] = rbuf[pos1++];
     }
-    if (fd >= 0)
-        d->fds[fd].rbuf_used = used;
-    else
-        d->peer[lid].rbuf_used = used;
+    d->fds[fd].rbuf_used = used;
 }
 
 void got_bytes(InstData* d, int fd)
@@ -820,9 +779,9 @@ void got_bytes(InstData* d, int fd)
     int used = d->fds[fd].rbuf_used;
 
     if (used == RBUF_LEN) {
-        // buffer full: try to consume messages in buffer
-        process_rbuf(d, fd, -1);
-        return;
+        // buffer not large enough for even 1 command: should not happen
+        laik_panic("TCP2 receive buffer too small for 1 command");
+        exit(1);
     }
 
     char* rbuf = d->fds[fd].rbuf;
@@ -838,28 +797,14 @@ void got_bytes(InstData* d, int fd)
 
         // process left-over commands, add NL for last command to process
         rbuf[used] = '\n';
-        process_rbuf(d, fd, -1);
+        process_rbuf(d, fd);
+        assert(d->fds[fd].rbuf_used == 0);
 
-        // if id known and still commands left, attach rbuf to peer
-        int lid = d->fds[fd].lid;
-        if (lid >= 0) {
-            laik_log(1, "TCP2 rbuf of FD %d moved (peer LID %d)\n", fd, lid);
-            d->peer[lid].rbuf = rbuf;
-            d->peer[lid].rbuf_used = used;
-            d->peer[lid].fd = -1;
-            // detach rbuf from fd
-            d->fds[fd].rbuf = 0;
-            d->fds[fd].rbuf_used = 0;
-        }
-
-        laik_log(1, "TCP2 FD %d closed (peer LID %d, location %s)\n",
-                 fd, lid, (lid >= 0) ? d->peer[lid].location : "-");
+        laik_log(1, "TCP2 FD %d closed (peer LID %d)\n",
+                 fd, d->fds[fd].lid);
 
         close(fd);
         rm_rfd(d, fd);
-
-        if (lid >= 0)
-            process_rbuf(d, -1, lid);
         return;
     }
 
@@ -875,7 +820,7 @@ void got_bytes(InstData* d, int fd)
     }
 
     d->fds[fd].rbuf_used = used + len;
-    process_rbuf(d, fd, -1);
+    process_rbuf(d, fd);
 }
 
 void got_connect(InstData* d, int fd)
@@ -960,8 +905,6 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         d->peer[i].fd = -1;   // not connected
         d->peer[i].host = 0;
         d->peer[i].location = 0;
-        d->peer[i].rbuf = 0;
-        d->peer[i].rbuf_used = 0;
         d->peer[i].rcount = 0;
         d->peer[i].scount = 0;
     }
