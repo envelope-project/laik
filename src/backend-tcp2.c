@@ -117,7 +117,7 @@
 #define MAX_PEERS 256
 #define MAX_FDS 256
 // receive buffer length
-#define RBUF_LEN 256
+#define RBUF_LEN 8*1024
 
 // forward decl
 void tcp2_exec(Laik_ActionSeq* as);
@@ -133,6 +133,9 @@ static Laik_Backend laik_backend = {
 };
 
 static Laik_Instance* instance = 0;
+
+// config set by LAIK_TCP2_BIN
+int use_bin_mode = 0;
 
 // structs for instance
 
@@ -165,6 +168,8 @@ typedef struct {
     loop_cb_t cb;
     int rbuf_used;
     char* rbuf;
+    // if > 0 we are in binary data receive mode, outstanding bytes
+    int outstanding_bin;
 } FDState;
 
 struct _InstData {
@@ -243,6 +248,7 @@ void add_rfd(InstData* d, int fd, loop_cb_t cb)
     d->fds[fd].lid = -1;
     d->fds[fd].rbuf = malloc(RBUF_LEN);
     d->fds[fd].rbuf_used = 0;
+    d->fds[fd].outstanding_bin = 0;
 }
 
 void rm_rfd(InstData* d, int fd)
@@ -383,9 +389,78 @@ void send_cmd(InstData* d, int lid, char* cmd)
     if (res >= 0) while((res = write(fd, "\n", 1)) == 0);
     if (res < 0) {
         int e = errno;
-        laik_log(LAIK_LL_Warning, "TCP2 write error on FD %d: %s\n",
+        laik_log(LAIK_LL_Panic, "TCP2 write error on FD %d: %s\n",
                  fd, strerror(e));
     }
+}
+
+void send_bin(InstData* d, int lid, char* buf, int len)
+{
+    ensure_conn(d, lid);
+    int fd = d->peer[lid].fd;
+    laik_log(1, "TCP2 Sent bin (len %d) to locID %d (FD %d)\n",
+             len, lid, fd);
+
+    // cope with partial writes and errors
+    int res, written = 0;
+    while(written < len) {
+        res = write(fd, buf + written, len - written);
+        if (res < 0) break;
+        written += res;
+    }
+    if (res < 0) {
+        int e = errno;
+        laik_log(LAIK_LL_Panic, "TCP2 write error on FD %d: %s\n",
+                 fd, strerror(e));
+    }
+}
+
+int got_binary_data(InstData* d, int lid, char* buf, int len)
+{
+    laik_log(1, "TCP2 got binary data (from LID %d, len %d)", lid, len);
+
+    Peer* p = &(d->peer[lid]);
+    if ((p->rcount == 0) || (p->rcount == p->roff)) {
+        laik_log(LAIK_LL_Warning, "TCP2 ignoring data from LID %d without send permission", lid);
+        return len;
+    }
+
+    int esize = p->relemsize;
+    Laik_Mapping* m = p->rmap;
+    assert(m != 0);
+    Laik_Layout* ll = m->layout;
+    bool inTraversal = true;
+    int consumed = 0;
+    while(len - consumed >= esize) {
+        assert(inTraversal);
+        int64_t off = ll->offset(ll, m->layoutSection, &(p->ridx));
+        char* idxPtr = m->start + off * p->relemsize;
+        if (p->rro == LAIK_RO_None)
+            memcpy(idxPtr, buf, esize);
+        else {
+            Laik_Type* t = p->rmap->data->type;
+            assert(t->reduce);
+            (t->reduce)(idxPtr, idxPtr, buf, 1, p->rro);
+        }
+        if ((esize == 8) && laik_log_begin(1)) {
+            char pstr[70];
+            int dims = p->rslc->space->dims;
+            sprintf(pstr, "(%d:%s)", p->roff, istr(dims, &(p->ridx)));
+            laik_log(1, " pos %s: in %f res %f\n", pstr, *((double*)buf), *((double*)idxPtr));
+        }
+        buf += p->relemsize;
+        consumed += p->relemsize;
+        p->roff++;
+        inTraversal = next_lex(p->rslc, &(p->ridx));
+    }
+    assert(p->roff <= p->rcount);
+
+    laik_log(1, "TCP2 consumed %d bytes, received %d/%d", consumed, p->roff, p->rcount);
+
+    if (p->roff == p->rcount)
+        d->exit = 1;
+
+    return consumed;
 }
 
 // "data" command received
@@ -760,19 +835,56 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
 
 void process_rbuf(InstData* d, int fd)
 {
-    char* rbuf;
-    int used;
-
     assert((fd >= 0) && (fd < MAX_FDS));
-    rbuf = d->fds[fd].rbuf;
+    FDState* fds = &(d->fds[fd]);
+    char* rbuf = fds->rbuf;
+    int used = fds->rbuf_used;
+    int outstanding_bin = fds->outstanding_bin;
     assert(rbuf != 0);
-    used = d->fds[fd].rbuf_used;
 
     laik_log(1, "TCP2 handle commands in receive buf of FD %d (LID %d, %d bytes)\n",
-             fd, d->fds[fd].lid, used);
+             fd, fds->lid, used);
 
+    int consumed;
+    // pos1/pos2: start/end of section to process
     int pos1 = 0, pos2 = 0;
     while(pos2 < used) {
+        // section in bin mode?
+        if (outstanding_bin > 0) {
+            if (used - pos1 < outstanding_bin) {
+                // all bytes in receive buffer are in bin mode
+                consumed = got_binary_data(d, fds->lid, rbuf + pos1, used - pos1);
+                if (consumed == 0) {
+                    // may happen if available chunk too small, need more data
+                    pos2 = used;
+                    break;
+                }
+            }
+            else {
+                consumed = got_binary_data(d, fds->lid, rbuf + pos1, outstanding_bin);
+                assert(consumed > 0); // we provided all bytes until end, ensure progress
+            }
+            outstanding_bin -= consumed;
+            pos1 += consumed;
+            pos2 = pos1;
+            continue;
+        }
+        // start of bin mode?
+        if (rbuf[pos1] == 'B') {
+            // 3 bytes header: 'B' + 2 bytes count (up to 64k of binary)
+            if (pos1 + 2 >= used) {
+                // not enough bytes to cover header: stop
+                pos2 = used;
+                break;
+            }
+            outstanding_bin  = ((int)((unsigned char*)rbuf)[pos1 + 1]);
+            outstanding_bin += ((int)((unsigned char*)rbuf)[pos1 + 2]) << 8;
+            laik_log(1, "TCP2 bin mode started with %d bytes\n", outstanding_bin);
+            pos1 += 3;
+            pos2 = pos1;
+            continue;
+        }
+
         if (rbuf[pos2] == 13) {
             // change CR to whitespace (sent by telnet)
             rbuf[pos2] = ' ';
@@ -789,7 +901,8 @@ void process_rbuf(InstData* d, int fd)
         while(pos1 < pos2)
             rbuf[used++] = rbuf[pos1++];
     }
-    d->fds[fd].rbuf_used = used;
+    fds->rbuf_used = used;
+    fds->outstanding_bin = outstanding_bin;
 }
 
 void got_bytes(InstData* d, int fd)
@@ -829,12 +942,13 @@ void got_bytes(InstData* d, int fd)
     }
 
     if (laik_log_begin(1)) {
-        char lstr[40];
+        char lstr[100];
         int i, o;
         o = sprintf(lstr, "%02x", rbuf[used]);
         for(i = 1; (i < len) && (i < 8); i++)
             o += sprintf(lstr + o, " %02x", rbuf[used + i]);
         if (i < len) sprintf(lstr + o, "...");
+        assert(o < 100);
         laik_log_flush("TCP2 got_bytes(FD %d, peer LID %d, used %d): read %d bytes (%s)\n",
                        fd, d->fds[fd].lid, used, len, lstr);
     }
@@ -913,6 +1027,10 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     if (home_port == 0) home_port = TCP2_PORT;
 
     laik_log(1, "TCP2 location %s, home %s:%d\n", location, home_host, home_port);
+
+    // use binary data mode?
+    str = getenv("LAIK_TCP2_BIN");
+    use_bin_mode = str ? atoi(str) : 0;
 
     InstData* d = malloc(sizeof(InstData) + MAX_PEERS * sizeof(Peer));
     if (!d) {
@@ -1069,6 +1187,47 @@ void send_data(int n, int dims, Laik_Index* idx, int toLID, void* p, int s)
     send_cmd((InstData*)instance->backend_data, toLID, str);
 }
 
+// send
+
+#define SBUF_LEN 8*1024
+int sbuf_used = 0;
+int sbuf_toLID = -1;
+char sbuf[SBUF_LEN];
+
+static
+void send_data_bin_flush(int toLID)
+{
+    if (sbuf_used == 0) return;
+    assert(sbuf_toLID == toLID);
+
+    unsigned char header[3];
+    header[0] = 'B';
+    header[1] = sbuf_used & 255;
+    header[2] = sbuf_used >> 8;
+    send_bin((InstData*)instance->backend_data, toLID, (char*) header, 3);
+    send_bin((InstData*)instance->backend_data, toLID, sbuf, sbuf_used);
+    sbuf_used = 0;
+    sbuf_toLID = -1;
+}
+
+static
+void send_data_bin(int n, int dims, Laik_Index* idx, int toLID, void* p, int s)
+{
+    if (sbuf_used + s > SBUF_LEN)
+        send_data_bin_flush(toLID);
+    if (sbuf_toLID < 0)
+        sbuf_toLID = toLID;
+    else
+        assert(sbuf_toLID == toLID);
+
+    memcpy(sbuf + sbuf_used, p, s);
+    sbuf_used += s;
+
+    if (s == 8)
+        laik_log(1, " pos (%d:%s): %f\n", n, istr(dims, idx), *((double*)p));
+}
+
+
 // send a slice of data from mapping <m> to process <lid>
 // if not yet allowed to send data, we have to wait.
 // the action sequence ordering makes sure that there must
@@ -1096,11 +1255,16 @@ void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int toLID)
     while(1) {
         int64_t off = l->offset(l, fromMap->layoutSection, &idx);
         void* idxPtr = fromMap->start + off * esize;
-        send_data(ecount, dims, &idx, toLID, idxPtr, esize);
+        if (use_bin_mode)
+            send_data_bin(ecount, dims, &idx, toLID, idxPtr, esize);
+        else
+            send_data(ecount, dims, &idx, toLID, idxPtr, esize);
         ecount++;
         if (!next_lex(slc, &idx)) break;
     }
     assert(ecount == (int) laik_slice_size(slc));
+    if (use_bin_mode)
+        send_data_bin_flush(toLID);
 
     // withdraw our right to send further data
     p->scount = 0;
