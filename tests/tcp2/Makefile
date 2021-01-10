@@ -13,7 +13,8 @@ TESTS= \
     test-spmv test-spmv2 test-spmv2r \
     test-spmv2-shrink test-spmv2-shrink-inc \
     test-jac1d test-jac1d-repart \
-    test-jac2d test-jac2d-gen test-jac2d-noc
+    test-jac2d test-jac2d-gen test-jac2d-noc \
+    test-kvstest test-location test-spaces
 
 TESTS_TODO= \
     test-vsum test-vsum2 \
@@ -144,10 +145,10 @@ test-kvstest:
 	$(TDIR)/test-kvstest-4.sh
 
 test-location:
-	$(TDIR)/unit_tests/test-location-4.sh
+	$(TDIR)/test-location-4.sh
 
 test-spaces:
-	$(TDIR)/unit_tests/test-spaces-4.sh
+	$(TDIR)/test-spaces-4.sh
 
 clean:
 	rm -rf *.out

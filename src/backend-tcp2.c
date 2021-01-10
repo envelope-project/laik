@@ -188,6 +188,12 @@ struct _InstData {
     int exit;         // set to exit event loop
     FDState fds[MAX_FDS];
 
+    // currently synced KVS (usually NULL)
+    Laik_KVStore* kvs;
+    char *kvs_name;  // non-null if sending changes of KVS with given name allowed
+    int kvs_changes; // number of changes expected
+    int kvs_received; // counter for incoming changes
+
     int peers;        // number of active peers, can be 0 only at master
     Peer peer[0];
 };
@@ -594,7 +600,8 @@ void got_register(InstData* d, int fd, int lid, char* msg)
     d->peer[lid].scount = 0;
 
     // send location ID info: "id <lid> <location> <host> <port> <flags>"
-    // new registered id to all already registered peers
+    // - info of new registered id to all already registered peers + new peer
+    // - info of all already registered peers (including master) to new peer
     char str[150];
     sprintf(str, "id %d %s %s %d %s", lid, l, h, p, accepts_bin_data ? "b":"-");
     for(int i = 1; i <= d->maxid; i++)
@@ -659,7 +666,7 @@ void got_help(InstData* d, int fd, int lid)
     if (lid == -1) lid = -fd;
     send_cmd(d, lid, "# Interactive usage (unambigous prefix is enough):");
     send_cmd(d, lid, "#  help                         : this help text");
-    send_cmd(d, lid, "#  kill                         : ask process to terminate");
+    send_cmd(d, lid, "#  terminate                    : ask process to terminate");
     send_cmd(d, lid, "#  quit                         : close connection");
     send_cmd(d, lid, "#  status                       : request status output");
     send_cmd(d, lid, "# Protocol messages:");
@@ -669,14 +676,17 @@ void got_help(InstData* d, int fd, int lid)
     send_cmd(d, lid, "#  myid <id>                    : identify your location id");
     send_cmd(d, lid, "#  phase <phase>                : announce current phase");
     send_cmd(d, lid, "#  register <loc> <host> <port> [<flags>] : request assignment of id");
+    send_cmd(d, lid, "#  kvs allow <name>             : allow to send changes for KVS");
+    send_cmd(d, lid, "#  kvs changes <count>          : announce number of changes for KVS");
+    send_cmd(d, lid, "#  kvs data <key> <value>       : send changed KVS entry");
     send_cmd(d, lid, "# Flags:");
     send_cmd(d, lid, "#  b                            : process accepts binary data format");
 }
 
-void got_kill(InstData* d, int fd, int lid)
+void got_terminate(InstData* d, int fd, int lid)
 {
-    // kill
-    laik_log(1, "TCP2 Exiting because of kill command");
+    // terminate
+    laik_log(1, "TCP2 Exiting because of terminate command");
 
     assert(fd > 0);
     if (lid == -1) lid = -fd;
@@ -807,6 +817,85 @@ void got_allowsend(InstData* d, int lid, char* msg)
     d->exit = 1;
 }
 
+void got_kvs_allow(InstData* d, int lid, char* msg)
+{
+    if (lid != 0) {
+        laik_log(LAIK_LL_Warning, "ignoring 'kvs allow' from LID %d", lid);
+        return;
+    }
+
+    char cmd[20];
+    char name[30];
+    if (sscanf(msg, "%20s %29s", cmd, name) < 2) {
+        laik_log(LAIK_LL_Warning, "cannot parse 'kvs allow' command '%s'; ignoring", msg);
+        return;
+    }
+
+    laik_log(1, "TCP2 allowed to send changes for KVS '%s'", name);
+    assert(d->kvs_name == 0);
+    d->kvs_name = strdup(name);
+    d->exit = 1;
+}
+
+void got_kvs_changes(InstData* d, int lid, char* msg)
+{
+    char cmd[20];
+    int changes = 0;
+    if (sscanf(msg, "%20s %d", cmd, &changes) < 2) {
+        laik_log(LAIK_LL_Warning, "cannot parse 'kvs changes' command '%s'; ignoring", msg);
+        return;
+    }
+
+    laik_log(1, "TCP2 got %d changes announced for KVS '%s' from LID %d",
+             changes, d->kvs->name, lid);
+    assert(d->kvs_changes == -1);
+    assert(d->kvs_received == 0);
+    d->kvs_changes = changes;
+    if (changes == 0)
+        d->exit = 1;
+}
+
+void got_kvs_data(InstData* d, int lid, char* msg)
+{
+    char cmd[20], key[30], value[110];
+    if (sscanf(msg, "%20s %29s %100[^\n]", cmd, key, value) < 3) {
+        laik_log(LAIK_LL_Warning, "cannot parse kvs data command '%s'; ignoring", msg);
+        return;
+    }
+
+    laik_log(1, "TCP2 got KVS data from LID %d for key '%s': '%s'", lid, key, value);
+    assert(d->kvs != 0);
+    assert(d->kvs_changes > 0);
+    assert(d->kvs_received < d->kvs_changes);
+
+    Laik_KVS_Entry* e = laik_kvs_sets(d->kvs, key, value);
+    // simply mark it as updated
+    //  this may send unneeded updates, but we do not use change journal in TCP2
+    e->updated = true;
+
+    d->kvs_received++;
+    if (d->kvs_received == d->kvs_changes)
+        d->exit = 1;
+}
+
+
+void got_kvs(InstData* d, int lid, char* msg)
+{
+    // kvs ...
+    msg++;
+    if (*msg == 'v') msg++;
+    if (*msg == 's') msg++;
+    if (*msg == ' ') msg++;
+
+    switch(*msg) {
+    case 'a': got_kvs_allow(d, lid, msg); break;
+    case 'c': got_kvs_changes(d, lid, msg); break;
+    case 'd': got_kvs_data(d, lid, msg); break;
+    default:
+        laik_log(LAIK_LL_Warning, "cannot parse kvs command '%s'; ignoring", msg);
+        break;
+    }
+}
 
 
 // a command was received from a peer, and should be processed
@@ -823,7 +912,7 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     case 'r': got_register(d, fd, lid, msg); return; // register <location> <host> <port>
     case 'm': got_myid(d, fd, lid, msg); return; // myid <lid>
     case 'h': got_help(d, fd, lid); return;
-    case 'k': got_kill(d, fd, lid); return;
+    case 't': got_terminate(d, fd, lid); return;
     case 'q': got_quit(d, fd, lid); return;
     case 's': got_status(d, fd, lid); return;
     case '#': return; // # - comment, ignore
@@ -845,6 +934,7 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     case 'p': got_phase(d, msg); return; // phase <phaseid>
     case 'a': got_allowsend(d, lid, msg); return; // allowsend <count> <elemsize>
     case 'd': got_data(d, lid, msg); return; // data <len> [(<pos>)] <hex> ...
+    case 'k': got_kvs(d, lid, msg); return; // kvs ...
     default: break;
     }
 
@@ -1077,10 +1167,13 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     d->phase = -1;    // not set yet
     // if home host is localhost, try to become master (-1: not yet determined)
     d->mylid = check_local(home_host) ? 0 : -1;
-
     // announce capability to accept binary data? Defaults to yes, can be switched off
     str = getenv("LAIK_TCP2_BIN");
     d->accept_bin_data = str ? atoi(str) : 1;
+    d->kvs = 0;       // only set during tcp2_sync()
+    d->kvs_changes = 0;
+    d->kvs_received = 0;
+    d->kvs_name = 0;
 
     // create socket to listen for incoming TCP connections
     //  if <home_host> is not set, try to aquire local port <home_port>
@@ -1493,8 +1586,87 @@ void tcp2_exec(Laik_ActionSeq* as)
 
 void tcp2_sync(Laik_KVStore* kvs)
 {
-    // TODO
-    (void) kvs;
+    char msg[100];
+    InstData* d = (InstData*)instance->backend_data;
+
+    int count = 0;
+    for(unsigned int i = 0; i < kvs->used; i++) {
+        if (!kvs->entry[i].updated) continue;
+        count++;
+    }
+    laik_log(1, "TCP2 syncing KVS '%s' with %d own changes", kvs->name, count);
+
+    // must not be in middle of another sync
+    assert(d->kvs == 0);
+    // if we already have permission to send data, it must be for this KVS
+    if (d->kvs_name)
+        assert(strcmp(d->kvs_name, kvs->name) == 0);
+    d->kvs = kvs;
+
+    if (d->mylid > 0) {
+        laik_log(1, "TCP2 waiting for allowance to send changes");
+        while(d->kvs_name == 0)
+            run_loop(d);
+        // this must be allowance to send changes for same KVS
+        assert(strcmp(kvs->name, d->kvs_name) == 0);
+
+        sprintf(msg, "kvs changes %d", count);
+        send_cmd(d, 0, msg);
+        for(unsigned int i = 0; i < kvs->used; i++) {
+            if (!kvs->entry[i].updated) continue;
+            sprintf(msg, "kvs data %s %s",
+                    kvs->entry[i].key, kvs->entry[i].value);
+            send_cmd(d, 0, msg);
+        }
+        // all changes sent, remove own permission
+        // (needs to be done here, as we may receive next allowance
+        //  before end of sync, which would trigger assertion)
+        free(d->kvs_name);
+        d->kvs_name = 0;
+        // wait for all changes being send by LID 0
+        d->kvs_changes = -1;
+        d->kvs_received = 0;
+        while((d->kvs_changes < 0) || (d->kvs_received < d->kvs_changes))
+            run_loop(d);
+        laik_log(1, "TCP2 synced %d changes for KVS %s",
+                d->kvs_changes, kvs->name);
+        d->kvs = 0;
+        return;
+    }
+
+    // master
+
+    for(int lid = 1; lid <= d->maxid; lid++) {
+        sprintf(msg, "kvs allow %s", kvs->name);
+        send_cmd(d, lid, msg);
+
+        // wait for changes from LID <lid>
+        d->kvs_changes = -1;
+        d->kvs_received = 0;
+        while((d->kvs_changes < 0) || (d->kvs_received < d->kvs_changes))
+            run_loop(d);
+        laik_log(1, "TCP2 got %d changes for KVS %s from LID %d",
+                d->kvs_changes, kvs->name, lid);
+    }
+    count = 0;
+    for(unsigned int i = 0; i < kvs->used; i++) {
+        if (!kvs->entry[i].updated) continue;
+        count++;
+    }
+    laik_log(1, "TCP2 with %d merged changes", count);
+    sprintf(msg, "kvs changes %d", count);
+    for(int lid = 1; lid <= d->maxid; lid++)
+        send_cmd(d, lid, msg);
+    for(unsigned int i = 0; i < kvs->used; i++) {
+        if (!kvs->entry[i].updated) continue;
+        sprintf(msg, "kvs data %s %s",
+                kvs->entry[i].key, kvs->entry[i].value);
+        for(int lid = 1; lid <= d->maxid; lid++)
+            send_cmd(d, lid, msg);
+    }
+    laik_log(1, "TCP2 synced %d changes for KVS %s",
+            count, kvs->name);
+    d->kvs = 0;
 }
 
 #endif // USE_TCP2
