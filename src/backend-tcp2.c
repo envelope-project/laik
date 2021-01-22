@@ -993,6 +993,10 @@ void process_rbuf(InstData* d, int fd)
             continue;
         }
 
+        if (rbuf[pos2] == 4) { // Ctrl+D: same as "quit"
+            got_cmd(d, fd, "quit", 5);
+            pos1 = pos2+1;
+        }
         if (rbuf[pos2] == 13) {
             // change CR to whitespace (sent by telnet)
             rbuf[pos2] = ' ';
