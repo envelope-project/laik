@@ -167,7 +167,7 @@ Laik_Instance* laik_init_tcp(int* argc, char*** argv)
     if (err != MPI_SUCCESS) laik_tcp_panic(err);
 
     Laik_Instance* inst;
-    inst = laik_new_instance(&laik_backend_tcp, size, rank,
+    inst = laik_new_instance(&laik_backend_tcp, size, rank, 0, 0,
                              processor_name, d, gd);
 
     sprintf(inst->guid, "%d", rank);

@@ -3,6 +3,7 @@
 *.csv
 *.out
 min
+resize
 vsum
 vsum2
 spmv

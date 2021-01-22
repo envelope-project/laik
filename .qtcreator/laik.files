@@ -81,6 +81,8 @@
 
 ../examples/Makefile
 ../examples/.gitignore
+../examples/min.c
+../examples/resize.c
 ../examples/vsum.c
 ../examples/vsum2.c
 ../examples/spmv.c

@@ -8,6 +8,7 @@ EXAMPLES = min vsum vsum2 spmv spmv2 \
     jac1d jac2d jac2d-ser jac3d \
     markov-ser markov markov2 \
     propagation1d propagation2d \
+    resize \
     README-example
 
 LDFLAGS = $(OPT)
@@ -45,6 +46,8 @@ propagation1d: $(SDIR)propagation1d.c $(LAIKLIB)
 
 propagation2d: $(SDIR)propagation2d.c $(LAIKLIB)
 	$(CC) $(CFLAGS) $< $(LAIKLIB) -o $@ -lm
+
+resize: resize.o $(LAIKLIB)
 
 README-example: README-example.o $(LAIKLIB)
 

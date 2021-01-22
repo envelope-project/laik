@@ -345,7 +345,7 @@ Laik_Instance* laik_init_mpi(int* argc, char*** argv)
     snprintf(processor_name + name_len, 15, ":%d", getpid());
 
     Laik_Instance* inst;
-    inst = laik_new_instance(&laik_backend_mpi, size, rank,
+    inst = laik_new_instance(&laik_backend_mpi, size, rank, 0, 0,
                              processor_name, d, gd);
 
     sprintf(inst->guid, "%d", rank);

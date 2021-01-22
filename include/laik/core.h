@@ -58,6 +58,7 @@ Laik_Instance* laik_init(int* argc, char*** argv);
 // allocate space for a new LAIK instance.
 // not to be used directly, but called from backend initialization
 Laik_Instance* laik_new_instance(const Laik_Backend* b, int size, int myid,
+                                 int epoch, int phase,
                                  char* location, void* data, void *gdata);
 
 //! shut down communication and free resources of this instance
@@ -76,8 +77,19 @@ Laik_Group* laik_create_group(Laik_Instance*, int maxsize);
  * backend are active. LAIK applications can mark processes inactive
  * by collectively calling laik_set_world giving a group not containing
  * these processes.
+ *
+ * This increments an internal reference counter for the group to keep
+ * it valid. If you do not need the group any more, call laik_release_group().
+ * Note: groups are immutable. On each change of world, a new group is created.
  */
 Laik_Group* laik_world(Laik_Instance* i);
+
+/**
+ * Ensure that the application will not use the given group any longer.
+ * This allows to free group resources if no process and neither LAIK internally
+ * needs the group anymore (all LAIK objects depending on the group are removed)
+ */
+void laik_release_group(Laik_Group* g);
 
 /**
  * Specify a new group of active processes for this instance
@@ -102,6 +114,12 @@ int laik_size(Laik_Group*);
 //! Return the id of the calling process in a LAIK process group
 int laik_myid(Laik_Group*);
 
+//! Return current program phase, important for new joining processes
+int laik_phase(Laik_Instance*);
+
+//! Return instance epoch, incremented at every world size change
+int laik_epoch(Laik_Instance*);
+
 //! Create a clone of process group
 Laik_Group* laik_clone_group(Laik_Group* g);
 
@@ -109,16 +127,26 @@ Laik_Group* laik_clone_group(Laik_Group* g);
 Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
 
 /**
- * Create group by growing a given group with new about-to-join processes
- * being identified locally by the communication backends of the given group.
+ * Allow LAIK to remove/add processes to current world.
+ * Reasons for changes may be external requests to remove processes
+ * or new processes wanting to join.
  *
- * This function needs to be called by all processes in the given group.
- * It will wait for at least <min> processes to join and will add at most
- * <max> processes, adding them only if their location matches <match>.
- * To finally add them to the active processes of this LAIK instance, call
- * laik_set_world with the returned group.
+ * On change, a new process group reflecting the changes is created,
+ * the instance world handle (returned from laik_world) is set to this
+ * new group, and the new group is returned. The old world group is
+ * still valid, but it is target to garbage collection if the application
+ * or other internal LAIK objects do not refer it.
+ * Changing the instance world handle triggers an increment of the
+ * internal epoch counter (returned from laik_epoch).
+ * If no change happens, the old world is returned.
+ *
+ * The given <phase> will be passed to new joining processes which can
+ * request the phase via laik_phase() after LAIK initialzation.
+ * This tells new processes where to start and join computation.
+ *
+ * This function needs to be called by all processes in the world group.
  */
-Laik_Group* laik_new_joining_group(Laik_Group* g, int min, int max, char* match);
+Laik_Group* laik_allow_world_resize(Laik_Instance* instance, int phase);
 
 // get location ID from process ID in given group
 int laik_group_locationid(Laik_Group *group, int id);

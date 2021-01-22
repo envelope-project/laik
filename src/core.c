@@ -131,6 +131,17 @@ int laik_myid(Laik_Group* g)
     return g->myid;
 }
 
+int laik_phase(Laik_Instance* i)
+{
+    return i->phase;
+}
+
+int laik_epoch(Laik_Instance* i)
+{
+    return i->epoch;
+}
+
+
 void laik_finalize(Laik_Instance* inst)
 {
     laik_log(1, "finalizing...");
@@ -175,7 +186,7 @@ char* laik_mylocation(Laik_Instance* inst)
 
 // allocate space for a new LAIK instance
 Laik_Instance* laik_new_instance(const Laik_Backend* b,
-                                 int size, int myid,
+                                 int size, int myid, int epoch, int phase,
                                  char* location, void* data, void *gdata)
 {
     Laik_Instance* instance;
@@ -187,6 +198,8 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
 
     instance->backend = b;
     instance->backend_data = data;
+    instance->epoch = epoch;
+    instance->phase = phase;
     instance->locations = size;    // initial number of locations
     instance->mylocationid = myid; // initially, myid is my locationid
     instance->mylocation = strdup(location);
@@ -292,6 +305,10 @@ Laik_Group* laik_create_group(Laik_Instance* i, int maxsize)
     g->fromParent = g->toParent + maxsize;
     g->locationid = g->fromParent + maxsize;
 
+    g->rc_app = 0;
+    g->rc_others = 0;
+    g->rc_ownprocess = 0;
+
     i->group_count++;
     return g;
 }
@@ -303,7 +320,15 @@ Laik_Instance* laik_inst(Laik_Group* g)
 
 Laik_Group* laik_world(Laik_Instance* i)
 {
-    return i->world;
+    Laik_Group* g = i->world;
+    g->rc_app = 1;
+    return g;
+}
+
+void laik_release_group(Laik_Group* g)
+{
+    g->rc_app = 0;
+    // TODO: free if other RCs are zero
 }
 
 void laik_set_world(Laik_Instance* i, Laik_Group* newworld)
@@ -311,8 +336,13 @@ void laik_set_world(Laik_Instance* i, Laik_Group* newworld)
     // TODO: check that removed processes do not appear in any
     //       active group of this instance
 
+    if (i->world == newworld) return;
+
     assert(newworld->inst == i);
+    newworld->rc_ownprocess++; // inc refcounter: used as world
+
     i->world = newworld;
+    i->epoch++;
 }
 
 // create a clone of <g>, derived from <g>.
@@ -375,14 +405,12 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
     return g2;
 }
 
-Laik_Group* laik_new_joining_group(Laik_Group* g, int min, int max, char* match)
+Laik_Group* laik_allow_world_resize(Laik_Instance* instance, int phase)
 {
-    (void)match;
-    (void)max;
+    // TODO: check backend for resize wish
 
-    // TOOD: for now, just return given group and check that we do not have to grow
-    assert(min == 0);
-    return g;
+    instance->phase = phase;
+    return instance->world;
 }
 
 

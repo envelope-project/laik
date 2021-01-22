@@ -42,6 +42,10 @@ struct _Laik_Group {
     int* toParent;   // maps process indexes in this group to indexes in parent
     int* fromParent; // maps parent process indexes to indexes in this group
     int* locationid; // maps process indexes to location IDs they are bound to
+
+    int rc_app;        // used by application?
+    int rc_ownprocess; // refererence counter in own process
+    int rc_others;     // sum of ref counters of other active processes
 };
 
 
@@ -52,8 +56,12 @@ struct _Laik_Instance {
     char* mylocation;
     char guid[64];
 
-    // current world, may change
+    // handle to current world, may change (groups themselves are immutable)
     Laik_Group* world;
+    // epoch counter, incremented when a new world is activated with a size change
+    int epoch;
+    // compute phase, for new processes to know where to start (defaults to 0)
+    int phase;
 
     // KV store for exchanging location information
     Laik_KVStore* locationStore;

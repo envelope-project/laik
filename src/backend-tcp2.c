@@ -1542,7 +1542,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         world_size = d->peers + 1;
     }
 
-    instance = laik_new_instance(&laik_backend, world_size, d->mylid, location, d, 0);
+    instance = laik_new_instance(&laik_backend, world_size, d->mylid, 0, 0, location, d, 0);
     laik_log(2, "TCP2 backend initialized (location '%s', rank %d/%d, listening at %d, flags: %c)\n",
              location, d->mylid, world_size, d->listenport, d->accept_bin_data ? 'b':'-');
 
