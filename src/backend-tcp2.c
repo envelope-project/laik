@@ -555,7 +555,9 @@ void got_data(InstData* d, int lid, char* msg)
 
 void got_register(InstData* d, int fd, int lid, char* msg)
 {
-    // register <location> <host> <port>
+    // register <location> [<host> [<port> [<flags>]]]
+    //  if <host> not given or set to "-": not possible to connect to this peer
+    //  if <port> not given: assume default
 
     // ignore if not master
     if (d->mylid != 0) {
@@ -571,10 +573,25 @@ void got_register(InstData* d, int fd, int lid, char* msg)
     char cmd[20], l[50], h[50], flags[5];
     int p, res;
     res = sscanf(msg, "%20s %50s %50s %d %4s", cmd, l, h, &p, flags);
-    if (res < 4) {
+    if (res < 2) {
         laik_log(LAIK_LL_Warning, "cannot parse register command '%s'; ignoring", msg);
         return;
     }
+    if (res == 2) {
+        // no host and port given, set to "-", which means "not possible to reconnect"
+        strcpy(h, "-");
+        p = -1; // invalid
+    }
+    if (res == 3) {
+        // no port given, assume default
+        p = TCP2_PORT;
+    }
+
+    if (h[0] == '-' && h[1] == 0) {
+        // host is "-": not possible to reconnect
+        p = -1;
+    }
+
     bool accepts_bin_data = false;
     if (res == 5) {
         // parse optional flags
@@ -675,7 +692,7 @@ void got_help(InstData* d, int fd, int lid)
     send_cmd(d, lid, "#  id <id> <loc> <host> <port> <flags> : announce location id info");
     send_cmd(d, lid, "#  myid <id>                    : identify your location id");
     send_cmd(d, lid, "#  phase <phase>                : announce current phase");
-    send_cmd(d, lid, "#  register <loc> <host> <port> [<flags>] : request assignment of id");
+    send_cmd(d, lid, "#  register <loc> [<host> [<port> [<flags>]]] : request assignment of id");
     send_cmd(d, lid, "#  kvs allow <name>             : allow to send changes for KVS");
     send_cmd(d, lid, "#  kvs changes <count>          : announce number of changes for KVS");
     send_cmd(d, lid, "#  kvs data <key> <value>       : send changed KVS entry");
