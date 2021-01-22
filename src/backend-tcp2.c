@@ -906,6 +906,7 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     int lid = d->fds[fd].lid;
     laik_log(1, "TCP2 Got cmd '%s' (len %d) from LID %d (FD %d)\n",
             msg, len, lid, fd);
+    if (len == 0) return;
 
     // first part of commands are accepted without assigned ID
     switch(msg[0]) {
@@ -1040,13 +1041,15 @@ void got_bytes(InstData* d, int fd)
     if (len == 0) {
         // other side closed connection
 
-        // process left-over commands, add NL for last command to process
-        rbuf[used] = '\n';
-        process_rbuf(d, fd);
-        assert(d->fds[fd].rbuf_used == 0);
+        if (used > 0) {
+            // process left-over commands, add NL for last command to process
+            rbuf[used] = '\n';
+            d->fds[fd].rbuf_used++;
+            process_rbuf(d, fd);
+        }
 
-        laik_log(1, "TCP2 FD %d closed (peer LID %d)\n",
-                 fd, d->fds[fd].lid);
+        laik_log(1, "TCP2 FD %d closed (peer LID %d, %d bytes unprocessed)\n",
+                 fd, d->fds[fd].lid, d->fds[fd].rbuf_used);
 
         close(fd);
         rm_rfd(d, fd);
@@ -1056,9 +1059,9 @@ void got_bytes(InstData* d, int fd)
     if (laik_log_begin(1)) {
         char lstr[100];
         int i, o;
-        o = sprintf(lstr, "%02x", rbuf[used]);
+        o = sprintf(lstr, "%02x", (unsigned char) rbuf[used]);
         for(i = 1; (i < len) && (i < 8); i++)
-            o += sprintf(lstr + o, " %02x", rbuf[used + i]);
+            o += sprintf(lstr + o, " %02x", (unsigned char) rbuf[used + i]);
         if (i < len) sprintf(lstr + o, "...");
         assert(o < 100);
         laik_log_flush("TCP2 got_bytes(FD %d, peer LID %d, used %d): read %d bytes (%s)\n",
