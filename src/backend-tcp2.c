@@ -281,6 +281,53 @@ char* istr(int dims, Laik_Index* idx)
     return str;
 }
 
+static
+char* get_statestring(PeerState st)
+{
+    assert(st != PS_Invalid);
+
+    switch(st) {
+    case PS_Unknown:
+        // accepted connection, may be active peer or not registered
+        return "unknown";
+
+    case PS_BeforeReg:
+        // peer/master: about to register
+        return "about to register";
+
+    case PS_RegReceived:
+        // master peer: received registration request, in wait queue
+        return "registration started, waiting";
+
+    case PS_RegAccepted:
+        // master peer: peer accepts config / peer: got my id, in reg
+        return "registration accepted, in info exchange";
+
+    case PS_RegFinishing:
+       // master peer: all config sent, waiting for confirm from peer
+       return "registration about to finish";
+
+    case PS_RegFinished:
+        // master peer: received peer confirmation, about to make active
+        return "";
+
+    case PS_InStartup:
+        // master: in startup handshake, waiting for enough peers to join
+        return "in startup phase";
+
+    case PS_NoConnect:
+          // peer: no permission for direct connection (yet)
+          return "not ready for direct connections";
+
+    case PS_Ready:
+        // peer: ready for connect/commands/data, control may be in application
+        return "ready";
+
+    default: break;
+    }
+    assert(0);
+}
+
 
 // event loop functions
 
@@ -779,9 +826,10 @@ void got_status(InstData* d, int fd, int lid)
     if (lid == -1) lid = -fd;
     send_cmd(d, lid, "# Processes:");
     for(int i = 0; i <= d->maxid; i++) {
-        sprintf(msg, "#  LID %2d loc '%s' at %s port %d flags %c", i,
+        sprintf(msg, "#  LID %2d loc '%s' at %s port %d flags %c, state: '%s'", i,
                 d->peer[i].location, d->peer[i].host, d->peer[i].port,
-                d->peer[i].accepts_bin_data ? 'b':'-');
+                d->peer[i].accepts_bin_data ? 'b':'-',
+                get_statestring((i == d->mylid) ? d->mystate : d->peer[i].state));
         send_cmd(d, lid, msg);
     }
 }
