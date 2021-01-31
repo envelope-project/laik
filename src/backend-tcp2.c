@@ -16,25 +16,21 @@
  */
 
 /*
- * Planned design (to be implemented / updated)
+ * Design
  *
  * The protocol used at TCP level among processes should enable easy debugging
  * and playing with ideas (eg. via 'nc'/'telnet'), performance is low priority.
- * Thus, it is based on text and line separation.
+ * Thus, it is based on text and line separation. Comment lines starting with
+ * "# ..." are possible and ignored.
  *
- * When messages end in <value> at end of line, it can be send as
- * - "+<payload length in bytes> R\n<raw bytes>\n"
- * - "+<payload lentgh in bytes> H\n" and multiple lines of
- *   " [(<offset>)] [<hex>*] [# <comment>]\n"
- * - for data of specific type, <hex> can be replaced by element value converted
- *   into ASCII representation, providing the element type instead of H, e.g.
- *   D/F/U32/U64/I32/I64 for double, float, (un)signed 32/64 bit, respectively
- *
- * Messages can be preceded by lines starting with "# ...\n" as comments, which
- * are ignored but may be written as log at receiver side for debugging
+ * For acceptable performance, a binary mode for data is supported but needs
+ * to be announced at registration time, so it is easy to fall back to ASCII
+ * with nc/telnet. Also, data packages are only accepted if permission is given
+ * by receiver. This enables immediate consumption of all messages without
+ * blocking.
  *
  * Startup:
- * - home process (location ID 0) is the process started on LAIK_TCP2_HOST
+ * - master process (location ID 0) is the process started on LAIK_TCP2_HOST
  *   (default: localhost) which aquired LAIK_TCP2_PORT for listening
  * - other processes register with home process to join
  * - home process waits for LAIK_SIZE (default: 1) processes to join before
@@ -50,9 +46,11 @@
  *     "id <id> <location> <host> <port>\n"
  * - afterwards, home sends the following message types in arbitrary order:
  *   - further ID lines, for each registered process
- *   - config lines "config <key> <value>\n"
+ *   - config lines "config <key> <value>\n" (TODO)
  *   - serialized objects "object <type> <name> <version> <refcount> <value>\n"
- * - at end: home sends current compute phase "phase <phaseid> <iteration>\n"
+ * - at end: master sends compute phase and epoch: "phase <phaseid> <epoch>\n"
+ *   - the epoch increments for each process world change
+ *   - the phase id allows new joining processes to know where to start
  * - give back control to application, connection can stay open
  *
  * Elasticity:
@@ -64,15 +62,17 @@
  *   - ids to be removed: "remove <id>"
  *   - finishes with "done"
  * - control given back to application, to process resize request
- * 
+ *
  * Data exchange:
  * - always done directly between 2 processes, using any existing connection
  * - if no connection exists yet
  *     - receiver always waits to be connected
- *     - sender connects to listening port of receiver, sends "id <id>\n"
+ *     - sender connects to listening port of receiver, sends "myid <id>\n"
+ * - when receiver reaches application phase where it wants to receive the data,
+ *   it give permission via "allowdata"
  * - sender sends "data <container name> <start index> <element count> <value>"
  * - connections can be used bidirectionally
-  * 
+ *
  * Sync:
  * - two phases:
  *   - send changed objects to home process
