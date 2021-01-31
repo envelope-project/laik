@@ -29,29 +29,53 @@
  * by receiver. This enables immediate consumption of all messages without
  * blocking.
  *
- * Startup:
+ * Startup (master)
  * - master process (location ID 0) is the process started on LAIK_TCP2_HOST
- *   (default: localhost) which aquired LAIK_TCP2_PORT for listening
- * - other processes register with home process to join
- * - home process waits for LAIK_SIZE (default: 1) processes to join before
- *   finishing initialization and giving control to application
+ *   (default: localhost) which successfully opens LAIK_TCP2_PORT for listening
+ * - other processes (either not on LAIK_TCP2_HOST, or not able to successfully
+ *   open LAIK_TCP2_PORT for listening) will connect to LAIK_TCP2_PORT on
+ *   LAIK_TCP2_HOST, and after connection acceptance, they send "register"
+ *   command to master
+ * - master process waits for (LAIK_SIZE-1) processes to join (default for
+ *   LAIK_SIZE is 1, ie. master does not wait for anybody to join) before
+ *   finishing initialization and giving control back to application
+ * - when the application of LAIK master calls into the backend again for
+ *   data exchange, KVS sync, or resize requests, it also handles connection
+ *   requests and commands from other processes, including requests to join by
+ *   sending a register command. Registration requests will be appended to a
+ *   waiting queue, with registration proceeding when LAIK calls resize().
  *
- * Registration:
+ * Registration (non-master)
+ * - may start with trying to become master by opening LAIK_TCP2_PORT for
+ *   listing, but this fails (if not, see startup above)
  * - open own listening port (usually randomly assigned by OS) at <myport>
- * - connect to home process; this may block until home can accept connections
- * - send "register <mylocation> <myhost> <myport>\n"
- *     - <mylocation> can be any string, but should be unique
- *     - if <myhost> is not specified, it is identified as connecting peer
- * - home sends an ID line for the new assigned id of registering process
- *     "id <id> <location> <host> <port>\n"
- * - afterwards, home sends the following message types in arbitrary order:
- *   - further ID lines, for each registered process
- *   - config lines "config <key> <value>\n" (TODO)
- *   - serialized objects "object <type> <name> <version> <refcount> <value>\n"
- * - at end: master sends compute phase and epoch: "phase <phaseid> <epoch>\n"
+ *   for later peer-to-peer connection requests and data transfers
+ * - connect to master process; this may block (and time out) until master
+ *   can accept connections (only if control is given to backend)
+ * - send "register <mylocation> <myhost> <myport>\n" to master
+ *     - <mylocation> is forwarded to LAIK as location string of joining process
+ *       (can be any string, but must be unique for registration to succeed)
+ *     - <myhost>/<myport> is used to allow direct connections for peer-to-peer
+ *       transfer between active LAIK processes (TODO: data forwarding via master)
+ * - master puts registrating process into wait queue for join wishes, and
+ *   registration proceeds if either master did not yet finish startup, or when
+ *   backend in master is called via resize() request to allow processes to join
+ * - master sends an "id" line for the new assigned location ID of registering
+ *   process "id <id> <location> <host> <port>\n"
+ * - afterwards, master sends the following commands in arbitrary order:
+ *   - further "id" lines, for each currently active process
+ *   - LAIK config and serialized LAIK objects as KVS entries (see KVS sync)
+ * - at end, master finishes registration setup by asking joining process for
+ *   confirmation of reception of sent commands via "ack req\n"
+ * - registered process answers with "ack ok\n", which also tells master
+ *   that registered process is ready for peer connections from sent id lines
+ * - master sends compute phase and epoch to just registered process via
+ *   "phase <phaseid> <epoch>\n", which allows process to start peer connections
  *   - the epoch increments for each process world change
  *   - the phase id allows new joining processes to know where to start
- * - give back control to application, connection can stay open
+ *   - in startup phase, master only can do this after getting the permission
+ *     from each registered process that peer connections are accepted (via "ack ok")
+ * - on reception of "phase", registered processes give back control to application
  *
  * Elasticity:
  * - LAIK checks backend for processes wanting to join at compute phase change
@@ -73,7 +97,7 @@
  * - sender sends "data <container name> <start index> <element count> <value>"
  * - connections can be used bidirectionally
  *
- * Sync:
+ * KVS Sync:
  * - two phases:
  *   - send changed objects to home process
  *   - receiving changes from home process
@@ -136,10 +160,24 @@ static Laik_Instance* instance = 0;
 
 // structs for instance
 
+typedef enum _PeerState {
+    PS_Invalid = 0,
+    PS_Unknown,        // accepted connection, may be active peer or not registered
+    PS_BeforeReg,      // peer/master: about to register
+    PS_RegReceived,    // master peer: received registration request, in wait queue
+    PS_RegAccepted,    // master peer: peer accepts config / peer: got my id, in reg
+    PS_RegFinishing,   // master peer: all config sent, waiting for confirm from peer
+    PS_RegFinished,    // master peer: received peer confirmation, about to make active
+    PS_InStartup,      // master: in startup handshake, waiting for enough peers to join
+    PS_NoConnect,      // peer: no permission for direct connection (yet)
+    PS_Ready,          // peer: ready for connect/commands/data, control may be in application
+} PeerState;
+
 // communicating peer
 // can be connected (fd >=0) or not
-typedef struct {
-    int fd;         // -1 if not connected
+typedef struct _Peer {
+    PeerState state;
+    int fd;         // -1 if no TCP connection existing to peer
     int port;       // port to connect to at host
     char* host;     // remote host, if 0 localhost
     char* location; // location string of peer
@@ -173,6 +211,7 @@ typedef struct {
 } FDState;
 
 struct _InstData {
+    PeerState mystate;
     int mylid;        // my location ID
     char* host;       // my hostname
     char* location;   // my location
@@ -194,7 +233,8 @@ struct _InstData {
     int kvs_changes; // number of changes expected
     int kvs_received; // counter for incoming changes
 
-    int peers;        // number of active peers, can be 0 only at master
+    int peers;        // number of known peers (= valid entries in peer entry)
+    int readyPeers;   // number of peers in Ready state
     Peer peer[0];
 };
 
@@ -332,6 +372,7 @@ void ensure_conn(InstData* d, int lid)
     assert(lid < MAX_PEERS);
     if (d->peer[lid].fd >= 0) return; // connected
 
+    assert(d->peer[lid].state == PS_Ready);
     assert(d->peer[lid].port >= 0);
     char port[20];
     sprintf(port, "%d", d->peer[lid].port);
@@ -599,6 +640,9 @@ void got_register(InstData* d, int fd, int lid, char* msg)
             if (flags[i] == 'b') accepts_bin_data = true;
     }
 
+    // TODO: accept registration requests after startup
+    assert(d->mystate == PS_InStartup);
+
     lid = ++d->maxid;
     assert(fd >= 0);
     d->fds[fd].lid = lid;
@@ -607,6 +651,7 @@ void got_register(InstData* d, int fd, int lid, char* msg)
              lid, l, h, p, accepts_bin_data ? 'b' : '-');
 
     assert(d->peer[lid].port == -1);
+    d->peer[lid].state = PS_RegAccepted;
     d->peer[lid].fd = fd;
     d->peer[lid].host = strdup(h);
     d->peer[lid].location = strdup(l);
@@ -689,13 +734,15 @@ void got_help(InstData* d, int fd, int lid)
     send_cmd(d, lid, "# Protocol messages:");
     send_cmd(d, lid, "#  allowsend <count> <esize>    : give send right");
     send_cmd(d, lid, "#  data <len> [pos] <hex> ...   : data from a LAIK container");
+    send_cmd(d, lid, "#  getready                     : request to finish registration");
     send_cmd(d, lid, "#  id <id> <loc> <host> <port> <flags> : announce location id info");
-    send_cmd(d, lid, "#  myid <id>                    : identify your location id");
-    send_cmd(d, lid, "#  phase <phase>                : announce current phase");
-    send_cmd(d, lid, "#  register <loc> [<host> [<port> [<flags>]]] : request assignment of id");
     send_cmd(d, lid, "#  kvs allow <name>             : allow to send changes for KVS");
     send_cmd(d, lid, "#  kvs changes <count>          : announce number of changes for KVS");
     send_cmd(d, lid, "#  kvs data <key> <value>       : send changed KVS entry");
+    send_cmd(d, lid, "#  myid <id>                    : identify your location id");
+    send_cmd(d, lid, "#  ok                           : positive response to a request");
+    send_cmd(d, lid, "#  phase <phase>                : announce current phase");
+    send_cmd(d, lid, "#  register <loc> [<host> [<port> [<flags>]]] : request assignment of id");
     send_cmd(d, lid, "# Flags:");
     send_cmd(d, lid, "#  b                            : process accepts binary data format");
 }
@@ -764,8 +811,10 @@ void got_id(InstData* d, int lid, char* msg)
     assert((lid >= 0) && (lid < MAX_PEERS));
     if (d->mylid < 0) {
         // is this my location id?
-        if (strcmp(d->location, l) == 0)
+        if (strcmp(d->location, l) == 0) {
             d->mylid = lid;
+            d->mystate = PS_RegAccepted; // registration wish accepted by master
+        }
     }
     if (d->peer[lid].location != 0) {
         // already known, announced by master
@@ -775,6 +824,7 @@ void got_id(InstData* d, int lid, char* msg)
         assert(d->peer[lid].port == p);
     }
     else {
+        d->peer[lid].state = PS_NoConnect; // got peer info, but not allowed to connect yet
         d->peer[lid].host = strdup(h);
         d->peer[lid].location = strdup(l);
         d->peer[lid].port = p;
@@ -786,7 +836,7 @@ void got_id(InstData* d, int lid, char* msg)
         if (lid != d->mylid) d->peers++;
         if (lid > d->maxid) d->maxid = lid;
     }
-    laik_log(1, "TCP2 seen %sLID %d (location %s, at %s, port %d, flags %c), active peers %d",
+    laik_log(1, "TCP2 seen %sLID %d (location %s, at %s, port %d, flags %c), known peers %d",
              (lid == d->mylid) ? "my ":"",
              lid, l, h, p, accepts_bin_data ? 'b':'-', d->peers);
 }
@@ -914,6 +964,52 @@ void got_kvs(InstData* d, int lid, char* msg)
     }
 }
 
+void got_getready(InstData* d, int lid, char* msg)
+{
+    if (lid != 0) {
+        laik_log(LAIK_LL_Warning, "ignoring 'getready' from LID %d", lid);
+        return;
+    }
+
+    char cmd[20];
+    if (sscanf(msg, "%15s", cmd) < 1) {
+        laik_log(LAIK_LL_Warning, "cannot parse 'getready' command '%s'; ignoring", msg);
+        return;
+    }
+
+    if (d->mystate != PS_RegAccepted) {
+        laik_log(LAIK_LL_Warning, "ignoring 'getready', already ready");
+        return;
+    }
+
+    laik_log(1, "TCP2 got 'getready' from LID %d", lid);
+
+    sprintf(cmd, "ok");
+    send_cmd(d, lid, cmd);
+    d->mystate = PS_Ready;
+
+    d->exit = 1;
+}
+
+void got_ok(InstData* d, int lid, char* msg)
+{
+    char cmd[20];
+    if (sscanf(msg, "%15s", cmd) < 1) {
+        laik_log(LAIK_LL_Warning, "cannot parse 'ok' command '%s'; ignoring", msg);
+        return;
+    }
+
+    if ((d->mylid == 0) && (d->peer[lid].state == PS_RegFinishing)) {
+        laik_log(1, "TCP2 got 'ok' from LID %d: registration done", lid);
+
+        d->peer[lid].state = PS_Ready;
+        d->readyPeers++;
+        d->exit = 1;
+        return;
+    }
+
+    laik_log(LAIK_LL_Warning, "ignoring 'ok' from LID %d", lid);
+}
 
 // a command was received from a peer, and should be processed
 // return false if command cannot be processed yet
@@ -953,10 +1049,12 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     case 'a': got_allowsend(d, lid, msg); return; // allowsend <count> <elemsize>
     case 'd': got_data(d, lid, msg); return; // data <len> [(<pos>)] <hex> ...
     case 'k': got_kvs(d, lid, msg); return; // kvs ...
+    case 'g': got_getready(d, lid, msg); return; // getready
+    case 'o': got_ok(d, lid, msg); return; // getready
     default: break;
     }
 
-    laik_log(LAIK_LL_Warning, "TCP2 got from lID %d unknown msg '%s'", lid, msg);
+    laik_log(LAIK_LL_Warning, "TCP2 got from LID %d unknown msg '%s'", lid, msg);
 }
 
 void process_rbuf(InstData* d, int fd)
@@ -1167,8 +1265,10 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         laik_panic("TCP2 Out of memory allocating InstData object");
         exit(1); // not actually needed, laik_panic never returns
     }
-    d->peers = 0; // zero active peers
+    d->peers = 0; // zero known peers
+    d->readyPeers = 0; // zero ready peers
     for(int i = 0; i < MAX_PEERS; i++) {
+        d->peer[i].state = PS_Invalid;
         d->peer[i].port = -1; // unknown peer
         d->peer[i].fd = -1;   // not connected
         d->peer[i].host = 0;
@@ -1258,13 +1358,19 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
 
     // now we know if we are master: init peer with id 0
     if (d->mylid == 0) {
-        // we are master: use real host name, will be sent to others
+        // we are master
+        d->mystate = PS_InStartup;
+        d->peer[0].state = PS_InStartup;
+        // use real host name, will be sent to others
         d->peer[0].host = host;
         d->peer[0].port = home_port;
         d->peer[0].location = d->location;
         d->peer[0].accepts_bin_data = d->accept_bin_data;
     }
     else {
+        // we are non-master: we want to register with master
+        d->mystate = PS_BeforeReg;
+        d->peer[0].state = PS_Ready; // we assume master to accept reg requests
         // only to be able to connect to master, will be updated from master
         d->peer[0].host = home_host;
         d->peer[0].port = home_port;
@@ -1292,9 +1398,22 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
             while(d->peers + 1 < world_size)
                 run_loop(d);
 
-            // send all peers to start at phase 0
-            for(int i = 1; i <= d->maxid; i++)
+            // notify peers to get ready, and wait for them to become ready
+            // (ready means they accept direct connections)
+            for(int i = 1; i <= d->maxid; i++) {
+                assert(d->peer[i].state == PS_RegAccepted);
+                d->peer[i].state = PS_RegFinishing;
+                send_cmd(d, i, "getready");
+            }
+            while(d->readyPeers + 1 < world_size)
+                run_loop(d);
+            laik_log(1, "TCP2 master: %d peers registered, startup done\n", d->readyPeers);
+
+            // notify all peers to start at phase 0
+            for(int i = 1; i <= d->maxid; i++) {
+                assert(d->peer[i].state == PS_Ready);
                 send_cmd(d, i, "phase 0");
+            }
         }
     }
     else {
@@ -1303,6 +1422,15 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         sprintf(msg, "register %.30s %.30s %d %s",
                 location, host, d->listenport, d->accept_bin_data ? "bin":"");
         send_cmd(d, 0, msg);
+        while(d->mystate != PS_Ready)
+            run_loop(d);
+
+        // all seen processes are ready (also master and myself): can make direct connections
+        for(int i = 0; i <= d->maxid; i++) {
+            d->peer[i].state = PS_Ready;
+        }
+
+        // wait for active phase
         while(d->phase == -1)
             run_loop(d);
         world_size = d->peers + 1;
