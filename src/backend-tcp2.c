@@ -163,6 +163,7 @@ static Laik_Instance* instance = 0;
 typedef enum _PeerState {
     PS_Invalid = 0,
     PS_Unknown,        // accepted connection, may be active peer or not registered
+    PS_DetachReceived, // peer/master: detach command received, queued
     PS_BeforeReg,      // peer/master: about to register
     PS_RegReceived,    // master peer: received registration request, in wait queue
     PS_RegAccepted,    // master peer: peer accepts config / peer: got my id, in reg
@@ -202,8 +203,12 @@ typedef struct _Peer {
 // registrations for active fds in event loop
 typedef void (*loop_cb_t)(InstData* d, int fd);
 typedef struct {
-    int lid;          // location ID of peer
+    PeerState state;  // state if no LID assigned
+    int lid;          // LID (location id) of peer
     loop_cb_t cb;
+    char* cmd;        // unprocessed command, can be 'register' or 'remove'
+
+    // receive buffer
     int rbuf_used;
     char* rbuf;
     // if > 0 we are in binary data receive mode, outstanding bytes
@@ -291,6 +296,10 @@ char* get_statestring(PeerState st)
         // accepted connection, may be active peer or not registered
         return "unknown";
 
+    case PS_DetachReceived:
+        // master/peer: received detach request, in wait queue
+        return "detach command queued, waiting";
+
     case PS_BeforeReg:
         // peer/master: about to register
         return "about to register";
@@ -340,6 +349,7 @@ void add_rfd(InstData* d, int fd, loop_cb_t cb)
     if (fd > d->maxfds) d->maxfds = fd;
     d->fds[fd].cb = cb;
     d->fds[fd].lid = -1;
+    d->fds[fd].cmd = 0; // no unprocessed command
     d->fds[fd].rbuf = malloc(RBUF_LEN);
     d->fds[fd].rbuf_used = 0;
     d->fds[fd].outstanding_bin = 0;
@@ -354,6 +364,7 @@ void rm_rfd(InstData* d, int fd)
     if (fd == d->maxfds)
         while(!FD_ISSET(d->maxfds, &d->rset)) d->maxfds--;
     d->fds[fd].cb = 0;
+    d->fds[fd].state = PS_Invalid;
     free(d->fds[fd].rbuf);
     d->fds[fd].rbuf = 0;
 }
@@ -658,6 +669,17 @@ void got_register(InstData* d, int fd, int lid, char* msg)
         return;
     }
 
+    if (d->mystate != PS_InStartup) {
+        // after startup: process later on resize()
+        assert(d->mystate == PS_Ready);
+        assert(d->fds[fd].cmd == 0);
+
+        d->fds[fd].state = PS_RegReceived;
+        d->fds[fd].cmd = strdup(msg);
+        laik_log(1, "TCP2 queued for later processing: '%s'", msg);
+        return;
+    }
+
     char cmd[20], l[50], h[50], flags[5];
     int p, res;
     res = sscanf(msg, "%20s %50s %50s %d %4s", cmd, l, h, &p, flags);
@@ -686,9 +708,6 @@ void got_register(InstData* d, int fd, int lid, char* msg)
         for(int i = 0; (i < 5) && flags[i]; i++)
             if (flags[i] == 'b') accepts_bin_data = true;
     }
-
-    // TODO: accept registration requests after startup
-    assert(d->mystate == PS_InStartup);
 
     lid = ++d->maxid;
     assert(fd >= 0);
@@ -766,6 +785,17 @@ void got_myid(InstData* d, int fd, int lid, char* msg)
              lid, d->peer[lid].location, fd);
 }
 
+void got_detach(InstData* d, int fd, char* msg)
+{
+    // detach <location pattern>
+
+    assert(d->fds[fd].cmd == 0);
+
+    d->fds[fd].state = PS_DetachReceived;
+    d->fds[fd].cmd = strdup(msg);
+    laik_log(1, "TCP2 queued for later processing: '%s'", msg);
+}
+
 void got_help(InstData* d, int fd, int lid)
 {
     // help
@@ -821,16 +851,40 @@ void got_status(InstData* d, int fd, int lid)
     // status command
     laik_log(1, "TCP2 Sending status becaue of status command");
 
-    char msg[100];
+    char msg[200];
     assert(fd > 0);
     if (lid == -1) lid = -fd;
-    send_cmd(d, lid, "# Processes:");
+
+    send_cmd(d, lid, "# Known peers:");
     for(int i = 0; i <= d->maxid; i++) {
-        sprintf(msg, "#  LID %2d loc '%s' at %s port %d flags %c, state: '%s'", i,
-                d->peer[i].location, d->peer[i].host, d->peer[i].port,
-                d->peer[i].accepts_bin_data ? 'b':'-',
+        sprintf(msg, "#  LID%2d loc '%s' at host '%s' port %d flags %c", i,
+                    d->peer[i].location, d->peer[i].host, d->peer[i].port,
+                    d->peer[i].accepts_bin_data ? 'b':'-');
+        send_cmd(d, lid, msg);
+        if (d->peer[i].fd >= 0) {
+            sprintf(msg, "#        open connection at FD %d", d->peer[i].fd);
+            send_cmd(d, lid, msg);
+        }
+        sprintf(msg, "#        state: '%s'",
                 get_statestring((i == d->mylid) ? d->mystate : d->peer[i].state));
         send_cmd(d, lid, msg);
+    }
+    bool header_sent = false;
+    for(int i = 0; i < MAX_FDS; i++) {
+        if (d->fds[i].state == PS_Invalid) continue;
+        if (d->fds[i].lid >= 0) continue;
+        if (!header_sent) {
+            send_cmd(d, lid, "# Unknown peers:");
+            header_sent = true;
+        }
+        sprintf(msg, "#  at FD%2d%s state '%s'", i,
+                (i == fd) ? " (this connection)":"",
+                get_statestring(d->fds[i].state));
+        send_cmd(d, lid, msg);
+        if (d->fds[i].cmd) {
+            sprintf(msg, "#        queued for processing: '%s'", d->fds[i].cmd);
+            send_cmd(d, lid, msg);
+        }
     }
 }
 
@@ -1073,6 +1127,7 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     switch(msg[0]) {
     case 'r': got_register(d, fd, lid, msg); return; // register <location> <host> <port>
     case 'm': got_myid(d, fd, lid, msg); return; // myid <lid>
+    case 'd': got_detach(d, fd, msg); return; // detach <location pattern>
     case 'h': got_help(d, fd, lid); return;
     case 't': got_terminate(d, fd, lid); return;
     case 'q': got_quit(d, fd, lid); return;
@@ -1246,6 +1301,7 @@ void got_connect(InstData* d, int fd)
     }
 
     add_rfd(d, newfd, got_bytes);
+    d->fds[newfd].state = PS_Unknown;
 
     char str[20];
     if (saddr.sa_family == AF_INET)
@@ -1329,8 +1385,10 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     FD_ZERO(&d->rset);
     d->maxfds = 0;
     d->exit = 0;
-    for(int i = 0; i < MAX_FDS; i++)
+    for(int i = 0; i < MAX_FDS; i++) {
+        d->fds[i].state = PS_Invalid;
         d->fds[i].cb = 0;
+    }
 
     d->host = host;
     d->location = strdup(location);
