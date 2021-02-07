@@ -64,6 +64,9 @@ struct _Laik_Backend {
 
   // log backend-specific action, return true if handled (see laik_log_Action)
   bool (*log_action)(Laik_Action* a);
+
+  // return new group on process size change (global sync)
+  Laik_Group* (*resize)();
 };
 
 

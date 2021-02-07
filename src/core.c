@@ -407,9 +407,19 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)
 
 Laik_Group* laik_allow_world_resize(Laik_Instance* instance, int phase)
 {
-    // TODO: check backend for resize wish
-
     instance->phase = phase;
+
+    if (instance->backend->resize == 0) {
+        // resize not supported by backend
+        return instance->world;
+    }
+
+    Laik_Group* g = (instance->backend->resize)();
+    if (g) {
+        laik_set_world(instance, g);
+        return g;
+    }
+
     return instance->world;
 }
 

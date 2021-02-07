@@ -146,6 +146,7 @@
 // forward decl
 void tcp2_exec(Laik_ActionSeq* as);
 void tcp2_sync(Laik_KVStore* kvs);
+Laik_Group* tcp2_resize();
 
 typedef struct _InstData InstData;
 
@@ -153,7 +154,8 @@ typedef struct _InstData InstData;
 static Laik_Backend laik_backend = {
     .name = "Dynamic TCP2 Backend",
     .exec = tcp2_exec,
-    .sync = tcp2_sync
+    .sync = tcp2_sync,
+    .resize = tcp2_resize
 };
 
 static Laik_Instance* instance = 0;
@@ -172,6 +174,7 @@ typedef enum _PeerState {
     PS_InStartup,      // master: in startup handshake, waiting for enough peers to join
     PS_NoConnect,      // peer: no permission for direct connection (yet)
     PS_Ready,          // peer: ready for connect/commands/data, control may be in application
+    PS_InResize,       // master/peer: in resize mode
 } PeerState;
 
 // communicating peer
@@ -224,6 +227,7 @@ struct _InstData {
     int listenport;   // port we listen at (random unless master)
     int maxid;        // highest seen id
     int phase;        // current phase
+    int epoch;        // current epoch
     bool accept_bin_data; // configured to accept binary data
 
     // event loop
@@ -332,6 +336,10 @@ char* get_statestring(PeerState st)
         // peer: ready for connect/commands/data, control may be in application
         return "ready";
 
+    case PS_InResize:
+        // master/peer: in resize mode
+        return "in resize mode";
+
     default: break;
     }
     assert(0);
@@ -369,6 +377,7 @@ void rm_rfd(InstData* d, int fd)
     d->fds[fd].rbuf = 0;
 }
 
+// run event loop until an event handler asks to exit
 void run_loop(InstData* d)
 {
     d->exit = 0;
@@ -383,6 +392,27 @@ void run_loop(InstData* d)
         }
     }
 }
+
+// handle queued input and return immediatly
+void check_loop(InstData* d)
+{
+    struct timeval tv = {0,0}; // zero timeout: do not block
+
+    while(1) {
+        fd_set rset = d->rset;
+        int ready = select(d->maxfds+1, &rset, 0, 0, &tv);
+        if (ready >= 0) {
+            for(int i = 0; i <= d->maxfds; i++)
+                if (FD_ISSET(i, &rset)) {
+                    assert(d->fds[i].cb != 0);
+                    (d->fds[i].cb)(d, i);
+                }
+        }
+        if (ready == 0) break;
+    }
+}
+
+
 
 
 // helper functions
@@ -669,7 +699,8 @@ void got_register(InstData* d, int fd, int lid, char* msg)
         return;
     }
 
-    if (d->mystate != PS_InStartup) {
+    if ((d->mystate != PS_InStartup) &&
+        (d->mystate != PS_InResize)) {
         // after startup: process later on resize()
         assert(d->mystate == PS_Ready);
         assert(d->fds[fd].cmd == 0);
@@ -811,6 +842,7 @@ void got_help(InstData* d, int fd, int lid)
     send_cmd(d, lid, "# Protocol messages:");
     send_cmd(d, lid, "#  allowsend <count> <esize>    : give send right");
     send_cmd(d, lid, "#  data <len> [pos] <hex> ...   : data from a LAIK container");
+    send_cmd(d, lid, "#  enterresize <phase> <epoch>  : enter resize phase at compute phase/epoch");
     send_cmd(d, lid, "#  getready                     : request to finish registration");
     send_cmd(d, lid, "#  id <id> <loc> <host> <port> <flags> : announce location id info");
     send_cmd(d, lid, "#  kvs allow <name>             : allow to send changes for KVS");
@@ -818,7 +850,7 @@ void got_help(InstData* d, int fd, int lid)
     send_cmd(d, lid, "#  kvs data <key> <value>       : send changed KVS entry");
     send_cmd(d, lid, "#  myid <id>                    : identify your location id");
     send_cmd(d, lid, "#  ok                           : positive response to a request");
-    send_cmd(d, lid, "#  phase <phase>                : announce current phase");
+    send_cmd(d, lid, "#  phase <phase> <epoch>        : announce current phase/epoch");
     send_cmd(d, lid, "#  register <loc> [<host> [<port> [<flags>]]] : request assignment of id");
     send_cmd(d, lid, "# Flags:");
     send_cmd(d, lid, "#  b                            : process accepts binary data format");
@@ -945,7 +977,7 @@ void got_id(InstData* d, int lid, char* msg)
 
 void got_phase(InstData* d, char* msg)
 {
-    // phase <phaseid>
+    // phase <phase> <epoch>
 
     // ignore if master
     if (d->mylid == 0) {
@@ -954,16 +986,48 @@ void got_phase(InstData* d, char* msg)
     }
 
     char cmd[20];
-    int phase;
-    if (sscanf(msg, "%20s %d", cmd, &phase) < 2) {
+    int phase, epoch;
+    if (sscanf(msg, "%20s %d %d", cmd, &phase, &epoch) < 3) {
         laik_log(LAIK_LL_Warning, "cannot parse phase command '%s'; ignoring", msg);
         return;
     }
-    laik_log(1, "TCP2 got phase %d", phase);
+    laik_log(1, "TCP2 got phase %d / epoch %d", phase, epoch);
     d->phase = phase;
+    d->epoch = epoch;
 
     d->exit = 1;
 }
+
+void got_enterresize(InstData* d, int lid, char* msg)
+{
+    // enterresize [<phase> [<epoch>]]
+    char cmd[20];
+    int phase, epoch;
+    int res = sscanf(msg, "%20s %d %d", cmd, &phase, &epoch);
+    if (res < 1) {
+        laik_log(LAIK_LL_Warning, "cannot parse enterresize command '%s'; ignoring", msg);
+        return;
+    }
+    laik_log(1, "TCP2 got info that LID %d is in resize mode", lid);
+
+    if (res < 2) {
+        // no phase given, assume own
+        phase = instance->phase;
+    }
+    if (res < 3) {
+        // no epoch given, assume own
+        epoch = instance->epoch;
+    }
+
+    assert((lid >= 0) && (lid < MAX_PEERS));
+    assert(d->peer[lid].state == PS_Ready);
+    assert(instance->phase == phase);
+    assert(instance->epoch == epoch);
+    d->peer[lid].state = PS_InResize;
+
+    d->exit = 1;
+}
+
 
 void got_allowsend(InstData* d, int lid, char* msg)
 {
@@ -1148,6 +1212,7 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     // second part of commands are accepted only with ID assigned by master
     switch(msg[0]) {
     case 'i': got_id(d, lid, msg); return; // id <lid> <location> <host> <port>
+    case 'e': got_enterresize(d, lid, msg); return; // enterresize <phase> <epoch>
     case 'p': got_phase(d, msg); return; // phase <phaseid>
     case 'a': got_allowsend(d, lid, msg); return; // allowsend <count> <elemsize>
     case 'd': got_data(d, lid, msg); return; // data <len> [(<pos>)] <hex> ...
@@ -1395,6 +1460,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     d->listenfd = -1; // not bound yet
     d->maxid = -1;    // not set yet
     d->phase = -1;    // not set yet
+    d->epoch = -1;    // not set yet
     // if home host is localhost, try to become master (-1: not yet determined)
     d->mylid = check_local(home_host) ? 0 : -1;
     // announce capability to accept binary data? Defaults to yes, can be switched off
@@ -1489,6 +1555,8 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     //  newcomers block until master accepts them
     int world_size = 0; // not detected yet
     if (d->mylid == 0) {
+        // master
+
         // master determines world size
         str = getenv("LAIK_SIZE");
         world_size = str ? atoi(str) : 0;
@@ -1496,7 +1564,9 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
 
         // slot 0 taken by myself
         d->maxid = 0;
+        // we start in phase 0, epoch 0
         d->phase = 0;
+        d->epoch = 0;
 
         if (world_size > 1) {
             laik_log(1, "TCP2 master: waiting for %d peers to join\n", world_size - 1);
@@ -1515,14 +1585,19 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
                 run_loop(d);
             laik_log(1, "TCP2 master: %d peers registered, startup done\n", d->readyPeers);
 
-            // notify all peers to start at phase 0
+            // notify all peers to start at phase 0, epoch 0
             for(int i = 1; i <= d->maxid; i++) {
                 assert(d->peer[i].state == PS_Ready);
-                send_cmd(d, i, "phase 0");
+                send_cmd(d, i, "phase 0 0");
             }
         }
+        // we are ready
+        d->peer[0].state = PS_Ready;
+        d->mystate = PS_Ready;
     }
     else {
+        // non-master
+
         // register with master, get world size
         char msg[100];
         sprintf(msg, "register %.30s %.30s %d %s",
@@ -1542,9 +1617,11 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         world_size = d->peers + 1;
     }
 
-    instance = laik_new_instance(&laik_backend, world_size, d->mylid, 0, 0, location, d, 0);
-    laik_log(2, "TCP2 backend initialized (location '%s', rank %d/%d, listening at %d, flags: %c)\n",
-             location, d->mylid, world_size, d->listenport, d->accept_bin_data ? 'b':'-');
+    instance = laik_new_instance(&laik_backend, world_size, d->mylid,
+                                 d->epoch, d->phase, location, d, 0);
+    laik_log(2, "TCP2 backend initialized (location '%s', rank %d/%d, epoch %d, phase %d, listening at %d, flags: %c)\n",
+             location, d->mylid, world_size,
+             d->epoch, d->phase, d->listenport, d->accept_bin_data ? 'b':'-');
 
     return instance;
 }
@@ -1925,6 +2002,168 @@ void tcp2_sync(Laik_KVStore* kvs)
     laik_log(1, "TCP2 synced %d changes for KVS %s",
             count, kvs->name);
     d->kvs = 0;
+}
+
+// return new group on process size change (global sync)
+Laik_Group* tcp2_resize()
+{
+    char msg[100];
+    InstData* d = (InstData*)instance->backend_data;
+    assert(d->mystate == PS_Ready);
+    d->peer[d->mylid].state = PS_InResize;
+    d->mystate = PS_InResize;
+
+    int phase = instance->phase;
+    int epoch = instance->epoch;
+    laik_log(1, "TCP2 resize: phase %d, epoch %d", phase, epoch);
+
+    if (d->mylid > 0) {
+        // tell master that we are in resize mode
+        sprintf(msg, "enterresize %d %d", phase, epoch);
+        send_cmd(d, 0, msg);
+
+        // wait for master to finish resize phase
+        d->phase = -1;
+        while(d->phase != phase)
+            run_loop(d);
+
+        int added = 0;
+        for(int lid = 0; lid <= d->maxid; lid++)
+            if (d->peer[lid].state == PS_NoConnect)
+                added++;
+
+        if (added == 0) {
+            // nothing changed
+            laik_log(1, "TCP2 resize: nothing changed");
+            d->peer[d->mylid].state = PS_Ready;
+            d->mystate = PS_Ready;
+            return 0;
+        }
+
+        // create new group from current world group, with parent relatinship
+        Laik_Group* w = instance->world;
+        Laik_Group* g = laik_create_group(instance, d->maxid + 1);
+        g->parent = w;
+        int i1 = 0, i2 = 0; // i1: index in parent, i2: new process index
+        for(int lid = 0; lid <= d->maxid; lid++) {
+            if ((d->peer[lid].state == PS_Ready) ||
+                (d->peer[lid].state == PS_InResize)) {
+                // both in old and new group
+                assert(w->locationid[i1] == lid);
+                g->locationid[i2] = lid;
+                g->toParent[i2] = i1;
+                g->fromParent[i1] = i2;
+                i1++;
+                i2++;
+                continue;
+            }
+            if (d->peer[lid].state == PS_NoConnect) {
+                // new registered
+                d->peer[lid].state = PS_Ready;
+                g->locationid[i2] = lid;
+                g->toParent[i2] = -1; // did not exist before
+                i2++;
+                continue;
+            }
+            assert(0);
+        }
+        assert(w->size == i1);
+        g->size = i2;
+        g->myid = g->fromParent[w->myid];
+        instance->locations = d->maxid + 1;
+
+        laik_log(1, "TCP2 resize: locations %d (added %d), new group (size %d, my id %d)",
+                 instance->locations, added, g->size, g->myid);
+        d->mystate = PS_Ready;
+        d->peer[d->mylid].state = PS_Ready;
+        return g;
+    }
+
+    // master
+
+    // process incoming commands
+    check_loop(d);
+
+    // wait for all ready processes to join resize phase
+    for(int lid = 1; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state != PS_Ready) continue;
+        while(d->peer[lid].state == PS_Ready)
+            run_loop(d);
+        assert(d->peer[lid].state == PS_InResize);
+    }
+
+    // process queued join / remove requests
+    for(int fd = 0; fd < MAX_FDS; fd++) {
+        if (d->fds[fd].state == PS_Invalid) continue;
+        if (d->fds[fd].lid >= 0) continue;
+        if (!d->fds[fd].cmd) continue;
+
+        laik_log(1, "TCP2 resize: replay '%s' from FD %d",
+                 d->fds[fd].cmd, fd);
+        got_cmd(d, fd, d->fds[fd].cmd, strlen(d->fds[fd].cmd));
+    }
+
+    // for newly registered: send 'getReady' and wait for confirmation
+    int added = 0;
+    for(int i = 1; i <= d->maxid; i++) {
+        if (d->peer[i].state != PS_RegAccepted) continue;
+        d->peer[i].state = PS_RegFinishing;
+        send_cmd(d, i, "getready");
+        added++;
+    }
+    while(d->readyPeers < d->peers)
+        run_loop(d);
+    laik_log(1, "TCP2 resize master: %d peers ready (%d added)", d->readyPeers, added);
+
+    // finish resize
+    if (added > 0) epoch++;
+    sprintf(msg, "phase %d %d", phase, epoch);
+    for(int lid = 1; lid <= d->maxid; lid++)
+        send_cmd(d, lid, msg);
+
+    if (added == 0) {
+        // nothing changed
+        for(int lid = 1; lid <= d->maxid; lid++)
+            d->peer[lid].state = PS_Ready;
+        d->mystate = PS_Ready;
+        return 0;
+    }
+
+    // create new group from current world group, with parent relatinship
+    Laik_Group* w = instance->world;
+    Laik_Group* g = laik_create_group(instance, d->maxid + 1);
+    g->parent = w;
+    int i1 = 0, i2 = 0; // i1: index in parent, i2: new process index
+    for(int lid = 0; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state == PS_InResize) {
+            // both in old and new group
+            d->peer[lid].state = PS_Ready;
+            assert(w->locationid[i1] == lid);
+            g->locationid[i2] = lid;
+            g->toParent[i2] = i1;
+            g->fromParent[i1] = i2;
+            i1++;
+            i2++;
+            continue;
+        }
+        if (d->peer[lid].state == PS_Ready) {
+            // new registered
+            g->locationid[i2] = lid;
+            g->toParent[i2] = -1; // did not exist before
+            i2++;
+            continue;
+        }
+        assert(0);
+    }
+    assert(w->size == i1);
+    g->size = i2;
+    g->myid = g->fromParent[w->myid];
+    instance->locations = d->maxid + 1;
+
+    laik_log(1, "TCP2 resize master: locations %d, new group (size %d, my id %d)",
+             instance->locations, g->size, g->myid);
+    d->mystate = PS_Ready;
+    return g;
 }
 
 #endif // USE_TCP2
