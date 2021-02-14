@@ -172,6 +172,7 @@ typedef enum _PeerState {
     PS_RegFinishing,   // master peer: all config sent, waiting for confirm from peer
     PS_RegFinished,    // master peer: received peer confirmation, about to make active
     PS_InStartup,      // master: in startup handshake, waiting for enough peers to join
+    PS_InStartup2,     // master: enough peers joined, wait for reg handshake to finish
     PS_NoConnect,      // peer: no permission for direct connection (yet)
     PS_Ready,          // peer: ready for connect/commands/data, control may be in application
     PS_InResize,       // master/peer: in resize mode
@@ -242,6 +243,7 @@ struct _InstData {
     int kvs_changes; // number of changes expected
     int kvs_received; // counter for incoming changes
 
+    int init_wsize;   // for master in startup: initial world size
     int peers;        // number of known peers (= valid entries in peer entry)
     int readyPeers;   // number of peers in Ready state
     Peer peer[0];
@@ -326,7 +328,11 @@ char* get_statestring(PeerState st)
 
     case PS_InStartup:
         // master: in startup handshake, waiting for enough peers to join
-        return "in startup phase";
+        return "in startup phase, waiting for enough peers to join";
+
+    case PS_InStartup2:
+        // master: enough peers joined, wait for reg handshake to finish
+        return "in startup phase, waiting for registrations to finish";
 
     case PS_NoConnect:
           // peer: no permission for direct connection (yet)
@@ -702,7 +708,7 @@ void got_register(InstData* d, int fd, int lid, char* msg)
     if ((d->mystate != PS_InStartup) &&
         (d->mystate != PS_InResize)) {
         // after startup: process later on resize()
-        assert(d->mystate == PS_Ready);
+        assert((d->mystate == PS_InStartup2) || (d->mystate == PS_Ready));
         assert(d->fds[fd].cmd == 0);
 
         d->fds[fd].state = PS_RegReceived;
@@ -773,6 +779,11 @@ void got_register(InstData* d, int fd, int lid, char* msg)
     }
 
     d->peers++;
+    if (d->mystate == PS_InStartup) {
+        // enough peers joined? If so, reject further join wishes
+        if (d->peers + 1 == d->init_wsize)
+            d->mystate = PS_InStartup2;
+    }
     d->exit = 1;
 }
 
@@ -1170,6 +1181,11 @@ void got_ok(InstData* d, int lid, char* msg)
 
         d->peer[lid].state = PS_Ready;
         d->readyPeers++;
+        if (d->mystate == PS_InStartup2) {
+            // finished all registrations?
+            if (d->readyPeers + 1 == d->init_wsize)
+                d->mystate = PS_Ready;
+        }
         d->exit = 1;
         return;
     }
@@ -1434,6 +1450,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         laik_panic("TCP2 Out of memory allocating InstData object");
         exit(1); // not actually needed, laik_panic never returns
     }
+    d->init_wsize = -1; // unknown initial world size
     d->peers = 0; // zero known peers
     d->readyPeers = 0; // zero ready peers
     for(int i = 0; i < MAX_PEERS; i++) {
@@ -1571,8 +1588,10 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         if (world_size > 1) {
             laik_log(1, "TCP2 master: waiting for %d peers to join\n", world_size - 1);
             // wait for enough peers to register
-            while(d->peers + 1 < world_size)
+            d->init_wsize = world_size;
+            while(d->mystate == PS_InStartup)
                 run_loop(d);
+            assert(d->peers + 1 == world_size);
 
             // notify peers to get ready, and wait for them to become ready
             // (ready means they accept direct connections)
@@ -1581,8 +1600,9 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
                 d->peer[i].state = PS_RegFinishing;
                 send_cmd(d, i, "getready");
             }
-            while(d->readyPeers + 1 < world_size)
+            while(d->mystate == PS_InStartup2)
                 run_loop(d);
+            assert(d->readyPeers + 1 == world_size);
             laik_log(1, "TCP2 master: %d peers registered, startup done\n", d->readyPeers);
 
             // notify all peers to start at phase 0, epoch 0

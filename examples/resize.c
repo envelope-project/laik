@@ -34,11 +34,12 @@ int main(int argc, char* argv[])
     if (max == 0) max = 10;
 
     Laik_Group *world = laik_world(inst);
-    while(phase < max) {
+    while(1) {
         printf("Epoch %d / Phase %d: Hello from process %d of %d\n",
                laik_epoch(inst), phase,
                laik_myid(world), laik_size(world));
         laik_release_group(world);
+	if (phase >= max) break;
 
         sleep(1);
         phase++;

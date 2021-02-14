@@ -14,7 +14,8 @@ TESTS= \
     test-spmv2-shrink test-spmv2-shrink-inc \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac2d-gen test-jac2d-noc \
-    test-kvstest test-location test-spaces
+    test-kvstest test-location test-spaces \
+    test-resize
 
 TESTS_TODO= \
     test-vsum test-vsum2 \
@@ -149,6 +150,9 @@ test-location:
 
 test-spaces:
 	$(TDIR)/test-spaces-4.sh
+
+test-resize:
+	$(SDIR)./test-resize-2-2.sh
 
 clean:
 	rm -rf *.out
