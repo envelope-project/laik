@@ -14,6 +14,7 @@ TESTS= \
     test-spmv2-shrink test-spmv2-shrink-inc \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac2d-gen test-jac2d-noc \
+    test-jac3d \
     test-kvstest test-location test-spaces \
     test-resize
 
@@ -79,49 +80,49 @@ test-jac2d-noc:
 	$(TDIR)/test-jac2d-noc-4.sh
 
 test-jac3d:
-	$(TDIR)/test-jac3d-100-1.sh
-	$(TDIR)/test-jac3d-100-4.sh
+	$(TDIR)/test-jac3d-1.sh
+	$(TDIR)/test-jac3d-4.sh
 
 test-jac3d-gen:
-	$(TDIR)/test-jac3d-gen-100-4.sh
+	$(TDIR)/test-jac3d-gen-4.sh
 
 test-jac3dr:
-	$(TDIR)/test-jac3dr-100-1.sh
-	$(TDIR)/test-jac3dr-100-4.sh
+	$(TDIR)/test-jac3dr-1.sh
+	$(TDIR)/test-jac3dr-4.sh
 
 test-jac3dri:
-	$(TDIR)/test-jac3dri-100-4.sh
+	$(TDIR)/test-jac3dri-4.sh
 
 test-jac3d-rgx3:
-	$(TDIR)/test-jac3d-rgx3-100-4.sh
+	$(TDIR)/test-jac3d-rgx3-4.sh
 
 test-jac3de:
-	$(TDIR)/test-jac3de-100-1.sh
-	$(TDIR)/test-jac3de-100-4.sh
+	$(TDIR)/test-jac3de-1.sh
+	$(TDIR)/test-jac3de-4.sh
 
 test-jac3der:
-	$(TDIR)/test-jac3der-100-1.sh
-	$(TDIR)/test-jac3der-100-4.sh
+	$(TDIR)/test-jac3der-1.sh
+	$(TDIR)/test-jac3der-4.sh
 
 test-jac3deri:
-	$(TDIR)/test-jac3deri-100-4.sh
+	$(TDIR)/test-jac3deri-4.sh
 
 test-jac3da:
-	$(TDIR)/test-jac3da-100-1.sh
-	$(TDIR)/test-jac3da-100-4.sh
+	$(TDIR)/test-jac3da-1.sh
+	$(TDIR)/test-jac3da-4.sh
 
 test-jac3dar:
-	$(TDIR)/test-jac3dar-100-1.sh
-	$(TDIR)/test-jac3dar-100-4.sh
+	$(TDIR)/test-jac3dar-1.sh
+	$(TDIR)/test-jac3dar-4.sh
 
 test-jac3dari:
-	$(TDIR)/test-jac3dari-100-4.sh
+	$(TDIR)/test-jac3dari-4.sh
 
 test-jac3d-noc:
-	$(TDIR)/test-jac3dn-100-4.sh
+	$(TDIR)/test-jac3dn-4.sh
 
 test-jac3dr-noc:
-	$(TDIR)/test-jac3dnr-100-4.sh
+	$(TDIR)/test-jac3dnr-4.sh
 
 test-markov:
 	$(TDIR)/test-markov-20-4-1.sh
