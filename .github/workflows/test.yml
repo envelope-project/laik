@@ -1,0 +1,17 @@
+name: Build and run tests
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - run: apt update
+      - run: apt install -y python3-distutils gcc make
+      - run: python3 configure
+      - run: make
+      - run: make test
