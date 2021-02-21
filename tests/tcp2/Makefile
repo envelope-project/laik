@@ -18,11 +18,9 @@ TESTS= \
     test-jac3de test-jac3der test-jac3da test-jac3dar \
     test-jac3dri test-jac3deri test-jac3dari test-jac3d-rgx3 \
     test-markov test-markov2 test-markov2f \
+    test-propagation2d test-propagation2do \
     test-kvstest test-location test-spaces \
     test-resize
-
-TESTS_TODO= \
-    test-propagation2d test-propagation2do
 
 .PHONY: $(TESTS)
 
@@ -130,11 +128,11 @@ test-markov2f:
 	$(TDIR)/test-markov2f-4.sh
 
 test-propagation2d:
-	$(TDIR)/test-propagation2d-10-1.sh
-	$(TDIR)/test-propagation2d-10-4.sh
+	$(TDIR)/test-propagation2d-1.sh
+	$(TDIR)/test-propagation2d-4.sh
 
 test-propagation2do:
-	$(TDIR)/test-propagation2do-10-4.sh
+	$(TDIR)/test-propagation2do-4.sh
 
 test-kvstest:
 	$(TDIR)/test-kvstest-1.sh
