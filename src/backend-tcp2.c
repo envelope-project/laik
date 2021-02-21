@@ -129,6 +129,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 // for VSC to see def of addrinfo
 #ifndef __USE_XOPEN2K
 #define __USE_XOPEN2K 1
@@ -493,6 +494,11 @@ void ensure_conn(InstData* d, int lid)
                  lid, d->peer[lid].host, d->peer[lid].port);
         exit(1);
     }
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &(int){1}, sizeof(int)) < 0) {
+        laik_panic("TCP2 cannot set TCP_NODELAY");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+
     d->peer[lid].fd = fd;
     add_rfd(d, fd, got_bytes);
     d->fds[fd].lid = lid;
@@ -508,8 +514,12 @@ void ensure_conn(InstData* d, int lid)
 }
 
 // send command <cmd> to peer <lid>
-// if <lid> is negative, this specifies the FD instead as (-<lid>)
-//   (receiver has no location id assigned yet)
+// if <lid> is negative, receiver has no LID and its the FD (as -<lid>)
+//
+// <cmd> can end with '\n'. When sent over wire, commands must end with '\n'.
+// So if <cmd> does not end with '\n', we will send '\n' in a separate write().
+// As the latter triggers Nagles algorithm for TCP (1st write without reply from
+// receiver possible as partial command), common commands should end with "\n"
 void send_cmd(InstData* d, int lid, char* cmd)
 {
     int fd = -lid;
@@ -518,17 +528,22 @@ void send_cmd(InstData* d, int lid, char* cmd)
         fd = d->peer[lid].fd;
     }
     int len = strlen(cmd);
+    // pointer to NL char, set to 0 if last char is not a NL
+    char* nlptr = cmd + len - 1;
+    if (*nlptr != '\n') nlptr = 0;
     laik_log(1, "TCP2 Sent cmd '%s' (len %d) to LID %d (FD %d)\n",
              cmd, len, lid, fd);
 
-    // write cmd + NL (cope with partial writes and errors)
+    // write cmd (cope with partial writes and errors)
     int res, written = 0;
     while(written < len) {
         res = write(fd, cmd + written, len - written);
         if (res < 0) break;
         written += res;
     }
-    if (res >= 0) while((res = write(fd, "\n", 1)) == 0);
+    // send NL if not last char of cmd
+    if ((res >= 0) && (nlptr == 0)) while((res = write(fd, "\n", 1)) == 0);
+
     if (res < 0) {
         int e = errno;
         laik_log(LAIK_LL_Panic, "TCP2 write error on FD %d: %s\n",
@@ -1676,7 +1691,7 @@ void send_data(int n, int dims, Laik_Index* idx, int toLID, void* p, int s)
 // send
 
 #define SBUF_LEN 8*1024
-int sbuf_used = 0;
+int sbuf_used = 3; // reserve space for header
 int sbuf_toLID = -1;
 char sbuf[SBUF_LEN];
 
@@ -1686,13 +1701,13 @@ void send_data_bin_flush(int toLID)
     if (sbuf_used == 0) return;
     assert(sbuf_toLID == toLID);
 
-    unsigned char header[3];
-    header[0] = 'B';
-    header[1] = sbuf_used & 255;
-    header[2] = sbuf_used >> 8;
-    send_bin((InstData*)instance->backend_data, toLID, (char*) header, 3);
+    // prepend data to send with header with byte count
+    int bytes = sbuf_used - 3;
+    sbuf[0] = 'B';
+    sbuf[1] = bytes & 255;
+    sbuf[2] = bytes >> 8;
     send_bin((InstData*)instance->backend_data, toLID, sbuf, sbuf_used);
-    sbuf_used = 0;
+    sbuf_used = 3; // reserve space for header
     sbuf_toLID = -1;
 }
 
@@ -1786,7 +1801,7 @@ void recv_slice(Laik_Slice* slc, int fromLID, Laik_Mapping* toMap, Laik_Reductio
 
     // give peer the right to start sending data consisting of given number of elements
     char msg[50];
-    sprintf(msg, "allowsend %d %d", p->rcount, p->relemsize);
+    sprintf(msg, "allowsend %d %d\n", p->rcount, p->relemsize);
     send_cmd(d, fromLID, msg);
 
     // wait until all data received from peer
