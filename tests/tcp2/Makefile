@@ -17,11 +17,11 @@ TESTS= \
     test-jac3d test-jac3d-gen test-jac3dr test-jac3d-noc test-jac3dr-noc \
     test-jac3de test-jac3der test-jac3da test-jac3dar \
     test-jac3dri test-jac3deri test-jac3dari test-jac3d-rgx3 \
+    test-markov test-markov2 test-markov2f \
     test-kvstest test-location test-spaces \
     test-resize
 
 TESTS_TODO= \
-    test-markov test-markov2 test-markov2-f \
     test-propagation2d test-propagation2do
 
 .PHONY: $(TESTS)
@@ -118,15 +118,16 @@ test-jac3dr-noc:
 	$(TDIR)/test-jac3dr-noc-4.sh
 
 test-markov:
-	$(TDIR)/test-markov-20-4-1.sh
-	$(TDIR)/test-markov-40-4-4.sh
+	$(TDIR)/test-markov-1.sh
+	$(TDIR)/test-markov-4.sh
 
 test-markov2:
-	$(TDIR)/test-markov2-20-4-1.sh
-	$(TDIR)/test-markov2-40-4-4.sh
+	$(TDIR)/test-markov2-1.sh
+	$(TDIR)/test-markov2-4.sh
 
-test-markov2-f:
-	$(TDIR)/test-markov2-f-500-5-4.sh
+test-markov2f:
+	$(TDIR)/test-markov2f-1.sh
+	$(TDIR)/test-markov2f-4.sh
 
 test-propagation2d:
 	$(TDIR)/test-propagation2d-10-1.sh

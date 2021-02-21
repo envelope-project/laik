@@ -1865,6 +1865,15 @@ void exec_reduce(Laik_TransitionContext* tc,
         // no input from me: overwrite my values
         op = LAIK_RO_None;
     }
+    else {
+        // input from me: if from different map, copy to output map
+        assert(tc->fromList && (a->fromMapNo < tc->fromList->count));
+        Laik_Mapping* fromMap = &(tc->fromList->map[a->fromMapNo]);
+        if (fromMap != m) {
+            // copy
+            laik_data_copy(a->slc, fromMap, m);
+        }
+    }
     int inCount = laik_trans_groupCount(t, a->inputGroup);
     for(int i = 0; i < inCount; i++) {
         int inTask = laik_trans_taskInGroup(t, a->inputGroup, i);
