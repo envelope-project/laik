@@ -166,7 +166,7 @@ static Laik_Instance* instance = 0;
 typedef enum _PeerState {
     PS_Invalid = 0,
     PS_Unknown,        // accepted connection, may be active peer or not registered
-    PS_DetachReceived, // peer/master: detach command received, queued
+    PS_CutoffReceived, // peer/master: cutoff command received, queued
     PS_BeforeReg,      // peer/master: about to register
     PS_RegReceived,    // master peer: received registration request, in wait queue
     PS_RegAccepted,    // master peer: peer accepts config / peer: got my id, in reg
@@ -303,9 +303,9 @@ char* get_statestring(PeerState st)
         // accepted connection, may be active peer or not registered
         return "unknown";
 
-    case PS_DetachReceived:
-        // master/peer: received detach request, in wait queue
-        return "detach command queued, waiting";
+    case PS_CutoffReceived:
+        // master/peer: received cutoff request, in wait queue
+        return "cutoff command queued, waiting";
 
     case PS_BeforeReg:
         // peer/master: about to register
@@ -842,13 +842,13 @@ void got_myid(InstData* d, int fd, int lid, char* msg)
              lid, d->peer[lid].location, fd);
 }
 
-void got_detach(InstData* d, int fd, char* msg)
+void got_cutoff(InstData* d, int fd, char* msg)
 {
-    // detach <location pattern>
+    // cutoff <location pattern>
 
     assert(d->fds[fd].cmd == 0);
 
-    d->fds[fd].state = PS_DetachReceived;
+    d->fds[fd].state = PS_CutoffReceived;
     d->fds[fd].cmd = strdup(msg);
     laik_log(1, "TCP2 queued for later processing: '%s'", msg);
 }
@@ -865,6 +865,7 @@ void got_help(InstData* d, int fd, int lid)
     send_cmd(d, lid, "#  terminate                    : ask process to terminate");
     send_cmd(d, lid, "#  quit                         : close connection");
     send_cmd(d, lid, "#  status                       : request status output");
+    send_cmd(d, lid, "#  cutoff <loc pattern>         : request removal of processes");
     send_cmd(d, lid, "# Protocol messages:");
     send_cmd(d, lid, "#  allowsend <count> <esize>    : give send right");
     send_cmd(d, lid, "#  data <len> [pos] <hex> ...   : data from a LAIK container");
@@ -1222,7 +1223,7 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     switch(msg[0]) {
     case 'r': got_register(d, fd, lid, msg); return; // register <location> <host> <port>
     case 'm': got_myid(d, fd, lid, msg); return; // myid <lid>
-    case 'd': got_detach(d, fd, msg); return; // detach <location pattern>
+    case 'c': got_cutoff(d, fd, msg); return; // cutoff <location pattern>
     case 'h': got_help(d, fd, lid); return;
     case 't': got_terminate(d, fd, lid); return;
     case 'q': got_quit(d, fd, lid); return;
