@@ -176,6 +176,7 @@ typedef enum _PeerState {
     PS_InStartup2,     // master: enough peers joined, wait for reg handshake to finish
     PS_NoConnect,      // peer: no permission for direct connection (yet)
     PS_Ready,          // peer: ready for connect/commands/data, control may be in application
+    PS_Error,          // peer: connectivity broken
     PS_InResize,       // master/peer: in resize mode
 } PeerState;
 
@@ -343,6 +344,10 @@ char* get_statestring(PeerState st)
         // peer: ready for connect/commands/data, control may be in application
         return "ready";
 
+    case PS_Error:
+        // peer: connectivity broken
+        return "error, connectivity broken";
+
     case PS_InResize:
         // master/peer: in resize mode
         return "in resize mode";
@@ -467,8 +472,17 @@ void ensure_conn(InstData* d, int lid)
     assert(lid < MAX_PEERS);
     if (d->peer[lid].fd >= 0) return; // connected
 
+    if (d->peer[lid].state == PS_Error) {
+        return; // cannot revive a broken connection
+    }
     assert(d->peer[lid].state == PS_Ready);
-    assert(d->peer[lid].port >= 0);
+
+    if (d->peer[lid].port < 0) {
+        // we want to connect, but cannot: peer becomes broken
+        d->peer[lid].state = PS_Error;
+        return;
+    }
+
     char port[20];
     sprintf(port, "%d", d->peer[lid].port);
 
@@ -490,10 +504,12 @@ void ensure_conn(InstData* d, int lid)
         close(fd);
     }
     if (p == 0) {
-        laik_log(LAIK_LL_Panic, "TCP2 cannot connect to LID %d (host %s, port %d)",
+        laik_log(LAIK_LL_Warning, "TCP2 cannot connect to LID %d (host %s, port %d)",
                  lid, d->peer[lid].host, d->peer[lid].port);
-        exit(1);
+        d->peer[lid].state = PS_Error;
+        return;
     }
+
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &(int){1}, sizeof(int)) < 0) {
         laik_panic("TCP2 cannot set TCP_NODELAY");
         exit(1); // not actually needed, laik_panic never returns
@@ -525,6 +541,12 @@ void send_cmd(InstData* d, int lid, char* cmd)
     int fd = -lid;
     if (lid >= 0) {
         ensure_conn(d, lid);
+        if (d->peer[lid].state == PS_Error) {
+            laik_log(1, "TCP2 Send cmd '%s' to LID %d: Cannot send, broken connection\n",
+                     cmd, lid);
+            return;
+        }
+
         fd = d->peer[lid].fd;
     }
     int len = strlen(cmd);
@@ -554,6 +576,12 @@ void send_cmd(InstData* d, int lid, char* cmd)
 void send_bin(InstData* d, int lid, char* buf, int len)
 {
     ensure_conn(d, lid);
+    if (d->peer[lid].state == PS_Error) {
+        laik_log(1, "TCP2 Send bin (len %d) to LID %d: Cannot send, broken connection\n",
+                 len, lid);
+        return;
+    }
+
     int fd = d->peer[lid].fd;
     laik_log(1, "TCP2 Sent bin (len %d) to LID %d (FD %d)\n",
              len, lid, fd);
@@ -2142,6 +2170,8 @@ Laik_Group* tcp2_resize()
         if (d->peer[lid].state != PS_Ready) continue;
         while(d->peer[lid].state == PS_Ready)
             run_loop(d);
+        // originally "ready" processes may become broken: simply skip them
+        if (d->peer[lid].state == PS_Error) continue;
         assert(d->peer[lid].state == PS_InResize);
     }
 
