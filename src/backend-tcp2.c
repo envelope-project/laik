@@ -1363,8 +1363,16 @@ void got_bytes(InstData* d, int fd)
             process_rbuf(d, fd);
         }
 
+        int lid = d->fds[fd].lid;
         laik_log(1, "TCP2 FD %d closed (peer LID %d, %d bytes unprocessed)\n",
-                 fd, d->fds[fd].lid, d->fds[fd].rbuf_used);
+                 fd, lid, d->fds[fd].rbuf_used);
+
+        if (lid >= 0) {
+            assert(d->peer[lid].fd == fd);
+            // peer may still be alive and just have closed connection to avoid
+            // too many open connections: thus, only mark as "not connected"
+            d->peer[lid].fd = -1;
+        }
 
         close(fd);
         rm_rfd(d, fd);
