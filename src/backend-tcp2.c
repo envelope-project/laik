@@ -1004,7 +1004,24 @@ void got_id(InstData* d, int lid, char* msg)
         assert(d->peer[lid].port == p);
     }
     else {
-        d->peer[lid].state = PS_NoConnect; // got peer info, but not allowed to connect yet
+        switch(d->mystate) {
+            case PS_RegAccepted:
+                // in newcomer, after reg acceptance: existing process
+                d->peer[lid].state = PS_Ready;
+                break;
+            case PS_Ready:
+                // in newcomer, after getting ready: this is a newcomer
+                // not allowed to connect yet
+                d->peer[lid].state = PS_NoConnect;
+                break;
+            case PS_InResize:
+                // in existing process: this is a new-comer (only newcomer info sent)
+                // not allowed to connect yet
+                d->peer[lid].state = PS_NoConnect;
+                break;
+            default:
+                laik_panic("Got id in wrong phase");
+        }
         d->peer[lid].host = strdup(h);
         d->peer[lid].location = strdup(l);
         d->peer[lid].port = p;
@@ -1522,8 +1539,18 @@ int startup_master(InstData* d)
     assert(d->peers + 1 == world_size);
     assert(d->mystate == PS_InStartup2);
 
+    // notify peers to get ready, and wait for them to become ready
+    // (ready means they accept direct connections)
+    for(int i = 1; i <= d->maxid; i++) {
+        assert(d->peer[i].state == PS_RegAccepted);
+        d->peer[i].state = PS_RegFinishing;
+        send_cmd(d, i, "getready");
+    }
+    while(d->mystate == PS_InStartup2)
+        run_loop(d);
+    assert(d->readyPeers + 1 == world_size);
+
     // broadcast location ID infos to all non-masters
-    // ("id <lid> <location> <host> <port> <flags>")
     char msg[150];
     for(int lid = 0; lid <= d->maxid; lid++) {
         sprintf(msg, "id %d %s %s %d %s", lid,
@@ -1535,16 +1562,6 @@ int startup_master(InstData* d)
         }
     }
 
-    // notify peers to get ready, and wait for them to become ready
-    // (ready means they accept direct connections)
-    for(int i = 1; i <= d->maxid; i++) {
-        assert(d->peer[i].state == PS_RegAccepted);
-        d->peer[i].state = PS_RegFinishing;
-        send_cmd(d, i, "getready");
-    }
-    while(d->mystate == PS_InStartup2)
-        run_loop(d);
-    assert(d->readyPeers + 1 == world_size);
     laik_log(1, "TCP2 master: %d peers registered, startup done\n", d->readyPeers);
 
     // notify all peers to start at phase 0, epoch 0
@@ -1572,11 +1589,6 @@ int startup_non_master(InstData* d)
     // wait for active phase
     while(d->phase == -1)
         run_loop(d);
-
-    // all seen processes are ready (also master and myself): can make direct connections
-    for(int i = 0; i <= d->maxid; i++) {
-        d->peer[i].state = PS_Ready;
-    }
 
     return d->peers + 1;
 }
@@ -1722,11 +1734,15 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     int world_size;
     if (d->mylid == 0) {
         world_size = startup_master(d);
-        d->peer[0].state = PS_Ready;
-        d->mystate = PS_Ready;
+        // set all peers to PS_NoConnect, to count as newly added
+        for(int i = 0; i <= d->maxid; i++)
+            d->peer[i].state = PS_NoConnect;
     }
-    else
+    else {
         world_size = startup_non_master(d);
+        // set myself to PS_NoConnect: newly added
+        d->peer[d->mylid].state = PS_NoConnect;
+    }
 
     assert(d->mylid < world_size);
 
@@ -1737,18 +1753,62 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     instance = laik_new_instance(&laik_backend, world_size, d->mylid,
                                  d->epoch, d->phase, location, d);
 
-    // initial world group
+    int added = 0, old = 0;
+    for(int i = 0; i <= d->maxid; i++) {
+        if (d->peer[i].state == PS_NoConnect) added++;
+        else if (d->peer[i].state == PS_Ready) old++;
+        else assert(0);
+    }
+    assert(world_size == old + added);
+    laik_log(1, "TCP2 newcomer: added %d, old %d", added, old);
+
+    // create initial world group
     Laik_Group* world = laik_create_group(instance, world_size);
     world->size = world_size;
-    world->myid = d->mylid;
-    // initial location IDs are the same as process IDs in initial world
-    for(int i = 0; i < world_size; i++)
-        world->locationid[i] = i;
+    if (old == 0) {
+        // we are part of initial processes: no parent
+        // location IDs are process IDs in initial world
+        world->myid = d->mylid;
+        for(int i = 0; i < world_size; i++)
+            world->locationid[i] = i;
+    }
+    else {
+        Laik_Group* parent = laik_create_group(instance, old);
+        parent->size = old;
+        parent->myid = -1; // not in parent group
+        int parentID = 0, worldID = 0;
+        for(int lid = 0; lid <= d->maxid; lid++) {
+            if (d->mylid == lid) world->myid = worldID;
+            if (d->peer[lid].state == PS_Ready) {
+                // in old, also in new group
+                parent->locationid[parentID] = lid;
+                world->locationid[worldID] = lid;
+                world->toParent[worldID] = parentID;
+                world->fromParent[parentID] = worldID;
+                worldID++;
+                parentID++;
+                continue;
+            }
+            // only in new group
+            assert(d->peer[lid].state == PS_NoConnect);
+            world->locationid[worldID] = lid;
+            world->toParent[worldID] = -1;
+            worldID++;
+        }
+        assert(parentID == old);
+        assert(worldID == world_size);
+        world->parent = parent;
+    }
     // attach world to instance
     instance->world = world;
 
-    laik_log(2, "TCP2 backend initialized (location '%s', rank %d/%d, epoch %d, phase %d, listening at %d, flags: %c)\n",
-             location, d->mylid, world_size,
+    // all processes are ready
+    for(int i = 0; i <= d->maxid; i++)
+        d->peer[i].state = PS_Ready;
+    d->mystate = PS_Ready;
+
+    laik_log(2, "TCP2 backend initialized (location '%s', LID %d, rank %d/%d, epoch %d, phase %d, listening at %d, flags: %c)\n",
+             location, d->mylid, world->myid, world_size,
              d->epoch, d->phase, d->listenport, d->accept_bin_data ? 'b':'-');
 
     return instance;
@@ -2262,18 +2322,6 @@ Laik_Group* tcp2_resize()
         }
     }
 
-    // broadcast location ID info of all new-comers to all non-masters
-    for(int lid = 0; lid <= d->maxid; lid++) {
-        if (d->peer[lid].state != PS_RegAccepted) continue;
-        sprintf(msg, "id %d %s %s %d %s", lid,
-                d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
-                d->peer[lid].accepts_bin_data ? "b":"-");
-        for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
-            if (lid == to_lid) continue;
-            send_cmd(d, to_lid, msg);
-        }
-    }
-
     // for newly registered: send 'getReady'
     for(int i = 1; i <= d->maxid; i++) {
         if (d->peer[i].state != PS_RegAccepted) continue;
@@ -2285,6 +2333,18 @@ Laik_Group* tcp2_resize()
     while(d->readyPeers < d->peers)
         run_loop(d);
     laik_log(1, "TCP2 resize master: %d peers ready (%d added)", d->readyPeers, added);
+
+    // broadcast location ID info of all new-comers to all non-masters
+    for(int lid = 0; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state != PS_Ready) continue;
+        sprintf(msg, "id %d %s %s %d %s", lid,
+                d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
+                d->peer[lid].accepts_bin_data ? "b":"-");
+        for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
+            if (lid == to_lid) continue;
+            send_cmd(d, to_lid, msg);
+        }
+    }
 
     // finish resize
     if (added > 0) epoch++;
