@@ -1450,9 +1450,131 @@ void got_connect(InstData* d, int fd)
 
 
 
-//
+//---------------------------------------------------------------------------
 // backend initialization
 //
+
+// helper for backend init
+static
+InstData* new_inst_data(char* host, char* location)
+{
+    InstData* d = malloc(sizeof(InstData) + MAX_PEERS * sizeof(Peer));
+    if (!d) {
+        laik_panic("TCP2 Out of memory allocating InstData object");
+        exit(1); // not actually needed, laik_panic never returns
+    }
+    d->init_wsize = -1; // unknown initial world size
+    d->peers = 0; // zero known peers
+    d->readyPeers = 0; // zero ready peers
+    for(int i = 0; i < MAX_PEERS; i++) {
+        d->peer[i].state = PS_Invalid;
+        d->peer[i].port = -1; // unknown peer
+        d->peer[i].fd = -1;   // not connected
+        d->peer[i].host = 0;
+        d->peer[i].location = 0;
+        d->peer[i].accepts_bin_data = false;
+        d->peer[i].rcount = 0;
+        d->peer[i].scount = 0;
+    }
+
+    FD_ZERO(&d->rset);
+    d->maxfds = 0;
+    d->exit = 0;
+    for(int i = 0; i < MAX_FDS; i++) {
+        d->fds[i].state = PS_Invalid;
+        d->fds[i].cb = 0;
+    }
+
+    d->host = host;
+    d->location = strdup(location);
+    d->listenfd = -1; // not bound yet
+    d->maxid = -1;    // not set yet
+    d->phase = -1;    // not set yet
+    d->epoch = -1;    // not set yet
+    d->mylid = -1;    // net yet determined
+    // announce capability to accept binary data? Defaults to yes, can be switched off
+    char* str = getenv("LAIK_TCP2_BIN");
+    d->accept_bin_data = str ? atoi(str) : 1;
+    d->kvs = 0;       // only set during tcp2_sync()
+    d->kvs_changes = 0;
+    d->kvs_received = 0;
+    d->kvs_name = 0;
+
+    return d;
+}
+
+// returns world size
+static
+int startup_master(InstData* d)
+{
+    // master determines world size
+    char* str = getenv("LAIK_SIZE");
+    int world_size = str ? atoi(str) : 0;
+    if (world_size == 0) world_size = 1; // just master alone
+
+    // slot 0 taken by myself
+    d->maxid = 0;
+    // we start in phase 0, epoch 0
+    d->phase = 0;
+    d->epoch = 0;
+
+    if (world_size == 1) return 1;
+
+    // handshake with non-masters
+
+    laik_log(1, "TCP2 master: waiting for %d peers to join\n", world_size - 1);
+    // wait for enough peers to register
+    d->init_wsize = world_size;
+    while(d->mystate == PS_InStartup)
+        run_loop(d);
+    assert(d->peers + 1 == world_size);
+
+    // notify peers to get ready, and wait for them to become ready
+    // (ready means they accept direct connections)
+    for(int i = 1; i <= d->maxid; i++) {
+        assert(d->peer[i].state == PS_RegAccepted);
+        d->peer[i].state = PS_RegFinishing;
+        send_cmd(d, i, "getready");
+    }
+    while(d->mystate == PS_InStartup2)
+        run_loop(d);
+    assert(d->readyPeers + 1 == world_size);
+    laik_log(1, "TCP2 master: %d peers registered, startup done\n", d->readyPeers);
+
+    // notify all peers to start at phase 0, epoch 0
+    for(int i = 1; i <= d->maxid; i++) {
+        assert(d->peer[i].state == PS_Ready);
+        send_cmd(d, i, "phase 0 0");
+    }
+
+    return world_size;
+}
+
+// returns world size
+static
+int startup_non_master(InstData* d)
+{
+    // register with master, get world size
+    char msg[100];
+    sprintf(msg, "register %.30s %.30s %d %s",
+            d->location, d->host, d->listenport, d->accept_bin_data ? "bin":"");
+    send_cmd(d, 0, msg);
+
+    while(d->mystate != PS_Ready)
+        run_loop(d);
+
+    // all seen processes are ready (also master and myself): can make direct connections
+    for(int i = 0; i <= d->maxid; i++) {
+        d->peer[i].state = PS_Ready;
+    }
+
+    // wait for active phase
+    while(d->phase == -1)
+        run_loop(d);
+
+    return d->peers + 1;
+}
+
 
 Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
 {
@@ -1497,48 +1619,14 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
 
     laik_log(1, "TCP2 location %s, home %s:%d\n", location, home_host, home_port);
 
-    InstData* d = malloc(sizeof(InstData) + MAX_PEERS * sizeof(Peer));
-    if (!d) {
-        laik_panic("TCP2 Out of memory allocating InstData object");
-        exit(1); // not actually needed, laik_panic never returns
-    }
-    d->init_wsize = -1; // unknown initial world size
-    d->peers = 0; // zero known peers
-    d->readyPeers = 0; // zero ready peers
-    for(int i = 0; i < MAX_PEERS; i++) {
-        d->peer[i].state = PS_Invalid;
-        d->peer[i].port = -1; // unknown peer
-        d->peer[i].fd = -1;   // not connected
-        d->peer[i].host = 0;
-        d->peer[i].location = 0;
-        d->peer[i].accepts_bin_data = false;
-        d->peer[i].rcount = 0;
-        d->peer[i].scount = 0;
-    }
+    InstData* d = new_inst_data(host, location);
 
-    FD_ZERO(&d->rset);
-    d->maxfds = 0;
-    d->exit = 0;
-    for(int i = 0; i < MAX_FDS; i++) {
-        d->fds[i].state = PS_Invalid;
-        d->fds[i].cb = 0;
-    }
+    //
+    // create listening socket and determine who is master
+    //
 
-    d->host = host;
-    d->location = strdup(location);
-    d->listenfd = -1; // not bound yet
-    d->maxid = -1;    // not set yet
-    d->phase = -1;    // not set yet
-    d->epoch = -1;    // not set yet
-    // if home host is localhost, try to become master (-1: not yet determined)
-    d->mylid = check_local(home_host) ? 0 : -1;
-    // announce capability to accept binary data? Defaults to yes, can be switched off
-    str = getenv("LAIK_TCP2_BIN");
-    d->accept_bin_data = str ? atoi(str) : 1;
-    d->kvs = 0;       // only set during tcp2_sync()
-    d->kvs_changes = 0;
-    d->kvs_received = 0;
-    d->kvs_name = 0;
+    // if home host is localhost, try to become master
+    bool try_master = check_local(home_host);
 
     // create socket to listen for incoming TCP connections
     //  if <home_host> is not set, try to aquire local port <home_port>
@@ -1551,7 +1639,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
             laik_panic("TCP2 cannot create listening socket");
             exit(1); // not actually needed, laik_panic never returns
         }
-        if (d->mylid == 0) {
+        if (try_master) {
             // mainly for development: avoid wait time to bind to same port
             if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR,
                            &(int){1}, sizeof(int)) < 0) {
@@ -1562,10 +1650,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
             sin.sin_family = AF_INET;
             sin.sin_addr.s_addr = htonl(INADDR_ANY);
             sin.sin_port = htons(home_port);
-            if (bind(listenfd, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
-                d->mylid = -1; // already somebody else, still need to determine
-            }
-            else {
+            if (bind(listenfd, (struct sockaddr *) &sin, sizeof(sin)) == 0) {
                 // listen on successfully bound socket
                 // if this fails, another process started listening first
                 // and we need to open another socket, as we cannot unbind
@@ -1574,6 +1659,8 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
                     close(listenfd);
                     continue;
                 }
+                // we successfully became master: my LID is 0
+                d->mylid = 0;
                 d->listenport = home_port;
                 break;
             }
@@ -1595,6 +1682,10 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         d->listenport = ntohs(sin.sin_port);
     }
     d->listenfd = listenfd;
+
+    // notify us on connection requests at listening port
+    add_rfd(d, d->listenfd, got_connect);
+
     laik_log(1, "TCP2 listening on port %d\n", d->listenport);
 
     // now we know if we are master: init peer with id 0
@@ -1617,77 +1708,23 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         d->peer[0].port = home_port;
     }
 
-    // notify us on connection requests at listening port
-    add_rfd(d, d->listenfd, got_connect);
 
-    // do registration of each non-master with master (using run-loop)
-    //  newcomers block until master accepts them
-    int world_size = 0; // not detected yet
+    //
+    // run startup protocol handshake: non-masters register with master
+    //
+
+    int world_size;
     if (d->mylid == 0) {
-        // master
-
-        // master determines world size
-        str = getenv("LAIK_SIZE");
-        world_size = str ? atoi(str) : 0;
-        if (world_size == 0) world_size = 1; // just master alone
-
-        // slot 0 taken by myself
-        d->maxid = 0;
-        // we start in phase 0, epoch 0
-        d->phase = 0;
-        d->epoch = 0;
-
-        if (world_size > 1) {
-            laik_log(1, "TCP2 master: waiting for %d peers to join\n", world_size - 1);
-            // wait for enough peers to register
-            d->init_wsize = world_size;
-            while(d->mystate == PS_InStartup)
-                run_loop(d);
-            assert(d->peers + 1 == world_size);
-
-            // notify peers to get ready, and wait for them to become ready
-            // (ready means they accept direct connections)
-            for(int i = 1; i <= d->maxid; i++) {
-                assert(d->peer[i].state == PS_RegAccepted);
-                d->peer[i].state = PS_RegFinishing;
-                send_cmd(d, i, "getready");
-            }
-            while(d->mystate == PS_InStartup2)
-                run_loop(d);
-            assert(d->readyPeers + 1 == world_size);
-            laik_log(1, "TCP2 master: %d peers registered, startup done\n", d->readyPeers);
-
-            // notify all peers to start at phase 0, epoch 0
-            for(int i = 1; i <= d->maxid; i++) {
-                assert(d->peer[i].state == PS_Ready);
-                send_cmd(d, i, "phase 0 0");
-            }
-        }
-        // we are ready
+        world_size = startup_master(d);
         d->peer[0].state = PS_Ready;
         d->mystate = PS_Ready;
     }
-    else {
-        // non-master
+    else
+        world_size = startup_non_master(d);
 
-        // register with master, get world size
-        char msg[100];
-        sprintf(msg, "register %.30s %.30s %d %s",
-                location, host, d->listenport, d->accept_bin_data ? "bin":"");
-        send_cmd(d, 0, msg);
-        while(d->mystate != PS_Ready)
-            run_loop(d);
-
-        // all seen processes are ready (also master and myself): can make direct connections
-        for(int i = 0; i <= d->maxid; i++) {
-            d->peer[i].state = PS_Ready;
-        }
-
-        // wait for active phase
-        while(d->phase == -1)
-            run_loop(d);
-        world_size = d->peers + 1;
-    }
+    //
+    // finished initialization: we are ready
+    //
 
     instance = laik_new_instance(&laik_backend, world_size, d->mylid,
                                  d->epoch, d->phase, location, d, 0);
