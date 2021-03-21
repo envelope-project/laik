@@ -1735,7 +1735,18 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     //
 
     instance = laik_new_instance(&laik_backend, world_size, d->mylid,
-                                 d->epoch, d->phase, location, d, 0);
+                                 d->epoch, d->phase, location, d);
+
+    // initial world group
+    Laik_Group* world = laik_create_group(instance, world_size);
+    world->size = world_size;
+    world->myid = d->mylid;
+    // initial location IDs are the same as process IDs in initial world
+    for(int i = 0; i < world_size; i++)
+        world->locationid[i] = i;
+    // attach world to instance
+    instance->world = world;
+
     laik_log(2, "TCP2 backend initialized (location '%s', rank %d/%d, epoch %d, phase %d, listening at %d, flags: %c)\n",
              location, d->mylid, world_size,
              d->epoch, d->phase, d->listenport, d->accept_bin_data ? 'b':'-');

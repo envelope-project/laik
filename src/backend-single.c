@@ -43,7 +43,14 @@ Laik_Instance* laik_init_single()
         return single_instance;
 
     Laik_Instance* inst;
-    inst = laik_new_instance(&laik_backend_single, 1, 0, 0, 0, "local", 0, 0);
+    inst = laik_new_instance(&laik_backend_single, 1, 0, 0, 0, "local", 0);
+
+    // create and attach initial world group
+    Laik_Group* world = laik_create_group(inst, 1);
+    world->size = 1;
+    world->myid = 0;
+    world->locationid[0] = 0;
+    inst->world = world;
 
     laik_log(2, "Single backend initialized\n");
 

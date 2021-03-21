@@ -187,7 +187,7 @@ char* laik_mylocation(Laik_Instance* inst)
 // allocate space for a new LAIK instance
 Laik_Instance* laik_new_instance(const Laik_Backend* b,
                                  int size, int myid, int epoch, int phase,
-                                 char* location, void* data, void *gdata)
+                                 char* location, void* data)
 {
     Laik_Instance* instance;
     instance = malloc(sizeof(Laik_Instance));
@@ -203,6 +203,8 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     instance->locations = size;    // initial number of locations
     instance->mylocationid = myid; // initially, myid is my locationid
     instance->mylocation = strdup(location);
+    instance->world = 0;           // still invalid, gets set by backend
+
     instance->locationStore = 0;
     instance->location = 0; // set at location sync
 
@@ -232,16 +234,6 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
         laik_log_append_info();
         laik_log_flush(0);
     }
-
-    // Create 'world' group with same parameters as the instance.
-    Laik_Group* world = laik_create_group(instance, size);
-    world->size = size;
-    world->myid = myid;
-    world->backend_data = gdata;
-    instance->world = world;
-    // initial location IDs are the same as process IDs in initial world
-    for(int i = 0; i < size; i++)
-        world->locationid[i] = i;
 
     return instance;
 }
@@ -295,7 +287,7 @@ Laik_Group* laik_create_group(Laik_Instance* i, int maxsize)
 
     g->inst = i;
     g->gid = i->group_count;
-    g->size = 0; // yet invalid;
+    g->size = 0; // yet invalid
     g->maxsize = maxsize;
     g->backend_data = 0;
     g->parent = 0;

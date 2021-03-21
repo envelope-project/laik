@@ -57,9 +57,10 @@ Laik_Instance* laik_init(int* argc, char*** argv);
 
 // allocate space for a new LAIK instance.
 // not to be used directly, but called from backend initialization
+// the world yet is invalid, needs to be created and attatched by backend
 Laik_Instance* laik_new_instance(const Laik_Backend* b, int size, int myid,
                                  int epoch, int phase,
-                                 char* location, void* data, void *gdata);
+                                 char* location, void* data);
 
 //! shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance* inst);

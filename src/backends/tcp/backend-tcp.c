@@ -168,7 +168,18 @@ Laik_Instance* laik_init_tcp(int* argc, char*** argv)
 
     Laik_Instance* inst;
     inst = laik_new_instance(&laik_backend_tcp, size, rank, 0, 0,
-                             processor_name, d, gd);
+                             processor_name, d);
+
+    // initial world group
+    Laik_Group* world = laik_create_group(inst, size);
+    world->size = size;
+    world->myid = rank; // same as location ID of this process
+    world->backend_data = gd;
+    // initial location IDs are the MPI ranks
+    for(int i = 0; i < size; i++)
+        world->locationid[i] = i;
+    // attach world to instance
+    inst->world = world;
 
     sprintf(inst->guid, "%d", rank);
 
