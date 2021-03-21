@@ -807,19 +807,10 @@ void got_register(InstData* d, int fd, int lid, char* msg)
     d->peer[lid].rcount = 0;
     d->peer[lid].scount = 0;
 
-    // send location ID info: "id <lid> <location> <host> <port> <flags>"
-    // - info of new registered id to all already registered peers + new peer
-    // - info of all already registered peers (including master) to new peer
+    // send response to registering process: notify about assigned LID
     char str[150];
     sprintf(str, "id %d %s %s %d %s", lid, l, h, p, accepts_bin_data ? "b":"-");
-    for(int i = 1; i <= d->maxid; i++)
-        send_cmd(d, i, str);
-    for(int i = 0; i < d->maxid; i++) {
-        sprintf(str, "id %d %s %s %d %s", i,
-                d->peer[i].location, d->peer[i].host, d->peer[i].port,
-                d->peer[i].accepts_bin_data ? "b":"-");
-        send_cmd(d, lid, str);
-    }
+    send_cmd(d, lid, str);
 
     d->peers++;
     if (d->mystate == PS_InStartup) {
@@ -1503,6 +1494,7 @@ InstData* new_inst_data(char* host, char* location)
     return d;
 }
 
+// startup handshake of master
 // returns world size
 static
 int startup_master(InstData* d)
@@ -1528,6 +1520,20 @@ int startup_master(InstData* d)
     while(d->mystate == PS_InStartup)
         run_loop(d);
     assert(d->peers + 1 == world_size);
+    assert(d->mystate == PS_InStartup2);
+
+    // broadcast location ID infos to all non-masters
+    // ("id <lid> <location> <host> <port> <flags>")
+    char msg[150];
+    for(int lid = 0; lid <= d->maxid; lid++) {
+        sprintf(msg, "id %d %s %s %d %s", lid,
+                d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
+                d->peer[lid].accepts_bin_data ? "b":"-");
+        for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
+            if (lid == to_lid) continue;
+            send_cmd(d, to_lid, msg);
+        }
+    }
 
     // notify peers to get ready, and wait for them to become ready
     // (ready means they accept direct connections)
@@ -1563,14 +1569,14 @@ int startup_non_master(InstData* d)
     while(d->mystate != PS_Ready)
         run_loop(d);
 
+    // wait for active phase
+    while(d->phase == -1)
+        run_loop(d);
+
     // all seen processes are ready (also master and myself): can make direct connections
     for(int i = 0; i <= d->maxid; i++) {
         d->peer[i].state = PS_Ready;
     }
-
-    // wait for active phase
-    while(d->phase == -1)
-        run_loop(d);
 
     return d->peers + 1;
 }
@@ -1721,6 +1727,8 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     }
     else
         world_size = startup_non_master(d);
+
+    assert(d->mylid < world_size);
 
     //
     // finished initialization: we are ready
@@ -2125,7 +2133,7 @@ void tcp2_sync(Laik_KVStore* kvs)
 // return new group on process size change (global sync)
 Laik_Group* tcp2_resize()
 {
-    char msg[100];
+    char msg[150];
     InstData* d = (InstData*)instance->backend_data;
     assert(d->mystate == PS_Ready);
     d->peer[d->mylid].state = PS_InResize;
@@ -2223,14 +2231,46 @@ Laik_Group* tcp2_resize()
         got_cmd(d, fd, d->fds[fd].cmd, strlen(d->fds[fd].cmd));
     }
 
-    // for newly registered: send 'getReady' and wait for confirmation
+    // check how many new processes got accepted
     int added = 0;
+    for(int i = 1; i <= d->maxid; i++) {
+        if (d->peer[i].state != PS_RegAccepted) continue;
+        added++;
+    }
+
+    // broadcast location ID info of old processes to all new-comers
+    for(int lid = 0; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state == PS_RegAccepted) continue;
+        sprintf(msg, "id %d %s %s %d %s", lid,
+                d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
+                d->peer[lid].accepts_bin_data ? "b":"-");
+        for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
+            if (d->peer[to_lid].state != PS_RegAccepted) continue;
+            assert(lid != to_lid);
+            send_cmd(d, to_lid, msg);
+        }
+    }
+
+    // broadcast location ID info of all new-comers to all non-masters
+    for(int lid = 0; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state != PS_RegAccepted) continue;
+        sprintf(msg, "id %d %s %s %d %s", lid,
+                d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
+                d->peer[lid].accepts_bin_data ? "b":"-");
+        for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
+            if (lid == to_lid) continue;
+            send_cmd(d, to_lid, msg);
+        }
+    }
+
+    // for newly registered: send 'getReady'
     for(int i = 1; i <= d->maxid; i++) {
         if (d->peer[i].state != PS_RegAccepted) continue;
         d->peer[i].state = PS_RegFinishing;
         send_cmd(d, i, "getready");
-        added++;
     }
+
+    // wait for ready confirmation
     while(d->readyPeers < d->peers)
         run_loop(d);
     laik_log(1, "TCP2 resize master: %d peers ready (%d added)", d->readyPeers, added);
