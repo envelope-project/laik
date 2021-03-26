@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
                laik_epoch(inst), phase,
                laik_myid(world), laik_size(world));
         laik_release_group(world);
-	if (phase >= max) break;
+        if (phase >= max) break;
 
         sleep(1);
         phase++;

@@ -93,6 +93,11 @@ Laik_Group* laik_world(Laik_Instance* i);
 void laik_release_group(Laik_Group* g);
 
 /**
+ * Return parent group of a given group
+ */
+Laik_Group* laik_group_parent(Laik_Group* g);
+
+/**
  * Specify a new group of active processes for this instance
  *
  * This function must be called collectively by all active

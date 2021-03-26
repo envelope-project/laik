@@ -323,6 +323,11 @@ void laik_release_group(Laik_Group* g)
     // TODO: free if other RCs are zero
 }
 
+Laik_Group* laik_group_parent(Laik_Group* g)
+{
+    return g->parent;
+}
+
 void laik_set_world(Laik_Instance* i, Laik_Group* newworld)
 {
     // TODO: check that removed processes do not appear in any
