@@ -50,8 +50,8 @@ int main(int argc, char* argv[])
     Laik_Data*  sumdata  = laik_new_data(sumspace, laik_Double);
     Laik_Partitioning* sp1 = laik_new_partitioning(laik_All, world, sumspace, 0);
     Laik_Partitioning* sp2 = laik_new_partitioning(laik_Master, world, sumspace, 0);
+    laik_data_provide_memory(sumdata, &mysum, sizeof(double));
     laik_set_initial_partitioning(sumdata, sp1);
-    laik_set_map_memory(sumdata, 0, &mysum, sizeof(double));
 
     double *base;
     uint64_t count, from, to;

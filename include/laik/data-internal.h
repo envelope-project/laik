@@ -109,6 +109,10 @@ struct _Laik_Data {
     // when switching to a partitioning, we check for reservations first
     Laik_Reservation* activeReservation;
 
+    // memory provided by application for map 0 (map0_base is 0 if not)
+    char* map0_base;
+    uint64_t map0_size;
+
     // allocator to use for memory allocation of mappings
     Laik_Allocator* allocator;
 

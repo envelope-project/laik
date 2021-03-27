@@ -182,6 +182,8 @@ Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
     d->stat = laik_newSwitchStat();
 
     d->activeReservation = 0;
+    d->map0_base = 0;
+    d->map0_size = 0;
 
     laik_log(1, "new data '%s':\n"
              "  type '%s' (elemsize %d), space '%s' (%lu elems, %.3f MB)\n",
@@ -327,6 +329,9 @@ Laik_Slice* coveringSlices(int n, Laik_SliceArray* sa, int myid)
     return slices;
 }
 
+// forward decl
+static void laik_map_set_allocation(Laik_Mapping*, char*, uint64_t, Laik_Allocator*);
+
 static
 Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
 {
@@ -377,6 +382,13 @@ Laik_MappingList* prepareMaps(Laik_Data* d, Laik_Partitioning* p)
         m->count = laik_slice_size(&(slices[mapNo]));
         m->layout = layout;       // all maps use same layout
         m->layoutSection = mapNo; // but different sections of it
+
+        if ((mapNo == 0) && (d->map0_base != 0)) {
+            laik_log(1, "  using provided memory (%lld bytes at %p with layout %s)",
+                     (unsigned long long int) d->map0_size, d->map0_base,
+                     layout->describe(m->layout));
+            laik_map_set_allocation(m, d->map0_base, d->map0_size, 0);
+        }
     }
 
     free(slices);  // just allocated here for layout factory function
@@ -1418,26 +1430,12 @@ void checkOwnParticipation(Laik_Data* d)
     assert(d->activeMappings != 0);
 }
 
-// provide memory resources for a mapping of own partition with ID <n>
-void laik_set_map_memory(Laik_Data* d, int n, void* start, uint64_t size)
+// provide memory resources for a mapping of own partition
+void laik_data_provide_memory(Laik_Data* d, void* start, uint64_t size)
 {
-    checkOwnParticipation(d);
-
-    // FIXME: signal user error instead of assertion
-    assert((n>=0) && (n < d->activeMappings->count));
-    Laik_Mapping* m = &(d->activeMappings->map[n]);
-
-    // allocator set to 0: not freed by Laik, and must be re-usable
-    // on switches
-    laik_map_set_allocation(m, start, size, 0);
-
-    laik_log(1, "set_map_memory: for '%s'/%d: %llu x %d (%llu B) at %p"
-             "\n  layout: %s",
-             d->name, m->mapNo, (unsigned long long int) m->count, d->elemsize,
-             (unsigned long long) m->capacity, (void*) m->base,
-             m->layout->describe(m->layout));
+    d->map0_base = start;
+    d->map0_size = size;
 }
-
 
 // get mapping of own partition into local memory for direct access
 Laik_Mapping* laik_get_map(Laik_Data* d, int n)

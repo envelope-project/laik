@@ -151,8 +151,9 @@ void laik_switchto_flow(Laik_Data* d, Laik_DataFlow flow, Laik_ReductionOperatio
 Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
 
 // set an initial partitioning for a container.
-// memory from a reservation can be used by calling laik_data_use_reservation() before.
-// otherwise, memory is not allocated and needs to be provided via laik_set_map_memory().
+// memory resources to be used need to be specified before, either by
+// - setting a reservation to use, see laik_data_use_reservation(), or
+// - by providing direct memory resources, see laik_data_provide_memory()
 void laik_set_initial_partitioning(Laik_Data* d, Laik_Partitioning* p);
 
 
@@ -192,10 +193,11 @@ char *laik_get_map_addr(Laik_Data* d, int n, Laik_Index* idx);
 void laik_data_copy(Laik_Slice* slc, Laik_Mapping* from, Laik_Mapping* to);
 
 
-// provide memory resources for a mapping of own partition with ID <n> of container <d>,
-// starting at address <base> with <size> bytes. Memory will not be freed by LAIK, and
-// it has to cover memory requirements of switches unless reserved memory is provided.
-void laik_set_map_memory(Laik_Data* d, int n, void* start, uint64_t size);
+// provide memory resources for mapping of own partition for container <d>.
+// It will get used when in next setting or switching to a partitioning.
+// LAIK never frees this memory itself, and it is an error if the memory is
+// not enough to cover resource requirements
+void laik_data_provide_memory(Laik_Data* d, void* start, uint64_t size);
 
 
 // get mapping of own partition into local memory for direct access

@@ -145,9 +145,9 @@ int main(int argc, char* argv[])
     sumspace = laik_new_space_1d(inst, 4);
     sumdata  = laik_new_data(sumspace, laik_Double);
     sumpart1 = laik_new_partitioning(laik_All, world, sumspace, 0);
-    laik_set_initial_partitioning(sumdata, sumpart1);
     // directly provide mysum array as input data
-    laik_set_map_memory(sumdata, 0, mysum, 4 * sizeof(double));
+    laik_data_provide_memory(sumdata, mysum, 4 * sizeof(double));
+    laik_set_initial_partitioning(sumdata, sumpart1);
 
     laik_set_phase(inst, 3, "master-only", NULL);
  
