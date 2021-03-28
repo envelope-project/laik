@@ -1297,11 +1297,15 @@ void laik_switchto_partitioning(Laik_Data* d,
 {
     // calculate actions to be done for switching
 
-    Laik_Group* toGroup = toP ? toP->group : 0;
+    Laik_Group *toGroup = 0, *fromGroup = 0, *commonGroup = 0;
     if (d->activePartitioning) {
         if (toP && (d->activePartitioning->group != toP->group)) {
-            // to a partitioning based on another group? migrate to old first
-            laik_partitioning_migrate(toP, d->activePartitioning->group);
+            // to a partitioning based on another group? migrate to common group first
+            toGroup = toP->group;
+            fromGroup = d->activePartitioning->group;
+            commonGroup = laik_new_union_group(fromGroup, toGroup);
+            laik_partitioning_migrate(d->activePartitioning, commonGroup);
+            laik_partitioning_migrate(toP, commonGroup);
         }
     }
     else {
@@ -1318,9 +1322,11 @@ void laik_switchto_partitioning(Laik_Data* d,
 
     doTransition(d, t, 0, d->activeMappings, toList);
 
-    // if we migrated "toP" to old group before, migrate back to new
-    if (toGroup != toP->group)
+    // if we migrated to common group before, migrate back
+    if (commonGroup) {
+        laik_partitioning_migrate(d->activePartitioning, fromGroup);
         laik_partitioning_migrate(toP, toGroup);
+    }
 
     // set new mapping/partitioning active
     d->activePartitioning = toP;

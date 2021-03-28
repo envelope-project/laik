@@ -37,11 +37,13 @@ struct _Laik_Group {
     int myid;        // index of this process (in [0;size[ or -1 if not in group)
     void* backend_data;
 
-    Laik_Group* parent;
+    Laik_Group *parent, *parent2;
     int maxsize;     // size of allocation for following 3 arrays
+    int* locationid; // maps process indexes to location IDs they are bound to
     int* toParent;   // maps process indexes in this group to indexes in parent
     int* fromParent; // maps parent process indexes to indexes in this group
-    int* locationid; // maps process indexes to location IDs they are bound to
+    int* toParent2;  // maps process indexes in this group to indexes in parent
+    int* fromParent2;// maps parent process indexes to indexes in this group
 
     int rc_app;        // used by application?
     int rc_ownprocess; // refererence counter in own process

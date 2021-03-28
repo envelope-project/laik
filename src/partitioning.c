@@ -589,15 +589,25 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
 void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg)
 {
     Laik_Group* oldg = p->group;
+    if (oldg == newg) return;
+
     int* fromOld; // mapping of IDs from old group to new group
 
     if (newg->parent == oldg) {
         // new group is child of old
         fromOld = newg->fromParent;
     }
+    else if (newg->parent2 == oldg) {
+        // new group is child of old
+        fromOld = newg->fromParent2;
+    }
     else if (oldg->parent == newg) {
         // new group is parent of old
         fromOld = oldg->toParent;
+    }
+    else if (oldg->parent2 == newg) {
+        // new group is parent of old
+        fromOld = oldg->toParent2;
     }
     else {
         // other cases not supported

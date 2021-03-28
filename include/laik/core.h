@@ -129,6 +129,9 @@ int laik_epoch(Laik_Instance*);
 //! Create a clone of process group
 Laik_Group* laik_clone_group(Laik_Group* g);
 
+// create new group as union of 2 groups
+Laik_Group* laik_new_union_group(Laik_Group* g1, Laik_Group* g2);
+
 //! Create group by removing <len> processes from <g> as given in <list>
 Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
 

@@ -18,7 +18,7 @@
 #ifndef LAIK_DEFINITIONS_H
 #define LAIK_DEFINITIONS_H
 
-#define MAX_GROUPS        10
+#define MAX_GROUPS        50
 #define MAX_SPACES        10
 #define MAX_PARTITIONINGS 10
 #define MAX_DATAS         1000

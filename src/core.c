@@ -278,7 +278,7 @@ Laik_Group* laik_create_group(Laik_Instance* i, int maxsize)
     Laik_Group* g;
 
     // with 3 arrays, 2 with number of processes as size, other with parent size
-    g = malloc(sizeof(Laik_Group) + (3 * maxsize) * sizeof(int));
+    g = malloc(sizeof(Laik_Group) + (5 * maxsize) * sizeof(int));
     if (!g) {
         laik_panic("Out of memory allocating Laik_Group object");
         exit(1); // not actually needed, laik_panic never returns
@@ -291,11 +291,14 @@ Laik_Group* laik_create_group(Laik_Instance* i, int maxsize)
     g->maxsize = maxsize;
     g->backend_data = 0;
     g->parent = 0;
+    g->parent2 = 0;
 
     // space after struct
-    g->toParent   = (int*) (((char*)g) + sizeof(Laik_Group));
-    g->fromParent = g->toParent + maxsize;
-    g->locationid = g->fromParent + maxsize;
+    g->locationid  = (int*) (((char*)g) + sizeof(Laik_Group));
+    g->fromParent  = g->locationid + maxsize;
+    g->toParent    = g->fromParent + maxsize;
+    g->fromParent2 = g->toParent + maxsize;
+    g->toParent2   = g->fromParent2 + maxsize;
 
     g->rc_app = 0;
     g->rc_others = 0;
@@ -359,6 +362,115 @@ Laik_Group* laik_clone_group(Laik_Group* g)
     return g2;
 }
 
+// helpers for laik_new_union_group
+
+struct lididx
+{
+    int lid;
+    int idx;
+};
+
+static
+int lididx_cmp(const void *p1, const void *p2)
+{
+    const struct lididx* li1 = (const struct lididx*) p1;
+    const struct lididx* li2 = (const struct lididx*) p2;
+
+    return li1->lid - li2->lid;
+}
+
+// create new group as union of 2 groups
+Laik_Group* laik_new_union_group(Laik_Group* g1, Laik_Group* g2)
+{
+    assert(g1->inst == g2->inst);
+    int sizesum = g1->size + g2->size;
+    struct lididx* li_array = malloc(sizesum * sizeof(struct lididx));
+    assert(li_array != 0);
+
+    int off = 0;
+    for(int i = 0; i < g1->size; i++) {
+        li_array[off].idx = i;
+        li_array[off].lid = g1->locationid[i];
+        off++;
+    }
+    for(int i = 0; i < g2->size; i++) {
+        li_array[off].idx = g1->size + i;
+        li_array[off].lid = g2->locationid[i];
+        off++;
+    }
+    assert(off == sizesum);
+    qsort(li_array, sizesum, sizeof(struct lididx), lididx_cmp);
+
+    int lids = 0, lastlid = -1;
+    for(int i = 0; i < sizesum; i++) {
+        if (lastlid == li_array[i].lid) continue;
+        lastlid = li_array[i].lid;
+        lids++;
+    }
+
+    if (lids == g1->size) {
+        // g1 has same LIDs as g1 and g2, so g1 is union
+        free(li_array);
+        laik_log(1, "union group of %d (size %d, myid %d) + %d (size %d, myid %d): %d",
+                 g1->gid, g1->size, g1->myid, g2->gid, g2->size, g2->myid, g1->gid);
+        return g1;
+    }
+    if (lids == g2->size) {
+        // g2 has same LIDs as g1 and g2, so g1 is union
+        free(li_array);
+        laik_log(1, "union group of %d (size %d, myid %d) + %d (size %d, myid %d): %d",
+                 g1->gid, g1->size, g1->myid, g2->gid, g2->size, g2->myid, g2->gid);
+        return g2;
+    }
+
+    Laik_Group* g = laik_create_group(g1->inst, lids);
+    g->size = lids;
+    g->myid = -1;
+    g->parent = g1;
+    g->parent2 = g2;
+    int gi = -1;
+    lastlid = -1;
+    for(int i = 0; i < sizesum; i++) {
+        if (lastlid != li_array[i].lid) {
+            lastlid = li_array[i].lid;
+            gi++;
+            g->locationid[gi] = lastlid;
+            if (g->inst->mylocationid == lastlid)
+                g->myid = gi;
+            g->toParent[gi] = -1;
+            g->toParent2[gi] = -1;
+        }
+        if (li_array[i].idx < g1-> size) {
+            g->fromParent[li_array[i].idx] = gi;
+            g->toParent[gi] = li_array[i].idx;
+        }
+        else {
+            g->fromParent2[li_array[i].idx - g1->size] = gi;
+            g->toParent2[gi] = li_array[i].idx - g1->size;
+        }
+    }
+
+    if (laik_log_begin(1)) {
+        laik_log_append("union group of %d (size %d, myid %d) + %d (size %d, myid %d)",
+                        g1->gid, g1->size, g1->myid, g2->gid, g2->size, g2->myid);
+        laik_log_append(" => %d (size %d, myid %d):",
+                        g->gid, g->size, g->myid);
+        laik_log_append("\n  fromParent1 (to union)  : ");
+        laik_log_IntList(g1->size, g->fromParent);
+        laik_log_append("\n  toParent1   (from union): ");
+        laik_log_IntList(g->size, g->toParent);
+        laik_log_append("\n  fromParent2 (to union)  : ");
+        laik_log_IntList(g2->size, g->fromParent2);
+        laik_log_append("\n  toParent2   (from union): ");
+        laik_log_IntList(g->size, g->toParent2);
+        laik_log_append("\n  toLocation (in union): ");
+        laik_log_IntList(g->size, g->locationid);
+        laik_log_flush(0);
+    }
+
+    free(li_array);
+    return g;
+}
 
 // Shrinking (collective)
 Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list)

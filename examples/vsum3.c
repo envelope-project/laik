@@ -68,6 +68,7 @@ int main(int argc, char* argv[])
         // joining
         Laik_Group* parent = laik_group_parent(world);
         part1 = laik_new_partitioning(bp, parent, space, 0);
+        laik_set_initial_partitioning(array, part1);
     }
 
     while(1) {
