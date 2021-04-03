@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
 
         laik_switchto_partitioning(sumdata, sp2, LAIK_DF_Preserve, LAIK_RO_Sum);
         if (laik_myid(world) == 0)
-            printf("Total sum: %.0f\n", mysum);
+            printf("Phase %d: total sum: %.0f\n", phase, mysum);
 
         if (phase >= maxiter) break;
         sleep(1);

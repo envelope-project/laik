@@ -20,7 +20,7 @@ TESTS= \
     test-markov test-markov2 test-markov2f \
     test-propagation2d test-propagation2do \
     test-kvstest test-location test-spaces \
-    test-resize
+    test-resize test-vsum3
 
 .PHONY: $(TESTS)
 
@@ -146,6 +146,9 @@ test-spaces:
 
 test-resize:
 	$(SDIR)./test-resize-2-2.sh
+
+test-vsum3:
+	$(SDIR)./test-vsum3-2-2.sh
 
 clean:
 	rm -rf *.out
