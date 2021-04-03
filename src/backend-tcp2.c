@@ -39,7 +39,30 @@
  * - master process waits for (LAIK_SIZE-1) processes to join (default for
  *   LAIK_SIZE is 1, ie. master does not wait for anybody to join) before
  *   finishing initialization and giving control back to application
- * - when the application of LAIK master calls into the backend again for
+ * - from the point of master, a registration uses 4 steps:
+ *   (1) waiting for and accepting registration wishes, sending an "id"
+ *       message to registering processes, giving each a unique location ID;
+ *   (2) when enough processes registered, send all new processes info about
+ *       existing ("id" line) and to all processes about newly joining
+ *       ("newid" line) processes
+ *   (3) request from all processes a confirmation about passed information
+ *       on existing/new proceeses, and to be ready accepting direct connections;
+ *   (4) telling all registered processes the entered application phase,
+ *       which is 0 for startup (in contract to later joining processes).
+ *   These steps are both done in startup and resize mode. However, in startup,
+ *   in (2) there are no existing processes
+ * - master sets application phase 0 for itself and returns control back
+ *   to application.
+ *
+ * Notes:
+ * - at registration, processes can specify a listening port for peer-to-peer
+ *   transfers. However, processes only accept connections from peers they know.
+ *   The registration steps make sure that after returning to the application,
+ *   processes can immedately open direct connections to other processes, as
+ *   these confirmed in the registration that they are ready to accept such
+ *   direct connections, after step (3) - at this point, they know all involved
+ *   processes
+ * - when later the application of LAIK master calls into the backend again for
  *   data exchange, KVS sync, or resize requests, it also handles connection
  *   requests and commands from other processes, including requests to join by
  *   sending a register command. Registration requests will be appended to a
@@ -62,13 +85,13 @@
  *   backend in master is called via resize() request to allow processes to join
  * - master sends an "id" line for the new assigned location ID of registering
  *   process "id <id> <location> <host> <port>\n"
- * - afterwards, master sends the following commands in arbitrary order:
- *   - further "id" lines, for each currently active process
- *   - LAIK config and serialized LAIK objects as KVS entries (see KVS sync)
- * - at end, master finishes registration setup by asking joining process for
- *   confirmation of reception of sent commands via "ack req\n"
- * - registered process answers with "ack ok\n", which also tells master
- *   that registered process is ready for peer connections from sent id lines
+ * - master sends further "id" lines, for each existing active process, and
+ *   "newid" lines for each newly joining process.
+ *   With these lists, the newly joining process can create the lists of
+ *   existing and joining processes
+ * - after master decides that enough processes registered, he sends "getready"
+ *   to each process
+ * - the registering and all existing processes sends back "ok" as response
  * - master sends compute phase and epoch to just registered process via
  *   "phase <phaseid> <epoch>\n", which allows process to start peer connections
  *   - the epoch increments for each process world change
@@ -80,11 +103,11 @@
  * Elasticity:
  * - LAIK checks backend for processes wanting to join at compute phase change
  * - processes tell master about reached phase and ask for new IDs
- *     "resize <phaseid> <maxid>"
+ *     "enterresize <phaseid> <maxid>"
  * - master answers
- *   - new ID lines of processes joining
- *   - ids to be removed: "remove <id>"
- *   - finishes with "done"
+ *   - new ID lines of processes joining with "newid"
+ *   - (TODO) ids to be removed: "remove <id>"
+ *   - request for confirmation via "getready", waiting for "ok"
  * - control given back to application, to process resize request
  *
  * Data exchange:
@@ -178,6 +201,8 @@ typedef enum _PeerState {
     PS_Ready,          // peer: ready for connect/commands/data, control may be in application
     PS_Error,          // peer: connectivity broken
     PS_InResize,       // master/peer: in resize mode
+    PS_InResize2,      // master: in resize mode, waiting for peer confirmation of new info
+    PS_InResize3,      // master: in resize mode, got peer confirmation of new info
 } PeerState;
 
 // communicating peer
@@ -351,6 +376,14 @@ char* get_statestring(PeerState st)
     case PS_InResize:
         // master/peer: in resize mode
         return "in resize mode";
+
+    case PS_InResize2:
+        // master: in resize mode, waiting for peer confirmation of new info
+        return "in resize mode, sent confirmation request";
+
+    case PS_InResize3:
+        // master: in resize mode, got peer confirmation of new info
+        return "in resize mode, got peer confirmation of new info";
 
     default: break;
     }
@@ -969,6 +1002,7 @@ void got_status(InstData* d, int fd, int lid)
 void got_id(InstData* d, int lid, char* msg)
 {
     // id <lid> <location> <host> <port> <flags>
+    // newid <lid> <location> <host> <port> <flags>
 
     // ignore if master
     if (d->mylid == 0) {
@@ -982,6 +1016,8 @@ void got_id(InstData* d, int lid, char* msg)
         laik_log(LAIK_LL_Warning, "cannot parse id command '%s'; ignoring", msg);
         return;
     }
+
+    bool newid = (cmd[0] == 'n');
 
     // parse flags
     bool accepts_bin_data = false;
@@ -1006,18 +1042,15 @@ void got_id(InstData* d, int lid, char* msg)
     else {
         switch(d->mystate) {
             case PS_RegAccepted:
-                // in newcomer, after reg acceptance: existing process
-                d->peer[lid].state = PS_Ready;
-                break;
-            case PS_Ready:
-                // in newcomer, after getting ready: this is a newcomer
-                // not allowed to connect yet
-                d->peer[lid].state = PS_NoConnect;
+                // in newcomer, announced process is:
+                // - (with "id") existing process in resize mode
+                // - (with "newid") newcomer, not allowed to connect yet
+                d->peer[lid].state = newid ? PS_NoConnect : PS_InResize;
                 break;
             case PS_InResize:
-                // in existing process: this is a new-comer (only newcomer info sent)
-                // not allowed to connect yet
+                // in existing process: this is a new-comer, no connect yet
                 d->peer[lid].state = PS_NoConnect;
+                assert(newid); // only new ids announced to existing processes
                 break;
             default:
                 laik_panic("Got id in wrong phase");
@@ -1206,12 +1239,17 @@ void got_getready(InstData* d, int lid, char* msg)
         return;
     }
 
-    if (d->mystate != PS_RegAccepted) {
+    switch(d->mystate) {
+    case PS_RegAccepted:
+        laik_log(1, "TCP2 got 'getready' from LID %d during registration", lid);
+        break;
+    case PS_InResize:
+        laik_log(1, "TCP2 got 'getready' from LID %d during resize", lid);
+        break;
+    default:
         laik_log(LAIK_LL_Warning, "ignoring 'getready', already ready");
         return;
     }
-
-    laik_log(1, "TCP2 got 'getready' from LID %d", lid);
 
     sprintf(cmd, "ok");
     send_cmd(d, lid, cmd);
@@ -1238,6 +1276,14 @@ void got_ok(InstData* d, int lid, char* msg)
             if (d->readyPeers + 1 == d->init_wsize)
                 d->mystate = PS_Ready;
         }
+        d->exit = 1;
+        return;
+    }
+
+    if ((d->mylid == 0) && (d->peer[lid].state == PS_InResize2)) {
+        laik_log(1, "TCP2 got 'ok' from LID %d: resize changes accepted", lid);
+
+        d->peer[lid].state = PS_InResize3;
         d->exit = 1;
         return;
     }
@@ -1280,13 +1326,14 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     // second part of commands are accepted only with ID assigned by master
     switch(msg[0]) {
     case 'i': got_id(d, lid, msg); return; // id <lid> <location> <host> <port>
+    case 'n': got_id(d, lid, msg); return; // newid <lid> <location> <host> <port>
     case 'e': got_enterresize(d, lid, msg); return; // enterresize <phase> <epoch>
     case 'p': got_phase(d, msg); return; // phase <phaseid>
     case 'a': got_allowsend(d, lid, msg); return; // allowsend <count> <elemsize>
     case 'd': got_data(d, lid, msg); return; // data <len> [(<pos>)] <hex> ...
     case 'k': got_kvs(d, lid, msg); return; // kvs ...
     case 'g': got_getready(d, lid, msg); return; // getready
-    case 'o': got_ok(d, lid, msg); return; // getready
+    case 'o': got_ok(d, lid, msg); return; // ok
     default: break;
     }
 
@@ -1539,6 +1586,18 @@ int startup_master(InstData* d)
     assert(d->peers + 1 == world_size);
     assert(d->mystate == PS_InStartup2);
 
+    // broadcast location ID infos to all non-masters
+    char msg[150];
+    for(int lid = 0; lid <= d->maxid; lid++) {
+        sprintf(msg, "newid %d %s %s %d %s", lid,
+                d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
+                d->peer[lid].accepts_bin_data ? "b":"-");
+        for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
+            if (lid == to_lid) continue;
+            send_cmd(d, to_lid, msg);
+        }
+    }
+
     // notify peers to get ready, and wait for them to become ready
     // (ready means they accept direct connections)
     for(int i = 1; i <= d->maxid; i++) {
@@ -1549,18 +1608,6 @@ int startup_master(InstData* d)
     while(d->mystate == PS_InStartup2)
         run_loop(d);
     assert(d->readyPeers + 1 == world_size);
-
-    // broadcast location ID infos to all non-masters
-    char msg[150];
-    for(int lid = 0; lid <= d->maxid; lid++) {
-        sprintf(msg, "id %d %s %s %d %s", lid,
-                d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
-                d->peer[lid].accepts_bin_data ? "b":"-");
-        for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
-            if (lid == to_lid) continue;
-            send_cmd(d, to_lid, msg);
-        }
-    }
 
     laik_log(1, "TCP2 master: %d peers registered, startup done\n", d->readyPeers);
 
@@ -1583,6 +1630,7 @@ int startup_non_master(InstData* d)
             d->location, d->host, d->listenport, d->accept_bin_data ? "bin":"");
     send_cmd(d, 0, msg);
 
+    // wait until "getready" from master, confirmed with "ok", setting myself to ready
     while(d->mystate != PS_Ready)
         run_loop(d);
 
@@ -1756,7 +1804,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     int added = 0, old = 0;
     for(int i = 0; i <= d->maxid; i++) {
         if (d->peer[i].state == PS_NoConnect) added++;
-        else if (d->peer[i].state == PS_Ready) old++;
+        else if (d->peer[i].state == PS_InResize) old++;
         else assert(0);
     }
     assert(world_size == old + added);
@@ -1779,7 +1827,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         int parentID = 0, worldID = 0;
         for(int lid = 0; lid <= d->maxid; lid++) {
             if (d->mylid == lid) world->myid = worldID;
-            if (d->peer[lid].state == PS_Ready) {
+            if (d->peer[lid].state == PS_InResize) {
                 // in old, also in new group
                 parent->locationid[parentID] = lid;
                 world->locationid[worldID] = lid;
@@ -2322,22 +2370,10 @@ Laik_Group* tcp2_resize()
         }
     }
 
-    // for newly registered: send 'getReady'
-    for(int i = 1; i <= d->maxid; i++) {
-        if (d->peer[i].state != PS_RegAccepted) continue;
-        d->peer[i].state = PS_RegFinishing;
-        send_cmd(d, i, "getready");
-    }
-
-    // wait for ready confirmation
-    while(d->readyPeers < d->peers)
-        run_loop(d);
-    laik_log(1, "TCP2 resize master: %d peers ready (%d added)", d->readyPeers, added);
-
     // broadcast location ID info of all new-comers to all non-masters
     for(int lid = 0; lid <= d->maxid; lid++) {
-        if (d->peer[lid].state != PS_Ready) continue;
-        sprintf(msg, "id %d %s %s %d %s", lid,
+        if (d->peer[lid].state != PS_RegAccepted) continue;
+        sprintf(msg, "newid %d %s %s %d %s", lid,
                 d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
                 d->peer[lid].accepts_bin_data ? "b":"-");
         for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
@@ -2345,6 +2381,28 @@ Laik_Group* tcp2_resize()
             send_cmd(d, to_lid, msg);
         }
     }
+
+    // request confirmation from all non-master about new info: send 'getReady'
+    for(int i = 1; i <= d->maxid; i++) {
+        if (d->peer[i].state == PS_RegAccepted)
+            d->peer[i].state = PS_RegFinishing;
+        else if (d->peer[i].state == PS_InResize)
+            d->peer[i].state = PS_InResize2;
+        else
+            continue;
+
+        send_cmd(d, i, "getready");
+    }
+
+    // wait for ready confirmation
+    for(int lid = 1; lid <= d->maxid; lid++) {
+        while((d->peer[lid].state != PS_Ready) &&
+              (d->peer[lid].state != PS_InResize3))
+            run_loop(d);
+    }
+
+    laik_log(1, "TCP2 resize master: %d peers ready (%d added)", d->readyPeers, added);
+
 
     // finish resize
     if (added > 0) epoch++;
@@ -2366,7 +2424,8 @@ Laik_Group* tcp2_resize()
     g->parent = w;
     int i1 = 0, i2 = 0; // i1: index in parent, i2: new process index
     for(int lid = 0; lid <= d->maxid; lid++) {
-        if (d->peer[lid].state == PS_InResize) {
+        if ((d->peer[lid].state == PS_InResize) ||
+            (d->peer[lid].state == PS_InResize3)) {
             // both in old and new group
             d->peer[lid].state = PS_Ready;
             assert(w->locationid[i1] == lid);
