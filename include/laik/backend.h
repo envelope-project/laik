@@ -29,6 +29,8 @@
 
 
 // LAIK communication back-end
+// there is no generic initialization function; laik_init() knowns
+// about available backends, and it calls specific init functions directly
 struct _Laik_Backend {
   char* name;
   void (*finalize)(Laik_Instance*);
@@ -65,7 +67,17 @@ struct _Laik_Backend {
   // log backend-specific action, return true if handled (see laik_log_Action)
   bool (*log_action)(Laik_Action* a);
 
-  // return new group on process size change (global sync)
+  // function for elasticity support, to be called by all active
+  // processes, resulting in a global synchronization.
+  // if not provided by a backend, no elasticity is supported.
+  // - merge all outstanding join and remove wishes seen by backend
+  // - without join/remove requests, return 0, otherwise
+  // - return new process group reflecting join/remove requests,
+  //   with current "world" group as parent
+  // TODO:
+  // - at beginning: mark processes not in current world as dead
+  // - split up for more fine-granular control
+  // - sub-world elasticity
   Laik_Group* (*resize)();
 };
 
