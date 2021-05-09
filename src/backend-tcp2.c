@@ -898,11 +898,15 @@ void got_cutoff(InstData* d, int fd, char* msg)
 {
     // cutoff <location pattern>
 
-    assert(d->fds[fd].cmd == 0);
+    if (d->mystate != PS_InResize) {
+        assert(d->fds[fd].cmd == 0);
 
-    d->fds[fd].state = PS_CutoffReceived;
-    d->fds[fd].cmd = strdup(msg);
-    laik_log(1, "TCP2 queued for later processing: '%s'", msg);
+        d->fds[fd].state = PS_CutoffReceived;
+        d->fds[fd].cmd = strdup(msg);
+        laik_log(1, "TCP2 queued for later processing: '%s'", msg);
+        return;
+    }
+    laik_log(1, "TCP2 processing: '%s'", msg);
 }
 
 void got_help(InstData* d, int fd, int lid)
@@ -2348,6 +2352,8 @@ Laik_Group* tcp2_resize()
         laik_log(1, "TCP2 resize: replay '%s' from FD %d",
                  d->fds[fd].cmd, fd);
         got_cmd(d, fd, d->fds[fd].cmd, strlen(d->fds[fd].cmd));
+        free(d->fds[fd].cmd);
+        d->fds[fd].cmd = 0;
     }
 
     // check how many new processes got accepted
