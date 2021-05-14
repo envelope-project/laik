@@ -199,10 +199,16 @@ typedef enum _PeerState {
     PS_InStartup2,     // master: enough peers joined, wait for reg handshake to finish
     PS_NoConnect,      // peer: no permission for direct connection (yet)
     PS_Ready,          // peer: ready for connect/commands/data, control may be in application
+    PS_ReadyRemove,    // peer: same as ready, but marked for removal
+    PS_Dead,           // peer: dead, got removed (after marked for removal)
     PS_Error,          // peer: connectivity broken
     PS_InResize,       // master/peer: in resize mode
+    PS_InResize1,      // master: in resize mode, all non-masters joined
     PS_InResize2,      // master: in resize mode, waiting for peer confirmation of new info
     PS_InResize3,      // master: in resize mode, got peer confirmation of new info
+    PS_InResizeRemove, // master/peer: peer marked for removal
+    PS_InResizeRemove2,// master: peer marked for removal, waiting for confirmation
+    PS_InResizeRemove3 // master: peer marked for removal, got confirmation
 } PeerState;
 
 // communicating peer
@@ -272,7 +278,8 @@ struct _InstData {
 
     int init_wsize;   // for master in startup: initial world size
     int peers;        // number of known peers (= valid entries in peer entry)
-    int readyPeers;   // number of peers in Ready state
+    int readyPeers;   // number of peers in Ready state (including ReadyRemove)
+    int deadPeers;    // number of peers marked dead (still valid entry)
     Peer peer[0];
 };
 
@@ -369,6 +376,14 @@ char* get_statestring(PeerState st)
         // peer: ready for connect/commands/data, control may be in application
         return "ready";
 
+    case PS_ReadyRemove:
+        // peer: same as ready, marked for removal
+        return "ready, marked for removal";
+
+    case PS_Dead:
+        // peer: dead, got removed (after marked for removal)
+        return "dead, got removed";
+
     case PS_Error:
         // peer: connectivity broken
         return "error, connectivity broken";
@@ -377,13 +392,29 @@ char* get_statestring(PeerState st)
         // master/peer: in resize mode
         return "in resize mode";
 
+    case PS_InResize1:
+        // master/peer: in resize mode, all non-masters joined
+        return "in resize mode, joined by all peers";
+
     case PS_InResize2:
         // master: in resize mode, waiting for peer confirmation of new info
-        return "in resize mode, sent confirmation request";
+        return "in resize mode, sent ready request to peers";
 
     case PS_InResize3:
         // master: in resize mode, got peer confirmation of new info
-        return "in resize mode, got peer confirmation of new info";
+        return "in resize mode, got ready confirmation from peers";
+
+    case PS_InResizeRemove:
+        // master/peer: in resize mode, peer marked for removal
+        return "in resize mode, peer marked for removal";
+
+    case PS_InResizeRemove2:
+        // master: peer marked for removal
+        return "in resize mode, peer marked for removal, sent ready confirmation request";
+
+    case PS_InResizeRemove3:
+        // master: peer marked for removal
+        return "in resize mode, peer marked for removal, got ready confirmation";
 
     default: break;
     }
@@ -782,9 +813,8 @@ void got_register(InstData* d, int fd, int lid, char* msg)
     }
 
     if ((d->mystate != PS_InStartup) &&
-        (d->mystate != PS_InResize)) {
-        // after startup: process later on resize()
-        assert((d->mystate == PS_InStartup2) || (d->mystate == PS_Ready));
+        (d->mystate != PS_InResize1)) {
+        // after startup: process later in resize()
         assert(d->fds[fd].cmd == 0);
 
         d->fds[fd].state = PS_RegReceived;
@@ -902,7 +932,7 @@ void got_cutoff(InstData* d, int fd, char* msg)
 {
     // cutoff <location pattern>
 
-    if (d->mystate != PS_InResize) {
+    if (d->mystate != PS_InResize1) {
         assert(d->fds[fd].cmd == 0);
 
         d->fds[fd].state = PS_CutoffReceived;
@@ -910,7 +940,31 @@ void got_cutoff(InstData* d, int fd, char* msg)
         laik_log(1, "TCP2 queued for later processing: '%s'", msg);
         return;
     }
-    laik_log(1, "TCP2 processing: '%s'", msg);
+
+    if (d->mylid > 0) {
+        laik_log(LAIK_LL_Warning, "got cutoff, but not master; ignoring");
+        return;
+    }
+
+    char cmd[20];
+    char pattern[50];
+    if (sscanf(msg, "%20s %40s", cmd, pattern) < 2) {
+        laik_log(LAIK_LL_Warning, "cannot parse cutoff command '%s'; ignoring", msg);
+        return;
+    }
+
+    laik_log(1, "TCP2 got cutoff, pattern '%s'", pattern);
+
+    int rcount = 0;
+    for(int lid = 1; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state == PS_Dead) continue;
+        if (strstr(d->peer[lid].location, pattern) == 0) continue;
+        assert(d->peer[lid].state == PS_InResize);
+        laik_log(1, "TCP2 LID %d matched for removal", lid);
+        d->peer[lid].state = PS_InResizeRemove;
+        rcount++;
+    }
+    laik_log(1, "TCP2 marked %d processes for removal", rcount);
 }
 
 void got_help(InstData* d, int fd, int lid)
@@ -1150,6 +1204,28 @@ void got_enterresize(InstData* d, int lid, char* msg)
     d->exit = 1;
 }
 
+void got_backedout(InstData* d, int lid, char* msg)
+{
+    // backedout <lid>
+    char cmd[20];
+    int backedout_lid;
+    if (sscanf(msg, "%20s %d", cmd, &backedout_lid) < 2) {
+        laik_log(LAIK_LL_Warning, "cannot parse backedout command '%s'; ignoring", msg);
+        return;
+    }
+
+    if ((d->mystate != PS_InResize) || (lid >0)) {
+        laik_log(LAIK_LL_Warning, "got backedout cmd not in resize or not from master; ignoring");
+        return;
+    }
+    laik_log(1, "TCP2 got backedout for LID %d", backedout_lid);
+
+    assert((backedout_lid > 0) && (backedout_lid <= d->maxid));
+    assert(d->peer[backedout_lid].state == PS_InResize);
+    d->peer[backedout_lid].state = PS_InResizeRemove;
+    if (d->mylid == backedout_lid)
+        d->mystate = PS_InResizeRemove;
+}
 
 void got_allowsend(InstData* d, int lid, char* msg)
 {
@@ -1265,12 +1341,19 @@ void got_getready(InstData* d, int lid, char* msg)
         return;
     }
 
+    PeerState newstate = PS_Invalid;
     switch(d->mystate) {
     case PS_RegAccepted:
         laik_log(1, "TCP2 got 'getready' from LID %d during registration", lid);
+        newstate = PS_Ready;
         break;
     case PS_InResize:
         laik_log(1, "TCP2 got 'getready' from LID %d during resize", lid);
+        newstate = PS_Ready;
+        break;
+    case PS_InResizeRemove:
+        laik_log(1, "TCP2 got 'getready' from LID %d during resize, marked for removal", lid);
+        newstate = PS_ReadyRemove;
         break;
     default:
         laik_log(LAIK_LL_Warning, "ignoring 'getready', already ready");
@@ -1279,7 +1362,8 @@ void got_getready(InstData* d, int lid, char* msg)
 
     sprintf(cmd, "ok");
     send_cmd(d, lid, cmd);
-    d->mystate = PS_Ready;
+    d->mystate = newstate;
+    d->peer[d->mylid].state = newstate;
 
     d->exit = 1;
 }
@@ -1306,10 +1390,15 @@ void got_ok(InstData* d, int lid, char* msg)
         return;
     }
 
-    if ((d->mylid == 0) && (d->peer[lid].state == PS_InResize2)) {
+    if ((d->mylid == 0) &&
+        ((d->peer[lid].state == PS_InResize2) ||
+         (d->peer[lid].state == PS_InResizeRemove2))) {
         laik_log(1, "TCP2 got 'ok' from LID %d: resize changes accepted", lid);
 
-        d->peer[lid].state = PS_InResize3;
+        if (d->peer[lid].state == PS_InResizeRemove2)
+            d->peer[lid].state = PS_InResizeRemove3;
+        else
+            d->peer[lid].state = PS_InResize3;
         d->exit = 1;
         return;
     }
@@ -1354,6 +1443,7 @@ void got_cmd(InstData* d, int fd, char* msg, int len)
     case 'i': got_id(d, lid, msg); return; // id <lid> <location> <host> <port>
     case 'n': got_id(d, lid, msg); return; // newid <lid> <location> <host> <port>
     case 'e': got_enterresize(d, lid, msg); return; // enterresize <phase> <epoch>
+    case 'b': got_backedout(d, lid, msg); return; // backedout <lid>
     case 'p': got_phase(d, msg); return; // phase <phaseid>
     case 'a': got_allowsend(d, lid, msg); return; // allowsend <count> <elemsize>
     case 'd': got_data(d, lid, msg); return; // data <len> [(<pos>)] <hex> ...
@@ -1547,6 +1637,7 @@ InstData* new_inst_data(char* host, char* location)
     d->init_wsize = -1; // unknown initial world size
     d->peers = 0; // zero known peers
     d->readyPeers = 0; // zero ready peers
+    d->deadPeers = 0;
     for(int i = 0; i < MAX_PEERS; i++) {
         d->peer[i].state = PS_Invalid;
         d->peer[i].port = -1; // unknown peer
@@ -1663,6 +1754,15 @@ int startup_non_master(InstData* d)
     // wait for active phase
     while(d->phase == -1)
         run_loop(d);
+
+    // LIDs without any info received actually are dead
+    int dead = 0;
+    for(int i = 0; i <= d->maxid; i++)
+        if (d->peer[i].state == PS_Invalid) {
+            d->peer[i].state = PS_Dead;
+            dead++;
+        }
+    d->deadPeers = dead;
 
     return d->peers + 1;
 }
@@ -1825,22 +1925,21 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         d->peer[d->mylid].state = PS_NoConnect;
     }
 
-    assert(d->mylid < world_size);
-
     //
     // finished initialization: we are ready
     //
 
-    instance = laik_new_instance(&laik_backend, world_size, d->mylid,
+    instance = laik_new_instance(&laik_backend, d->maxid + 1, d->mylid,
                                  d->epoch, d->phase, d->location, d);
 
     int added = 0, old = 0;
     for(int i = 0; i <= d->maxid; i++) {
+        if (d->peer[i].state == PS_Dead) continue;
         if (d->peer[i].state == PS_NoConnect) added++;
         else if (d->peer[i].state == PS_InResize) old++;
         else assert(0);
     }
-    laik_log(1, "TCP2 newcomer: added %d, old %d", added, old);
+    laik_log(1, "TCP2 newcomer: added %d, old %d (dead %d)", added, old, d->deadPeers);
     assert(world_size == old + added);
 
     // create initial world group
@@ -1859,6 +1958,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         parent->myid = -1; // not in parent group
         int parentID = 0, worldID = 0;
         for(int lid = 0; lid <= d->maxid; lid++) {
+            if (d->peer[lid].state == PS_Dead) continue;
             if (d->mylid == lid) world->myid = worldID;
             if (d->peer[lid].state == PS_InResize) {
                 // in old, also in new group
@@ -2287,6 +2387,10 @@ Laik_Group* tcp2_resize()
 {
     char msg[150];
     InstData* d = (InstData*)instance->backend_data;
+    if (d->mystate == PS_ReadyRemove) {
+        // cannot join in resize, outside of current world
+        return 0;
+    }
     assert(d->mystate == PS_Ready);
     d->peer[d->mylid].state = PS_InResize;
     d->mystate = PS_InResize;
@@ -2294,6 +2398,16 @@ Laik_Group* tcp2_resize()
     int phase = instance->phase;
     int epoch = instance->epoch;
     laik_log(1, "TCP2 resize: phase %d, epoch %d", phase, epoch);
+
+    // peers marked for removal are now dead
+    int markedDead = 0;
+    for(int lid = 1; lid <= d->maxid; lid++)
+        if (d->peer[lid].state == PS_ReadyRemove) {
+            d->peer[lid].state = PS_Dead;
+            markedDead++;
+        }
+    d->deadPeers += markedDead;
+    d->readyPeers -= markedDead;
 
     if (d->mylid > 0) {
         // tell master that we are in resize mode
@@ -2305,12 +2419,17 @@ Laik_Group* tcp2_resize()
         while(d->phase != phase)
             run_loop(d);
 
-        int added = 0;
-        for(int lid = 0; lid <= d->maxid; lid++)
-            if (d->peer[lid].state == PS_NoConnect)
-                added++;
+        int added = 0, to_remove = 0;
+        for(int lid = 0; lid <= d->maxid; lid++) {
+            switch(d->peer[lid].state) {
+            case PS_NoConnect: added++; break;
+            case PS_ReadyRemove: to_remove++; break;
+            case PS_Ready: break;
+            default: assert(0);
+            }
+        }
 
-        if (added == 0) {
+        if ((added == 0) && (to_remove == 0)) {
             // nothing changed
             laik_log(1, "TCP2 resize: nothing changed");
             d->peer[d->mylid].state = PS_Ready;
@@ -2327,6 +2446,7 @@ Laik_Group* tcp2_resize()
             if ((d->peer[lid].state == PS_Ready) ||
                 (d->peer[lid].state == PS_InResize)) {
                 // both in old and new group
+                d->peer[lid].state = PS_Ready;
                 assert(w->locationid[i1] == lid);
                 g->locationid[i2] = lid;
                 g->toParent[i2] = i1;
@@ -2343,6 +2463,13 @@ Laik_Group* tcp2_resize()
                 i2++;
                 continue;
             }
+            if (d->peer[lid].state == PS_ReadyRemove) {
+                // marked for removal
+                assert(w->locationid[i1] == lid);
+                g->fromParent[i1] = -1; // does not exist in new group
+                i1++;
+                continue;
+            }
             assert(0);
         }
         assert(w->size == i1);
@@ -2350,10 +2477,9 @@ Laik_Group* tcp2_resize()
         g->myid = g->fromParent[w->myid];
         instance->locations = d->maxid + 1;
 
-        laik_log(1, "TCP2 resize: locations %d (added %d), new group (size %d, my id %d)",
-                 instance->locations, added, g->size, g->myid);
-        d->mystate = PS_Ready;
-        d->peer[d->mylid].state = PS_Ready;
+        laik_log(1, "TCP2 resize: locations %d (added %d, to remove %d), new group (size %d, my id %d)",
+                 instance->locations, added, to_remove, g->size, g->myid);
+        d->mystate = d->peer[d->mylid].state;
         return g;
     }
 
@@ -2372,6 +2498,8 @@ Laik_Group* tcp2_resize()
         assert(d->peer[lid].state == PS_InResize);
     }
 
+    d->mystate = PS_InResize1;
+
     // process queued join / remove requests
     for(int fd = 0; fd < MAX_FDS; fd++) {
         if (d->fds[fd].state == PS_Invalid) continue;
@@ -2385,16 +2513,18 @@ Laik_Group* tcp2_resize()
         d->fds[fd].cmd = 0;
     }
 
-    // check how many new processes got accepted
-    int added = 0;
+    // check how many new processes got accepted / are marked for removal
+    int added = 0, to_remove = 0;
     for(int i = 1; i <= d->maxid; i++) {
-        if (d->peer[i].state != PS_RegAccepted) continue;
-        added++;
+        if (d->peer[i].state == PS_RegAccepted) added++;
+        else if (d->peer[i].state == PS_InResizeRemove) to_remove++;
     }
 
     // broadcast location ID info of old processes to all new-comers
     for(int lid = 0; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state == PS_Dead) continue;
         if (d->peer[lid].state == PS_RegAccepted) continue;
+        // <lid> is an old process
         sprintf(msg, "id %d %s %s %d %s", lid,
                 d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
                 d->peer[lid].accepts_bin_data ? "b":"-");
@@ -2412,43 +2542,69 @@ Laik_Group* tcp2_resize()
                 d->peer[lid].location, d->peer[lid].host, d->peer[lid].port,
                 d->peer[lid].accepts_bin_data ? "b":"-");
         for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
+            if (d->peer[to_lid].state == PS_Dead) continue;
             if (lid == to_lid) continue;
+            send_cmd(d, to_lid, msg);
+        }
+    }
+
+    // broadcast LIDs of all processes marked for removal
+    for(int lid = 0; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state != PS_InResizeRemove) continue;
+        sprintf(msg, "backedout %d", lid);
+        for(int to_lid = 1; to_lid <= d->maxid; to_lid++) {
+            if (d->peer[to_lid].state == PS_Dead) continue;
             send_cmd(d, to_lid, msg);
         }
     }
 
     // request confirmation from all non-master about new info: send 'getReady'
     for(int i = 1; i <= d->maxid; i++) {
+        if (d->peer[i].state == PS_Dead) continue;
         if (d->peer[i].state == PS_RegAccepted)
             d->peer[i].state = PS_RegFinishing;
         else if (d->peer[i].state == PS_InResize)
             d->peer[i].state = PS_InResize2;
+        else if (d->peer[i].state == PS_InResizeRemove)
+            d->peer[i].state = PS_InResizeRemove2;
         else
-            continue;
+            assert(0); // should not happen
 
         send_cmd(d, i, "getready");
     }
 
     // wait for ready confirmation
+    int ready = 0, dead = 0;
     for(int lid = 1; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state == PS_Dead) { dead++; continue; }
+        // go on if ready (was joining), in resize3 (stays), in remove3 (about to leave)
         while((d->peer[lid].state != PS_Ready) &&
-              (d->peer[lid].state != PS_InResize3))
+              (d->peer[lid].state != PS_InResize3) &&
+              (d->peer[lid].state != PS_InResizeRemove3)) {
             run_loop(d);
+        }
+        ready++;
     }
+    assert(ready == d->readyPeers);
+    assert(dead == d->deadPeers);
 
-    laik_log(1, "TCP2 resize master: %d peers ready (%d added)", d->readyPeers, added);
-
+    laik_log(1, "TCP2 resize master: %d ready peers (%d added, %d to remove), %d dead",
+             ready, added, to_remove, dead);
 
     // finish resize
-    if (added > 0) epoch++;
+    if ((added > 0) || (to_remove > 0)) epoch++;
     sprintf(msg, "phase %d %d", phase, epoch);
-    for(int lid = 1; lid <= d->maxid; lid++)
+    for(int lid = 1; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state == PS_Dead) continue;
         send_cmd(d, lid, msg);
+    }
 
-    if (added == 0) {
+    if ((added == 0) && (to_remove == 0)) {
         // nothing changed
-        for(int lid = 1; lid <= d->maxid; lid++)
+        for(int lid = 1; lid <= d->maxid; lid++) {
+            if (d->peer[lid].state == PS_Dead) continue;
             d->peer[lid].state = PS_Ready;
+        }
         d->mystate = PS_Ready;
         return 0;
     }
@@ -2459,6 +2615,7 @@ Laik_Group* tcp2_resize()
     g->parent = w;
     int i1 = 0, i2 = 0; // i1: index in parent, i2: new process index
     for(int lid = 0; lid <= d->maxid; lid++) {
+        if (d->peer[lid].state == PS_Dead) continue;
         if ((d->peer[lid].state == PS_InResize) ||
             (d->peer[lid].state == PS_InResize3)) {
             // both in old and new group
@@ -2478,15 +2635,24 @@ Laik_Group* tcp2_resize()
             i2++;
             continue;
         }
+        if (d->peer[lid].state == PS_InResizeRemove3) {
+            // marked for removal
+            d->peer[lid].state = PS_ReadyRemove;
+            assert(w->locationid[i1] == lid);
+            g->fromParent[i1] = -1; // does not exist in new group
+            i1++;
+            continue;
+        }
         assert(0);
     }
     assert(w->size == i1);
     g->size = i2;
     g->myid = g->fromParent[w->myid];
     instance->locations = d->maxid + 1;
+    assert(d->deadPeers == dead);
 
-    laik_log(1, "TCP2 resize master: locations %d, new group (size %d, my id %d)",
-             instance->locations, g->size, g->myid);
+    laik_log(1, "TCP2 resize master: locations %d (%d ready, %d dead), new group (size %d, my id %d)",
+             instance->locations, ready, dead, g->size, g->myid);
     d->mystate = PS_Ready;
     return g;
 }
