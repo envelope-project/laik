@@ -101,6 +101,12 @@ void laik_log_init(Laik_Instance* i)
     assert(laik_loginst == 0);
     laik_loginst = i;
 
+    // if early-log location set: free it
+    if (laik_log_mylocation) {
+        free(laik_log_mylocation);
+        laik_log_mylocation = 0;
+    }
+
     laik_log_init_internal();
 }
 
@@ -108,7 +114,7 @@ void laik_log_init(Laik_Instance* i)
 // before a full backend instance is created, to get log output
 void laik_log_init_loc(char* mylocation)
 {
-    laik_log_mylocation = mylocation;
+    laik_log_mylocation = strdup(mylocation);
 
     laik_log_init_internal();
 }

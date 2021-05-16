@@ -826,14 +826,18 @@ void got_register(InstData* d, int fd, int lid, char* msg)
     assert(fd >= 0);
     d->fds[fd].lid = lid;
     assert(lid < MAX_PEERS);
+
+    char loc[60];
+    sprintf(loc, "L%d:%s", lid, l);
+
     laik_log(1, "TCP2 registered new LID %d: location %s (at host %s, port %d, flags %c)",
-             lid, l, h, p, accepts_bin_data ? 'b' : '-');
+             lid, loc, h, p, accepts_bin_data ? 'b' : '-');
 
     assert(d->peer[lid].port == -1);
     d->peer[lid].state = PS_RegAccepted;
     d->peer[lid].fd = fd;
     d->peer[lid].host = strdup(h);
-    d->peer[lid].location = strdup(l);
+    d->peer[lid].location = strdup(loc);
     d->peer[lid].port = p;
     d->peer[lid].accepts_bin_data = accepts_bin_data;
     // first time we use this id for a peer: init receive
@@ -842,7 +846,7 @@ void got_register(InstData* d, int fd, int lid, char* msg)
 
     // send response to registering process: notify about assigned LID
     char str[150];
-    sprintf(str, "id %d %s %s %d %s", lid, l, h, p, accepts_bin_data ? "b":"-");
+    sprintf(str, "id %d %s %s %d %s", lid, loc, h, p, accepts_bin_data ? "b":"-");
     send_cmd(d, lid, str);
 
     d->peers++;
@@ -1003,7 +1007,7 @@ void got_status(InstData* d, int fd, int lid)
     }
 }
 
-void got_id(InstData* d, int lid, char* msg)
+void got_id(InstData* d, int from_lid, char* msg)
 {
     // id <lid> <location> <host> <port> <flags>
     // newid <lid> <location> <host> <port> <flags>
@@ -1015,7 +1019,7 @@ void got_id(InstData* d, int lid, char* msg)
     }
 
     char cmd[20], l[50], h[50], flags[5];
-    int p;
+    int lid, p;
     if (sscanf(msg, "%20s %d %50s %50s %d %4s", cmd, &lid, l, h, &p, flags) < 6) {
         laik_log(LAIK_LL_Warning, "cannot parse id command '%s'; ignoring", msg);
         return;
@@ -1029,49 +1033,67 @@ void got_id(InstData* d, int lid, char* msg)
         if (flags[i] == 'b') accepts_bin_data = true;
 
     assert((lid >= 0) && (lid < MAX_PEERS));
-    if (d->mylid < 0) {
-        // is this my location id?
-        if (strcmp(d->location, l) == 0) {
-            d->mylid = lid;
-            d->mystate = PS_RegAccepted; // registration wish accepted by master
-        }
-    }
-    if (d->peer[lid].location != 0) {
-        // already known, announced by master
-        assert(lid <= d->maxid);
-        assert(strcmp(d->peer[lid].location, l) == 0);
-        assert(strcmp(d->peer[lid].host, h) == 0);
-        assert(d->peer[lid].port == p);
-    }
-    else {
-        switch(d->mystate) {
-            case PS_RegAccepted:
-                // in newcomer, announced process is:
-                // - (with "id") existing process in resize mode
-                // - (with "newid") newcomer, not allowed to connect yet
-                d->peer[lid].state = newid ? PS_NoConnect : PS_InResize;
-                break;
-            case PS_InResize:
-                // in existing process: this is a new-comer, no connect yet
-                d->peer[lid].state = PS_NoConnect;
-                assert(newid); // only new ids announced to existing processes
-                break;
-            default:
-                laik_panic("Got id in wrong phase");
-        }
-        d->peer[lid].host = strdup(h);
-        d->peer[lid].location = strdup(l);
-        d->peer[lid].port = p;
-        d->peer[lid].accepts_bin_data = accepts_bin_data;
-        // first time we see this peer: init receive
-        d->peer[lid].rcount = 0;
-        d->peer[lid].scount = 0;
+    if (lid > d->maxid) d->maxid = lid;
 
-        if (lid != d->mylid) d->peers++;
-        if (lid > d->maxid) d->maxid = lid;
+    if (d->mylid < 0) {
+        // must be response from master about accepted registration
+        assert(from_lid == 0);
+        d->mystate = PS_RegAccepted;
+        d->mylid = lid;
+
+        // master may have changed my location ID string
+        free(d->location);
+        d->location = strdup(l);
+
+        assert(strcmp(d->host, h) == 0);
+        assert(d->listenport == p);
+        assert(d->accept_bin_data == accepts_bin_data);
+
+        // copy my data also to d->peer[mylid]
+        d->peer[lid].state    = d->mystate;
+        d->peer[lid].host     = d->host;
+        d->peer[lid].location = d->location;
+        d->peer[lid].port     = d->listenport;
+        d->peer[lid].accepts_bin_data = accepts_bin_data;
+
+        laik_log(1, "TCP2 got my LID %d assigned (location %s, at %s, port %d, flags %c)",
+             lid, l, h, p, accepts_bin_data ? 'b':'-');
+        return;
     }
-    laik_log(1, "TCP2 seen %sLID %d (location %s, at %s, port %d, flags %c), known peers %d",
-             (lid == d->mylid) ? "my ":"",
+
+    // must be information about another peer
+    assert(lid != d->mylid);
+    // should not get same information twice
+    assert(d->peer[lid].location == 0);
+
+    // set peer state depending on own state
+    switch(d->mystate) {
+        case PS_RegAccepted:
+            // in newcomer, announced process is:
+            // - (with "id") existing process in resize mode
+            // - (with "newid") newcomer, not allowed to connect yet
+            d->peer[lid].state = newid ? PS_NoConnect : PS_InResize;
+            break;
+        case PS_InResize:
+            // in existing process: this is a new-comer, no connect yet
+            d->peer[lid].state = PS_NoConnect;
+            assert(newid); // only new ids announced to existing processes
+            break;
+        default:
+            laik_panic("Got id in wrong phase");
+    }
+    d->peer[lid].host = strdup(h);
+    d->peer[lid].location = strdup(l);
+    d->peer[lid].port = p;
+    d->peer[lid].accepts_bin_data = accepts_bin_data;
+
+    // first time we see this peer: init receive
+    d->peer[lid].rcount = 0;
+    d->peer[lid].scount = 0;
+
+    d->peers++;
+
+    laik_log(1, "TCP2 seen peer LID %d (location %s, at %s, port %d, flags %c), known peers %d",
              lid, l, h, p, accepts_bin_data ? 'b':'-', d->peers);
 }
 
@@ -1544,7 +1566,7 @@ InstData* new_inst_data(char* host, char* location)
         d->fds[i].cb = 0;
     }
 
-    d->host = host;
+    d->host = strdup(host);
     d->location = strdup(location);
     d->listenfd = -1; // not bound yet
     d->maxid = -1;    // not set yet
@@ -1661,15 +1683,15 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     // TODO: LAIK as library should not touch global signal handlers...
     signal(SIGPIPE, SIG_IGN);
 
-    // my location: hostname:PID
-    char location[100];
-    if (gethostname(location, 100) != 0) {
+    // my location string: "<hostname>:<pid>" (may be extended by master)
+    char hostname[50];
+    if (gethostname(hostname, 50) != 0) {
         // logging not initilized yet
         fprintf(stderr, "TCP2 cannot get host name");
         exit(1);
     }
-    char* host = strdup(location);
-    sprintf(location + strlen(location), ":%d", getpid());
+    char location[70];
+    sprintf(location, "%s:%d", hostname, getpid());
 
     // enable early logging
     laik_log_init_loc(location);
@@ -1687,9 +1709,9 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     int home_port = str ? atoi(str) : 0;
     if (home_port == 0) home_port = TCP2_PORT;
 
-    laik_log(1, "TCP2 location %s, home %s:%d\n", location, home_host, home_port);
+    laik_log(1, "TCP2 location '%s', home %s:%d\n", location, home_host, home_port);
 
-    InstData* d = new_inst_data(host, location);
+    InstData* d = new_inst_data(hostname, location);
 
     //
     // create listening socket and determine who is master
@@ -1762,11 +1784,18 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     if (d->mylid == 0) {
         // we are master
         d->mystate = PS_InStartup;
-        d->peer[0].state = PS_InStartup;
-        // use real host name, will be sent to others
-        d->peer[0].host = host;
-        d->peer[0].port = home_port;
+
+        // add LID tag to my location
+        char loc[100];
+        sprintf(loc, "L0:%s", d->location);
+        free(d->location);
+        d->location = strdup(loc);
+
+        // copy my data also to d->peer[0]
+        d->peer[0].state    = d->mystate;
+        d->peer[0].host     = d->host;
         d->peer[0].location = d->location;
+        d->peer[0].port     = d->listenport;
         d->peer[0].accepts_bin_data = d->accept_bin_data;
     }
     else {
@@ -1803,7 +1832,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     //
 
     instance = laik_new_instance(&laik_backend, world_size, d->mylid,
-                                 d->epoch, d->phase, location, d);
+                                 d->epoch, d->phase, d->location, d);
 
     int added = 0, old = 0;
     for(int i = 0; i <= d->maxid; i++) {
@@ -1811,8 +1840,8 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         else if (d->peer[i].state == PS_InResize) old++;
         else assert(0);
     }
-    assert(world_size == old + added);
     laik_log(1, "TCP2 newcomer: added %d, old %d", added, old);
+    assert(world_size == old + added);
 
     // create initial world group
     Laik_Group* world = laik_create_group(instance, world_size);
@@ -1860,7 +1889,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     d->mystate = PS_Ready;
 
     laik_log(2, "TCP2 backend initialized (location '%s', LID %d, rank %d/%d, epoch %d, phase %d, listening at %d, flags: %c)\n",
-             location, d->mylid, world->myid, world_size,
+             d->location, d->mylid, world->myid, world_size,
              d->epoch, d->phase, d->listenport, d->accept_bin_data ? 'b':'-');
 
     return instance;
