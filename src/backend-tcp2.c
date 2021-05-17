@@ -1221,7 +1221,9 @@ void got_backedout(InstData* d, int lid, char* msg)
     laik_log(1, "TCP2 got backedout for LID %d", backedout_lid);
 
     assert((backedout_lid > 0) && (backedout_lid <= d->maxid));
-    assert(d->peer[backedout_lid].state == PS_InResize);
+    // in non-master, other processes may still be marked as Ready (even though in resize)
+    assert((d->peer[backedout_lid].state == PS_InResize) ||
+           (d->peer[backedout_lid].state == PS_Ready));
     d->peer[backedout_lid].state = PS_InResizeRemove;
     if (d->mylid == backedout_lid)
         d->mystate = PS_InResizeRemove;
@@ -1949,8 +1951,10 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
         // we are part of initial processes: no parent
         // location IDs are process IDs in initial world
         world->myid = d->mylid;
-        for(int i = 0; i < world_size; i++)
+        for(int i = 0; i < world_size; i++) {
             world->locationid[i] = i;
+            d->peer[i].state = PS_Ready;
+        }
     }
     else {
         Laik_Group* parent = laik_create_group(instance, old);
@@ -1962,6 +1966,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
             if (d->mylid == lid) world->myid = worldID;
             if (d->peer[lid].state == PS_InResize) {
                 // in old, also in new group
+                d->peer[lid].state = PS_Ready;
                 parent->locationid[parentID] = lid;
                 world->locationid[worldID] = lid;
                 world->toParent[worldID] = parentID;
@@ -1972,6 +1977,7 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
             }
             // only in new group
             assert(d->peer[lid].state == PS_NoConnect);
+            d->peer[lid].state = PS_Ready;
             world->locationid[worldID] = lid;
             world->toParent[worldID] = -1;
             worldID++;
@@ -1983,9 +1989,6 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     // attach world to instance
     instance->world = world;
 
-    // all processes are ready
-    for(int i = 0; i <= d->maxid; i++)
-        d->peer[i].state = PS_Ready;
     d->mystate = PS_Ready;
 
     laik_log(2, "TCP2 backend initialized (location '%s', LID %d, rank %d/%d, epoch %d, phase %d, listening at %d, flags: %c)\n",
@@ -2422,9 +2425,14 @@ Laik_Group* tcp2_resize()
         int added = 0, to_remove = 0;
         for(int lid = 0; lid <= d->maxid; lid++) {
             switch(d->peer[lid].state) {
-            case PS_NoConnect: added++; break;
-            case PS_ReadyRemove: to_remove++; break;
-            case PS_Ready: break;
+            case PS_NoConnect:
+                added++; break;
+            case PS_InResizeRemove: // other process
+            case PS_ReadyRemove: // this process, ready
+                to_remove++; break;
+            case PS_Dead:
+            case PS_Ready:
+                break;
             default: assert(0);
             }
         }
@@ -2432,8 +2440,8 @@ Laik_Group* tcp2_resize()
         if ((added == 0) && (to_remove == 0)) {
             // nothing changed
             laik_log(1, "TCP2 resize: nothing changed");
-            d->peer[d->mylid].state = PS_Ready;
-            d->mystate = PS_Ready;
+            assert(d->peer[d->mylid].state == PS_Ready);
+            assert(d->mystate == PS_Ready);
             return 0;
         }
 
@@ -2443,34 +2451,35 @@ Laik_Group* tcp2_resize()
         g->parent = w;
         int i1 = 0, i2 = 0; // i1: index in parent, i2: new process index
         for(int lid = 0; lid <= d->maxid; lid++) {
-            if ((d->peer[lid].state == PS_Ready) ||
-                (d->peer[lid].state == PS_InResize)) {
+            switch(d->peer[lid].state) {
+            case PS_Dead: break;
+            case PS_Ready:
                 // both in old and new group
-                d->peer[lid].state = PS_Ready;
                 assert(w->locationid[i1] == lid);
                 g->locationid[i2] = lid;
                 g->toParent[i2] = i1;
                 g->fromParent[i1] = i2;
                 i1++;
                 i2++;
-                continue;
-            }
-            if (d->peer[lid].state == PS_NoConnect) {
+                break;
+            case PS_NoConnect:
                 // new registered
                 d->peer[lid].state = PS_Ready;
                 g->locationid[i2] = lid;
                 g->toParent[i2] = -1; // did not exist before
                 i2++;
-                continue;
-            }
-            if (d->peer[lid].state == PS_ReadyRemove) {
+                break;
+            case PS_InResizeRemove: // other process
+            case PS_ReadyRemove:
                 // marked for removal
+                d->peer[lid].state = PS_ReadyRemove;
                 assert(w->locationid[i1] == lid);
                 g->fromParent[i1] = -1; // does not exist in new group
                 i1++;
-                continue;
+                break;
+            default:
+                assert(0);
             }
-            assert(0);
         }
         assert(w->size == i1);
         g->size = i2;
