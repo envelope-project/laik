@@ -74,6 +74,7 @@ int main(int argc, char* argv[])
     while(1) {
         part2 = laik_new_partitioning(bp, world, space, 0);
         laik_switchto_partitioning(array, part2, LAIK_DF_Preserve, LAIK_RO_None);
+        if (laik_myid(world) < 0) break;
 
         laik_get_map_1d(array, 0, (void**) &base, &count);
         mysum = 0.0;
@@ -93,7 +94,6 @@ int main(int argc, char* argv[])
 
         // allow resize of world and get new world
         Laik_Group* newworld = laik_allow_world_resize(inst, phase);
-        if (laik_myid(newworld) < 0) break;
 
         if (newworld != world) {
             laik_release_group(world);
