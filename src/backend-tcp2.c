@@ -958,6 +958,7 @@ void got_cutoff(InstData* d, int fd, char* msg)
     int rcount = 0;
     for(int lid = 1; lid <= d->maxid; lid++) {
         if (d->peer[lid].state == PS_Dead) continue;
+        if (d->peer[lid].state == PS_RegAccepted) continue; // not for removal
         if (strstr(d->peer[lid].location, pattern) == 0) continue;
         assert(d->peer[lid].state == PS_InResize);
         laik_log(1, "TCP2 LID %d matched for removal", lid);
@@ -1214,10 +1215,16 @@ void got_backedout(InstData* d, int lid, char* msg)
         return;
     }
 
-    if ((d->mystate != PS_InResize) || (lid >0)) {
-        laik_log(LAIK_LL_Warning, "got backedout cmd not in resize or not from master; ignoring");
+    if (lid >0) {
+        laik_log(LAIK_LL_Warning, "got backedout cmd from non-master; ignoring");
         return;
     }
+
+    if ((d->mystate != PS_InResize) && (d->mystate != PS_RegAccepted)) {
+        laik_log(LAIK_LL_Warning, "got backedout cmd not in resize/regaccept; ignoring");
+        return;
+    }
+
     laik_log(1, "TCP2 got backedout for LID %d", backedout_lid);
 
     assert((backedout_lid > 0) && (backedout_lid <= d->maxid));
@@ -1934,15 +1941,18 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
     instance = laik_new_instance(&laik_backend, d->maxid + 1, d->mylid,
                                  d->epoch, d->phase, d->location, d);
 
-    int added = 0, old = 0;
+    int added = 0, old = 0, remove = 0;
     for(int i = 0; i <= d->maxid; i++) {
         if (d->peer[i].state == PS_Dead) continue;
         if (d->peer[i].state == PS_NoConnect) added++;
         else if (d->peer[i].state == PS_InResize) old++;
+        else if (d->peer[i].state == PS_InResizeRemove) { old++; remove++; }
         else assert(0);
     }
-    laik_log(1, "TCP2 newcomer: added %d, old %d (dead %d)", added, old, d->deadPeers);
+    laik_log(1, "TCP2 newcomer: added %d, old %d, remove %d (dead %d)",
+             added, old, remove, d->deadPeers);
     assert(world_size == old + added);
+    world_size -= remove;
 
     // create initial world group
     Laik_Group* world = laik_create_group(instance, world_size);
@@ -1972,6 +1982,14 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
                 world->toParent[worldID] = parentID;
                 world->fromParent[parentID] = worldID;
                 worldID++;
+                parentID++;
+                continue;
+            }
+            if (d->peer[lid].state == PS_InResizeRemove) {
+                // only in old group
+                d->peer[lid].state = PS_ReadyRemove;
+                parent->locationid[parentID] = lid;
+                world->fromParent[parentID] = -1; // does not exist in new group
                 parentID++;
                 continue;
             }

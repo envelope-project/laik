@@ -146,6 +146,8 @@ test-spaces:
 
 test-resize:
 	$(SDIR)./test-resize-2-2.sh
+	$(SDIR)./test-resize-3-r1.sh
+	$(SDIR)./test-resize-2-s1-r1.sh
 
 test-vsum3:
 	$(SDIR)./test-vsum3-2-2.sh
