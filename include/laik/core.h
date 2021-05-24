@@ -58,6 +58,9 @@ Laik_Instance* laik_init(int* argc, char*** argv);
 //! shut down communication and free resources of this instance
 void laik_finalize(Laik_Instance* inst);
 
+//! get unique location ID for the calling process in given instance
+int laik_mylocationid(Laik_Instance*);
+
 //! return a backend-dependent string for the location of the calling process
 char* laik_mylocation(Laik_Instance*);
 

@@ -178,6 +178,12 @@ void laik_finalize(Laik_Instance* inst)
     laik_log_cleanup(inst);
 }
 
+//! get unique location ID for the calling process in given instance
+int laik_mylocationid(Laik_Instance *i)
+{
+    return i->mylocationid;
+}
+
 // return a backend-dependant string for the location of the calling task
 char* laik_mylocation(Laik_Instance* inst)
 {
