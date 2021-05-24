@@ -1220,12 +1220,17 @@ void got_backedout(InstData* d, int lid, char* msg)
         return;
     }
 
-    if ((d->mystate != PS_InResize) && (d->mystate != PS_RegAccepted)) {
-        laik_log(LAIK_LL_Warning, "got backedout cmd not in resize/regaccept; ignoring");
+    laik_log(1, "TCP2 got backedout for LID %d", backedout_lid);
+
+    switch(d->mystate) {
+    case PS_RegAccepted:
+    case PS_InResize:
+    case PS_InResizeRemove:
+        break;
+    default:
+        laik_log(LAIK_LL_Panic, "got backedout cmd not in resize/regaccept");
         return;
     }
-
-    laik_log(1, "TCP2 got backedout for LID %d", backedout_lid);
 
     assert((backedout_lid > 0) && (backedout_lid <= d->maxid));
     // in non-master, other processes may still be marked as Ready (even though in resize)
