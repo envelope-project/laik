@@ -65,10 +65,21 @@ int main(int argc, char* argv[])
     int64_t gx1, gx2;
     int64_t x1, x2;
 
+    // for global sum, used for residuum: 1 double accessible by all
+    Laik_Space* sp1 = laik_new_space_1d(inst, 1);
+    Laik_Partitioning* pSum = laik_new_partitioning(laik_All, world, sp1, 0);
+    Laik_Data* sumD = laik_new_data(sp1, laik_Double);
+    laik_data_set_name(sumD, "sum");
+    laik_switchto_partitioning(sumD, pSum, LAIK_DF_None, LAIK_RO_None);
+
     // two 1d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_1d(inst, size);
     Laik_Data* data1 = laik_new_data(space, laik_Double);
     Laik_Data* data2 = laik_new_data(space, laik_Double);
+
+    // start with writing (= initialization) data1
+    Laik_Data* dWrite = data1;
+    Laik_Data* dRead = data2;
 
     // we use two types of partitioners algorithms:
     // - prWrite: cells to update (disjunctive partitioning)
@@ -77,53 +88,66 @@ int main(int argc, char* argv[])
     prWrite = laik_new_block_partitioner1();
     prRead = laik_new_cornerhalo_partitioner(1);
 
-    // run partitioners to get partitionings over 2d space and <world> group
-    // data1/2 are then alternately accessed using pRead/pWrite
     Laik_Partitioning *pWrite, *pRead;
-    pWrite = laik_new_partitioning(prWrite, world, space, 0);
-    pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+    int iter = laik_phase(inst);
+    if (iter == 0) {
+        // initial process
+        // run partitioners to get partitionings over 2d space and <world> group
+        // data1/2 are then alternately accessed using pRead/pWrite
+        pWrite = laik_new_partitioning(prWrite, world, space, 0);
+        pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+
+        // distributed initialization
+        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
+        laik_my_slice_1d(pWrite, 0, &gx1, &gx2);
+
+        // arbitrary non-zero values based on global indexes to detect bugs
+        laik_get_map_1d(dWrite, 0, (void**) &baseW, &countW);
+        for(uint64_t i = 0; i < countW; i++)
+            baseW[i] = (double) ((gx1 + i) & 6);
+
+        // set fixed boundary values
+        if (laik_global2local_1d(dWrite, 0, &off)) {
+            // if global index 0 is local, it must be at local index 0
+            assert(off == 0);
+            baseW[off] = loValue;
+        }
+        if (laik_global2local_1d(dWrite, size-1, &off)) {
+            // if last global index is local, it must be at countW-1
+            assert(off == countW - 1);
+            baseW[off] = hiValue;
+        }
+        laik_log(2, "Init done\n");
+    }
+    else {
+        // joining process
+        Laik_Group* parent = laik_group_parent(world);
+        // partitionings before joining
+        Laik_Partitioning *pWriteOld, *pReadOld;
+        pWriteOld = laik_new_partitioning(prWrite, parent, space, 0);
+        pReadOld  = laik_new_partitioning(prRead, parent, space, pWriteOld);
+        laik_set_initial_partitioning(dWrite, pWriteOld);
+        laik_set_initial_partitioning(dRead, pReadOld);
+
+        // calculate and switch to partitionings with new processes
+        pWrite = laik_new_partitioning(prWrite, world, space, 0);
+        pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+        laik_switchto_partitioning(dWrite, pWrite,
+                                   LAIK_DF_Preserve, LAIK_RO_None);
+        laik_switchto_partitioning(dRead, pRead,
+                                   LAIK_DF_None, LAIK_RO_None);
+        laik_free_partitioning(pWriteOld);
+        laik_free_partitioning(pReadOld);
+    }
     laik_partitioning_set_name(pWrite, "pWrite");
     laik_partitioning_set_name(pRead, "pRead");
 
-    // for global sum, used for residuum: 1 double accessible by all
-    Laik_Space* sp1 = laik_new_space_1d(inst, 1);
-    Laik_Partitioning* sumP = laik_new_partitioning(laik_All, world, sp1, 0);
-    Laik_Data* sumD = laik_new_data(sp1, laik_Double);
-    laik_data_set_name(sumD, "sum");
-    laik_switchto_partitioning(sumD, sumP, LAIK_DF_None, LAIK_RO_None);
-
-    // start with writing (= initialization) data1
-    Laik_Data* dWrite = data1;
-    Laik_Data* dRead = data2;
-
-    // distributed initialization
-    laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-    laik_my_slice_1d(pWrite, 0, &gx1, &gx2);
-
-    // arbitrary non-zero values based on global indexes to detect bugs
-    laik_get_map_1d(dWrite, 0, (void**) &baseW, &countW);
-    for(uint64_t i = 0; i < countW; i++)
-        baseW[i] = (double) ((gx1 + i) & 6);
-
-    // set fixed boundary values
-    if (laik_global2local_1d(dWrite, 0, &off)) {
-        // if global index 0 is local, it must be at local index 0
-        assert(off == 0);
-        baseW[off] = loValue;
-    }
-    if (laik_global2local_1d(dWrite, size-1, &off)) {
-        // if last global index is local, it must be at countW-1
-        assert(off == countW - 1);
-        baseW[off] = hiValue;
-    }
-    laik_log(2, "Init done\n");
-
     // for statistics (with LAIK_LOG=2)
     double t, t1 = laik_wtime(), t2 = t1;
-    int last_iter = 0;
+    int first_iter = iter;
+    int last_iter = iter;
     int res_iters = 0; // iterations done with residuum calculation
 
-    int iter = 0;
     for(; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
 
@@ -231,14 +255,46 @@ int main(int argc, char* argv[])
             pRead = pReadNew;
         }
 
-        // TODO: allow repartitioning
+        // allow external repartitioning
+        if ((repart < 0) && (iter > 0) && ((iter % (-repart)) == 0)) {
+            // allow resize of world and get new world
+            Laik_Group* newworld = laik_allow_world_resize(inst, iter + 1);
+            if (newworld != world) {
+                laik_release_group(world);
+                world = newworld;
+
+                Laik_Partitioning* pSumNew;
+                pSumNew = laik_new_partitioning(laik_All, world, sp1, 0);
+                laik_switchto_partitioning(sumD, pSumNew, LAIK_DF_None, LAIK_RO_None);
+                laik_free_partitioning(pSum);
+                pSum = pSumNew;
+
+                Laik_Partitioning *pWriteNew, *pReadNew;
+                pWriteNew = laik_new_partitioning(prWrite, world, space, 0);
+                pReadNew  = laik_new_partitioning(prRead, world, space, pWriteNew);
+                laik_switchto_partitioning(dWrite, pWriteNew,
+                                           LAIK_DF_Preserve, LAIK_RO_None);
+                laik_switchto_partitioning(dRead, pReadNew,
+                                           LAIK_DF_None, LAIK_RO_None);
+                laik_free_partitioning(pWrite);
+                laik_free_partitioning(pRead);
+                pWrite = pWriteNew;
+                pRead = pReadNew;
+
+                // exit if we got removed from world
+                if (laik_myid(world) < 0) {
+                    laik_finalize(inst);
+                    return 0;
+                }
+            }
+        }
     }
 
     // statistics for all iterations and reductions
     // using work load in all tasks
     if (laik_log_shown(2)) {
         t = laik_wtime();
-        int diter = iter;
+        int diter = iter - first_iter;
         double dt = t - t1;
         double gUpdates = 0.000000001 * size; // per iteration
         laik_log(2, "For %d iters: %.3fs, %.3f GF/s, %.3f GB/s",
