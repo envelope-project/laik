@@ -152,6 +152,9 @@ test-resize:
 
 test-vsum3:
 	$(SDIR)./test-vsum3-2-2.sh
+	$(SDIR)./test-vsum3-3-r1.sh
+	$(SDIR)./test-vsum3-2-s1-r1.sh
+	$(SDIR)./test-vsum3-3-r12.sh
 
 clean:
 	rm -rf *.out

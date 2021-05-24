@@ -539,7 +539,8 @@ void ensure_conn(InstData* d, int lid)
     if (d->peer[lid].state == PS_Error) {
         return; // cannot revive a broken connection
     }
-    assert(d->peer[lid].state == PS_Ready);
+    assert((d->peer[lid].state == PS_Ready) ||
+           (d->peer[lid].state == PS_ReadyRemove));
 
     if (d->peer[lid].port < 0) {
         // we want to connect, but cannot: peer becomes broken
