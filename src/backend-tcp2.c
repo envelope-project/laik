@@ -101,14 +101,30 @@
  * - on reception of "phase", registered processes give back control to application
  *
  * Elasticity:
- * - LAIK checks backend for processes wanting to join at compute phase change
- * - processes tell master about reached phase and ask for new IDs
- *     "enterresize <phaseid> <maxid>"
- * - master answers
- *   - new ID lines of processes joining with "newid"
- *   - (TODO) ids to be removed: "remove <id>"
+ * - By calling resize() in a backend, LAIK grants join wishes and removal requests.
+ *   On a change, the backend returns a newly created process group reflecting the
+ *   changes (with a group parent being the current world group)
+ * - if the backend detects join wishes (by receiving "register") or removal requests
+ *   (by receiving "cutoff <pattern>"), it will delay the requests and replay when
+ *   the resize() function is called
+ * - on resize(), existing processes
+ *   - check for processes marked for removal, and mark them as dead
+ *   - tell master about reached phase / epoch (via "enterresize").
+ *     here, phase is an arbitrary integer provided by the application to mark the
+ *     compute phase to be entered next. This allows joining processes to jump to this
+ *     phase. epoch is a integer incremented on any world group change, for internal
+ *     consistency check in LAIK.
+ * - master accepts join requests from new processes by assigning a LID
+ * - master answers to
+ *   - existing processes with IDs of newly joining processes (via "newid") and
+ *     processes to remove (via "backout")
+ *   - new processes with IDs of existing processes (via "id"), other newly joining
+ *     processes (via "newid"), and processes to remove (via "backout")
+ *  - master asks every process to confirm the information sent (via "getready")
  *   - request for confirmation via "getready", waiting for "ok"
- * - control given back to application, to process resize request
+ * - new group reflecting the changes is created, and group parent attached.
+ *   In newly joining processes the original group (parent) is reconstructed.
+ * - control is given back to LAIK
  *
  * Data exchange:
  * - always done directly between 2 processes, using any existing connection
