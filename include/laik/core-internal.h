@@ -97,6 +97,14 @@ struct _Laik_Instance {
     
 };
 
+// allocate space for a new LAIK instance.
+// this is only to be called from backend initialization.
+// the world yet is invalid, needs to be created and attached by backend
+Laik_Instance* laik_new_instance(const Laik_Backend* b, int size, int myid,
+                                 int epoch, int phase,
+                                 char* location, void* data);
+
+
 // add/remove space to/from instance
 void laik_addSpaceForInstance(Laik_Instance* inst, Laik_Space* s);
 void laik_removeSpaceFromInstance(Laik_Instance* inst, Laik_Space* s);
