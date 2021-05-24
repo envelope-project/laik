@@ -174,6 +174,7 @@
 #define __USE_XOPEN2K 1
 #endif
 #include <netdb.h>
+#include <regex.h>
 
 // defaults
 #define TCP2_PORT 7777
@@ -945,6 +946,8 @@ void got_myid(InstData* d, int fd, int lid, char* msg)
              lid, d->peer[lid].location, fd);
 }
 
+// the pattern is parsed as extended POSIX regular expression
+// (similar to PERL regexp, but no back-refs)
 void got_cutoff(InstData* d, int fd, char* msg)
 {
     // cutoff <location pattern>
@@ -972,17 +975,25 @@ void got_cutoff(InstData* d, int fd, char* msg)
 
     laik_log(1, "TCP2 got cutoff, pattern '%s'", pattern);
 
+    regex_t re;
+    if (regcomp(&re, pattern, REG_EXTENDED|REG_NOSUB) != 0) {
+        laik_log(LAIK_LL_Warning, "cannot compile regex pattern '%s'; ignoring", pattern);
+        return;
+    }
+
     int rcount = 0;
-    for(int lid = 1; lid <= d->maxid; lid++) {
+    for(int lid = 0; lid <= d->maxid; lid++) {
         if (d->peer[lid].state == PS_Dead) continue;
         if (d->peer[lid].state == PS_RegAccepted) continue; // not for removal
-        if (strstr(d->peer[lid].location, pattern) == 0) continue;
+        if (regexec(&re, d->peer[lid].location, 0, NULL, 0) != 0) continue;
+        assert(lid > 0); // complain if we got asked to remove LID 0
         assert(d->peer[lid].state == PS_InResize);
         laik_log(1, "TCP2 LID %d matched for removal", lid);
         d->peer[lid].state = PS_InResizeRemove;
         rcount++;
     }
     laik_log(1, "TCP2 marked %d processes for removal", rcount);
+    regfree(&re);
 }
 
 void got_help(InstData* d, int fd, int lid)
