@@ -252,6 +252,9 @@ typedef struct _Peer {
     // allowed to send data to peer?
     int scount;    // element count allowed to send, 0 if not
     int selemsize; // byte count expected per element
+
+    // info on early-entered resize phase (only used at master)
+    int phase, epoch;
 } Peer;
 
 // registrations for active fds in event loop
@@ -1213,22 +1216,17 @@ void got_enterresize(InstData* d, int lid, char* msg)
         laik_log(LAIK_LL_Warning, "cannot parse enterresize command '%s'; ignoring", msg);
         return;
     }
-    laik_log(1, "TCP2 got info that LID %d is in resize mode", lid);
+    if (res < 2) phase = -1; // unknown
+    if (res < 3) epoch = -1; // unknown
 
-    if (res < 2) {
-        // no phase given, assume own
-        phase = instance->phase;
-    }
-    if (res < 3) {
-        // no epoch given, assume own
-        epoch = instance->epoch;
-    }
+    laik_log(1, "TCP2 got info that LID %d is in resize mode (phase %d, epoch %d)",
+             lid, phase, epoch);
 
     assert((lid >= 0) && (lid < MAX_PEERS));
     assert(d->peer[lid].state == PS_Ready);
-    assert(instance->phase == phase);
-    assert(instance->epoch == epoch);
     d->peer[lid].state = PS_InResize;
+    d->peer[lid].phase = phase;
+    d->peer[lid].epoch = epoch;
 
     d->exit = 1;
 }
@@ -2550,7 +2548,10 @@ Laik_Group* tcp2_resize()
 
     // wait for all ready processes to join resize phase
     for(int lid = 1; lid <= d->maxid; lid++) {
-        if (d->peer[lid].state != PS_Ready) continue;
+        laik_log(1, "TCP2 resize master: LID %d state %d (%s)",
+                 lid, d->peer[lid].state, get_statestring(d->peer[lid].state));
+        if (d->peer[lid].state == PS_Dead) continue;
+        if (d->peer[lid].state == PS_InResize) continue;
         while(d->peer[lid].state == PS_Ready)
             run_loop(d);
         // originally "ready" processes may become broken: simply skip them
@@ -2558,6 +2559,7 @@ Laik_Group* tcp2_resize()
         assert(d->peer[lid].state == PS_InResize);
     }
 
+    // all ready processes now are in resize phase
     d->mystate = PS_InResize1;
 
     // process queued join / remove requests
@@ -2572,6 +2574,9 @@ Laik_Group* tcp2_resize()
         free(d->fds[fd].cmd);
         d->fds[fd].cmd = 0;
     }
+
+    // do not accept register/cutoff commands any more
+    d->mystate = PS_InResize2;
 
     // check how many new processes got accepted / are marked for removal
     int added = 0, to_remove = 0;
