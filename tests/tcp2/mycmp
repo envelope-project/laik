@@ -1,0 +1,1 @@
+cmp $1 $2 || git diff --no-index $1 $2
