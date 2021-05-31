@@ -77,10 +77,6 @@ int main(int argc, char* argv[])
     Laik_Data* data1 = laik_new_data(space, laik_Double);
     Laik_Data* data2 = laik_new_data(space, laik_Double);
 
-    // start with writing (= initialization) data1
-    Laik_Data* dWrite = data1;
-    Laik_Data* dRead = data2;
-
     // we use two types of partitioners algorithms:
     // - prWrite: cells to update (disjunctive partitioning)
     // - prRead : extends partitionings by haloes, to read neighbor values
@@ -88,6 +84,7 @@ int main(int argc, char* argv[])
     prWrite = laik_new_block_partitioner1();
     prRead = laik_new_cornerhalo_partitioner(1);
 
+    Laik_Data *dWrite, *dRead; // set to data1/2, depending on iteration
     Laik_Partitioning *pWrite, *pRead;
     int iter = laik_phase(inst);
     if (iter == 0) {
@@ -96,6 +93,10 @@ int main(int argc, char* argv[])
         // data1/2 are then alternately accessed using pRead/pWrite
         pWrite = laik_new_partitioning(prWrite, world, space, 0);
         pRead  = laik_new_partitioning(prRead, world, space, pWrite);
+
+        // start with writing (= initialization) data1
+        dWrite = data1;
+        dRead = data2;
 
         // distributed initialization
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
@@ -121,8 +122,13 @@ int main(int argc, char* argv[])
     }
     else {
         // joining process
+
+        // when joining for uneven iteration, data got written to data2 to be preserved
+        if ((iter & 1) == 1) { dRead = data1; dWrite = data2; }
+        else                 { dRead = data2; dWrite = data1; }
+
         Laik_Group* parent = laik_group_parent(world);
-        // partitionings before joining
+        // partitionings before joining: empty for own process
         Laik_Partitioning *pWriteOld, *pReadOld;
         pWriteOld = laik_new_partitioning(prWrite, parent, space, 0);
         pReadOld  = laik_new_partitioning(prRead, parent, space, pWriteOld);
@@ -151,9 +157,9 @@ int main(int argc, char* argv[])
     for(; iter < maxiter; iter++) {
         laik_set_iteration(inst, iter + 1);
 
-        // switch roles: data written before now is read
-        if (dRead == data1) { dRead = data2; dWrite = data1; }
-        else                { dRead = data1; dWrite = data2; }
+        // switch roles: in even iterations, switch data1 to read partitioning
+        if ((iter & 1) == 0) { dRead = data1; dWrite = data2; }
+        else                 { dRead = data2; dWrite = data1; }
 
         laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
