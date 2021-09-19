@@ -67,18 +67,24 @@ struct _Laik_Backend {
   // log backend-specific action, return true if handled (see laik_log_Action)
   bool (*log_action)(Laik_Action* a);
 
-  // function for elasticity support, to be called by all active
-  // processes, resulting in a global synchronization.
-  // if not provided by a backend, no elasticity is supported.
-  // - merge all outstanding join and remove wishes seen by backend
-  // - without join/remove requests, return 0, otherwise
-  // - return new process group reflecting join/remove requests,
-  //   with current "world" group as parent
+  // for elasticity: get resize rules received, by adding rules to linked list
+  // can be NULL, if the backend does not allow the registration of resize rules
+  void (*collectResizeRules)(Laik_ResizeRule**);
+
+  // for elasticity: get received join wishes
+  // can be NULL, if the backend does not report joint wishes
+  void (*collectJoinWishes)(Laik_AddRequest_Entry**);
+
+  // for elasticity: to be called by all active processes,
+  // resulting in a global synchronization.
+  // can be NULL if backend does not support elasticity.
+  // Tries to execute given add/remove requests; if not
+  // possible, does nothing and returns 0.
+  // Otherwise, return new process group reflecting the
+  // add/remove requests, with current "world" group as parent
   // TODO:
-  // - at beginning: mark processes not in current world as dead
-  // - split up for more fine-granular control
   // - sub-world elasticity
-  Laik_Group* (*resize)();
+  Laik_Group* (*resize)(Laik_ResizeRequest* req);
 };
 
 

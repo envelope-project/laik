@@ -122,6 +122,51 @@ struct _Laik_Error {
 
 
 //--------------------------------------------------------
+// Elasticity
+//
+
+typedef struct _Laik_AddRequest_Entry Laik_AddRequest_Entry;
+struct _Laik_AddRequest_Entry {
+    char* location;
+    bool skip;
+    void* backend_data;
+    Laik_AddRequest_Entry* next;
+};
+
+typedef struct _Laik_RemoveRequest_Entry Laik_RemoveRequest_Entry;
+struct _Laik_RemoveRequest_Entry {
+    int procIdx; // index into group of resize request
+    bool skip;
+    void* backend_data;
+    Laik_RemoveRequest_Entry* next;
+};
+
+typedef struct _Laik_ResizeRequest Laik_ResizeRequest;
+struct _Laik_ResizeRequest {
+    // based on this group
+    Laik_Group* group;
+    Laik_AddRequest_Entry* addList;
+    Laik_RemoveRequest_Entry* removeList;
+};
+
+typedef struct _Laik_ResizeRule Laik_ResizeRule;
+struct _Laik_ResizeRule {
+    char* name;
+    char* options;
+    bool singleShot; // if true, will be removed when applied and resize done
+
+    // when checking a resize request, this function is called for each rule
+    // registered. <req> is both input and output parameter: existing
+    // add/remove request entries can be marked to be skipped and new remove
+    // requests can be added.
+    // when returning false, the resize request will be cancelled
+    bool (*check)(Laik_ResizeRequest* req);
+
+    Laik_ResizeRule* next;
+};
+
+
+//--------------------------------------------------------
 // KV Store
 //
 

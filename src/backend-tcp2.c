@@ -187,7 +187,7 @@
 // forward decl
 void tcp2_exec(Laik_ActionSeq* as);
 void tcp2_sync(Laik_KVStore* kvs);
-Laik_Group* tcp2_resize();
+Laik_Group* tcp2_resize(Laik_ResizeRequest* req);
 
 typedef struct _InstData InstData;
 
@@ -2435,7 +2435,7 @@ void tcp2_sync(Laik_KVStore* kvs)
 }
 
 // return new group on process size change (global sync)
-Laik_Group* tcp2_resize()
+Laik_Group* tcp2_resize(Laik_ResizeRequest* req)
 {
     char msg[150];
     InstData* d = (InstData*)instance->backend_data;

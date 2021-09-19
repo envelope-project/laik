@@ -529,7 +529,7 @@ Laik_Group* laik_allow_world_resize(Laik_Instance* instance, int phase)
         return instance->world;
     }
 
-    Laik_Group* g = (instance->backend->resize)();
+    Laik_Group* g = (instance->backend->resize)(0);
     if (g) {
         laik_set_world(instance, g);
         return g;
