@@ -82,7 +82,7 @@ Laik_Group* laik_create_group(Laik_Instance*, int maxsize);
 Laik_Group* laik_world(Laik_Instance* i);
 
 /**
- * Ensure that the application will not use the given group any longer.
+ * Notify LAIK that the application will not use the given group any longer.
  * This allows to free group resources if no process and neither LAIK internally
  * needs the group anymore (all LAIK objects depending on the group are removed)
  */
@@ -137,13 +137,19 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
  * or new processes wanting to join.
  *
  * On change, a new process group reflecting the changes is created,
- * the instance world handle (returned from laik_world) is set to this
- * new group, and the new group is returned. The old world group is
- * still valid, but it is target to garbage collection if the application
- * or other internal LAIK objects do not refer it.
- * Changing the instance world handle triggers an increment of the
- * internal epoch counter (returned from laik_epoch).
+ * the original world of the instance is set to be parent of the new
+ * group (see laik_parent), the world (returned by laik_world) is
+ * replaced by the new group, and the new group is returned.
+ * The old world is still valid. Call laik_finish_world_resize() to
+ * explicitly free the resources of the old world group.
+ * Change of world triggers an increment of the epoch counter
+ * (returned from laik_epoch).
+ * 
  * If no change happens, the old world is returned.
+ *
+ * If the original world, when calling this function, still has a
+ * parent set (from a previous resize), its resources first will be
+ * freed.
  *
  * The given <phase> will be passed to new joining processes which can
  * request the phase via laik_phase() after LAIK initialzation.
@@ -152,6 +158,17 @@ Laik_Group* laik_new_shrinked_group(Laik_Group* g, int len, int* list);
  * This function needs to be called by all processes in the world group.
  */
 Laik_Group* laik_allow_world_resize(Laik_Instance* instance, int phase);
+
+/**
+ * Notify LAIK that resize adaptation of world is done.
+ * This is a promise that the old world (parent of current world) will
+ * not be used any more, and all resources can be freed.
+ *
+ * Calling this function is optional after laik_allow_world_resize().
+ * Another resize will free resources of a previous resize automatically.
+ */
+void laik_finish_world_resize(Laik_Instance*);
+
 
 // get location ID from process ID in given group
 int laik_group_locationid(Laik_Group *group, int id);

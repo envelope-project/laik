@@ -145,6 +145,10 @@ int laik_epoch(Laik_Instance* i)
 void laik_finalize(Laik_Instance* inst)
 {
     laik_log(1, "finalizing...");
+
+    // finish an eventual ongoing resize phase
+    laik_finish_world_resize(inst);
+
     if (inst->backend && inst->backend->finalize)
         (*inst->backend->finalize)(inst);
 
@@ -529,6 +533,9 @@ Laik_Group* laik_allow_world_resize(Laik_Instance* instance, int phase)
         return instance->world;
     }
 
+    // before starting a new resize, first finish a previous one
+    laik_finish_world_resize(instance);
+
     Laik_Group* g = (instance->backend->resize)();
     if (g) {
         laik_set_world(instance, g);
@@ -538,6 +545,18 @@ Laik_Group* laik_allow_world_resize(Laik_Instance* instance, int phase)
     return instance->world;
 }
 
+void laik_finish_world_resize(Laik_Instance* instance)
+{
+    Laik_Group* parent = instance->world->parent;
+    if (parent == 0) return;
+
+    if (instance->backend->finish_resize) {
+        (instance->backend->finish_resize)();
+    }
+
+    laik_release_group(parent);
+    instance->world->parent = 0;
+}
 
 int laik_group_locationid(Laik_Group *group, int id)
 {

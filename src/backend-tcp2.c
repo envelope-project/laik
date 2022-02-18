@@ -188,6 +188,7 @@
 void tcp2_exec(Laik_ActionSeq* as);
 void tcp2_sync(Laik_KVStore* kvs);
 Laik_Group* tcp2_resize();
+void tcp2_finish_resize();
 
 typedef struct _InstData InstData;
 
@@ -196,7 +197,8 @@ static Laik_Backend laik_backend = {
     .name = "Dynamic TCP2 Backend",
     .exec = tcp2_exec,
     .sync = tcp2_sync,
-    .resize = tcp2_resize
+    .resize = tcp2_resize,
+    .finish_resize = tcp2_finish_resize
 };
 
 static Laik_Instance* instance = 0;
@@ -2434,10 +2436,35 @@ void tcp2_sync(Laik_KVStore* kvs)
     d->kvs = 0;
 }
 
+
+void tcp2_finish_resize()
+{
+    // a resize must have been started
+    assert(instance->world && instance->world->parent);
+
+    // peers marked for removal are now dead
+    InstData* d = (InstData*)instance->backend_data;
+    int markedDead = 0;
+    for(int lid = 1; lid <= d->maxid; lid++)
+        if (d->peer[lid].state == PS_ReadyRemove) {
+            d->peer[lid].state = PS_Dead;
+            markedDead++;
+        }
+    d->deadPeers += markedDead;
+    d->readyPeers -= markedDead;
+
+    laik_log(1, "TCP2 finish resize: %d processes marked dead", markedDead);
+}
+
+
 // return new group on process size change (global sync)
 Laik_Group* tcp2_resize()
 {
     char msg[150];
+
+    // any previous resize must be finished
+    assert(instance->world && (instance->world->parent == 0));
+
     InstData* d = (InstData*)instance->backend_data;
     if (d->mystate == PS_ReadyRemove) {
         // cannot join in resize, outside of current world
@@ -2450,16 +2477,6 @@ Laik_Group* tcp2_resize()
     int phase = instance->phase;
     int epoch = instance->epoch;
     laik_log(1, "TCP2 resize: phase %d, epoch %d", phase, epoch);
-
-    // peers marked for removal are now dead
-    int markedDead = 0;
-    for(int lid = 1; lid <= d->maxid; lid++)
-        if (d->peer[lid].state == PS_ReadyRemove) {
-            d->peer[lid].state = PS_Dead;
-            markedDead++;
-        }
-    d->deadPeers += markedDead;
-    d->readyPeers -= markedDead;
 
     if (d->mylid > 0) {
         // tell master that we are in resize mode

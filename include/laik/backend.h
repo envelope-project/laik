@@ -75,10 +75,13 @@ struct _Laik_Backend {
   // - return new process group reflecting join/remove requests,
   //   with current "world" group as parent
   // TODO:
-  // - at beginning: mark processes not in current world as dead
   // - split up for more fine-granular control
   // - sub-world elasticity
   Laik_Group* (*resize)();
+
+  // for elasticity: removal of processes which got started in a previous
+  // resize is finished. They can be marked as dead and resources freed
+  void (*finish_resize)();
 };
 
 
