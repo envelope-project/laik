@@ -26,6 +26,9 @@
 // dynamically generated revision/opt flags information, in info.c
 void laik_log_append_info(void);
 
+// internal structs (see below)
+typedef struct _Laik_ResizeRequests Laik_ResizeRequests;
+
 struct _Laik_Task {
     int rank;
 };
@@ -65,6 +68,9 @@ struct _Laik_Instance {
     int epoch;
     // compute phase, for new processes to know where to start (defaults to 0)
     int phase;
+
+    // not yet accepted resize requests
+    Laik_ResizeRequests* resizeRequests;
 
     // KV store for exchanging location information
     Laik_KVStore* locationStore;
@@ -121,6 +127,27 @@ struct _Laik_Error {
   char* desc;
 };
 
+//--------------------------------------------------------
+// Elasticity
+//
+
+typedef struct _Laik_ResizeRequest Laik_ResizeRequest;
+struct _Laik_ResizeRequest {
+    bool is_join_req;
+    void* backend_data;
+};
+
+// List of join requests not processed yet.
+// Each entry just is a pointer to backend-specific data
+struct _Laik_ResizeRequests {
+    int size, used;
+    Laik_ResizeRequest req[0];
+};
+
+Laik_ResizeRequests* laik_new_resize_reqs(int size);
+// called by backends receiving join/remove requests
+void laik_add_join_req(Laik_Instance*, void* backend_data);
+void laik_add_remove_req(Laik_Instance*, void* backend_data);
 
 //--------------------------------------------------------
 // KV Store

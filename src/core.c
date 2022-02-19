@@ -215,6 +215,8 @@ Laik_Instance* laik_new_instance(const Laik_Backend* b,
     instance->mylocation = strdup(location);
     instance->world = 0;           // still invalid, gets set by backend
 
+    instance->resizeRequests = 0;
+
     instance->locationStore = 0;
     instance->location = 0; // set at location sync
 
@@ -536,7 +538,34 @@ Laik_Group* laik_allow_world_resize(Laik_Instance* instance, int phase)
     // before starting a new resize, first finish a previous one
     laik_finish_world_resize(instance);
 
-    Laik_Group* g = (instance->backend->resize)();
+    // LAIK just got back control from an eventually long application
+    // phase, so ask backend to progress (if it provides such a function).
+    // this may result in queuing incoming join/remove requests
+    if (instance->backend->make_progress) {
+        (instance->backend->make_progress)();
+    }
+
+    // for now, we handle all resize requests directly
+    // TODO: use an app-specific resize policy
+    Laik_ResizeRequests* reqs = instance->resizeRequests;
+    if (laik_log_begin(1)) {
+        int jcount = 0, rcount = 0;
+        if (reqs && (reqs->used > 0)) {
+            for(int r = 0; r < reqs->used; r++) {
+                if (reqs->req[r].is_join_req)
+                    jcount++;
+                else
+                    rcount++;
+            }
+        }
+        laik_log_flush("allow-world-resize: %d join + %d remove request(s)",
+                       jcount, rcount);
+    }
+
+    Laik_Group* g = (instance->backend->resize)(reqs);
+    if (reqs)
+        reqs->used = 0;
+
     if (g) {
         laik_set_world(instance, g);
         return g;
@@ -557,6 +586,45 @@ void laik_finish_world_resize(Laik_Instance* instance)
     laik_release_group(parent);
     instance->world->parent = 0;
 }
+
+Laik_ResizeRequests* laik_new_resize_reqs(int size)
+{
+    Laik_ResizeRequests* reqs;
+    reqs = malloc(size * sizeof(Laik_ResizeRequest) + sizeof(Laik_ResizeRequests));
+    reqs->size = size;
+    reqs->used = 0;
+
+    return reqs;
+}
+
+// usually called by a backend which got a join request
+static
+void laik_add_resize_req(Laik_Instance* instance, bool is_join_req, void* backend_data)
+{
+    if (instance->resizeRequests == 0) {
+        // reserve space for 100 join requests
+        instance->resizeRequests = laik_new_resize_reqs(100);
+    }
+
+    Laik_ResizeRequests* reqs = instance->resizeRequests;
+    assert(reqs->used < reqs->size);
+    reqs->req[reqs->used].is_join_req = is_join_req;
+    reqs->req[reqs->used].backend_data = backend_data;
+    reqs->used++;
+}
+
+void laik_add_join_req(Laik_Instance* instance, void* backend_data)
+{
+    laik_add_resize_req(instance, true, backend_data);
+}
+
+void laik_add_remove_req(Laik_Instance* instance, void* backend_data)
+{
+    laik_add_resize_req(instance, false, backend_data);
+}
+
+
+// locations in KVS
 
 int laik_group_locationid(Laik_Group *group, int id)
 {

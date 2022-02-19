@@ -187,8 +187,9 @@
 // forward decl
 void tcp2_exec(Laik_ActionSeq* as);
 void tcp2_sync(Laik_KVStore* kvs);
-Laik_Group* tcp2_resize();
+Laik_Group* tcp2_resize(Laik_ResizeRequests*);
 void tcp2_finish_resize();
+void tcp2_make_progress();
 
 typedef struct _InstData InstData;
 
@@ -198,7 +199,8 @@ static Laik_Backend laik_backend = {
     .exec = tcp2_exec,
     .sync = tcp2_sync,
     .resize = tcp2_resize,
-    .finish_resize = tcp2_finish_resize
+    .finish_resize = tcp2_finish_resize,
+    .make_progress = tcp2_make_progress
 };
 
 static Laik_Instance* instance = 0;
@@ -210,7 +212,8 @@ typedef enum _PeerState {
     PS_Unknown,        // accepted connection, may be active peer or not registered
     PS_CutoffReceived, // peer/master: cutoff command received, queued
     PS_BeforeReg,      // peer/master: about to register
-    PS_RegReceived,    // master peer: received registration request, in wait queue
+    PS_RegReceived,    // master peer: received registration request, not yet processed
+    PS_RegReceived2,   // master peer: received registration request, in wait queue
     PS_RegAccepted,    // master peer: peer accepts config / peer: got my id, in reg
     PS_RegFinishing,   // master peer: all config sent, waiting for confirm from peer
     PS_RegFinished,    // master peer: received peer confirmation, about to make active
@@ -367,6 +370,7 @@ char* get_statestring(PeerState st)
         return "about to register";
 
     case PS_RegReceived:
+    case PS_RegReceived2:
         // master peer: received registration request, in wait queue
         return "registration started, waiting";
 
@@ -957,7 +961,8 @@ void got_cutoff(InstData* d, int fd, char* msg)
 {
     // cutoff <location pattern>
 
-    if (d->mystate != PS_InResize1) {
+    if (instance == 0) {
+        // no instance yet to queue remove requests, need to replay
         assert(d->fds[fd].cmd == 0);
 
         d->fds[fd].state = PS_CutoffReceived;
@@ -988,18 +993,31 @@ void got_cutoff(InstData* d, int fd, char* msg)
 
     int rcount = 0;
     for(int lid = 0; lid <= d->maxid; lid++) {
-        if (d->peer[lid].state == PS_Dead) continue;
-        if (d->peer[lid].state == PS_RegAccepted) continue; // not for removal
+        switch(d->peer[lid].state) {
+            case PS_Dead:
+            case PS_RegAccepted:
+            case PS_RegReceived:
+            case PS_RegReceived2:
+                // dead or about to join, no candidate for removal
+                continue;
+            default:
+                break;
+        }
         if (regexec(&re, d->peer[lid].location, 0, NULL, 0) != 0) continue;
-        assert(lid > 0); // complain if we got asked to remove LID 0
-        assert(d->peer[lid].state == PS_InResize);
-        laik_log(1, "TCP2 LID %d matched for removal", lid);
-        d->peer[lid].state = PS_InResizeRemove;
+        // complain if we got asked to remove LID 0
+        if (lid == 0) {
+            laik_log(LAIK_LL_Warning, "asked to remove master; ignoring");
+            continue;
+        }
+        Peer* peer = &(d->peer[lid]);
+        laik_log(1, "TCP2 LID %d ('%s') matched for removal", lid, peer->location);
+        laik_add_remove_req(instance, peer);
         rcount++;
     }
-    laik_log(1, "TCP2 marked %d processes for removal", rcount);
+    laik_log(1, "TCP2 queued %d processes for removal", rcount);
     regfree(&re);
 }
+
 
 void got_help(InstData* d, int fd, int lid)
 {
@@ -2436,6 +2454,33 @@ void tcp2_sync(Laik_KVStore* kvs)
     d->kvs = 0;
 }
 
+void tcp2_make_progress()
+{
+    // process incoming commands
+    InstData* d = (InstData*)instance->backend_data;
+    check_loop(d);
+
+    // collect register requests into join list
+    // make sure to do this only once: change state
+    for(int fd = 0; fd < MAX_FDS; fd++) {
+        switch(d->fds[fd].state) {
+            case PS_RegReceived:
+                d->fds[fd].state = PS_RegReceived2;
+                laik_add_join_req(instance, &(d->fds[fd]));
+                break;
+            case PS_CutoffReceived:
+                // replay
+                laik_log(1, "TCP2 make progress: replay cutoff '%s' from FD %d",
+                        d->fds[fd].cmd, fd);
+                got_cutoff(d, fd, d->fds[fd].cmd);
+                free(d->fds[fd].cmd);
+                d->fds[fd].cmd = 0;
+                break;
+            default:
+                break;
+        }
+    }
+}
 
 void tcp2_finish_resize()
 {
@@ -2458,7 +2503,7 @@ void tcp2_finish_resize()
 
 
 // return new group on process size change (global sync)
-Laik_Group* tcp2_resize()
+Laik_Group* tcp2_resize(Laik_ResizeRequests* resizeReqs)
 {
     char msg[150];
 
@@ -2560,9 +2605,6 @@ Laik_Group* tcp2_resize()
 
     // master
 
-    // process incoming commands
-    check_loop(d);
-
     // wait for all ready processes to join resize phase
     for(int lid = 1; lid <= d->maxid; lid++) {
         laik_log(1, "TCP2 resize master: LID %d state %d (%s)",
@@ -2579,17 +2621,33 @@ Laik_Group* tcp2_resize()
     // all ready processes now are in resize phase
     d->mystate = PS_InResize1;
 
-    // process queued join / remove requests
-    for(int fd = 0; fd < MAX_FDS; fd++) {
-        if (d->fds[fd].state == PS_Invalid) continue;
-        if (d->fds[fd].lid >= 0) continue;
-        if (!d->fds[fd].cmd) continue;
+    // process given resize requests
+    if (resizeReqs) {
+        for(int i = 0; i < resizeReqs->used; i++) {
+            Laik_ResizeRequest* req = &(resizeReqs->req[i]);
+            if (req->is_join_req) {
+                FDState* fds = (FDState*) req->backend_data;
+                int fd = fds - d->fds;
+                assert(&(d->fds[fd]) == fds);
+                assert(fds->state == PS_RegReceived2);
+                assert(fds->lid < 0);
+                assert(fds->cmd);
 
-        laik_log(1, "TCP2 resize: replay '%s' from FD %d",
-                 d->fds[fd].cmd, fd);
-        got_cmd(d, fd, d->fds[fd].cmd, strlen(d->fds[fd].cmd));
-        free(d->fds[fd].cmd);
-        d->fds[fd].cmd = 0;
+                laik_log(1, "TCP2 resize: replay join req '%s' from FD %d",
+                        fds->cmd, fd);
+                got_cmd(d, fd, fds->cmd, strlen(fds->cmd));
+                free(fds->cmd);
+                fds->cmd = 0;
+            }
+            else {
+                Peer* peer = (Peer*) req->backend_data;
+                laik_log(1, "TCP2 resize: remove process '%s'", peer->location);
+                // expected to be active
+                assert(peer->state == PS_InResize);
+                peer->state = PS_InResizeRemove;
+            }
+        }
+        resizeReqs->used = 0; // all processed
     }
 
     // do not accept register/cutoff commands any more

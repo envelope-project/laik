@@ -67,17 +67,20 @@ struct _Laik_Backend {
   // log backend-specific action, return true if handled (see laik_log_Action)
   bool (*log_action)(Laik_Action* a);
 
+  // ensure progress in backend, can be NULL
+  void (*make_progress)();
+
   // function for elasticity support, to be called by all active
   // processes, resulting in a global synchronization.
   // if not provided by a backend, no elasticity is supported.
-  // - merge all outstanding join and remove wishes seen by backend
+  // - process join and remove requests given as parameter
   // - without join/remove requests, return 0, otherwise
   // - return new process group reflecting join/remove requests,
   //   with current "world" group as parent
   // TODO:
-  // - split up for more fine-granular control
+  // - also handle remove requests via function parameter
   // - sub-world elasticity
-  Laik_Group* (*resize)();
+  Laik_Group* (*resize)(Laik_ResizeRequests*);
 
   // for elasticity: removal of processes which got started in a previous
   // resize is finished. They can be marked as dead and resources freed
