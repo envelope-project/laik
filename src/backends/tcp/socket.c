@@ -140,7 +140,11 @@ Laik_Tcp_Socket* laik_tcp_socket_new (Laik_Tcp_SocketType type, const size_t ran
 
         // Fill the socket address variables
         socket_address_size = addresses->ai_addrlen;
+#if GLIB_VERSION_2_68
+        socket_address_data = g_memdup2 (addresses->ai_addr, addresses->ai_addrlen);
+#else
         socket_address_data = g_memdup (addresses->ai_addr, addresses->ai_addrlen);
+#endif
     } else {
         laik_tcp_debug ("Trying to create an abstract UNIX socket with name %s", address);
 
