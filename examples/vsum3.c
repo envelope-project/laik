@@ -54,7 +54,8 @@ int main(int argc, char* argv[])
     laik_set_initial_partitioning(sumdata, sp1);
 
     double *base;
-    uint64_t count, from, to;
+    uint64_t count;
+    int64_t from, to;
     Laik_Partitioning *part1, *part2;
 
     if (phase == 0) {
@@ -82,7 +83,7 @@ int main(int argc, char* argv[])
         laik_my_slice_1d(part2, 0, &from, &to);
         printf("Phase %d, Epoch %d, Proc %d/%d: sum of %ld values at %ld - %ld : %.0f\n",
                phase, laik_epoch(inst), laik_myid(world), laik_size(world),
-               count, from, to - 1, mysum);
+               (long) count, (long) from, (long) to - 1, mysum);
 
         laik_switchto_partitioning(sumdata, sp2, LAIK_DF_Preserve, LAIK_RO_Sum);
         if (laik_myid(world) == 0)
