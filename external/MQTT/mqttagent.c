@@ -97,7 +97,7 @@ Laik_Agent* agent_init(
     char** argv
 ){
     
-    if(argc != 3 || argc != 5){
+    if((argc != 3) && (argc != 5)){
         //laik_log(2, "Invalid Argument number.\n");
         exit(-1);
     }
