@@ -91,18 +91,18 @@ void print(MGraph* mg)
 }
 
 
-void run_markovPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
+void run_markovPartitioner(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
 {
     MGraph* mg = laik_partitioner_data(p->partitioner);
     int out = mg->out;
     int* cm = mg->cm;
 
     // go over states and add itself and incoming states to new partitioning
-    int sliceCount = laik_partitioning_slicecount(p->other);
-    for(int i = 0; i < sliceCount; i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(p->other, i);
-        const Laik_Slice* s = laik_taskslice_get_slice(ts);
-        int task = laik_taskslice_get_task(ts);
+    int rangeCount = laik_partitioning_rangecount(p->other);
+    for(int i = 0; i < rangeCount; i++) {
+        Laik_TaskRange* ts = laik_partitioning_get_taskrange(p->other, i);
+        const Laik_Range* s = laik_taskrange_get_range(ts);
+        int task = laik_taskrange_get_task(ts);
         for(int st = (int) s->from.i[0]; st < s->to.i[0]; st++) {
             int off = st * (out + 1);
             // j=0: state itself
@@ -139,7 +139,7 @@ Laik_Data* runSparse(MGraph* mg, int miter,
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto_partitioning(dRead,  pRead, LAIK_DF_Preserve, LAIK_RO_Sum);
         laik_get_map_1d(dRead, 0, (void**) &src, &srcCount);
-        laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
+        laik_my_range_1d(pRead, 0, &srcFrom, &srcTo);
         assert(srcFrom <= srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
@@ -218,7 +218,7 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
         // switch dRead to pRead, dWrite to pWrite
         laik_switchto_partitioning(dRead,  pRead, LAIK_DF_Preserve, LAIK_RO_Sum);
         laik_get_map_1d(dRead, 0, (void**) &src, &srcCount);
-        laik_my_slice_1d(pRead, 0, &srcFrom, &srcTo);
+        laik_my_range_1d(pRead, 0, &srcFrom, &srcTo);
         assert(srcFrom < srcTo);
         assert(srcCount == (uint64_t) (srcTo - srcFrom));
 
@@ -291,7 +291,7 @@ int main(int argc, char* argv[])
                    " -i: use indirection with pre-calculated local indexes\n"
                    " -c: use a compact mapping (implies -i)\n"
                    " -s: use single index hint\n"
-                   " -f: use pseudo-random connectivity (much more slices)\n"
+                   " -f: use pseudo-random connectivity (much more ranges)\n"
                    " -v: be verbose using laik_log(), level 2\n"
                    " -p: write profiling measurements to 'markov2_profiling.txt'\n"
                    " -h: this help text\n", n, out);

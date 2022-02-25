@@ -30,7 +30,7 @@ These use a graph connectivity to specify the statistical relationship
 between states. Starting from initial probabilities of nodes, the static
 distribution is approximated in iterations, taking the values at predecessor
 states into account. This uses a very fine-graied partitioner, stress testing
-the partitioning (slice) processing.
+the partitioning (range) processing.
 
 * markov: tasks are responsible for updating the probability of owned states
 from predecessors

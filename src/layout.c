@@ -34,25 +34,25 @@
 
 // helper for laik_layout_copy/pack_gen: lexicographical traversal
 static
-bool next_lex(Laik_Slice* slc, Laik_Index* idx)
+bool next_lex(Laik_Range* range, Laik_Index* idx)
 {
     idx->i[0]++;
-    if (idx->i[0] < slc->to.i[0]) return true;
-    if (slc->space->dims == 1) return false;
+    if (idx->i[0] < range->to.i[0]) return true;
+    if (range->space->dims == 1) return false;
 
     idx->i[1]++;
-    idx->i[0] = slc->from.i[0];
-    if (idx->i[1] < slc->to.i[1]) return true;
-    if (slc->space->dims == 2) return false;
+    idx->i[0] = range->from.i[0];
+    if (idx->i[1] < range->to.i[1]) return true;
+    if (range->space->dims == 2) return false;
 
     idx->i[2]++;
-    idx->i[1] = slc->from.i[1];
-    if (idx->i[2] < slc->to.i[2]) return true;
+    idx->i[1] = range->from.i[1];
+    if (idx->i[2] < range->to.i[2]) return true;
     return false;
 }
 
 // generic copy just using offset function from layout interface
-void laik_layout_copy_gen(Laik_Slice* slc,
+void laik_layout_copy_gen(Laik_Range* range,
                           Laik_Mapping* from, Laik_Mapping* to)
 {
     Laik_Layout* fromLayout = from->layout;
@@ -61,10 +61,10 @@ void laik_layout_copy_gen(Laik_Slice* slc,
     assert(elemsize == to->data->elemsize);
 
     if (laik_log_begin(1)) {
-        laik_log_append("generic copy of slice ");
-        laik_log_Slice(slc);
+        laik_log_append("generic copy of range ");
+        laik_log_Range(range);
         laik_log_append(" (count %llu, elemsize %d) from mapping %p",
-            laik_slice_size(slc), elemsize, from->start);
+            laik_range_size(range), elemsize, from->start);
         laik_log_append(" (data '%s'/%d, %s) ",
             from->data->name, from->mapNo,
             from->layout->describe(from->layout));
@@ -73,7 +73,7 @@ void laik_layout_copy_gen(Laik_Slice* slc,
             to->layout->describe(to->layout));
     }
 
-    Laik_Index idx = slc->from;
+    Laik_Index idx = range->from;
     uint64_t count = 0;
     do {
         int64_t fromOffset = fromLayout->offset(fromLayout, from->layoutSection, &idx);
@@ -83,40 +83,40 @@ void laik_layout_copy_gen(Laik_Slice* slc,
 #if 0
         if (laik_log_begin(1)) {
             laik_log_append(" copy idx ");
-            laik_log_Index(slc->space->dims, &idx);
+            laik_log_Index(range->space->dims, &idx);
             laik_log_flush(" from off %lu (ptr %p) to %lu (%p)",
                            fromOffset, fromPtr, toOffset, toPtr);
         }
 #endif
         memcpy(toPtr, fromPtr, elemsize);
         count++;
-    } while(next_lex(slc, &idx));
-    assert(count == laik_slice_size(slc));
+    } while(next_lex(range, &idx));
+    assert(count == laik_range_size(range));
 }
 
 // generic pack just using offset function from layout interface.
 // this packs data according to lexicographical traversal
 // return number of elements packed into provided buffer
-unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
+unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Range* range,
                                   Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
     Laik_Layout* layout = m->layout;
     int dims = m->layout->dims;
 
-    if (laik_index_isEqual(dims, idx, &(slc->to))) {
+    if (laik_index_isEqual(dims, idx, &(range->to))) {
         // nothing left to pack
         return 0;
     }
 
-    // slice to pack must within local valid slice of mapping
-    assert(laik_slice_within_slice(slc, &(m->requiredSlice)));
+    // range to pack must within local valid range of mapping
+    assert(laik_range_within_range(range, &(m->requiredRange)));
 
     if (laik_log_begin(1)) {
-        laik_log_append("        generic packing of slice ");
-        laik_log_Slice(slc);
+        laik_log_append("        generic packing of range ");
+        laik_log_Range(range);
         laik_log_append(" (count %llu, elemsize %d) from mapping %p",
-            laik_slice_size(slc), elemsize, m->start);
+            laik_range_size(range), elemsize, m->start);
         laik_log_append(" (data '%s'/%d, %s) at idx ",
             m->data->name, m->mapNo, layout->describe(layout));
         laik_log_Index(dims, idx);
@@ -140,8 +140,8 @@ unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
         buf += elemsize;
         count++;
 
-        if (!next_lex(slc, idx)) {
-            *idx = slc->to;
+        if (!next_lex(range, idx)) {
+            *idx = range->to;
             break;
         }
     }
@@ -159,7 +159,7 @@ unsigned int laik_layout_pack_gen(Laik_Mapping* m, Laik_Slice* slc,
 // generic unpack just using offset function from layout interface
 // this expects provided data to be packed according to lexicographical traversal
 // return number of elements unpacked from provided buffer
-unsigned int laik_layout_unpack_gen(Laik_Mapping* m, Laik_Slice* slc,
+unsigned int laik_layout_unpack_gen(Laik_Mapping* m, Laik_Range* range,
                                     Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
@@ -168,16 +168,16 @@ unsigned int laik_layout_unpack_gen(Laik_Mapping* m, Laik_Slice* slc,
 
     // there should be something to unpack
     assert(size > 0);
-    assert(!laik_index_isEqual(dims, idx, &(slc->to)));
+    assert(!laik_index_isEqual(dims, idx, &(range->to)));
 
-    // slice to unpack into must be within local valid slice of mapping
-    assert(laik_slice_within_slice(slc, &(m->requiredSlice)));
+    // range to unpack into must be within local valid range of mapping
+    assert(laik_range_within_range(range, &(m->requiredRange)));
 
     if (laik_log_begin(1)) {
-        laik_log_append("        generic unpacking of slice ");
-        laik_log_Slice(slc);
+        laik_log_append("        generic unpacking of range ");
+        laik_log_Range(range);
         laik_log_append(" (count %llu, elemsize %d) into mapping %p",
-            laik_slice_size(slc), elemsize, m->start);
+            laik_range_size(range), elemsize, m->start);
         laik_log_append(" (data '%s'/%d, %s) at idx ",
             m->data->name, m->mapNo, layout->describe(layout));
         laik_log_Index(dims, idx);
@@ -201,8 +201,8 @@ unsigned int laik_layout_unpack_gen(Laik_Mapping* m, Laik_Slice* slc,
         buf += elemsize;
         count++;
 
-        if (!next_lex(slc, idx)) {
-            *idx = slc->to;
+        if (!next_lex(range, idx)) {
+            *idx = range->to;
             break;
         }
     }

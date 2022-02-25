@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
     laik_switchto_new_partitioning(a, world, laik_Master,
                                    LAIK_DF_None, LAIK_RO_None);
     if (laik_myid(world) == 0) {
-        // it is ensured this is exactly one slice
+        // it is ensured this is exactly one range
         laik_get_map_1d(a, 0, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) base[i] = (double) i;
     }
@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
     laik_switchto_new_partitioning(a, world,
                                    laik_new_block_partitioner(0, 2, 0, 0, 0),
                                    LAIK_DF_Preserve, LAIK_RO_None);
-    // partial sum using equally-sized blocks, outer loop over slices
+    // partial sum using equally-sized blocks, outer loop over ranges
     for(int sNo = 0;; sNo++) {
         if (laik_get_map_1d(a, sNo, (void**) &base, &count) == 0) break;
         for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];

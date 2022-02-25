@@ -91,18 +91,18 @@ void print(MGraph* mg)
 }
 
 
-void run_markovPartitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
+void run_markovPartitioner(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
 {
     MGraph* mg = laik_partitioner_data(p->partitioner);
     int in = mg->in;
     int* cm = mg->cm;
 
     // go over states and add itself and incoming states to new partitioning
-    int sliceCount = laik_partitioning_slicecount(p->other);
-    for(int i = 0; i < sliceCount; i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(p->other, i);
-        const Laik_Slice* s = laik_taskslice_get_slice(ts);
-        int task = laik_taskslice_get_task(ts);
+    int rangeCount = laik_partitioning_rangecount(p->other);
+    for(int i = 0; i < rangeCount; i++) {
+        Laik_TaskRange* ts = laik_partitioning_get_taskrange(p->other, i);
+        const Laik_Range* s = laik_taskrange_get_range(ts);
+        int task = laik_taskrange_get_task(ts);
         for(int st = (int) s->from.i[0]; st < s->to.i[0]; st++) {
             int off = st * (in + 1);
             // j=0: state itself
@@ -141,7 +141,7 @@ Laik_Data* runSparse(MGraph* mg, int miter,
 
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
         laik_get_map_1d(dWrite, 0, (void**) &dst, &dstCount);
-        laik_my_slice_1d(pWrite, 0, &dstFrom, &dstTo);
+        laik_my_range_1d(pWrite, 0, &dstFrom, &dstTo);
         assert(dstFrom < dstTo);
         assert(dstCount == (uint64_t) (dstTo - dstFrom));
 
@@ -195,7 +195,7 @@ Laik_Data* runIndirection(MGraph* mg, int miter,
 
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
         laik_get_map_1d(dWrite, 0, (void**) &dst, &dstCount);
-        laik_my_slice_1d(pWrite, 0, &dstFrom, &dstTo);
+        laik_my_range_1d(pWrite, 0, &dstFrom, &dstTo);
         assert(dstFrom < dstTo);
         assert(dstCount == (uint64_t) (dstTo - dstFrom));
 
@@ -250,7 +250,7 @@ int main(int argc, char* argv[])
                    " -i: use indirection with pre-calculated local indexes\n"
                    " -c: use a compact mapping (implies -i)\n"
                    " -s: use single index hint\n"
-                   " -f: use pseudo-random connectivity (much more slices)\n"
+                   " -f: use pseudo-random connectivity (much more ranges)\n"
                    " -v: verbose: print connectivity\n"
                    " -p: write profiling measurements to 'markov_profiling.txt'\n"
                    " -h: this help text\n");

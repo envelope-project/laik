@@ -21,7 +21,7 @@ add_library ("laik" SHARED
     "program.c"
     "revinfo.c"
     "space.c"
-    "slicearray.c"
+    "rangelist.c"
     "type.c"
 )
 

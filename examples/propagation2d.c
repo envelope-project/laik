@@ -35,8 +35,8 @@
  *   n20   n21 ...
  *
  * With 4 tasks and a distribution into a 2 x 2 grid, elements 0, 1, 4, 5 get
- * mapped to task 0. That is, the slices for task 0 are [0-1] and [4-5].
- * The derived slices of the nodes for task 0 are [0-2], [5-7], and [10-12].
+ * mapped to task 0. That is, the ranges for task 0 are [0-1] and [4-5].
+ * The derived ranges of the nodes for task 0 are [0-2], [5-7], and [10-12].
  * Here, task 0 and 1 share nodes 2,7,12. Node 12 is shared by all 4 tasks.
  *
  * For the computation, we start with element values 1.0 and node values 0.0,
@@ -76,7 +76,7 @@ void calculate_my_coordinate(int numRanks, int rank, int* rx, int* ry)
 }
 
 // partitioner algorithm for the 1d array of elements, using a 2d grid
-void run_element_partitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
+void run_element_partitioner(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
 {
     Laik_Group* group = p->group;
     Laik_Space* space = p->space;
@@ -92,14 +92,14 @@ void run_element_partitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
     int N_elems_y = N_local_y * N_tasks_y;
     assert( (int) laik_space_size(space) == N_elems_x * N_elems_y);
 
-    Laik_Slice slc;
+    Laik_Range range;
 
     for(int ix = 0; ix < N_tasks_x; ix++) {
         for(int iy = 0; iy < N_tasks_y; iy++) {
             for(int jy = 0; jy < N_local_y; jy++) {
                 int idx = ix * N_local_x + (iy * N_local_y + jy) * N_elems_x;
-                laik_slice_init_1d(&slc, space, idx, idx + N_local_x);
-                laik_append_slice(r, ix + iy * N_tasks_x, &slc, 0, 0);
+                laik_range_init_1d(&range, space, idx, idx + N_local_x);
+                laik_append_range(r, ix + iy * N_tasks_x, &range, 0, 0);
             }
         }
     }
@@ -112,7 +112,7 @@ Laik_Partitioner* get_element_partitioner(int *size)
 }
 
 // partitioner for 1d array of nodes, derived from element partitioning
-void run_node_partitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
+void run_node_partitioner(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
 {
     Laik_Group* group = p->group;
     Laik_Space* space = p->space;
@@ -121,30 +121,30 @@ void run_node_partitioner(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
     int Rx,Ry,rx,ry;
     calculate_task_topology(laik_size(group), &Rx, &Ry);
 
-    Laik_Slice slc;
+    Laik_Range range;
 
-    // for all the slices in the element partitioner
-    // we find the neighbouring nodes and add a slice
+    // for all the ranges in the element partitioner
+    // we find the neighbouring nodes and add a range
     // to the new partioning
-    int sliccountE = laik_partitioning_slicecount(p->other);
+    int sliccountE = laik_partitioning_rangecount(p->other);
     for(int i = 0; i < sliccountE; i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(p->other, i);
-        const Laik_Slice* s = laik_taskslice_get_slice(ts);
-        int task = laik_taskslice_get_task(ts);
+        Laik_TaskRange* ts = laik_partitioning_get_taskrange(p->other, i);
+        const Laik_Range* s = laik_taskrange_get_range(ts);
+        int task = laik_taskrange_get_task(ts);
 
-        // add bottom/top node rows bounding the elements of this slice.
-        // as we merge slices afterwards, there is no problem eventually
+        // add bottom/top node rows bounding the elements of this range.
+        // as we merge ranges afterwards, there is no problem eventually
         // adding the same nodes twice
         calculate_my_coordinate(laik_size(group), task, &rx, &ry);
-        laik_slice_init_1d(&slc, space,
+        laik_range_init_1d(&range, space,
                            neighbours[ 4 * s->from.i[0] + 0 ] + 0,
                            neighbours[ 4 * (s->to.i[0] - 1) + 1 ] + 1);
-        laik_append_slice(r, task, &slc, 0, 0);
+        laik_append_range(r, task, &range, 0, 0);
 
-        laik_slice_init_1d(&slc, space,
+        laik_range_init_1d(&range, space,
                            neighbours[ 4 * s->from.i[0] + 2] + 0,
                            neighbours [ 4 * (s->to.i[0] - 1) + 3 ] + 1);
-        laik_append_slice(r, task, &slc, 0, 0);
+        laik_append_range(r, task, &range, 0, 0);
     }
 }
 
@@ -192,8 +192,8 @@ void print_data(Laik_Data* d, Laik_Partitioning* p)
 {
     double *base;
     uint64_t count;
-    int nSlices = laik_my_slicecount(p);
-    for (int s = 0; s < nSlices; s++) {
+    int nRanges = laik_my_rangecount(p);
+    for (int s = 0; s < nRanges; s++) {
         laik_get_map_1d(d, s, (void**) &base, &count);
         laik_log_begin(1);
         for (uint64_t i = 0; i < count; i++) {
@@ -208,9 +208,9 @@ double data_check_sum(Laik_Data* d, Laik_Partitioning* p, Laik_Group* world)
 {
     double *base;
     uint64_t count;
-    int nSlices = laik_my_slicecount(p);
+    int nRanges = laik_my_rangecount(p);
     double sum = 0.0;
-    for(int s = 0; s < nSlices; s++) {
+    for(int s = 0; s < nRanges; s++) {
         laik_get_map_1d(d, s, (void**) &base, &count);
         for (uint64_t i = 0; i < count; i++) {
             sum += base[i];
@@ -238,18 +238,18 @@ void apply_boundary_condition(Laik_Data* data, Laik_Partitioning* p,
 {
     double *baseN;
     uint64_t countN, i;
-    int nSlices = laik_my_slicecount(p);
+    int nRanges = laik_my_rangecount(p);
     int n;
 
     if (rx == 0) {
         i = 0;
-        for(n = 0; n < nSlices; ++n) {
+        for(n = 0; n < nRanges; ++n) {
             laik_get_map_1d(data, n, (void**) &baseN, &countN);
             baseN[i]=value;
         }
     }
     if (rx == Rx - 1) {
-        for(n = 0; n < nSlices; ++n) {
+        for(n = 0; n < nRanges; ++n) {
             laik_get_map_1d(data, n, (void**) &baseN, &countN);
             i=countN-1;
             baseN[i]=value;
@@ -263,7 +263,7 @@ void apply_boundary_condition(Laik_Data* data, Laik_Partitioning* p,
         }
     }
     if (ry == Ry - 1) {
-        n = nSlices - 1;
+        n = nRanges - 1;
         laik_get_map_1d(data, n, (void**) &baseN, &countN);
         for(i = 0; i < countN; ++i) {
             baseN[i]=value;
@@ -279,11 +279,11 @@ int main(int argc, char* argv[])
     // process command line arguments
     int size = 0;
     int maxIt = 0;
-    bool sliceopt = false; // use slices filters for reduced memory consumption
+    bool rangeopt = false; // use range filters for reduced memory consumption
 
     int arg = 1;
     while((arg < argc) && (argv[arg][0] == '-')) {
-        if (argv[arg][1] == 'o') sliceopt = true;
+        if (argv[arg][1] == 'o') rangeopt = true;
         else if (argv[arg][1] == 'h') {
             printf("Usage: %s [-o] [<size> [<maxiter>]]\n", argv[0]);
             exit(1);
@@ -336,15 +336,15 @@ int main(int argc, char* argv[])
     pElements = laik_new_partitioning(get_element_partitioner(&Nx),
                                       world, element_space, 0);
 
-    if (!sliceopt)
+    if (!rangeopt)
         pNodes = laik_new_partitioning(get_node_partitioner(neighbours),
                                        world, node_space, pElements);
     else {
         pNodes = laik_new_empty_partitioning(world, node_space,
                                              get_node_partitioner(neighbours),
                                              pElements);
-        laik_partitioning_store_myslices(pNodes);
-        laik_partitioning_store_intersectslices(pNodes, pNodes);
+        laik_partitioning_store_myranges(pNodes);
+        laik_partitioning_store_intersectranges(pNodes, pNodes);
     }
 
     double *baseN, *baseE;
@@ -357,10 +357,10 @@ int main(int argc, char* argv[])
     laik_switchto_partitioning(element, pElements, LAIK_DF_None, LAIK_RO_None);
 
     // for the element partition assigned to me:
-    // go over all my slices and find out where they are allocated in memory.
+    // go over all my ranges and find out where they are allocated in memory.
     // set the double value for each element to 1.0
-    int nSlicesElem = laik_my_slicecount(pElements);
-    for (int n = 0; n < nSlicesElem; ++n) {
+    int nElemRanges = laik_my_rangecount(pElements);
+    for (int n = 0; n < nElemRanges; ++n) {
         laik_get_map_1d(element, n, (void**) &baseE, &countE);
         for (uint64_t i = 0; i < countE; i++) {
             baseE[i] = 1.0;
@@ -369,8 +369,8 @@ int main(int argc, char* argv[])
 
     // same for nodes, initialize node value to 0.0
     laik_switchto_partitioning(node, pNodes, LAIK_DF_None, LAIK_RO_None);
-    int nSlicesNodes = laik_my_slicecount(pNodes);
-    for (int n = 0; n < nSlicesNodes; ++n) {
+    int nNodeRanges = laik_my_rangecount(pNodes);
+    for (int n = 0; n < nNodeRanges; ++n) {
         laik_get_map_1d(node, n, (void**) &baseN, &countN);
         for (uint64_t i = 0; i < countN; i++) {
             baseN[i] = 0.0;
@@ -448,7 +448,7 @@ int main(int argc, char* argv[])
                 laik_global2maplocal_1d(node, gj2, &m2, &j2);
                 laik_global2maplocal_1d(node, gj3, &m3, &j3);
 
-                //laik_log(1,"slice: %d, element: %d, global index: %d\n", m, i, gi);
+                //laik_log(1,"range: %d, element: %d, global index: %d\n", m, i, gi);
                 //laik_log(1,"global indexes for neighbours of element: %d: neighbour0:%d, neighbour1:%d, neighbour2:%d, neighbour3:%d\n"
                 //                , gi, gj0, gj1, gj2, gj3);
                 //laik_log(1,"local indexes for neighbours of element: %d: neighbour0:%d in mapping %d, neighbour1:%d in mapping %d, neighbour2:%d  in mapping %d, neighbour3:%d in mapping %d\n"

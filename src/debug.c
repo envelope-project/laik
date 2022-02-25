@@ -44,24 +44,24 @@ void laik_log_Space(Laik_Space* spc)
     switch(spc->dims) {
     case 1:
         laik_log_append("[%lld;%lld[",
-                        (long long) spc->s.from.i[0],
-                        (long long) spc->s.to.i[0] );
+                        (long long) spc->range.from.i[0],
+                        (long long) spc->range.to.i[0] );
         break;
     case 2:
         laik_log_append("[%lld;%lld[ x [%lld;%lld[",
-                        (long long) spc->s.from.i[0],
-                        (long long) spc->s.to.i[0],
-                        (long long) spc->s.from.i[1],
-                        (long long) spc->s.to.i[1] );
+                        (long long) spc->range.from.i[0],
+                        (long long) spc->range.to.i[0],
+                        (long long) spc->range.from.i[1],
+                        (long long) spc->range.to.i[1] );
         break;
     case 3:
         laik_log_append("[%lld;%lld[ x [%lld;%lld[ x [%lld;%lld[",
-                        (long long) spc->s.from.i[0],
-                        (long long) spc->s.to.i[0],
-                        (long long) spc->s.from.i[1],
-                        (long long) spc->s.to.i[1],
-                        (long long) spc->s.from.i[2],
-                        (long long) spc->s.to.i[2] );
+                        (long long) spc->range.from.i[0],
+                        (long long) spc->range.to.i[0],
+                        (long long) spc->range.from.i[1],
+                        (long long) spc->range.to.i[1],
+                        (long long) spc->range.from.i[2],
+                        (long long) spc->range.to.i[2] );
         break;
     default: assert(0);
     }
@@ -92,18 +92,18 @@ void laik_log_Index(int dims, const Laik_Index* idx)
     }
 }
 
-void laik_log_Slice(Laik_Slice* slc)
+void laik_log_Range(Laik_Range* range)
 {
-    if (laik_slice_isEmpty(slc)) {
+    if (laik_range_isEmpty(range)) {
         laik_log_append("(empty)");
         return;
     }
 
-    int dims = slc->space->dims;
+    int dims = range->space->dims;
     laik_log_append("[");
-    laik_log_Index(dims, &(slc->from));
+    laik_log_Index(dims, &(range->from));
     laik_log_append(";");
-    laik_log_Index(dims, &(slc->to));
+    laik_log_Index(dims, &(range->to));
     laik_log_append("[");
 }
 
@@ -185,7 +185,7 @@ void laik_log_Transition(Laik_Transition* t, bool showActions)
         laik_log_append("\n   %2d local: ", t->localCount);
         for(int i=0; i<t->localCount; i++) {
             if (i>0) laik_log_append(", ");
-            laik_log_Slice(&(t->local[i].slc));
+            laik_log_Range(&(t->local[i].range));
         }
     }
 
@@ -194,7 +194,7 @@ void laik_log_Transition(Laik_Transition* t, bool showActions)
         for(int i=0; i<t->initCount; i++) {
             if (i>0) laik_log_append(", ");
             laik_log_Reduction(t->init[i].redOp);
-            laik_log_Slice(&(t->init[i].slc));
+            laik_log_Range(&(t->init[i].range));
         }
     }
 
@@ -202,7 +202,7 @@ void laik_log_Transition(Laik_Transition* t, bool showActions)
         laik_log_append("\n   %2d send : ", t->sendCount);
         for(int i=0; i<t->sendCount; i++) {
             if (i>0) laik_log_append(", ");
-            laik_log_Slice(&(t->send[i].slc));
+            laik_log_Range(&(t->send[i].range));
             laik_log_append("==>T%d", t->send[i].toTask);
         }
     }
@@ -212,7 +212,7 @@ void laik_log_Transition(Laik_Transition* t, bool showActions)
         for(int i=0; i<t->recvCount; i++) {
             if (i>0) laik_log_append(", ");
             laik_log_append("T%d==>", t->recv[i].fromTask);
-            laik_log_Slice(&(t->recv[i].slc));
+            laik_log_Range(&(t->recv[i].range));
         }
     }
 
@@ -220,7 +220,7 @@ void laik_log_Transition(Laik_Transition* t, bool showActions)
         laik_log_append("\n   %2d reduc: ", t->redCount);
         for(int i=0; i<t->redCount; i++) {
             if (i>0) laik_log_append(", ");
-            laik_log_Slice(&(t->red[i].slc));
+            laik_log_Range(&(t->red[i].range));
             laik_log_append(" ");
             laik_log_TransitionGroup(t, t->red[i].inputGroup);
             laik_log_append("=(");
@@ -231,26 +231,26 @@ void laik_log_Transition(Laik_Transition* t, bool showActions)
     }
 }
 
-void laik_log_SliceArray(Laik_SliceArray* sa)
+void laik_log_RangeList(Laik_RangeList* list)
 {
-    laik_log_append("%d slice(s) assigned to %d task ids on ",
-                    sa->count, sa->tid_count);
-    laik_log_Space(sa->space);
-    if (sa->count > 0) {
-        assert(sa->tslice); // only show generic slices
-        laik_log_append(": (tid:slice-tag/mapNo)\n    ");
-        for(unsigned int i = 0; i < sa->count; i++) {
-            Laik_TaskSlice_Gen* ts = &(sa->tslice[i]);
+    laik_log_append("%d range(s) assigned to %d task ids on ",
+                    list->count, list->tid_count);
+    laik_log_Space(list->space);
+    if (list->count > 0) {
+        assert(list->trange); // only show generic ranges
+        laik_log_append(": (tid:range-tag/mapNo)\n    ");
+        for(unsigned int i = 0; i < list->count; i++) {
+            Laik_TaskRange_Gen* trange = &(list->trange[i]);
             if (i>0)
                 laik_log_append(", ");
-            laik_log_append("%d:", ts->task);
-            laik_log_Slice(&(ts->s));
-            laik_log_append("-%d/%d", ts->tag, ts->mapNo);
+            laik_log_append("%d:", trange->task);
+            laik_log_Range(&(trange->range));
+            laik_log_append("-%d/%d", trange->tag, trange->mapNo);
         }
     }
 }
 
-void laik_log_SliceFilter(Laik_SliceFilter* sf)
+void laik_log_RangeFilter(Laik_RangeFilter* sf)
 {
     if (!sf)
         laik_log_append("no filter");
@@ -263,7 +263,7 @@ void laik_log_SliceFilter(Laik_SliceFilter* sf)
         if (sf->pfilter2)
             laik_log_append(" and %d [%lld;%lld[", sf->pfilter2->len,
                         (long long) sf->pfilter2->from, (long long) sf->pfilter2->to);
-        laik_log_append(" slices");
+        laik_log_append(" ranges");
     }
 }
 
@@ -275,25 +275,25 @@ void laik_log_Partitioning(Laik_Partitioning* p)
     }
     laik_log_append("partitioning '%s' on space '%s', group %d",
                     p->name, p->space->name, p->group->gid);
-    if (!p->saList) {
-        laik_log_append(" - no slices stored");
+    if (!p->rangeList) {
+        laik_log_append(" - no ranges stored");
         return;
     }
-    SliceArray_Entry* e = p->saList;
+    RangeList_Entry* e = p->rangeList;
     while(e) {
         laik_log_append("\n  ");
         switch(e->info) {
-        case LAIK_AI_UNKNOWN: break;
-        case LAIK_AI_FULL: laik_log_append("(full run): "); break;
-        case LAIK_AI_SINGLETASK:
+        case LAIK_RI_UNKNOWN: break;
+        case LAIK_RI_FULL: laik_log_append("(full run): "); break;
+        case LAIK_RI_SINGLETASK:
             laik_log_append("(run filtered with task %d): ", e->filter_tid);
             break;
-        case LAIK_AI_INTERSECT:
+        case LAIK_RI_INTERSECT:
             laik_log_append("(run filtered with intersection with part '%s'): ",
                             e->other);
             break;
         }
-        laik_log_SliceArray(e->slices);
+        laik_log_RangeList(e->ranges);
         e = e->next;
     }
 }
@@ -580,7 +580,7 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
 
     case LAIK_AT_MapGroupReduce:
         laik_log_append(": ");
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(" myInMapNo %d, myOutMapNo %d, count %d, input ",
                         ba->fromMapNo, ba->toMapNo, ba->count);
         laik_log_TransitionGroup(tc->transition, ba->inputGroup);
@@ -623,28 +623,28 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
 
     case LAIK_AT_PackToBuf:
         laik_log_append(": ");
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(" count %d ==> buf %p",
                         ba->count, (void*) ba->toBuf);
         break;
 
     case LAIK_AT_PackToRBuf:
         laik_log_append(": ");
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(" count %d ==> buf %d off %lld",
                         ba->count, ba->bufID, ba->offset);
         break;
 
     case LAIK_AT_MapPackToRBuf:
         laik_log_append(": ");
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(" mapNo %d, count %d ==> buf %d off %lld",
                         ba->fromMapNo, ba->count, ba->bufID, ba->offset);
         break;
 
     case LAIK_AT_MapPackToBuf:
         laik_log_append(": ");
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(" mapNo %d, count %d ==> buf %p",
                         ba->fromMapNo, ba->count, (void*) ba->toBuf);
         break;
@@ -652,7 +652,7 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
     case LAIK_AT_MapPackAndSend: {
         Laik_A_MapPackAndSend* aa = (Laik_A_MapPackAndSend*) a;
         laik_log_append(": ");
-        laik_log_Slice(aa->slc);
+        laik_log_Range(aa->range);
         laik_log_append(" mapNo %d, count %llu ==> T%d",
                         aa->fromMapNo, (unsigned long long) aa->count, aa->to_rank);
         break;
@@ -660,45 +660,45 @@ void laik_log_Action(Laik_Action* a, Laik_ActionSeq* as)
 
     case LAIK_AT_PackAndSend:
         laik_log_append(": ");
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(" count %d ==> T%d",
                         ba->count, ba->rank);
         break;
 
     case LAIK_AT_UnpackFromBuf:
         laik_log_append(": buf %p ==> ", (void*) ba->fromBuf);
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(", count %d", ba->count);
         break;
 
     case LAIK_AT_UnpackFromRBuf:
         laik_log_append(": buf %d, off %lld ==> ", ba->bufID, ba->offset);
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(", count %d", ba->count);
         break;
 
     case LAIK_AT_MapUnpackFromRBuf:
         laik_log_append(": buf %d, off %lld ==> ", ba->bufID, ba->offset);
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(" mapNo %d, count %d", ba->toMapNo, ba->count);
         break;
 
     case LAIK_AT_MapUnpackFromBuf:
         laik_log_append(": buf %p ==> ", (void*) ba->fromBuf);
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(" mapNo %d, count %d", ba->toMapNo, ba->count);
         break;
 
     case LAIK_AT_RecvAndUnpack:
         laik_log_append(": T%d ==> ", ba->rank);
-        laik_log_Slice(ba->slc);
+        laik_log_Range(ba->range);
         laik_log_append(", count %d", ba->count);
         break;
 
     case LAIK_AT_MapRecvAndUnpack: {
         Laik_A_MapRecvAndUnpack* aa = (Laik_A_MapRecvAndUnpack*) a;
         laik_log_append(": T%d ==> ", aa->from_rank);
-        laik_log_Slice(aa->slc);
+        laik_log_Range(aa->range);
         laik_log_append(" mapNo %d, count %llu",
                         aa->toMapNo, (unsigned long long) aa->count);
         break;

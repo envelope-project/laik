@@ -36,8 +36,8 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
     uint64_t zsizeW, zstrideW, ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2, gz1, gz2;
 
-    // global index ranges of the slice of this process
-    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    // global index ranges of the range of this process
+    laik_my_range_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
 
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
@@ -86,9 +86,9 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
 
 //--------------------------------------------------------------
 // custom layout factory (used with '-l'): just return lex layout
-static Laik_Layout* mylayout_new(int n, Laik_Slice* slc)
+static Laik_Layout* mylayout_new(int n, Laik_Range* range)
 {
-    return laik_new_layout_lex(n, slc);
+    return laik_new_layout_lex(n, range);
 }
 
 
@@ -282,7 +282,7 @@ int main(int argc, char* argv[])
 
     // distributed initialization
     laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-    laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+    laik_my_range_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
 
     // default mapping order for 3d:
     //   with z in [0;zsize[, y in [0;ysize[, x in [0;xsize[
@@ -360,7 +360,7 @@ int main(int argc, char* argv[])
         setBoundary(size, pWrite, dWrite);
 
         // determine local range for which to do 3d stencil, without global edges
-        laik_my_slice_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
+        laik_my_range_3d(pWrite, 0, &gx1, &gx2, &gy1, &gy2, &gz1, &gz2);
         z1 = (gz1 == 0)    ? 1 : 0;
         y1 = (gy1 == 0)    ? 1 : 0;
         x1 = (gx1 == 0)    ? 1 : 0;
@@ -382,7 +382,7 @@ int main(int argc, char* argv[])
             baseR += zstrideR;
         }
         // instead of relocating baseR, we can query address via index g1
-        // check this (addr is zero if slice empty - this can happen!)
+        // check this (addr is zero if range is empty - this can happen!)
         Laik_Index g1;
         laik_index_init(&g1, gx1, gy1, gz1);
         double* baseR2 = (double*) laik_get_map_addr(dRead, 0, &g1);

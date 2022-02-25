@@ -86,75 +86,74 @@ bool laik_index_isEqual(int dims, const Laik_Index* i1, const Laik_Index* i2)
 }
 
 //----------------------------------------------------------
-// Slices
+// Ranges
 
-void laik_slice_init(Laik_Slice* slc, Laik_Space* space,
+void laik_range_init(Laik_Range* range, Laik_Space* space,
                      Laik_Index* from, Laik_Index* to)
 {
-    slc->space = space;
-    slc->from = *from;
-    slc->to = *to;
+    range->space = space;
+    range->from = *from;
+    range->to = *to;
 }
 
-void laik_slice_init_copy(Laik_Slice* dst, Laik_Slice* src)
+void laik_range_init_copy(Laik_Range* dst, Laik_Range* src)
 {
     *dst = *src;
 }
 
-void laik_slice_init_1d(Laik_Slice* slc, Laik_Space* space,
+void laik_range_init_1d(Laik_Range* range, Laik_Space* space,
                         int64_t from, int64_t to)
 {
     assert(space && (space->dims == 1));
-    slc->space = space;
-    slc->from.i[0] = from;
-    slc->to.i[0] = to;
+    range->space = space;
+    range->from.i[0] = from;
+    range->to.i[0] = to;
 }
 
-void laik_slice_init_2d(Laik_Slice* slc, Laik_Space* space,
+void laik_range_init_2d(Laik_Range* range, Laik_Space* space,
                         int64_t from1, int64_t to1,
                         int64_t from2, int64_t to2)
 {
     assert(space && (space->dims == 2));
-    slc->space = space;
-    slc->from.i[0] = from1;
-    slc->from.i[1] = from2;
-    slc->to.i[0] = to1;
-    slc->to.i[1] = to2;
+    range->space = space;
+    range->from.i[0] = from1;
+    range->from.i[1] = from2;
+    range->to.i[0] = to1;
+    range->to.i[1] = to2;
 }
 
-void laik_slice_init_3d(Laik_Slice* slc, Laik_Space* space,
+void laik_range_init_3d(Laik_Range* range, Laik_Space* space,
                         int64_t from1, int64_t to1,
                         int64_t from2, int64_t to2,
                         int64_t from3, int64_t to3)
 {
     assert(space && (space->dims == 3));
-    slc->space = space;
-    slc->from.i[0] = from1;
-    slc->from.i[1] = from2;
-    slc->from.i[2] = from3;
-    slc->to.i[0] = to1;
-    slc->to.i[1] = to2;
-    slc->to.i[2] = to3;
+    range->space = space;
+    range->from.i[0] = from1;
+    range->from.i[1] = from2;
+    range->from.i[2] = from3;
+    range->to.i[0] = to1;
+    range->to.i[1] = to2;
+    range->to.i[2] = to3;
 }
 
 
-// is the given slice empty?
-bool laik_slice_isEmpty(Laik_Slice* slc)
+bool laik_range_isEmpty(Laik_Range* range)
 {
-    // an invalid slice (no space set) is considered empty
-    if (slc->space == 0) return true;
+    // an invalid range (no space set) is considered empty
+    if (range->space == 0) return true;
 
-    int dims = slc->space->dims;
+    int dims = range->space->dims;
 
-    if (slc->from.i[0] >= slc->to.i[0])
+    if (range->from.i[0] >= range->to.i[0])
         return true;
 
     if (dims>1) {
-        if (slc->from.i[1] >= slc->to.i[1])
+        if (range->from.i[1] >= range->to.i[1])
             return true;
 
         if (dims>2) {
-            if (slc->from.i[2] >= slc->to.i[2])
+            if (range->from.i[2] >= range->to.i[2])
                 return true;
         }
     }
@@ -174,41 +173,41 @@ bool intersectRange(int64_t from1, int64_t to1, int64_t from2, int64_t to2,
     return true;
 }
 
-// get the intersection of 2 slices; return 0 if intersection is empty
-Laik_Slice* laik_slice_intersect(const Laik_Slice* s1, const Laik_Slice* s2)
+// get the intersection of two ranges; return 0 if intersection is empty
+Laik_Range* laik_range_intersect(const Laik_Range* r1, const Laik_Range* r2)
 {
-    static Laik_Slice s;
+    static Laik_Range r;
 
-    // intersection with invalid slice gives invalid slice
-    if ((s1->space == 0) || (s2->space == 0)) {
-        s.space = 0;
-        return &s;
+    // intersection with invalid range gives invalid range
+    if ((r1->space == 0) || (r2->space == 0)) {
+        r.space = 0;
+        return &r;
     }
 
-    assert(s1->space == s2->space);
-    int dims = s1->space->dims;
-    s.space = s1->space;
+    assert(r1->space == r2->space);
+    int dims = r1->space->dims;
+    r.space = r1->space;
 
-    if (!intersectRange(s1->from.i[0], s1->to.i[0],
-                        s2->from.i[0], s2->to.i[0],
-                        &(s.from.i[0]), &(s.to.i[0])) ) return 0;
+    if (!intersectRange(r1->from.i[0], r1->to.i[0],
+                        r2->from.i[0], r2->to.i[0],
+                        &(r.from.i[0]), &(r.to.i[0])) ) return 0;
     if (dims>1) {
-        if (!intersectRange(s1->from.i[1], s1->to.i[1],
-                            s2->from.i[1], s2->to.i[1],
-                            &(s.from.i[1]), &(s.to.i[1])) ) return 0;
+        if (!intersectRange(r1->from.i[1], r1->to.i[1],
+                            r2->from.i[1], r2->to.i[1],
+                            &(r.from.i[1]), &(r.to.i[1])) ) return 0;
         if (dims>2) {
-            if (!intersectRange(s1->from.i[2], s1->to.i[2],
-                                s2->from.i[2], s2->to.i[2],
-                                &(s.from.i[2]), &(s.to.i[2])) ) return 0;
+            if (!intersectRange(r1->from.i[2], r1->to.i[2],
+                                r2->from.i[2], r2->to.i[2],
+                                &(r.from.i[2]), &(r.to.i[2])) ) return 0;
         }
     }
-    return &s;
+    return &r;
 }
 
-// expand slice <dst> such that it contains <src>
-void laik_slice_expand(Laik_Slice* dst, Laik_Slice* src)
+// expand range <dst> such that it contains <src>
+void laik_range_expand(Laik_Range* dst, Laik_Range* src)
 {
-    // an invalid slice stays invalid
+    // an invalid range stays invalid
     if (dst->space == 0) return;
 
     assert(src->space == dst->space);
@@ -226,87 +225,87 @@ void laik_slice_expand(Laik_Slice* dst, Laik_Slice* src)
     if (src->to.i[2] > dst->to.i[2]) dst->to.i[2] = src->to.i[2];
 }
 
-// is slice <slc1> contained in <slc2>?
-bool laik_slice_within_slice(const Laik_Slice* slc1, const Laik_Slice* slc2)
+// is range <r1> contained in <r2>?
+bool laik_range_within_range(const Laik_Range* r1, const Laik_Range* r2)
 {
-    // an invalid slice never can be part of another
-    if ((slc1->space == 0) || (slc2->space == 0)) return false;
+    // an invalid range never can be part of another
+    if ((r1->space == 0) || (r2->space == 0)) return false;
 
-    assert(slc1->space == slc2->space);
+    assert(r1->space == r2->space);
 
-    int dims = slc1->space->dims;
-    if (slc1->from.i[0] < slc1->to.i[0]) {
+    int dims = r1->space->dims;
+    if (r1->from.i[0] < r1->to.i[0]) {
         // not empty
-        if (slc1->from.i[0] < slc2->from.i[0]) return false;
-        if (slc1->to.i[0] > slc2->to.i[0]) return false;
+        if (r1->from.i[0] < r2->from.i[0]) return false;
+        if (r1->to.i[0] > r2->to.i[0]) return false;
     }
     if (dims == 1) return true;
 
-    if (slc1->from.i[1] < slc1->to.i[1]) {
+    if (r1->from.i[1] < r1->to.i[1]) {
         // not empty
-        if (slc1->from.i[1] < slc2->from.i[1]) return false;
-        if (slc1->to.i[1] > slc2->to.i[1]) return false;
+        if (r1->from.i[1] < r2->from.i[1]) return false;
+        if (r1->to.i[1] > r2->to.i[1]) return false;
     }
     if (dims == 2) return true;
 
-    if (slc1->from.i[2] < slc1->to.i[2]) {
+    if (r1->from.i[2] < r1->to.i[2]) {
         // not empty
-        if (slc1->from.i[2] < slc2->from.i[2]) return false;
-        if (slc1->to.i[2] > slc2->to.i[2]) return false;
+        if (r1->from.i[2] < r2->from.i[2]) return false;
+        if (r1->to.i[2] > r2->to.i[2]) return false;
     }
     return true;
 }
 
-// is slice within space borders?
-bool laik_slice_within_space(const Laik_Slice* slc, const Laik_Space* sp)
+// is range within space borders?
+bool laik_range_within_space(const Laik_Range* range, const Laik_Space* sp)
 {
-    return laik_slice_within_slice(slc, &(sp->s));
+    return laik_range_within_range(range, &(sp->range));
 }
 
-// are the slices equal?
-bool laik_slice_isEqual(Laik_Slice* s1, Laik_Slice* s2)
+// are the ranges equal?
+bool laik_range_isEqual(Laik_Range* r1, Laik_Range* r2)
 {
-    // an invalid slice never can be part of another
-    if ((s1->space == 0) || (s2->space == 0)) return false;
-    if (s1->space != s2->space) return false;
+    // an invalid range never can be part of another
+    if ((r1->space == 0) || (r2->space == 0)) return false;
+    if (r1->space != r2->space) return false;
 
-    int dims = s1->space->dims;
-    if (!laik_index_isEqual(dims, &(s1->from), &(s2->from))) return false;
-    if (!laik_index_isEqual(dims, &(s1->to), &(s2->to))) return false;
+    int dims = r1->space->dims;
+    if (!laik_index_isEqual(dims, &(r1->from), &(r2->from))) return false;
+    if (!laik_index_isEqual(dims, &(r1->to), &(r2->to))) return false;
     return true;
 }
 
 
-// number of indexes in the slice
-uint64_t laik_slice_size(const Laik_Slice* s)
+// number of indexes in the range
+uint64_t laik_range_size(const Laik_Range* r)
 {
-    // invalid slice?
-    if (s->space == 0) return 0;
+    // invalid range?
+    if (r->space == 0) return 0;
 
-    int dims = s->space->dims;
-    assert(s->to.i[0] >= s->from.i[0]);
-    uint64_t size = (uint64_t) (s->to.i[0] - s->from.i[0]);
+    int dims = r->space->dims;
+    assert(r->to.i[0] >= r->from.i[0]);
+    uint64_t size = (uint64_t) (r->to.i[0] - r->from.i[0]);
     if (dims > 1) {
-        assert(s->to.i[1] >= s->from.i[1]);
-        size *= (uint64_t) (s->to.i[1] - s->from.i[1]);
+        assert(r->to.i[1] >= r->from.i[1]);
+        size *= (uint64_t) (r->to.i[1] - r->from.i[1]);
         if (dims > 2) {
-            assert(s->to.i[2] >= s->from.i[2]);
-            size *= (uint64_t) (s->to.i[2] - s->from.i[2]);
+            assert(r->to.i[2] >= r->from.i[2]);
+            size *= (uint64_t) (r->to.i[2] - r->from.i[2]);
         }
     }
     return size;
 }
 
-// get the index slice covered by the space
-const Laik_Slice* laik_space_asslice(Laik_Space* space)
+// get the index range covered by the space
+const Laik_Range* laik_space_asrange(Laik_Space* space)
 {
-    return &(space->s);
+    return &(space->range);
 }
 
 // number of indexes in the space
 uint64_t laik_space_size(const Laik_Space* s)
 {
-    return laik_slice_size(&(s->s));
+    return laik_range_size(&(s->range));
 }
 
 // get the number of dimensions if this is a regular space
@@ -357,7 +356,7 @@ Laik_Space* laik_new_space_1d(Laik_Instance* i, int64_t s1)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 1;
-    laik_slice_init_1d(&(space->s), space, 0, s1);
+    laik_range_init_1d(&(space->range), space, 0, s1);
 
     if (laik_log_begin(1)) {
         laik_log_append("new 1d space '%s': ", space->name);
@@ -372,7 +371,7 @@ Laik_Space* laik_new_space_2d(Laik_Instance* i, int64_t s1, int64_t s2)
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 2;
-    laik_slice_init_2d(&(space->s), space, 0, s1, 0, s2);
+    laik_range_init_2d(&(space->range), space, 0, s1, 0, s2);
 
     if (laik_log_begin(1)) {
         laik_log_append("new 2d space '%s': ", space->name);
@@ -388,7 +387,7 @@ Laik_Space* laik_new_space_3d(Laik_Instance* i,
 {
     Laik_Space* space = laik_new_space(i);
     space->dims = 3;
-    laik_slice_init_3d(&(space->s), space, 0, s1, 0, s2, 0, s3);
+    laik_range_init_3d(&(space->range), space, 0, s1, 0, s2, 0, s3);
 
     if (laik_log_begin(1)) {
         laik_log_append("new 3d space '%s': ", space->name);
@@ -422,16 +421,16 @@ char* laik_space_serialize(Laik_Space* s, unsigned* psize)
     int off = -1;
     if (s->dims == 1)
         off = sprintf(buf, "1(%" PRId64 "/%" PRId64 ")",
-                      s->s.from.i[0], s->s.to.i[0]);
+                      s->range.from.i[0], s->range.to.i[0]);
     else if (s->dims == 2)
         off = sprintf(buf, "2(%" PRId64 ",%" PRId64 "/%" PRId64 ",%" PRId64 ")",
-                      s->s.from.i[0], s->s.from.i[1],
-                      s->s.to.i[0], s->s.to.i[1]);
+                      s->range.from.i[0], s->range.from.i[1],
+                      s->range.to.i[0], s->range.to.i[1]);
     else if (s->dims == 3)
         off = sprintf(buf, "3(%" PRId64 ",%" PRId64 ",%" PRId64
                       "/%" PRId64 ",%" PRId64 ",%" PRId64 ")",
-                      s->s.from.i[0], s->s.from.i[1], s->s.from.i[2],
-                      s->s.to.i[0], s->s.to.i[1], s->s.to.i[2]);
+                      s->range.from.i[0], s->range.from.i[1], s->range.from.i[2],
+                      s->range.to.i[0], s->range.to.i[1], s->range.to.i[2]);
     assert(off > 0);
     if (psize) *psize = (unsigned) off;
     return buf;
@@ -443,18 +442,18 @@ bool laik_space_set(Laik_Space* s, char* v)
     s->dims = v[0] - '0';
     if (s->dims == 1) {
         if (sscanf(v+1, "(%" SCNd64 "/%" SCNd64 ")",
-                   &(s->s.from.i[0]), &(s->s.to.i[0]) ) != 2) return false;
+                   &(s->range.from.i[0]), &(s->range.to.i[0]) ) != 2) return false;
     }
     else if (s->dims == 2) {
         if (sscanf(v+1, "(%" SCNd64 ",%" SCNd64 "/%" SCNd64 ",%" SCNd64 ")",
-                   &(s->s.from.i[0]), &(s->s.from.i[1]),
-                   &(s->s.to.i[0]), &(s->s.to.i[1]) ) != 4) return false;
+                   &(s->range.from.i[0]), &(s->range.from.i[1]),
+                   &(s->range.to.i[0]), &(s->range.to.i[1]) ) != 4) return false;
     }
     else if (s->dims == 3) {
         if (sscanf(v+1, "(%" SCNd64 ",%" SCNd64 ",%" SCNd64
                    "/%" SCNd64 ",%" SCNd64 ",%" SCNd64 ")",
-                   &(s->s.from.i[0]), &(s->s.from.i[1]), &(s->s.from.i[2]),
-                   &(s->s.to.i[0]), &(s->s.to.i[1]), &(s->s.to.i[2]) ) != 6) return false;
+                   &(s->range.from.i[0]), &(s->range.from.i[1]), &(s->range.from.i[2]),
+                   &(s->range.to.i[0]), &(s->range.to.i[1]), &(s->range.to.i[2]) ) != 6) return false;
     }
     return true;
 }
@@ -524,13 +523,13 @@ void laik_sync_spaces(Laik_Instance* i)
 void laik_change_space_1d(Laik_Space* s, int64_t from1, int64_t to1)
 {
     assert(s->dims == 1);
-    if ((s->s.from.i[0] == from1) && (s->s.to.i[0] == to1))
+    if ((s->range.from.i[0] == from1) && (s->range.to.i[0] == to1))
         return;
 
-    s->s.from.i[0] = from1;
-    s->s.to.i[0] = to1;
+    s->range.from.i[0] = from1;
+    s->range.to.i[0] = to1;
 
-    // if slice is in store, notify other processes on next sync
+    // if range is in store, notify other processes on next sync
     if (s->kvs)
         laik_spacestore_set(s);
 
@@ -541,15 +540,15 @@ void laik_change_space_2d(Laik_Space* s,
                           int64_t from1, int64_t to1, int64_t from2, int64_t to2)
 {
     assert(s->dims == 2);
-    if ((s->s.from.i[0] == from1) && (s->s.to.i[0] == to1) &&
-        (s->s.from.i[1] == from2) && (s->s.to.i[1] == to2)) return;
+    if ((s->range.from.i[0] == from1) && (s->range.to.i[0] == to1) &&
+        (s->range.from.i[1] == from2) && (s->range.to.i[1] == to2)) return;
 
-    s->s.from.i[0] = from1;
-    s->s.to.i[0] = to1;
-    s->s.from.i[1] = from2;
-    s->s.to.i[1] = to2;
+    s->range.from.i[0] = from1;
+    s->range.to.i[0] = to1;
+    s->range.from.i[1] = from2;
+    s->range.to.i[1] = to2;
 
-    // if slice is in store, notify other processes on next sync
+    // if range is in store, notify other processes on next sync
     if (s->kvs)
         laik_spacestore_set(s);
 
@@ -560,18 +559,18 @@ void laik_change_space_3d(Laik_Space* s, int64_t from1, int64_t to1,
                           int64_t from2, int64_t to2, int64_t from3, int64_t to3)
 {
     assert(s->dims == 3);
-    if ((s->s.from.i[0] == from1) && (s->s.to.i[0] == to1) &&
-        (s->s.from.i[1] == from2) && (s->s.to.i[1] == to2) &&
-        (s->s.from.i[2] == from3) && (s->s.to.i[2] == to3)) return;
+    if ((s->range.from.i[0] == from1) && (s->range.to.i[0] == to1) &&
+        (s->range.from.i[1] == from2) && (s->range.to.i[1] == to2) &&
+        (s->range.from.i[2] == from3) && (s->range.to.i[2] == to3)) return;
 
-    s->s.from.i[0] = from1;
-    s->s.to.i[0] = to1;
-    s->s.from.i[1] = from2;
-    s->s.to.i[1] = to2;
-    s->s.from.i[2] = from3;
-    s->s.to.i[2] = to3;
+    s->range.from.i[0] = from1;
+    s->range.to.i[0] = to1;
+    s->range.from.i[1] = from2;
+    s->range.to.i[1] = to2;
+    s->range.from.i[2] = from3;
+    s->range.to.i[2] = to3;
 
-    // if slice is in store, notify other processes on next sync
+    // if range is in store, notify other processes on next sync
     if (s->kvs)
         laik_spacestore_set(s);
 
@@ -580,81 +579,81 @@ void laik_change_space_3d(Laik_Space* s, int64_t from1, int64_t to1,
 
 
 //-----------------------
-// Laik_TaskSlice
+// Laik_TaskRange
 
 
-// get slice from a task slice
-const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts)
+// get range of a task range
+const Laik_Range* laik_taskrange_get_range(Laik_TaskRange* trange)
 {
 
-    if (!ts) return 0;
+    if (!trange) return 0;
 
-    if (ts->sa->tslice)
-        return &(ts->sa->tslice[ts->no].s);
+    if (trange->list->trange)
+        return &(trange->list->trange[trange->no].range);
 
-    if (ts->sa->tss1d) {
-        static Laik_Slice slc;
-        int64_t idx = ts->sa->tss1d[ts->no].idx;
-        laik_slice_init_1d(&slc, ts->sa->space, idx, idx + 1);
-        return &slc;
+    if (trange->list->tss1d) {
+        static Laik_Range range;
+        int64_t idx = trange->list->tss1d[trange->no].idx;
+        laik_range_init_1d(&range, trange->list->space, idx, idx + 1);
+        return &range;
     }
     return 0;
 }
 
-// get the process rank of an task slice
-int laik_taskslice_get_task(Laik_TaskSlice* ts)
+// get the process rank of an task range
+int laik_taskrange_get_task(Laik_TaskRange* trange)
 {
-    assert(ts && ts->sa);
-    if (ts->sa->tslice)
-        return ts->sa->tslice[ts->no].task;
-    if (ts->sa->tss1d)
-        return ts->sa->tss1d[ts->no].task;
+    assert(trange && trange->list);
+    if (trange->list->trange)
+        return trange->list->trange[trange->no].task;
+    if (trange->list->tss1d)
+        return trange->list->tss1d[trange->no].task;
 
     return -1;
 }
 
 
 
-int laik_taskslice_get_mapNo(Laik_TaskSlice* ts)
+int laik_taskrange_get_mapNo(Laik_TaskRange* trange)
 {
-    assert(ts && ts->sa);
-    // does the partitioning store slices as single indexes? Only one map!
-    if (ts->sa->tss1d) return 0;
+    assert(trange && trange->list);
+    // does the partitioning store ranges as single indexes? Only one map!
+    if (trange->list->tss1d) return 0;
 
-    Laik_TaskSlice_Gen* tsg = &(ts->sa->tslice[ts->no]);
+    Laik_TaskRange_Gen* tsg = &(trange->list->trange[trange->no]);
     return tsg->mapNo;
 }
 
-int laik_taskslice_get_tag(Laik_TaskSlice* ts)
+int laik_taskrange_get_tag(Laik_TaskRange* trange)
 {
-    assert(ts && ts->sa);
-    // does the partitioning store slices as single indexes? Always tag 1
-    if (ts->sa->tss1d) return 1;
+    assert(trange && trange->list);
+    // does the partitioning store ranges as single indexes? Always tag 1
+    if (trange->list->tss1d) return 1;
 
-    Laik_TaskSlice_Gen* tsg = &(ts->sa->tslice[ts->no]);
+    Laik_TaskRange_Gen* tsg = &(trange->list->trange[trange->no]);
     return tsg->tag;
 }
 
 
-// applications can attach arbitrary values to a TaskSlice, to be
-// passed from application-specific partitioners to slice processing
-void* laik_taskslice_get_data(Laik_TaskSlice* ts)
+// applications can attach arbitrary values to a TaskRange, to be
+// passed from application-specific partitioners to range processing
+void* laik_taskrange_get_data(Laik_TaskRange* trange)
 {
-    assert(ts && ts->sa);
-    // does the partitioning store slices as single indexes? No data!
-    if (ts->sa->tss1d) return 0;
+    assert(trange && trange->list);
+    // does the partitioning store ranges as single indexes? No data!
+    if (trange->list->tss1d) return 0;
 
-    Laik_TaskSlice_Gen* tsg = &(ts->sa->tslice[ts->no]);
+    Laik_TaskRange_Gen* tsg = &(trange->list->trange[trange->no]);
     return tsg->data;
 }
 
-void laik_taskslice_set_data(Laik_TaskSlice* ts, void* data)
+void laik_taskrange_set_data(Laik_TaskRange* trange, void* data)
 {
-    assert(ts && ts->sa);
-    // does the partitioning store slices as single indexes? No data to set!
-    assert(ts->sa->tss1d == 0);
+    assert(trange && trange->list);
+    // does the partitioning store ranges as single indexes? No data to set!
+    assert(trange->list->tss1d == 0);
 
-    Laik_TaskSlice_Gen* tsg = &(ts->sa->tslice[ts->no]);
+    Laik_TaskRange_Gen* tsg = &(trange->list->trange[trange->no]);
     tsg->data = data;
 }
 
@@ -684,10 +683,10 @@ bool laik_index_global2local(Laik_Partitioning* p,
 
 // TODO:
 // - quadratic complexity for 2d/3d spaces
-// - for 1d, does not cope with overlapping slices belonging to same task
+// - for 1d, does not cope with overlapping ranges belonging to same task
 
-// print verbose debug output for creating slices for reductions?
-#define DEBUG_REDUCTIONSLICES 1
+// print verbose debug output for creating ranges for reductions?
+#define DEBUG_REDUCTIONRANGES 1
 
 
 static TaskGroup* groupList = 0;
@@ -770,15 +769,15 @@ static int getTaskGroup(TaskGroup* tg)
 
 
 // only for 1d
-typedef struct _SliceBorder {
+typedef struct _RangeBorder {
     int64_t b;
     int task;
-    int sliceNo, mapNo;
+    int rangeNo, mapNo;
     unsigned int isStart :1;
     unsigned int isInput :1;
-} SliceBorder;
+} RangeBorder;
 
-static SliceBorder* borderList = 0;
+static RangeBorder* borderList = 0;
 int borderListSize = 0, borderListCount = 0;
 
 static
@@ -797,40 +796,40 @@ void freeBorderList()
 }
 
 static
-void appendBorder(int64_t b, int task, int sliceNo, int mapNo,
+void appendBorder(int64_t b, int task, int rangeNo, int mapNo,
                   bool isStart, bool isInput)
 {
     if (borderListCount == borderListSize) {
         // enlarge list
         borderListSize = (borderListSize + 10) * 2;
-        borderList = realloc(borderList, borderListSize * sizeof(SliceBorder));
+        borderList = realloc(borderList, borderListSize * sizeof(RangeBorder));
         if (!borderList) {
             laik_panic("Out of memory allocating memory for Laik_Transition");
             exit(1); // not actually needed, laik_panic never returns
         }
     }
-    SliceBorder *sb = &(borderList[borderListCount]);
+    RangeBorder *sb = &(borderList[borderListCount]);
     borderListCount++;
 
     sb->b = b;
     sb->task = task;
-    sb->sliceNo = sliceNo;
+    sb->rangeNo = rangeNo;
     sb->mapNo = mapNo;
     sb->isStart = isStart ? 1 : 0;
     sb->isInput = isInput ? 1 : 0;
 
-#ifdef DEBUG_REDUCTIONSLICES
-    laik_log(1, "  add border %lld, task %d slice/map %d/%d (%s, %s)",
-             (long long int) b, task, sliceNo, mapNo,
+#ifdef DEBUG_REDUCTIONRANGES
+    laik_log(1, "  add border %lld, task %d range/map %d/%d (%s, %s)",
+             (long long int) b, task, rangeNo, mapNo,
              isStart ? "start" : "end", isInput ? "input" : "output");
 #endif
 }
 
-static int sb_cmp(const void *p1, const void *p2)
+static int rb_cmp(const void *p1, const void *p2)
 {
-    const SliceBorder* sb1 = (const SliceBorder*) p1;
-    const SliceBorder* sb2 = (const SliceBorder*) p2;
-    // order by border, at same point first close slice
+    const RangeBorder* sb1 = (const RangeBorder*) p1;
+    const RangeBorder* sb2 = (const RangeBorder*) p2;
+    // order by border, at same point first close range
     if (sb1->b == sb2->b) {
         return sb1->isStart - sb2->isStart;
     }
@@ -914,8 +913,8 @@ void cleanTOpBufs(bool doFree)
 }
 
 static
-struct localTOp* appendLocalTOp(Laik_Slice* slc,
-                                int fromSliceNo, int toSliceNo,
+struct localTOp* appendLocalTOp(Laik_Range* range,
+                                int fromRangeNo, int toRangeNo,
                                 int fromMapNo, int toMapNo)
 {
     if (localBufCount == localBufSize) {
@@ -930,9 +929,9 @@ struct localTOp* appendLocalTOp(Laik_Slice* slc,
     struct localTOp* op = &(localBuf[localBufCount]);
     localBufCount++;
 
-    op->slc = *slc;
-    op->fromSliceNo = fromSliceNo;
-    op->toSliceNo = toSliceNo;
+    op->range = *range;
+    op->fromRangeNo = fromRangeNo;
+    op->toRangeNo = toRangeNo;
     op->fromMapNo = fromMapNo;
     op->toMapNo = toMapNo;
 
@@ -940,8 +939,8 @@ struct localTOp* appendLocalTOp(Laik_Slice* slc,
 }
 
 static
-struct initTOp* appendInitTOp(Laik_Slice* slc,
-                              int sliceNo, int mapNo,
+struct initTOp* appendInitTOp(Laik_Range* range,
+                              int rangeNo, int mapNo,
                               Laik_ReductionOperation redOp)
 {
     if (initBufCount == initBufSize) {
@@ -956,8 +955,8 @@ struct initTOp* appendInitTOp(Laik_Slice* slc,
     struct initTOp* op = &(initBuf[initBufCount]);
     initBufCount++;
 
-    op->slc = *slc;
-    op->sliceNo = sliceNo;
+    op->range = *range;
+    op->rangeNo = rangeNo;
     op->mapNo = mapNo;
     op->redOp = redOp;
 
@@ -965,8 +964,8 @@ struct initTOp* appendInitTOp(Laik_Slice* slc,
 }
 
 static
-struct sendTOp* appendSendTOp(Laik_Slice* slc,
-                              int sliceNo, int mapNo, int toTask)
+struct sendTOp* appendSendTOp(Laik_Range* range,
+                              int rangeNo, int mapNo, int toTask)
 {
     if (sendBufCount == sendBufSize) {
         // enlarge temp buffer
@@ -980,8 +979,8 @@ struct sendTOp* appendSendTOp(Laik_Slice* slc,
     struct sendTOp* op = &(sendBuf[sendBufCount]);
     sendBufCount++;
 
-    op->slc = *slc;
-    op->sliceNo = sliceNo;
+    op->range = *range;
+    op->rangeNo = rangeNo;
     op->mapNo = mapNo;
     op->toTask = toTask;
 
@@ -989,8 +988,8 @@ struct sendTOp* appendSendTOp(Laik_Slice* slc,
 }
 
 static
-struct recvTOp* appendRecvTOp(Laik_Slice* slc,
-                              int sliceNo, int mapNo, int fromTask)
+struct recvTOp* appendRecvTOp(Laik_Range* range,
+                              int rangeNo, int mapNo, int fromTask)
 {
     if (recvBufCount == recvBufSize) {
         // enlarge temp buffer
@@ -1004,8 +1003,8 @@ struct recvTOp* appendRecvTOp(Laik_Slice* slc,
     struct recvTOp* op = &(recvBuf[recvBufCount]);
     recvBufCount++;
 
-    op->slc = *slc;
-    op->sliceNo = sliceNo;
+    op->range = *range;
+    op->rangeNo = rangeNo;
     op->mapNo = mapNo;
     op->fromTask = fromTask;
 
@@ -1013,10 +1012,10 @@ struct recvTOp* appendRecvTOp(Laik_Slice* slc,
 }
 
 static
-struct redTOp* appendRedTOp(Laik_Slice* slc,
+struct redTOp* appendRedTOp(Laik_Range* range,
                             Laik_ReductionOperation redOp,
                             int inputGroup, int outputGroup,
-                            int myInputSliceNo, int myOutputSliceNo,
+                            int myInputRangeNo, int myOutputRangeNo,
                             int myInputMapNo, int myOutputMapNo)
 {
     if (redBufCount == redBufSize) {
@@ -1031,12 +1030,12 @@ struct redTOp* appendRedTOp(Laik_Slice* slc,
     struct redTOp* op = &(redBuf[redBufCount]);
     redBufCount++;
 
-    op->slc = *slc;
+    op->range = *range;
     op->redOp = redOp;
     op->inputGroup = inputGroup;
     op->outputGroup = outputGroup;
-    op->myInputSliceNo = myInputSliceNo;
-    op->myOutputSliceNo = myOutputSliceNo;
+    op->myInputRangeNo = myInputRangeNo;
+    op->myOutputRangeNo = myOutputRangeNo;
     op->myInputMapNo = myInputMapNo;
     op->myOutputMapNo = myOutputMapNo;
 
@@ -1054,7 +1053,7 @@ bool oneInputIsCopy(Laik_ReductionOperation redOp)
     return (int) redOp < LAIK_RO_Custom;
 }
 
-// find all slices where this task takes part in a reduction, and add
+// find all ranges where this task takes part in a reduction, and add
 // them to the reduction operation list.
 // TODO: we only support one mapping in each task for reductions
 //       better: support multiple mappings for same index in same task
@@ -1068,60 +1067,60 @@ void calcAddReductions(int tflags,
     assert(fromP->space->dims == 1);
     assert(fromP->space == toP->space);
 
-    Laik_SliceArray *fromSA, *toSA;
-    // need at least intersection of own slices in fromP/toP to calculate transition
-    fromSA = laik_partitioning_interslices(fromP, toP);
-    toSA = laik_partitioning_interslices(toP, fromP);
-    if ((fromSA == 0) || (toSA == 0)) {
-        // required slices for transition calculation not calculated yet
-        laik_panic("Transition calculation not possible without pre-calculated slices");
+    Laik_RangeList *fromRL, *toRL;
+    // need at least intersection of own ranges in fromP/toP to calculate transition
+    fromRL = laik_partitioning_interranges(fromP, toP);
+    toRL = laik_partitioning_interranges(toP, fromP);
+    if ((fromRL == 0) || (toRL == 0)) {
+        // required ranges for transition calculation not calculated yet
+        laik_panic("Transition calculation not possible without pre-calculated ranges");
         exit(1); // not actually needed, laik_panic never returns
     }
 
     if (laik_log_begin(1)) {
         laik_log_append("calc '");
         laik_log_Reduction(redOp);
-        laik_log_flush("' ops for '%s' (%d slices) => '%s' (%d slices)",
-                       fromP->name, fromSA->count, toP->name, toSA->count);
+        laik_log_flush("' ops for '%s' (%d ranges) => '%s' (%d ranges)",
+                       fromP->name, fromRL->count, toP->name, toRL->count);
     }
 
-    // add slice borders of all tasks
+    // add range borders of all tasks
     cleanBorderList();
-    int sliceNo, lastTask, lastMapNo;
-    sliceNo = 0;
+    int rangeNo, lastTask, lastMapNo;
+    rangeNo = 0;
     lastTask = -1;
     lastMapNo = -1;
-    for(unsigned int i = 0; i < fromSA->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(fromSA->tslice[i]);
-        // reset sliceNo to 0 on every task/mapNo change
+    for(unsigned int i = 0; i < fromRL->count; i++) {
+        Laik_TaskRange_Gen* ts = &(fromRL->trange[i]);
+        // reset rangeNo to 0 on every task/mapNo change
         if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
-            sliceNo = 0;
+            rangeNo = 0;
             lastTask = ts->task;
             lastMapNo = ts->mapNo;
         }
-        appendBorder(ts->s.from.i[0], ts->task, sliceNo, ts->mapNo, true, true);
-        appendBorder(ts->s.to.i[0], ts->task, sliceNo, ts->mapNo, false, true);
-        sliceNo++;
+        appendBorder(ts->range.from.i[0], ts->task, rangeNo, ts->mapNo, true, true);
+        appendBorder(ts->range.to.i[0], ts->task, rangeNo, ts->mapNo, false, true);
+        rangeNo++;
     }
     lastTask = -1;
     lastMapNo = -1;
-    for(unsigned int i = 0; i < toSA->count; i++) {
-        Laik_TaskSlice_Gen* ts = &(toSA->tslice[i]);
-        // reset sliceNo to 0 on every task/mapNo change
-        if ((ts->task != lastTask) || (ts->mapNo != lastMapNo)) {
-            sliceNo = 0;
-            lastTask = ts->task;
-            lastMapNo = ts->mapNo;
+    for(unsigned int i = 0; i < toRL->count; i++) {
+        Laik_TaskRange_Gen* tr = &(toRL->trange[i]);
+        // reset rangeNo to 0 on every task/mapNo change
+        if ((tr->task != lastTask) || (tr->mapNo != lastMapNo)) {
+            rangeNo = 0;
+            lastTask = tr->task;
+            lastMapNo = tr->mapNo;
         }
-        appendBorder(ts->s.from.i[0], ts->task, sliceNo, ts->mapNo, true, false);
-        appendBorder(ts->s.to.i[0], ts->task, sliceNo, ts->mapNo, false, false);
-        sliceNo++;
+        appendBorder(tr->range.from.i[0], tr->task, rangeNo, tr->mapNo, true, false);
+        appendBorder(tr->range.to.i[0], tr->task, rangeNo, tr->mapNo, false, false);
+        rangeNo++;
     }
 
     if (borderListCount == 0) return;
 
     // order by border to travers in border order
-    qsort(borderList, borderListCount, sizeof(SliceBorder), sb_cmp);
+    qsort(borderList, borderListCount, sizeof(RangeBorder), rb_cmp);
 
 #define MAX_TASKS 65536
     int inputTask[MAX_TASKS], outputTask[MAX_TASKS];
@@ -1136,19 +1135,19 @@ void calcAddReductions(int tflags,
 
     int myid = group->myid;
     int myActivity = 0; // bit0: input, bit1: output
-    int myInputSliceNo = -1, myOutputSliceNo = -1;
+    int myInputRangeNo = -1, myOutputRangeNo = -1;
     int myInputMapNo = -1, myOutputMapNo = -1;
 
-    Laik_Slice slc;
-    // all slices are from same space
-    slc.space = fromP->space;
+    Laik_Range range;
+    // all ranges are from same space
+    range.space = fromP->space;
 
     for(int i = 0; i < borderListCount; i++) {
-        SliceBorder* sb = &(borderList[i]);
+        RangeBorder* sb = &(borderList[i]);
 
-#ifdef DEBUG_REDUCTIONSLICES
-        laik_log(1, "at border %lld, task %d (slice %d, map %d): %s for %s",
-                 (long long int) sb->b, sb->task, sb->sliceNo, sb->mapNo,
+#ifdef DEBUG_REDUCTIONRANGES
+        laik_log(1, "at border %lld, task %d (range %d, map %d): %s for %s",
+                 (long long int) sb->b, sb->task, sb->rangeNo, sb->mapNo,
                  sb->isStart ? "start" : "end",
                  sb->isInput ? "input" : "output");
 #endif
@@ -1160,7 +1159,7 @@ void calcAddReductions(int tflags,
                 isOk = addTask(&inputGroup, sb->task, MAX_TASKS);
                 if (sb->task == myid) {
                     myActivity |= 1;
-                    myInputSliceNo = sb->sliceNo;
+                    myInputRangeNo = sb->rangeNo;
                     myInputMapNo = sb->mapNo;
                 }
             }
@@ -1174,7 +1173,7 @@ void calcAddReductions(int tflags,
                 isOk = addTask(&outputGroup, sb->task, MAX_TASKS);
                 if (sb->task == myid) {
                     myActivity |= 2;
-                    myOutputSliceNo = sb->sliceNo;
+                    myOutputRangeNo = sb->rangeNo;
                     myOutputMapNo = sb->mapNo;
                 }
             }
@@ -1189,7 +1188,7 @@ void calcAddReductions(int tflags,
             // about to leave a range with given input/output tasks
             int64_t nextBorder = borderList[i + 1].b;
 
-#ifdef DEBUG_REDUCTIONSLICES
+#ifdef DEBUG_REDUCTIONRANGES
             char* act[] = {"(none)", "input", "output", "in & out"};
             laik_log(1, "  range (%lld - %lld), my activity: %s",
                      (long long int) sb->b,
@@ -1200,8 +1199,8 @@ void calcAddReductions(int tflags,
                 assert(isInTaskGroup(&inputGroup, myid) ||
                        isInTaskGroup(&outputGroup, myid));
 
-                slc.from.i[0] = sb->b;
-                slc.to.i[0] = nextBorder;
+                range.from.i[0] = sb->b;
+                range.to.i[0] = nextBorder;
 
                 // check for special case: one input, ie. no reduction needed
                 if (inputGroup.count == 1) {
@@ -1215,16 +1214,16 @@ void calcAddReductions(int tflags,
                             (outputGroup.task[0] == myid)) {
 
                             // local (copy) operation
-                            appendLocalTOp(&slc,
-                                           myInputSliceNo, myOutputSliceNo,
+                            appendLocalTOp(&range,
+                                           myInputRangeNo, myOutputRangeNo,
                                            myInputMapNo, myOutputMapNo);
-#ifdef DEBUG_REDUCTIONSLICES
+#ifdef DEBUG_REDUCTIONRANGES
                             laik_log(1, "  adding local (special reduction)"
-                                        " (%lld - %lld) from %d/%d to %d/%d (slc/map)",
-                                     (long long int) slc.from.i[0],
-                                     (long long int) slc.to.i[0],
-                                     myInputSliceNo, myInputMapNo,
-                                     myOutputSliceNo, myOutputMapNo);
+                                        " (%lld - %lld) from %d/%d to %d/%d (range/map)",
+                                     (long long int) range.from.i[0],
+                                     (long long int) range.to.i[0],
+                                     myInputRangeNo, myInputMapNo,
+                                     myOutputRangeNo, myOutputMapNo);
 #endif
                             continue;
                         }
@@ -1234,30 +1233,30 @@ void calcAddReductions(int tflags,
                             for(int out = 0; out < outputGroup.count; out++) {
                                 if (outputGroup.task[out] == myid) {
                                     // local (copy) operation
-                                    appendLocalTOp(&slc,
-                                                   myInputSliceNo, myOutputSliceNo,
+                                    appendLocalTOp(&range,
+                                                   myInputRangeNo, myOutputRangeNo,
                                                    myInputMapNo, myOutputMapNo);
-#ifdef DEBUG_REDUCTIONSLICES
+#ifdef DEBUG_REDUCTIONRANGES
                                     laik_log(1, "  adding local (special reduction)"
-                                                " (%lld - %lld) from %d/%d to %d/%d (slc/map)",
-                                             (long long int) slc.from.i[0],
-                                            (long long int) slc.to.i[0],
-                                            myInputSliceNo, myInputMapNo,
-                                            myOutputSliceNo, myOutputMapNo);
+                                                " (%lld - %lld) from %d/%d to %d/%d (range/map)",
+                                             (long long int) range.from.i[0],
+                                            (long long int) range.to.i[0],
+                                            myInputRangeNo, myInputMapNo,
+                                            myOutputRangeNo, myOutputMapNo);
 #endif
                                     continue;
                                 }
 
                                 // send operation
-                                appendSendTOp(&slc,
-                                              myInputSliceNo, myInputMapNo,
+                                appendSendTOp(&range,
+                                              myInputRangeNo, myInputMapNo,
                                               outputGroup.task[out]);
-#ifdef DEBUG_REDUCTIONSLICES
+#ifdef DEBUG_REDUCTIONRANGES
                                 laik_log(1, "  adding send (special reduction)"
-                                            " (%lld - %lld) slc/map %d/%d to T%d",
-                                         (long long int) slc.from.i[0],
-                                        (long long int) slc.to.i[0],
-                                        myInputSliceNo, myInputMapNo,
+                                            " (%lld - %lld) range/map %d/%d to T%d",
+                                         (long long int) range.from.i[0],
+                                        (long long int) range.to.i[0],
+                                        myInputRangeNo, myInputMapNo,
                                         outputGroup.task[out]);
 #endif
                             }
@@ -1271,16 +1270,16 @@ void calcAddReductions(int tflags,
                                 if (outputGroup.task[out] != myid) continue;
 
                                 // receive operation
-                                appendRecvTOp(&slc,
-                                              myOutputSliceNo, myOutputMapNo,
+                                appendRecvTOp(&range,
+                                              myOutputRangeNo, myOutputMapNo,
                                               inputGroup.task[0]);
 
-#ifdef DEBUG_REDUCTIONSLICES
+#ifdef DEBUG_REDUCTIONRANGES
                                 laik_log(1, "  adding recv (special reduction)"
-                                            " (%lld - %lld) slc/map %d/%d from T%d",
-                                         (long long int) slc.from.i[0],
-                                        (long long int) slc.to.i[0],
-                                        myOutputSliceNo, myOutputMapNo,
+                                            " (%lld - %lld) range/map %d/%d from T%d",
+                                         (long long int) range.from.i[0],
+                                        (long long int) range.to.i[0],
+                                        myOutputRangeNo, myOutputMapNo,
                                         inputGroup.task[0]);
 #endif
                             }
@@ -1295,10 +1294,10 @@ void calcAddReductions(int tflags,
                 int in = getTaskGroup(&inputGroup);
                 int out = getTaskGroup(&outputGroup);
 
-#ifdef DEBUG_REDUCTIONSLICES
+#ifdef DEBUG_REDUCTIONRANGES
                 laik_log_begin(1);
                 laik_log_append("  adding reduction (%lu - %lu), in %d:(",
-                                slc.from.i[0], slc.to.i[0], in);
+                                range.from.i[0], range.to.i[0], in);
                 for(int i = 0; i < groupList[in].count; i++) {
                     if (i > 0) laik_log_append(",");
                     laik_log_append("T%d", groupList[in].task[i]);
@@ -1308,9 +1307,9 @@ void calcAddReductions(int tflags,
                     if (i > 0) laik_log_append(",");
                     laik_log_append("T%d", groupList[out].task[i]);
                 }
-                laik_log_flush("), in %d/%d out %d/%d (slc/map)",
-                               myInputSliceNo, myInputMapNo,
-                               myOutputSliceNo, myOutputMapNo);
+                laik_log_flush("), in %d/%d out %d/%d (range/map)",
+                               myInputRangeNo, myInputMapNo,
+                               myOutputRangeNo, myOutputMapNo);
 #endif
 
                 // convert to all-group if possible
@@ -1318,8 +1317,8 @@ void calcAddReductions(int tflags,
                 if (groupList[out].count == group->size) out = -1;
 
                 assert(redOp != LAIK_RO_None); // must be a real reduction
-                appendRedTOp(&slc, redOp, in, out,
-                             myInputSliceNo, myOutputSliceNo,
+                appendRedTOp(&range, redOp, in, out,
+                             myInputRangeNo, myOutputRangeNo,
                              myInputMapNo, myOutputMapNo);
             }
         }
@@ -1338,7 +1337,7 @@ do_calc_transition(Laik_Space* space,
                    Laik_Partitioning* fromP, Laik_Partitioning* toP,
                    Laik_DataFlow flow, Laik_ReductionOperation redOp)
 {
-    Laik_Slice* slc;
+    Laik_Range* range;
 
     // flags for transition
     int tflags = 0; //LAIK_TF_KEEP_REDUCTIONS; // no_sendrev_actions
@@ -1386,20 +1385,20 @@ do_calc_transition(Laik_Space* space,
     // request to initialize values?
     if ((toP != 0) && (flow == LAIK_DF_Init)) {
 
-        // own slices enough
-        Laik_SliceArray* toSA = laik_partitioning_myslices(toP);
-        if (!toSA) {
-            laik_panic("Own slices not known for init in transition calculation");
+        // own ranges enough
+        Laik_RangeList* toRL = laik_partitioning_myranges(toP);
+        if (!toRL) {
+            laik_panic("Own ranges not known for init in transition calculation");
             exit(1); // not actually needed, laik_panic never returns
         }
 
-        for(o = toSA->off[myid]; o < toSA->off[myid+1]; o++) {
-            if (laik_slice_isEmpty(&(toSA->tslice[o].s))) continue;
+        for(o = toRL->off[myid]; o < toRL->off[myid+1]; o++) {
+            if (laik_range_isEmpty(&(toRL->trange[o].range))) continue;
 
             assert(redOp != LAIK_RO_None);
-            appendInitTOp( &(toSA->tslice[o].s),
-                           o - toSA->off[myid],
-                           toSA->tslice[o].mapNo,
+            appendInitTOp( &(toRL->trange[o].range),
+                           o - toRL->off[myid],
+                           toRL->trange[o].mapNo,
                            redOp);
         }
     }
@@ -1414,28 +1413,28 @@ do_calc_transition(Laik_Space* space,
             calcAddReductions(tflags, group, redOp, fromP, toP);
         }
         else {
-            // we need intersection of own slices in fromP/toP
-            Laik_SliceArray* fromSA = laik_partitioning_allslices(fromP);
-            Laik_SliceArray* toSA = laik_partitioning_allslices(toP);
-            if ((fromSA == 0) || (toSA == 0)) {
-                laik_panic("Slices not known for transition calculation");
+            // we need intersection of own ranges in fromP/toP
+            Laik_RangeList* fromRL = laik_partitioning_allranges(fromP);
+            Laik_RangeList* toRL = laik_partitioning_allranges(toP);
+            if ((fromRL == 0) || (toRL == 0)) {
+                laik_panic("Ranges not known for transition calculation");
                 exit(1); // not actually needed, laik_panic never returns
             }
 
-            // determine local slices to keep
+            // determine local ranges to keep
             // (may need local copy if from/to mappings are different).
             // reductions are not handled here, but by backend
-            for(o1 = fromSA->off[myid]; o1 < fromSA->off[myid+1]; o1++) {
-                for(o2 = toSA->off[myid]; o2 < toSA->off[myid+1]; o2++) {
-                    slc = laik_slice_intersect(&(fromSA->tslice[o1].s),
-                                               &(toSA->tslice[o2].s));
-                    if (slc == 0) continue;
+            for(o1 = fromRL->off[myid]; o1 < fromRL->off[myid+1]; o1++) {
+                for(o2 = toRL->off[myid]; o2 < toRL->off[myid+1]; o2++) {
+                    range = laik_range_intersect(&(fromRL->trange[o1].range),
+                                               &(toRL->trange[o2].range));
+                    if (range == 0) continue;
 
-                    appendLocalTOp(slc,
-                                   o1 - fromSA->off[myid],
-                                   o2 - toSA->off[myid],
-                                   fromSA->tslice[o1].mapNo,
-                                   toSA->tslice[o2].mapNo);
+                    appendLocalTOp(range,
+                                   o1 - fromRL->off[myid],
+                                   o2 - toRL->off[myid],
+                                   fromRL->trange[o1].mapNo,
+                                   toRL->trange[o2].mapNo);
                 }
             }
 
@@ -1470,8 +1469,8 @@ do_calc_transition(Laik_Space* space,
 
                 if (fromAllto1OrAll) {
                     assert(outputGroup > -2);
-                    // complete space, always sliceNo 0 and mapNo 0
-                    appendRedTOp( &(space->s), redOp,
+                    // complete space, always rangeNo 0 and mapNo 0
+                    appendRedTOp( &(space->range), redOp,
                                   -1, outputGroup, 0, 0, 0, 0);
                 }
                 else {
@@ -1484,30 +1483,30 @@ do_calc_transition(Laik_Space* space,
                 // something to receive not coming from a reduction?
                 for(int task = 0; task < taskCount; task++) {
                     if (task == myid) continue;
-                    for(o1 = toSA->off[myid]; o1 < toSA->off[myid+1]; o1++) {
+                    for(o1 = toRL->off[myid]; o1 < toRL->off[myid+1]; o1++) {
 
                         // everything we have local will not have been sent
                         // TODO: we only check for exact match to catch All
                         // FIXME: should print out a Warning/Error as the App
                         //        was requesting for overwriting of values!
-                        slc = &(toSA->tslice[o1].s);
-                        for(o2 = fromSA->off[myid]; o2 < fromSA->off[myid+1]; o2++) {
-                            if (laik_slice_isEqual(slc,
-                                                   &(fromSA->tslice[o2].s))) {
-                                slc = 0;
+                        range = &(toRL->trange[o1].range);
+                        for(o2 = fromRL->off[myid]; o2 < fromRL->off[myid+1]; o2++) {
+                            if (laik_range_isEqual(range,
+                                                   &(fromRL->trange[o2].range))) {
+                                range = 0;
                                 break;
                             }
                         }
-                        if (slc == 0) continue;
+                        if (range == 0) continue;
 
-                        for(o2 = fromSA->off[task]; o2 < fromSA->off[task+1]; o2++) {
+                        for(o2 = fromRL->off[task]; o2 < fromRL->off[task+1]; o2++) {
 
-                            slc = laik_slice_intersect(&(fromSA->tslice[o2].s),
-                                                       &(toSA->tslice[o1].s));
-                            if (slc == 0) continue;
+                            range = laik_range_intersect(&(fromRL->trange[o2].range),
+                                                       &(toRL->trange[o1].range));
+                            if (range == 0) continue;
 
-                            appendRecvTOp(slc, o1 - toSA->off[myid],
-                                          toSA->tslice[o1].mapNo, task);
+                            appendRecvTOp(range, o1 - toRL->off[myid],
+                                          toRL->trange[o1].mapNo, task);
                         }
                     }
                 }
@@ -1516,31 +1515,31 @@ do_calc_transition(Laik_Space* space,
             // something to send?
             for(int task = 0; task < taskCount; task++) {
                 if (task == myid) continue;
-                for(o1 = fromSA->off[myid]; o1 < fromSA->off[myid+1]; o1++) {
+                for(o1 = fromRL->off[myid]; o1 < fromRL->off[myid+1]; o1++) {
 
                     // everything the receiver has local, no need to send
                     // TODO: we only check for exact match to catch All
                     // FIXME: should print out a Warning/Error as the App
                     //        requests overwriting of values!
-                    slc = &(fromSA->tslice[o1].s);
-                    for(o2 = fromSA->off[task]; o2 < fromSA->off[task+1]; o2++) {
-                        if (laik_slice_isEqual(slc,
-                                               &(fromSA->tslice[o2].s))) {
-                            slc = 0;
+                    range = &(fromRL->trange[o1].range);
+                    for(o2 = fromRL->off[task]; o2 < fromRL->off[task+1]; o2++) {
+                        if (laik_range_isEqual(range,
+                                               &(fromRL->trange[o2].range))) {
+                            range = 0;
                             break;
                         }
                     }
-                    if (slc == 0) continue;
+                    if (range == 0) continue;
 
                     // we may send multiple messages to same task
-                    for(o2 = toSA->off[task]; o2 < toSA->off[task+1]; o2++) {
+                    for(o2 = toRL->off[task]; o2 < toRL->off[task+1]; o2++) {
 
-                        slc = laik_slice_intersect(&(fromSA->tslice[o1].s),
-                                                   &(toSA->tslice[o2].s));
-                        if (slc == 0) continue;
+                        range = laik_range_intersect(&(fromRL->trange[o1].range),
+                                                   &(toRL->trange[o2].range));
+                        if (range == 0) continue;
 
-                        appendSendTOp(slc, o1 - fromSA->off[myid],
-                                      fromSA->tslice[o1].mapNo, task);
+                        appendSendTOp(range, o1 - fromRL->off[myid],
+                                      fromRL->trange[o1].mapNo, task);
                     }
                 }
             }

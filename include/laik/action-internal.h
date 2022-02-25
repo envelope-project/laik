@@ -98,7 +98,7 @@ typedef struct {
     Laik_Action h;
     int to_rank;
     int fromMapNo;
-    Laik_Slice* slc;
+    Laik_Range* range;
     unsigned int count;
 } Laik_A_MapPackAndSend;
 
@@ -127,7 +127,7 @@ typedef struct {
     Laik_Action h;
     int from_rank;
     int toMapNo;
-    Laik_Slice* slc;
+    Laik_Range* range;
     unsigned int count;
 } Laik_A_MapRecvAndUnpack;
 
@@ -151,8 +151,8 @@ typedef struct _Laik_BackendAction {
     int rank;          // for Send, Recv, PackAndSend, RecvAndUnpack, Reduce
     Laik_CopyEntry* ce; // for CopyFromBuf, CopyToBuf
 
-    // points to slice given in operation of transition
-    Laik_Slice* slc;   // for Pack, Unpack, PackAndSend, RecvAndUnpack
+    // points to range given in operation of transition
+    Laik_Range* range;   // for Pack, Unpack, PackAndSend, RecvAndUnpack
 
     // subgroup IDs defined in transition
     int inputGroup, outputGroup;   // for GroupReduce
@@ -346,59 +346,59 @@ void laik_aseq_addRBufCopy(Laik_ActionSeq* as, int round,
                            int fromBufID, unsigned int fromByteOffset,
                            char* toBuf, unsigned int count);
 
-// append action to pack a slice of data into a buffer
+// append action to pack a range of data into a buffer
 void laik_aseq_addPackToBuf(Laik_ActionSeq* as, int round,
-                            Laik_Mapping* fromMap, Laik_Slice* slc, char* toBuf);
+                            Laik_Mapping* fromMap, Laik_Range* range, char* toBuf);
 
-// append action to pack a slice of data into a buffer
+// append action to pack a range of data into a buffer
 void laik_aseq_addPackToRBuf(Laik_ActionSeq* as, int round,
-                             Laik_Mapping* fromMap, Laik_Slice* slc,
+                             Laik_Mapping* fromMap, Laik_Range* range,
                              int toBufID, unsigned int toByteOffset);
 
-// append action to pack a slice of data into a temp buffer
+// append action to pack a range of data into a temp buffer
 void laik_aseq_addMapPackToRBuf(Laik_ActionSeq* as, int round,
-                                int fromMapNo, Laik_Slice* slc,
+                                int fromMapNo, Laik_Range* range,
                                 int toBufID, unsigned int toByteOffset);
 
-// append action to pack a slice of data into a buffer
+// append action to pack a range of data into a buffer
 void laik_aseq_addMapPackToBuf(Laik_ActionSeq* as, int round,
-                               int fromMapNo, Laik_Slice* slc, char* toBuf);
+                               int fromMapNo, Laik_Range* range, char* toBuf);
 
-// append action to pack a slice of data into temp buffer and send it
+// append action to pack a range of data into temp buffer and send it
 void laik_aseq_addMapPackAndSend(Laik_ActionSeq* as, int round,
-                                 int fromMapNo, Laik_Slice* slc, int to);
+                                 int fromMapNo, Laik_Range* range, int to);
 
-// append action to pack a slice of data into temp buffer and send it
+// append action to pack a range of data into temp buffer and send it
 void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,
                               Laik_Mapping* fromMap,
-                              Laik_Slice* slc, int to);
+                              Laik_Range* range, int to);
 
-// append action to unpack data from buffer into a slice of data
+// append action to unpack data from buffer into a range of data
 void laik_aseq_addUnpackFromBuf(Laik_ActionSeq* as, int round,
-                                char* fromBuf, Laik_Mapping* toMap, Laik_Slice* slc);
+                                char* fromBuf, Laik_Mapping* toMap, Laik_Range* range);
 
-// append action to unpack data from buffer into a slice of data
+// append action to unpack data from buffer into a range of data
 void laik_aseq_addUnpackFromRBuf(Laik_ActionSeq* as, int round,
                                  int fromBufID, unsigned int fromByteOffset,
-                                 Laik_Mapping* toMap, Laik_Slice* slc);
+                                 Laik_Mapping* toMap, Laik_Range* range);
 
-// append action to unpack data from temp buffer into a slice of data
+// append action to unpack data from temp buffer into a range of data
 void laik_aseq_addMapUnpackFromRBuf(Laik_ActionSeq* as, int round,
                                     int fromBufID, unsigned int fromByteOffset,
-                                    int toMapNo, Laik_Slice* slc);
+                                    int toMapNo, Laik_Range* range);
 
-// append action to unpack data from buffer into a slice of data
+// append action to unpack data from buffer into a range of data
 void laik_aseq_addMapUnpackFromBuf(Laik_ActionSeq* as, int round,
-                                   char* fromBuf, int toMapNo, Laik_Slice* slc);
+                                   char* fromBuf, int toMapNo, Laik_Range* range);
 
-// append action to receive data into temp buffer and unpack it into a slice of data
+// append action to receive data into temp buffer and unpack it into a range of data
 void laik_aseq_addMapRecvAndUnpack(Laik_ActionSeq* as, int round,
-                                   int toMapNo, Laik_Slice* slc, int from);
+                                   int toMapNo, Laik_Range* range, int from);
 
-// append action to receive data into temp buffer and unpack it into a slice of data
+// append action to receive data into temp buffer and unpack it into a range of data
 void laik_aseq_addRecvAndUnpack(Laik_ActionSeq* as, int round,
                                 Laik_Mapping* toMap,
-                                Laik_Slice* slc, int from);
+                                Laik_Range* range, int from);
 
 // append action to reduce data in buffer from all to buffer in rootTask
 void laik_aseq_addReduce(Laik_ActionSeq* as, int round,

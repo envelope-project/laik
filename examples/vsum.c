@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
     part1 = laik_new_partitioning(laik_Master, world, space, 0);
     laik_switchto_partitioning(array, part1, LAIK_DF_None, LAIK_RO_None);
     if (laik_myid(world) == 0) {
-        // it is ensured this is exactly one slice
+        // it is ensured this is exactly one range
         laik_get_map_1d(array, 0, (void**) &base, &count);
         for(uint64_t i = 0; i < count; i++) base[i] = (double) i;
     }

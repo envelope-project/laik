@@ -22,12 +22,12 @@
 #include <string.h>
 
 // this file implements a layout providing lexicographical ordering (1d/2d/3d)
-// for multiple slices, requesting a separate allocation for each slice
+// for multiple ranges, requesting a separate allocation for each range
 
-// parameters for one slice
+// parameters for one range
 typedef struct _Lex_Entry Lex_Entry;
 struct _Lex_Entry {
-    Laik_Slice slc;
+    Laik_Range range;
     uint64_t count;
     uint64_t stride[3];
 };
@@ -56,7 +56,7 @@ Laik_Layout_Lex* laik_is_layout_lex(Laik_Layout* l)
     return 0; // not a lexicographical layout
 }
 
-// return map number whose slice contains index <idx>
+// return map number whose ranges contains index <idx>
 static
 int section_lex(Laik_Layout* l, Laik_Index* idx)
 {
@@ -67,12 +67,12 @@ int section_lex(Laik_Layout* l, Laik_Index* idx)
     for(int i=0; i < ll->h.map_count; i++) {
         Lex_Entry* e = &(ll->e[i]);
 
-        // is idx in slice?
-        if ((idx->i[0] < e->slc.from.i[0]) || (idx->i[0] >= e->slc.to.i[0])) continue;
+        // is idx in range?
+        if ((idx->i[0] < e->range.from.i[0]) || (idx->i[0] >= e->range.to.i[0])) continue;
         if (dims > 1) {
-            if ((idx->i[1] < e->slc.from.i[1]) || (idx->i[1] >= e->slc.to.i[1])) continue;
+            if ((idx->i[1] < e->range.from.i[1]) || (idx->i[1] >= e->range.to.i[1])) continue;
             if (dims > 2) {
-                if ((idx->i[2] < e->slc.from.i[2]) || (idx->i[2] >= e->slc.to.i[2])) continue;
+                if ((idx->i[2] < e->range.from.i[2]) || (idx->i[2] >= e->range.to.i[2])) continue;
             }
         }
         return i;
@@ -99,11 +99,11 @@ int64_t offset_lex(Laik_Layout* l, int n, Laik_Index* idx)
     assert((n >= 0) && (n < l->map_count));
     Lex_Entry* e = &(ll->e[n]);
 
-    int64_t off = idx->i[0] - e->slc.from.i[0];
+    int64_t off = idx->i[0] - e->range.from.i[0];
     if (dims > 1) {
-        off += (idx->i[1] - e->slc.from.i[1]) * e->stride[1];
+        off += (idx->i[1] - e->range.from.i[1]) * e->stride[1];
         if (dims > 2) {
-            off += (idx->i[2] - e->slc.from.i[2]) * e->stride[2];
+            off += (idx->i[2] - e->range.from.i[2]) * e->stride[2];
         }
     }
     assert((off >= 0) && (off < (int64_t) e->count));
@@ -153,7 +153,7 @@ bool reuse_lex(Laik_Layout* l, int n, Laik_Layout* old, int nold)
 
     Lex_Entry* eNew = &(lnew->e[n]);
     Lex_Entry* eOld = &(lold->e[nold]);
-    if (!laik_slice_within_slice(&(eNew->slc), &(eOld->slc))) {
+    if (!laik_range_within_range(&(eNew->range), &(eOld->range))) {
         // no, cannot reuse
         return false;
     }
@@ -164,7 +164,7 @@ bool reuse_lex(Laik_Layout* l, int n, Laik_Layout* old, int nold)
 
     l->count += eOld->count - eNew->count;
     eNew->count = eOld->count;
-    eNew->slc = eOld->slc;
+    eNew->range = eOld->range;
     eNew->stride[0] = eOld->stride[0];
     eNew->stride[1] = eOld->stride[1];
     eNew->stride[2] = eOld->stride[2];
@@ -173,7 +173,7 @@ bool reuse_lex(Laik_Layout* l, int n, Laik_Layout* old, int nold)
 
 
 static
-void copy_lex(Laik_Slice* slc,
+void copy_lex(Laik_Range* range,
               Laik_Mapping* from, Laik_Mapping* to)
 {
     Laik_Layout_Lex* fromLayout = laik_is_layout_lex(from->layout);
@@ -189,7 +189,7 @@ void copy_lex(Laik_Slice* slc,
     assert(dims == to->layout->dims);
 
     Laik_Index count;
-    laik_sub_index(&count, &(slc->to), &(slc->from));
+    laik_sub_index(&count, &(range->to), &(range->from));
     if (dims < 3) {
         count.i[2] = 1;
         if (dims < 2)
@@ -198,14 +198,14 @@ void copy_lex(Laik_Slice* slc,
     uint64_t ccount = count.i[0] * count.i[1] * count.i[2];
     assert(ccount > 0);
 
-    uint64_t fromOff  = offset_lex(from->layout, from->layoutSection, &(slc->from));
-    uint64_t toOff    = offset_lex(to->layout, to->layoutSection, &(slc->from));
+    uint64_t fromOff  = offset_lex(from->layout, from->layoutSection, &(range->from));
+    uint64_t toOff    = offset_lex(to->layout, to->layoutSection, &(range->from));
     char*    fromPtr  = from->start + fromOff * elemsize;
     char*    toPtr    = to->start   + toOff * elemsize;
 
     if (laik_log_begin(1)) {
-        laik_log_append("lex copy of slice ");
-        laik_log_Slice(slc);
+        laik_log_append("lex copy of range ");
+        laik_log_Range(range);
         laik_log_append(" (count %llu, elemsize %d) from mapping %p",
             ccount, elemsize, from->start);
         laik_log_append(" (data '%s'/%d, %s) ",
@@ -234,7 +234,7 @@ void copy_lex(Laik_Slice* slc,
 
 // pack/unpack routines for lexicographical layout
 static
-unsigned int pack_lex(Laik_Mapping* m, Laik_Slice* s,
+unsigned int pack_lex(Laik_Mapping* m, Laik_Range* s,
                       Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
@@ -255,8 +255,8 @@ unsigned int pack_lex(Laik_Mapping* m, Laik_Slice* s,
             assert(layoutEntry->stride[1] <= layoutEntry->stride[2]);
     }
 
-    // slice to pack must within local valid slice of mapping
-    assert(laik_slice_within_slice(s, &(m->requiredSlice)));
+    // range to pack must within local valid range of mapping
+    assert(laik_range_within_range(s, &(m->requiredRange)));
 
     // calculate address of starting index
     uint64_t idxOff = offset_lex(m->layout, m->layoutSection, idx);
@@ -286,7 +286,7 @@ unsigned int pack_lex(Laik_Mapping* m, Laik_Slice* s,
 
     if (laik_log_begin(1)) {
         Laik_Index slcsize, localFrom;
-        laik_sub_index(&localFrom, &(s->from), &(m->requiredSlice.from));
+        laik_sub_index(&localFrom, &(s->from), &(m->requiredRange.from));
         laik_sub_index(&slcsize, &(s->to), &(s->from));
 
         laik_log_append("        packing '%s', size (", m->data->name);
@@ -357,7 +357,7 @@ unsigned int pack_lex(Laik_Mapping* m, Laik_Slice* s,
 }
 
 static
-unsigned int unpack_lex(Laik_Mapping* m, Laik_Slice* s,
+unsigned int unpack_lex(Laik_Mapping* m, Laik_Range* s,
                         Laik_Index* idx, char* buf, unsigned int size)
 {
     unsigned int elemsize = m->data->elemsize;
@@ -377,8 +377,8 @@ unsigned int unpack_lex(Laik_Mapping* m, Laik_Slice* s,
             assert(layoutEntry->stride[1] <= layoutEntry->stride[2]);
     }
 
-    // slice to unpack into must be within local valid slice of mapping
-    assert(laik_slice_within_slice(s, &(m->requiredSlice)));
+    // range to unpack into must be within local valid range of mapping
+    assert(laik_range_within_range(s, &(m->requiredRange)));
 
     // calculate address of starting index
     uint64_t idxOff = offset_lex(m->layout, m->layoutSection, idx);
@@ -408,7 +408,7 @@ unsigned int unpack_lex(Laik_Mapping* m, Laik_Slice* s,
 
     if (laik_log_begin(1)) {
         Laik_Index slcsize, localFrom;
-        laik_sub_index(&localFrom, &(s->from), &(m->requiredSlice.from));
+        laik_sub_index(&localFrom, &(s->from), &(m->requiredRange.from));
         laik_sub_index(&slcsize, &(s->to), &(s->from));
 
         laik_log_append("        unpacking '%s', size (", m->data->name);
@@ -479,10 +479,10 @@ unsigned int unpack_lex(Laik_Mapping* m, Laik_Slice* s,
 }
 
 
-// create layout for lexicographical layout covering <n> slices
-Laik_Layout* laik_new_layout_lex(int n, Laik_Slice* s)
+// create layout for lexicographical layout covering <n> ranges
+Laik_Layout* laik_new_layout_lex(int n, Laik_Range* ranges)
 {
-    int dims = s->space->dims;
+    int dims = ranges->space->dims;
     Laik_Layout_Lex* l = malloc(sizeof(Laik_Layout_Lex) + n * sizeof(Lex_Entry));
     if (!l) {
         laik_panic("Out of memory allocating Laik_Layout_Lex object");
@@ -502,25 +502,25 @@ Laik_Layout* laik_new_layout_lex(int n, Laik_Slice* s)
     uint64_t count = 0;
     for(int i = 0; i < n; i++) {
         Lex_Entry* e = &(l->e[i]);
-        Laik_Slice* slc = &s[i];
+        Laik_Range* range = &ranges[i];
 
-        e->count = laik_slice_size(slc);
+        e->count = laik_range_size(range);
         count += e->count;
 
-        e->slc = *slc;
-        assert(slc->from.i[0] < slc->to.i[0]);
+        e->range = *range;
+        assert(range->from.i[0] < range->to.i[0]);
         e->stride[0] = 1;
 
         if (dims > 1) {
-            e->stride[1] = slc->to.i[0] - slc->from.i[0];
-            assert(slc->from.i[1] < slc->to.i[1]);
+            e->stride[1] = range->to.i[0] - range->from.i[0];
+            assert(range->from.i[1] < range->to.i[1]);
         }
         else
             e->stride[1] = 0; // invalid, not used
 
         if (dims > 2) {
-            e->stride[2] = e->stride[1] * (slc->to.i[1] - slc->from.i[1]);
-            assert(slc->from.i[2] < slc->to.i[2]);
+            e->stride[2] = e->stride[1] * (range->to.i[1] - range->from.i[1]);
+            assert(range->from.i[2] < range->to.i[2]);
         }
         else
             e->stride[2] = 0; // invalid, not used

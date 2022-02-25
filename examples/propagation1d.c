@@ -19,16 +19,16 @@
 **/
 
 // provide partitioning for nodes from partitioning of elements (<o>)
-void runMyParter(Laik_SliceReceiver* r, Laik_PartitionerParams* p)
+void runMyParter(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
 {
     // iterate over all element partitions used as basis
-    for(int i = 0; i < laik_partitioning_slicecount(p->other); i++) {
-        Laik_TaskSlice* ts = laik_partitioning_get_tslice(p->other, i);
-        // does a private copy of original slice which can be modified
-        Laik_Slice slc = *laik_taskslice_get_slice(ts);
-        // extend 1d slice of elements by 1 at end for corresponding node partition
-        slc.to.i[0]++;
-        laik_append_slice(r, laik_taskslice_get_task(ts), &slc, 0, 0);
+    for(int i = 0; i < laik_partitioning_rangecount(p->other); i++) {
+        Laik_TaskRange* ts = laik_partitioning_get_taskrange(p->other, i);
+        // does a private copy of original range which can be modified
+        Laik_Range range = *laik_taskrange_get_range(ts);
+        // extend 1d range of elements by 1 at end for corresponding node partition
+        range.to.i[0]++;
+        laik_append_range(r, laik_taskrange_get_task(ts), &range, 0, 0);
     }
 }
 

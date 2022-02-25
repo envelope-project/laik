@@ -13,26 +13,26 @@ void print_spaces(Laik_Instance* i, int step)
 
     s = laik_spacestore_get(i, "1d-space");
     assert(s && (s->dims == 1));
-    assert(s->s.to.i[0] == ((step == 1) ? 100 : 1000));
+    assert(s->range.to.i[0] == ((step == 1) ? 100 : 1000));
     printf("T%d: 1d-space: %" PRId64 " - %" PRId64 "\n", myid,
-           s->s.from.i[0], s->s.to.i[0]);
+           s->range.from.i[0], s->range.to.i[0]);
 
     s = laik_spacestore_get(i, "2d-space");
     assert(s && (s->dims == 2));
-    assert(s->s.to.i[0] == ((step == 1) ? 200 : 2000));
+    assert(s->range.to.i[0] == ((step == 1) ? 200 : 2000));
     printf("T%d: 2d-space: %" PRId64 " - %" PRId64
            " / %" PRId64 " - %" PRId64 "\n", myid,
-           s->s.from.i[0], s->s.to.i[0], s->s.from.i[1], s->s.to.i[1]);
+           s->range.from.i[0], s->range.to.i[0], s->range.from.i[1], s->range.to.i[1]);
 
     s = laik_spacestore_get(i, "3d-space");
     assert(s && (s->dims == 3));
-    assert(s->s.to.i[0] == 400);
+    assert(s->range.to.i[0] == 400);
     printf("T%d: 3d-space: %" PRId64 " - %" PRId64
            " / %" PRId64 " - %" PRId64
            " / %" PRId64 " - %" PRId64 "\n", myid,
-           s->s.from.i[0], s->s.to.i[0],
-           s->s.from.i[1], s->s.to.i[1],
-           s->s.from.i[2], s->s.to.i[2]);
+           s->range.from.i[0], s->range.to.i[0],
+           s->range.from.i[1], s->range.to.i[1],
+           s->range.from.i[2], s->range.to.i[2]);
 }
 
 int main(int argc, char* argv[])

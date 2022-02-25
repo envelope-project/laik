@@ -93,8 +93,8 @@ void laik_single_exec(Laik_ActionSeq* as)
         for(int i=0; i < t->redCount; i++) {
             assert(d->space->dims == 1);
             struct redTOp* op = &(t->red[i]);
-            int64_t from = op->slc.from.i[0];
-            int64_t to   = op->slc.to.i[0];
+            int64_t from = op->range.from.i[0];
+            int64_t to   = op->range.to.i[0];
             assert(fromBase != 0);
             assert(laik_trans_isInGroup(t, op->outputGroup, t->group->myid));
             assert(toBase != 0);

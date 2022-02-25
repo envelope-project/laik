@@ -28,7 +28,7 @@
 ../src/partitioning.c
 ../src/profiling.c
 ../src/program.c
-../src/slicearray.c
+../src/rangelist.c
 ../src/space.c
 ../src/type.c
 
@@ -85,6 +85,7 @@
 ../examples/resize.c
 ../examples/vsum.c
 ../examples/vsum2.c
+../examples/vsum3.c
 ../examples/spmv.c
 ../examples/spmv2.c
 ../examples/jac1d.c
@@ -103,6 +104,7 @@
 ../examples/c++/.gitignore
 ../examples/c++/raytracer.cpp
 
+../src/rangelist.c
 ../tests/Makefile
 ../tests/.gitignore
 ../tests/mpi/Makefile

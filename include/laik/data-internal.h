@@ -18,7 +18,7 @@
 #ifndef LAIK_DATA_INTERNAL_H
 #define LAIK_DATA_INTERNAL_H
 
-#include <laik.h>     // for Laik_Mapping, Laik_Slice, Laik_Data, Laik_Switc...
+#include <laik.h>     // for Laik_Mapping, Laik_Range, Laik_Data, Laik_Switc...
 #include <stdbool.h>  // for bool
 #include <stdint.h>   // for uint64_t
 
@@ -43,8 +43,8 @@ struct _Laik_Type {
     laik_reduce_t reduce;
 
     // callbacks for packing/unpacking
-    int (*getLength)(Laik_Data*,Laik_Slice*);
-    bool (*convert)(Laik_Data*,Laik_Slice*, void*);
+    int (*getLength)(Laik_Data*,Laik_Range*);
+    bool (*convert)(Laik_Data*,Laik_Range*, void*);
 };
 
 Laik_Type* laik_type_new(char* name, Laik_TypeKind kind, int size,
@@ -128,22 +128,21 @@ struct _Laik_Data {
 
 
 
-// a mapping of data elements for global index range given by <validSlice>,
-// with index <validSlice.from> mapped to address <base>.
-// This may be embedded in a larger mapping for <fullSlice> at <start>
-// with <fullcount> elements.
+// a mapping of data elements for global index range given by <validRange>,
+// with index <validRange.from> mapped to address <base>.
+// This may be embedded in a larger mapping <baseMapping>.
 // Memory of the larger mapping space is kept for future reuse.
 struct _Laik_Mapping {
     Laik_Data* data;
     int mapNo; // index of this map in local mapping list
     Laik_Layout* layout; // memory layout used
     int layoutSection; // section of layout used for this mapping
-    Laik_Slice allocatedSlice; // slice (global) covered by this mapping
-    Laik_Slice requiredSlice; // sub-slice (global) containing used slices
-    uint64_t count, allocCount; // number of elements in req/allcSlice
+    Laik_Range allocatedRange; // range (global) covered by this mapping
+    Laik_Range requiredRange; // sub-range (global) containing used ranges
+    uint64_t count, allocCount; // number of elements in req/allocRange
 
     char* start; // start address of mapping
-    char* base; // address matching requiredSlice.from (usually same as start)
+    char* base; // address matching requiredRange.from (usually same as start)
     uint64_t capacity; // number of bytes allocated
     int reusedFor; // -1: not reused, otherwise map number used for
 

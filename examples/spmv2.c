@@ -240,12 +240,12 @@ int main(int argc, char* argv[])
         sum = 0.0;
         tt1 = wtime();
 
-        // loop over all local slices
-        for(int sNo = 0; ; sNo++) {
-            if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
+        // loop over all local ranges
+        for(int rangeNo = 0; ; rangeNo++) {
+            if (!laik_my_range_1d(p, rangeNo, &fromRow, &toRow)) break;
 
-            // my partition slice of result vector (local indexing, from 0)
-            laik_get_map_1d(resD, sNo, (void**) &res, &rcount);
+            // my partition range of result vector (local indexing, from 0)
+            laik_get_map_1d(resD, rangeNo, (void**) &res, &rcount);
 
 #ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic,50)
@@ -288,9 +288,9 @@ int main(int argc, char* argv[])
             laik_switchto_partitioning(inpD, pAll, LAIK_DF_Init, LAIK_RO_Sum);
             laik_get_map_1d(inpD, 0, (void**) &inp, 0);
 
-            // loop over all local slices of result vector
+            // loop over all local ranges of result vector
             for(int sNo = 0; ; sNo++) {
-                if (!laik_my_slice_1d(p, sNo, &fromRow, &toRow)) break;
+                if (!laik_my_range_1d(p, sNo, &fromRow, &toRow)) break;
 
                 laik_get_map_1d(resD, sNo, (void**) &res, &rcount);
                 for(i = 0; i < rcount; i++) inp[i + fromRow] = res[i] / sum;
@@ -299,10 +299,10 @@ int main(int argc, char* argv[])
         else {
             // variant 2: broadcast written input values directly
             laik_switchto_partitioning(inpD, p, LAIK_DF_None, LAIK_RO_None);
-            // loop over all local slices of result and input vector
-            for(int sNo = 0; laik_my_slice(p, sNo) != 0; sNo++) {
-                laik_get_map_1d(resD, sNo, (void**) &res, &rcount);
-                laik_get_map_1d(inpD, sNo, (void**) &inp, 0);
+            // loop over all local ranges of result and input vector
+            for(int rangeNo = 0; laik_my_range(p, rangeNo) != 0; rangeNo++) {
+                laik_get_map_1d(resD, rangeNo, (void**) &res, &rcount);
+                laik_get_map_1d(inpD, rangeNo, (void**) &inp, 0);
                 for(i = 0; i < rcount; i++) inp[i] = res[i] / sum;
             }
         }

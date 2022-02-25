@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
     for(uint64_t i = 0; i < count; i++)
         res[i] = 0.0;
     // SPMV on my part of matrix rows
-    laik_my_slice_1d(p, 0, &fromRow, &toRow);
+    laik_my_range_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
             res[r - fromRow] += m->val[o] * v[m->col[o]];
@@ -128,7 +128,7 @@ int main(int argc, char* argv[])
     Laik_Partitioning* pAll = laik_new_partitioning(laik_All, world, s, 0);
     laik_switchto_partitioning(resD, pAll, LAIK_DF_Init, LAIK_RO_Sum);
     laik_get_map_1d(resD, 0, (void**) &res, &count);
-    laik_my_slice_1d(p, 0, &fromRow, &toRow);
+    laik_my_range_1d(p, 0, &fromRow, &toRow);
     for(int r = fromRow; r < toRow; r++) {
         for(int o = m->row[r]; o < m->row[r+1]; o++)
             res[r] += m->val[o] * v[m->col[o]];

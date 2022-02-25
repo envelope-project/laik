@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
 
         // distributed initialization
         laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-        laik_my_slice_1d(pWrite, 0, &gx1, &gx2);
+        laik_my_range_1d(pWrite, 0, &gx1, &gx2);
 
         // arbitrary non-zero values based on global indexes to detect bugs
         laik_get_map_1d(dWrite, 0, (void**) &baseW, &countW);

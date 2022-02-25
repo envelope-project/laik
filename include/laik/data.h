@@ -97,8 +97,8 @@ Laik_Partitioning* laik_data_get_partitioning(Laik_Data* d);
 // free resources for a data container
 void laik_free(Laik_Data*);
 
-// type for layout factory: create new layout, given <n> slices to cover
-typedef Laik_Layout* (*laik_layout_factory_t)(int n, Laik_Slice*);
+// type for layout factory: create new layout, given <n> ranges to cover
+typedef Laik_Layout* (*laik_layout_factory_t)(int n, Laik_Range*);
 
 // change layout factory to use for generating mapping layouts
 void laik_data_set_layout_factory(Laik_Data* d, laik_layout_factory_t);
@@ -146,9 +146,9 @@ void laik_switchto_partitioning(Laik_Data* d,
 // switch to use another data flow, keep access phase/partitioning
 void laik_switchto_flow(Laik_Data* d, Laik_DataFlow flow, Laik_ReductionOperation redOp);
 
-// get slice number <n> in own partition of data container <d>
-// returns 0 if partitioning is not set or slice number <n> is invalid
-Laik_TaskSlice* laik_data_slice(Laik_Data* d, int n);
+// get range number <n> in own partition of data container <d>
+// returns 0 if partitioning is not set or range number <n> is invalid
+Laik_TaskRange* laik_data_range(Laik_Data* d, int n);
 
 // set an initial partitioning for a container.
 // memory resources to be used need to be specified before, either by
@@ -177,10 +177,10 @@ void laik_fill_double(Laik_Data* data, double v);
 //  starting from a base address
 
 
-// one slice mapped to local memory space
+// one range mapped to local memory space
 typedef struct _Laik_Mapping Laik_Mapping;
 
-// list of mappings for all multiple slices
+// list of mappings for all multiple ranges
 typedef struct _Laik_MappingList Laik_MappingList;
 
 // offset for an index inside a layout section (1d/2d/3d)
@@ -189,8 +189,8 @@ int64_t laik_offset(Laik_Layout* l, int section, Laik_Index* idx);
 // get address of entry for index <idx>
 char *laik_get_map_addr(Laik_Data* d, int n, Laik_Index* idx);
 
-// copy data in a slice between mappings
-void laik_data_copy(Laik_Slice* slc, Laik_Mapping* from, Laik_Mapping* to);
+// copy data in a range between mappings
+void laik_data_copy(Laik_Range* range, Laik_Mapping* from, Laik_Mapping* to);
 
 
 // provide memory resources for mapping of own partition for container <d>.
@@ -204,7 +204,7 @@ void laik_data_provide_memory(Laik_Data* d, void* start, uint64_t size);
 //
 // A partition for a process can consist of multiple consecutive ranges
 // of memory allocated for the partition. Each range is called a
-// mapping. Each mapping may cover multiple slices.
+// mapping. Each mapping may cover multiple ranges.
 //
 // <n> is the mapping ID, going from 0 to number of current mappings -1,
 // see laik_my_mapcount(laik_get_partitioning(<data>)).
@@ -307,24 +307,24 @@ typedef int64_t (*laik_layout_offset_t)(Laik_Layout*, int n, Laik_Index*);
 // If yes, modify new layout and return true
 typedef bool (*laik_layout_reuse_t)(Laik_Layout*, int, Laik_Layout* old, int);
 
-// copy data in a slice among mappings with same layout type
-typedef void (*laik_layout_copy_t)(Laik_Slice* slc,
+// copy data in a range among mappings with same layout type
+typedef void (*laik_layout_copy_t)(Laik_Range* range,
     Laik_Mapping* from, Laik_Mapping* to);
 
-// pack data of slice in given mapping with this layout into <buf>,
+// pack data of range in given mapping with this layout into <buf>,
 // using at most <size> bytes, starting at index <idx>.
 // called iteratively by backends, using <idx> to remember position
 // accross multiple calls. <idx> must be set first to index at beginning.
 // returns the number of elements written (or 0 if finished)
 typedef unsigned int (*laik_layout_pack_t)(
-    Laik_Mapping* m, Laik_Slice* s,
+    Laik_Mapping* m, Laik_Range* r,
     Laik_Index* idx, char* buf, unsigned int size);
 
-// unpack data from <buf> with <size> bytes length into given slice of
+// unpack data from <buf> with <size> bytes length into given range of
 // memory space provided by mapping, incrementing index accordingly.
 // returns number of elements unpacked.
 typedef unsigned int (*laik_layout_unpack_t)(
-    Laik_Mapping* m, Laik_Slice* s,
+    Laik_Mapping* m, Laik_Range* r,
     Laik_Index* idx, char* buf, unsigned int size);
 
 // return string describing the layout (for debug output)
@@ -357,16 +357,16 @@ void laik_init_layout(Laik_Layout* l, int dims, int map_count, uint64_t count,
                       laik_layout_copy_t copy);
 
 // (slow) generic copy just using offset function from layout interface
-void laik_layout_copy_gen(Laik_Slice* slc,
+void laik_layout_copy_gen(Laik_Range* range,
                           Laik_Mapping* from, Laik_Mapping* to);
 
 
-// lexicographical layout covering one 1d, 2d, 3d slice
+// lexicographical layout covering one 1d, 2d, 3d range
 
 
 // create layout object for 1d/2d/3d lexicographical layout
-// with innermost dim x, then y, z, fully covering given slices
-Laik_Layout* laik_new_layout_lex(int n, Laik_Slice* slc);
+// with innermost dim x, then y, z, fully covering given ranges
+Laik_Layout* laik_new_layout_lex(int n, Laik_Range* ranges);
 
 // return stride for dimension <d> in lex layout mapping <n>
 uint64_t laik_layout_lex_stride(Laik_Layout* l, int n, int d);

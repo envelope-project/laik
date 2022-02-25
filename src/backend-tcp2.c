@@ -250,8 +250,8 @@ typedef struct _Peer {
     int relemsize; // expected byte count per element
     int roff;      // receive offset
     Laik_Mapping* rmap; // mapping to write received data to
-    Laik_Slice* rslc; // slice to write received data to
-    Laik_Index ridx; // index representing receive progress
+    Laik_Range* rcv_range; // range to write received data to
+    Laik_Index rcv_idx; // index representing receive progress
     Laik_ReductionOperation rro; // reduction with existing value
 
     // allowed to send data to peer?
@@ -311,24 +311,24 @@ struct _InstData {
 
 // helpers for send/receive of LAIK containers
 
-// index traversal over slice
+// index traversal over ranges
 // return true if index was successfully incremented, false if traversal done
 // (copied from src/layout.c)
 static
-bool next_lex(Laik_Slice* slc, Laik_Index* idx)
+bool next_lex(Laik_Range* range, Laik_Index* idx)
 {
     idx->i[0]++;
-    if (idx->i[0] < slc->to.i[0]) return true;
-    if (slc->space->dims == 1) return false;
+    if (idx->i[0] < range->to.i[0]) return true;
+    if (range->space->dims == 1) return false;
 
     idx->i[1]++;
-    idx->i[0] = slc->from.i[0];
-    if (idx->i[1] < slc->to.i[1]) return true;
-    if (slc->space->dims == 2) return false;
+    idx->i[0] = range->from.i[0];
+    if (idx->i[1] < range->to.i[1]) return true;
+    if (range->space->dims == 2) return false;
 
     idx->i[2]++;
-    idx->i[1] = slc->from.i[1];
-    if (idx->i[2] < slc->to.i[2]) return true;
+    idx->i[1] = range->from.i[1];
+    if (idx->i[2] < range->to.i[2]) return true;
     return false;
 }
 
@@ -709,7 +709,7 @@ int got_binary_data(InstData* d, int lid, char* buf, int len)
     int consumed = 0;
     while(len - consumed >= esize) {
         assert(inTraversal);
-        int64_t off = ll->offset(ll, m->layoutSection, &(p->ridx));
+        int64_t off = ll->offset(ll, m->layoutSection, &(p->rcv_idx));
         char* idxPtr = m->start + off * p->relemsize;
         if (p->rro == LAIK_RO_None)
             memcpy(idxPtr, buf, esize);
@@ -720,14 +720,14 @@ int got_binary_data(InstData* d, int lid, char* buf, int len)
         }
         if ((esize == 8) && laik_log_begin(1)) {
             char pstr[70];
-            int dims = p->rslc->space->dims;
-            sprintf(pstr, "(%d:%s)", p->roff, istr(dims, &(p->ridx)));
+            int dims = p->rcv_range->space->dims;
+            sprintf(pstr, "(%d:%s)", p->roff, istr(dims, &(p->rcv_idx)));
             laik_log(1, " pos %s: in %f res %f\n", pstr, *((double*)buf), *((double*)idxPtr));
         }
         buf += p->relemsize;
         consumed += p->relemsize;
         p->roff++;
-        inTraversal = next_lex(p->rslc, &(p->ridx));
+        inTraversal = next_lex(p->rcv_range, &(p->rcv_idx));
     }
     assert(p->roff <= p->rcount);
 
@@ -762,13 +762,13 @@ void got_data(InstData* d, int lid, char* msg)
     Laik_Mapping* m = p->rmap;
     assert(m != 0);
     Laik_Layout* ll = m->layout;
-    int64_t off = ll->offset(ll, m->layoutSection, &(p->ridx));
+    int64_t off = ll->offset(ll, m->layoutSection, &(p->rcv_idx));
     char* idxPtr = m->start + off * p->relemsize;
 
     // position string for check
     char pstr[70];
-    int dims = p->rslc->space->dims;
-    int s = sprintf(pstr, "(%d:%s)", p->roff, istr(dims, &(p->ridx)));
+    int dims = p->rcv_range->space->dims;
+    int s = sprintf(pstr, "(%d:%s)", p->roff, istr(dims, &(p->rcv_idx)));
 
     if (msg[i] == '(') {
         assert(strncmp(msg+i, pstr, s) == 0);
@@ -810,7 +810,7 @@ void got_data(InstData* d, int lid, char* msg)
     if (len == 8) laik_log(1, " pos %s: in %f res %f\n", pstr, *((double*)data_in), *((double*)idxPtr));
 
     p->roff++;
-    bool inTraversal = next_lex(p->rslc, &(p->ridx));
+    bool inTraversal = next_lex(p->rcv_range, &(p->rcv_idx));
     assert(inTraversal == (p->roff < p->rcount));
 
     laik_log(1, "TCP2 got data, len %d, received %d/%d",
@@ -2140,16 +2140,16 @@ void send_data_bin(int n, int dims, Laik_Index* idx, int toLID, void* p, int s)
 }
 
 
-// send a slice of data from mapping <m> to process <lid>
+// send a range of data from mapping <m> to process <lid>
 // if not yet allowed to send data, we have to wait.
 // the action sequence ordering makes sure that there must
 // be a matching receive action on the receiver side
 static
-void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int toLID)
+void send_range(Laik_Mapping* fromMap, Laik_Range* range, int toLID)
 {
     Laik_Layout* l = fromMap->layout;
     int esize = fromMap->data->elemsize;
-    int dims = slc->space->dims;
+    int dims = range->space->dims;
     assert(fromMap->start != 0); // must be backed by memory
 
     InstData* d = (InstData*)instance->backend_data;
@@ -2159,11 +2159,11 @@ void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int toLID)
         while(p->scount == 0)
             run_loop(d);
     }
-    assert(p->scount == (int) laik_slice_size(slc));
+    assert(p->scount == (int) laik_range_size(range));
     assert(p->selemsize == esize);
 
     bool send_binary_data = p->accepts_bin_data;
-    Laik_Index idx = slc->from;
+    Laik_Index idx = range->from;
     int ecount = 0;
     while(1) {
         int64_t off = l->offset(l, fromMap->layoutSection, &idx);
@@ -2173,9 +2173,9 @@ void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int toLID)
         else
             send_data(ecount, dims, &idx, toLID, idxPtr, esize);
         ecount++;
-        if (!next_lex(slc, &idx)) break;
+        if (!next_lex(range, &idx)) break;
     }
-    assert(ecount == (int) laik_slice_size(slc));
+    assert(ecount == (int) laik_range_size(range));
     if (send_binary_data)
         send_data_bin_flush(toLID);
 
@@ -2187,7 +2187,7 @@ void send_slice(Laik_Mapping* fromMap, Laik_Slice* slc, int toLID)
 // <ro> allows to request reduction with existing value
 // (use RO_None to overwrite with received value)
 static
-void recv_slice(Laik_Slice* slc, int fromLID, Laik_Mapping* toMap, Laik_ReductionOperation ro)
+void recv_range(Laik_Range* range, int fromLID, Laik_Mapping* toMap, Laik_ReductionOperation ro)
 {
     assert(toMap->start != 0); // must be backed by memory
     // check no data still registered to be received from <fromID>
@@ -2196,13 +2196,13 @@ void recv_slice(Laik_Slice* slc, int fromLID, Laik_Mapping* toMap, Laik_Reductio
     assert(p->rcount == 0);
 
     // write outstanding receive info into peer structure
-    p->rcount = laik_slice_size(slc);
+    p->rcount = laik_range_size(range);
     assert(p->rcount > 0);
     p->roff = 0;
     p->relemsize = toMap->data->elemsize;
     p->rmap = toMap;
-    p->rslc = slc;
-    p->ridx = slc->from;
+    p->rcv_range = range;
+    p->rcv_idx = range->from;
     p->rro = ro;
 
     // give peer the right to start sending data consisting of given number of elements
@@ -2247,14 +2247,14 @@ void exec_reduce(Laik_TransitionContext* tc,
                      reduceTask, reduceLID);
             assert(tc->fromList && (a->fromMapNo < tc->fromList->count));
             Laik_Mapping* m = &(tc->fromList->map[a->fromMapNo]);
-            send_slice(m, a->slc, reduceLID);
+            send_range(m, a->range, reduceLID);
         }
         if (laik_trans_isInGroup(t, a->outputGroup, myid)) {
             laik_log(1, "  not reduce process: recv from T%d (LID%d)",
                      reduceTask, reduceLID);
             assert(tc->toList && (a->toMapNo < tc->toList->count));
             Laik_Mapping* m = &(tc->toList->map[a->toMapNo]);
-            recv_slice(a->slc, reduceLID, m, LAIK_RO_None);
+            recv_range(a->range, reduceLID, m, LAIK_RO_None);
         }
         return;
     }
@@ -2276,7 +2276,7 @@ void exec_reduce(Laik_TransitionContext* tc,
         Laik_Mapping* fromMap = &(tc->fromList->map[a->fromMapNo]);
         if (fromMap != m) {
             // copy
-            laik_data_copy(a->slc, fromMap, m);
+            laik_data_copy(a->range, fromMap, m);
         }
     }
     int inCount = laik_trans_groupCount(t, a->inputGroup);
@@ -2287,7 +2287,7 @@ void exec_reduce(Laik_TransitionContext* tc,
 
         laik_log(1, "  reduce process: recv + %s from T%d (LID %d), count %d",
                  (op == LAIK_RO_None) ? "overwrite":"reduce", inTask, inLID, a->count);
-        recv_slice(a->slc, inLID, m, op);
+        recv_range(a->range, inLID, m, op);
         op = a->redOp; // eventually reset to reduction op from None
     }
 
@@ -2302,7 +2302,7 @@ void exec_reduce(Laik_TransitionContext* tc,
         int outLID = laik_group_locationid(t->group, outTask);
 
         laik_log(1, "  reduce process: send result to T%d (LID %d)", outTask, outLID);
-        send_slice(m, a->slc, outLID);
+        send_range(m, a->range, outLID);
     }
 }
 
@@ -2340,7 +2340,7 @@ void tcp2_exec(Laik_ActionSeq* as)
                      aa->to_rank, toLID, aa->count, tc->data->elemsize);
             assert(tc->fromList && (aa->fromMapNo < tc->fromList->count));
             Laik_Mapping* m = &(tc->fromList->map[aa->fromMapNo]);
-            send_slice(m, aa->slc, toLID);
+            send_range(m, aa->range, toLID);
             break;
         }
         case LAIK_AT_MapRecvAndUnpack: {
@@ -2350,7 +2350,7 @@ void tcp2_exec(Laik_ActionSeq* as)
                      aa->from_rank, fromLID, aa->count, tc->data->elemsize);
             assert(tc->toList && (aa->toMapNo < tc->toList->count));
             Laik_Mapping* m = &(tc->toList->map[aa->toMapNo]);
-            recv_slice(aa->slc, fromLID, m, LAIK_RO_None);
+            recv_range(aa->range, fromLID, m, LAIK_RO_None);
             break;
         }
 

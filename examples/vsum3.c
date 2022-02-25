@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
         laik_get_map_1d(array, 0, (void**) &base, &count);
         mysum = 0.0;
         for(uint64_t i = 0; i < count; i++) mysum += base[i];
-        laik_my_slice_1d(part2, 0, &from, &to);
+        laik_my_range_1d(part2, 0, &from, &to);
         printf("Phase %d, Epoch %d, Proc %d/%d: sum of %ld values at %ld - %ld : %.0f\n",
                phase, laik_epoch(inst), laik_myid(world), laik_size(world),
                (long) count, (long) from, (long) to - 1, mysum);

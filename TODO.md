@@ -42,7 +42,7 @@ Upcoming stable: 1.0, April 18
 ## Implementation
 
 * trigger repartitioning via task group modification (1)
-* merge consecutive slices after repartitioning (2)
+* merge consecutive ranges after repartitioning (2)
 * crash with "mpirun -np 2 example/spmv2 -r": reduce not over all tasks (1)
 
 

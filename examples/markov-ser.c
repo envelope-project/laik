@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
         if (argv[arg][1] == 'h') {
             printf("markov-ser [options] [<statecount> [<fan-in> [<iterations>]]]\n"
                    "\nOptions:\n"
-                   " -f: use pseudo-random connectivity (much more slices)\n"
+                   " -f: use pseudo-random connectivity (much more ranges)\n"
                    " -p: print connectivity\n"
                    " -h: this help text\n");
             exit(1);

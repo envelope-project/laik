@@ -303,7 +303,7 @@ int main(int argc, char **argv)
     laik_switchto_partitioning(zval, pValAll, LAIK_DF_Init, LAIK_RO_Sum);
 
     int64_t xstart, xend, ystart, yend;
-    laik_my_slice_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
+    laik_my_range_2d(pImage, 0, &xstart, &xend, &ystart, &yend);
 
     laik_get_map_1d(xval, 0, (void**)&xvalues, 0);
     laik_get_map_1d(yval, 0, (void**)&yvalues, 0);

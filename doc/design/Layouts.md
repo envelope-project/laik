@@ -17,7 +17,7 @@ process by a partitioning algorithm, layouts specify
   * how many blocks of memory are used,
   * block sizes by means of the number of indexes
     contained in each block, and
-  * how global indexes in assigned slices are mapped to
+  * how global indexes in assigned ranges are mapped to
     offsets in the blocks
 
 The same layout can be used for multiple LAIK containers.
@@ -36,9 +36,9 @@ may tell LAIK about memory resources to use.
 
 * R2: Applications may want to maintain shadow copies of values
   for faster access in algorithms. LAIK can support this by
-  partitioner algorithms providing overlapping slices assigned
+  partitioner algorithms providing overlapping ranges assigned
   to a process, and layouts mapping the same global index within
-  different slices to different points in local memory.
+  different ranges to different points in local memory.
   The design for layouts should not prohibit this possibility.
 
 * R3: memory requirements for multiple partitionings at once should
@@ -72,7 +72,7 @@ may tell LAIK about memory resources to use.
 * layouts are subdiveded into sections, which can use their own
   mapping pattern. Within a section, global indexes are uniquely
   mapped to (at most) one point in memory. This fulfills R2, by
-  putting overlapping slices from a partitioner algorithm into
+  putting overlapping ranges from a partitioner algorithm into
   different layout sections.
 
 
@@ -122,7 +122,7 @@ Required.
 ### Lexicographical Layout
 
 Lexicographical layout, with separate allocations/sections
-for slices with different tags.
+for ranges with different tags.
 
 ## Link to Source
 

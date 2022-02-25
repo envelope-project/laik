@@ -35,8 +35,8 @@ void setBoundary(int size, Laik_Partitioning *pWrite, Laik_Data* dWrite)
     uint64_t ysizeW, ystrideW, xsizeW;
     int64_t gx1, gx2, gy1, gy2;
 
-    // global index ranges of the slice of this process
-    laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+    // global index ranges of the range of this process
+    laik_my_range_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
 
     // default mapping order for 2d:
     //   with y in [0;ysize[, x in [0;xsize[
@@ -164,7 +164,7 @@ int main(int argc, char* argv[])
 
     // distributed initialization
     laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
-    laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+    laik_my_range_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
 
     // default mapping order for 2d:
     //   with y in [0;ysize], x in [0;xsize[
@@ -199,7 +199,7 @@ int main(int argc, char* argv[])
         setBoundary(size, pWrite, dWrite);
 
         // local range for which to do 2d stencil, without global edges
-        laik_my_slice_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
+        laik_my_range_2d(pWrite, 0, &gx1, &gx2, &gy1, &gy2);
         y1 = (gy1 == 0)    ? 1 : 0;
         x1 = (gx1 == 0)    ? 1 : 0;
         y2 = (gy2 == size) ? (ysizeW - 1) : ysizeW;

@@ -470,16 +470,16 @@ MPI_Op getMPIOp(Laik_ReductionOperation redOp)
 }
 
 static
-void laik_mpi_exec_packAndSend(Laik_Mapping* map, Laik_Slice* slc,
+void laik_mpi_exec_packAndSend(Laik_Mapping* map, Laik_Range* range,
                                int to_rank, uint64_t slc_size,
                                MPI_Datatype dataType, int tag, MPI_Comm comm)
 {
-    Laik_Index idx = slc->from;
-    int dims = slc->space->dims;
+    Laik_Index idx = range->from;
+    int dims = range->space->dims;
     unsigned int packed;
     uint64_t count = 0;
     while(1) {
-        packed = (map->layout->pack)(map, slc, &idx,
+        packed = (map->layout->pack)(map, range, &idx,
                                      packbuf, PACKBUFSIZE);
         assert(packed > 0);
         int err = MPI_Send(packbuf, (int) packed,
@@ -487,20 +487,20 @@ void laik_mpi_exec_packAndSend(Laik_Mapping* map, Laik_Slice* slc,
         if (err != MPI_SUCCESS) laik_mpi_panic(err);
 
         count += packed;
-        if (laik_index_isEqual(dims, &idx, &(slc->to))) break;
+        if (laik_index_isEqual(dims, &idx, &(range->to))) break;
     }
     assert(count == slc_size);
 }
 
 static
-void laik_mpi_exec_recvAndUnpack(Laik_Mapping* map, Laik_Slice* slc,
+void laik_mpi_exec_recvAndUnpack(Laik_Mapping* map, Laik_Range* range,
                                  int from_rank, uint64_t slc_size,
                                  int elemsize,
                                  MPI_Datatype dataType, int tag, MPI_Comm comm)
 {
     MPI_Status st;
-    Laik_Index idx = slc->from;
-    int dims = slc->space->dims;
+    Laik_Index idx = range->from;
+    int dims = range->space->dims;
     int recvCount, unpacked;
     uint64_t count = 0;
     while(1) {
@@ -510,11 +510,11 @@ void laik_mpi_exec_recvAndUnpack(Laik_Mapping* map, Laik_Slice* slc,
         err = MPI_Get_count(&st, dataType, &recvCount);
         if (err != MPI_SUCCESS) laik_mpi_panic(err);
 
-        unpacked = (map->layout->unpack)(map, slc, &idx,
+        unpacked = (map->layout->unpack)(map, range, &idx,
                                          packbuf, recvCount * elemsize);
         assert(recvCount == unpacked);
         count += unpacked;
-        if (laik_index_isEqual(dims, &idx, &(slc->to))) break;
+        if (laik_index_isEqual(dims, &idx, &(range->to))) break;
     }
     assert(count == slc_size);
 }
@@ -893,13 +893,13 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             assert(aa->fromMapNo < fromList->count);
             Laik_Mapping* fromMap = &(fromList->map[aa->fromMapNo]);
             assert(fromMap->base != 0);
-            laik_mpi_exec_packAndSend(fromMap, aa->slc, aa->to_rank, aa->count,
+            laik_mpi_exec_packAndSend(fromMap, aa->range, aa->to_rank, aa->count,
                                       dataType, tag, comm);
             break;
         }
 
         case LAIK_AT_PackAndSend:
-            laik_mpi_exec_packAndSend(ba->map, ba->slc, ba->rank,
+            laik_mpi_exec_packAndSend(ba->map, ba->range, ba->rank,
                                       (uint64_t) ba->count,
                                       dataType, tag, comm);
             break;
@@ -909,13 +909,13 @@ void laik_mpi_exec(Laik_ActionSeq* as)
             assert(aa->toMapNo < toList->count);
             Laik_Mapping* toMap = &(toList->map[aa->toMapNo]);
             assert(toMap->base);
-            laik_mpi_exec_recvAndUnpack(toMap, aa->slc, aa->from_rank, aa->count,
+            laik_mpi_exec_recvAndUnpack(toMap, aa->range, aa->from_rank, aa->count,
                                         elemsize, dataType, tag, comm);
             break;
         }
 
         case LAIK_AT_RecvAndUnpack:
-            laik_mpi_exec_recvAndUnpack(ba->map, ba->slc, ba->rank,
+            laik_mpi_exec_recvAndUnpack(ba->map, ba->range, ba->rank,
                                         (uint64_t) ba->count,
                                         elemsize, dataType, tag, comm);
             break;

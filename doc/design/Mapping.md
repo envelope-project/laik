@@ -29,7 +29,7 @@ Possible solutions:
 ** how? (1) callback interface on allocation (2) by flags beforehand
 
 * allow mappings to be splitted
-** program needs to handle split mappings, query for regular slices
+** program needs to handle split mappings, query for regular ranges
 ** more complex kernel code to handle splitting variants
 ** may need lot of calls to find local offset for global index
 

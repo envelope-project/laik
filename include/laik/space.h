@@ -35,8 +35,8 @@
 // a point in an index space
 typedef struct _Laik_Index Laik_Index;
 
-// a rectangle-shaped slice from an index space
-typedef struct _Laik_Slice Laik_Slice;
+// a rectangle-shaped range from an index space
+typedef struct _Laik_Range Laik_Range;
 
 // a participating task in the distribution of an index space
 typedef struct _Laik_Task Laik_Task;
@@ -50,8 +50,8 @@ typedef struct _Laik_AccessPhase Laik_AccessPhase;
 // set of partitionings to make consistent at the same time
 typedef struct _Laik_PartGroup Laik_PartGroup;
 
-// a slice mapped to a task, created by a partitioner
-typedef struct _Laik_TaskSlice Laik_TaskSlice;
+// a range assigned to a task, created by a partitioner
+typedef struct _Laik_TaskRange Laik_TaskRange;
 
 // calculated partitioning borders, result of a partitioner run
 typedef struct _Laik_Partitioning Laik_Partitioning;
@@ -59,20 +59,20 @@ typedef struct _Laik_Partitioning Laik_Partitioning;
 // communication requirements when switching partitioning groups
 typedef struct _Laik_Transition Laik_Transition;
 
-// a partitioner is an algorithm mapping slices of an index space to tasks
+// a partitioner is an algorithm assigning ranges of an index space to tasks
 typedef struct _Laik_Partitioner Laik_Partitioner;
 
 // input parameters for a partitioner run
 typedef struct _Laik_PartitionerParams Laik_PartitionerParams;
 
-// an ordered sequence of slices assigned to tasks
-typedef struct _Laik_SliceArray Laik_SliceArray;
+// an ordered sequence of ranges assigned to tasks
+typedef struct _Laik_RangeList Laik_RangeList;
 
-// parameters for filtering slices during a partitioner run
-typedef struct _Laik_SliceFilter Laik_SliceFilter;
+// parameters for filtering ranges during a partitioner run
+typedef struct _Laik_RangeFilter Laik_RangeFilter;
 
 // context during a partitioner run
-typedef struct _Laik_SliceReceiver Laik_SliceReceiver;
+typedef struct _Laik_RangeReceiver Laik_RangeReceiver;
 
 
 //---------------------------------------------------------------------
@@ -113,7 +113,7 @@ bool laik_is_reduction(Laik_ReductionOperation redOp);
 
 
 //--------------------------------------------------------------------------
-// structs used in the space module: spaces, indexes, slices
+// structs used in the space module: spaces, indexes, ranges
 
 /**
  * Laik_Index
@@ -136,62 +136,62 @@ bool laik_index_isEqual(int dims, const Laik_Index* i1, const Laik_Index* i2);
 
 
 /**
- * Laik_Slice
+ * Laik_Range
  *
- * A rectangle-shaped slice from an index space [from;to[.
+ * A range from an index space [from;to[.
  *
  * The number of dimensions actually used in from/to members is stored
- * with in the space.
- * The struct layout is part of the public LAIK API.
+ * in the referenced space object.
+ * This struct is public.
  */
 
-struct _Laik_Slice {
+struct _Laik_Range {
     Laik_Space* space;
     Laik_Index  from, to;
 };
 
-// initialize a slice by providing space and from/to indexes
-void laik_slice_init(Laik_Slice* slc, Laik_Space* space,
+// initialize a range by providing space and from/to indexes
+void laik_range_init(Laik_Range* range, Laik_Space* space,
                      Laik_Index* from, Laik_Index* to);
 
-// initialize a slice by copying parameters from another slice
-void laik_slice_init_copy(Laik_Slice* dst, Laik_Slice* src);
+// initialize a range by copying parameters from another range
+void laik_range_init_copy(Laik_Range* dst, Laik_Range* src);
 
-// initialize a 1d slice by providing space and from/to values
-void laik_slice_init_1d(Laik_Slice* slc, Laik_Space* space,
+// initialize a 1d range by providing space and from/to values
+void laik_range_init_1d(Laik_Range* range, Laik_Space* space,
                         int64_t from, int64_t to);
 
-// initialize a 2d slice by providing space and two from/to values
-void laik_slice_init_2d(Laik_Slice* slc, Laik_Space* space,
+// initialize a 2d range by providing space and two from/to values
+void laik_range_init_2d(Laik_Range* range, Laik_Space* space,
                         int64_t from1, int64_t to1,
                         int64_t from2, int64_t to2);
 
-// initialize a 3d slice by providing space and three from/to values
-void laik_slice_init_3d(Laik_Slice* slc, Laik_Space* space,
+// initialize a 3d range by providing space and three from/to values
+void laik_range_init_3d(Laik_Range* range, Laik_Space* space,
                         int64_t from1, int64_t to1,
                         int64_t from2, int64_t to2,
                         int64_t from3, int64_t to3);
 
-// is the given slice empty?
-bool laik_slice_isEmpty(Laik_Slice* slc);
+// is the given range empty?
+bool laik_range_isEmpty(Laik_Range*);
 
-// get the intersection of 2 slices; return 0 if intersection is empty
-Laik_Slice* laik_slice_intersect(const Laik_Slice* s1, const Laik_Slice* s2);
+// get the intersection of two ranges; return 0 if intersection is empty
+Laik_Range* laik_range_intersect(const Laik_Range* r1, const Laik_Range* r2);
 
-// expand slice <dst> such that it contains <src>
-void laik_slice_expand(Laik_Slice* dst, Laik_Slice* src);
+// expand range <dst> such that it contains <src>
+void laik_range_expand(Laik_Range* dst, Laik_Range* src);
 
-// is slice <slc1> contained in <slc2>?
-bool laik_slice_within_slice(const Laik_Slice* slc1, const Laik_Slice* slc2);
+// is range <r1> contained in <r2>?
+bool laik_range_within_range(const Laik_Range* r1, const Laik_Range* r2);
 
-// is slice within space borders?
-bool laik_slice_within_space(const Laik_Slice* slc, const Laik_Space* sp);
+// is range within space borders?
+bool laik_range_within_space(const Laik_Range* range, const Laik_Space* sp);
 
-// are the slices equal?
-bool laik_slice_isEqual(Laik_Slice* s1, Laik_Slice* s2);
+// are the ranges equal?
+bool laik_range_isEqual(Laik_Range* r1, Laik_Range* r2);
 
-// number of indexes in the slice
-uint64_t laik_slice_size(const Laik_Slice* s);
+// number of indexes in the range
+uint64_t laik_range_size(const Laik_Range* r);
 
 
 /**
@@ -225,8 +225,8 @@ void laik_free_space(Laik_Space* s);
 // set a space a name, for debug output
 void laik_set_space_name(Laik_Space* s, char* n);
 
-// get the index slice covered by the space
-const Laik_Slice* laik_space_asslice(Laik_Space* space);
+// get the index range covered by the space
+const Laik_Range* laik_space_asrange(Laik_Space* space);
 
 // number of indexes in the space
 uint64_t laik_space_size(const Laik_Space* s);
@@ -236,57 +236,57 @@ int laik_space_getdimensions(Laik_Space* space);
 
 
 /**
- * Laik_SliceArray
+ * Laik_RangeList
  *
- * A sequence of slices assigned to task ids.
- * After adding slices, the array must be freezed before accessing slices.
+ * A sequence of ranges assigned to task ids.
+ * After adding ranges, the list must be freezed before accessing ranges.
  */
 
-// create an array to hold slices for a given space with max task id
-Laik_SliceArray* laik_slicearray_new(Laik_Space* space, unsigned int max_tid);
-void laik_slicearray_free(Laik_SliceArray* sa);
+// create a list to hold ranges for a given space with max task id
+Laik_RangeList* laik_rangelist_new(Laik_Space* space, unsigned int max_tid);
+void laik_rangelist_free(Laik_RangeList* list);
 
-// add a slice with tag and arbitrary data to a slice array
-void laik_slicearray_append(Laik_SliceArray* sa, int tid, const Laik_Slice *s,
-                            int tag, void* data);
-// add a slice with a single 1d index to a slice array (space optimized)
-void laik_slicearray_append_single1d(Laik_SliceArray* sa, int tid, int64_t idx);
-// freeze slice array
-void laik_slicearray_freeze(Laik_SliceArray* sa, bool doMerge);
+// add a range with tag and arbitrary data to a range list
+void laik_rangelist_append(Laik_RangeList* list, int tid, const Laik_Range *range,
+                           int tag, void* data);
+// add a range with a single 1d index to a range list (space optimized)
+void laik_rangelist_append_single1d(Laik_RangeList* list, int tid, int64_t idx);
+// freeze range list
+void laik_rangelist_freeze(Laik_RangeList* list, bool doMerge);
 // translate task ids using <idmap> array
-void laik_slicearray_migrate(Laik_SliceArray* sa, int* idmap, unsigned int new_count);
+void laik_rangelist_migrate(Laik_RangeList* list, int* idmap, unsigned int new_count);
 
-// does this cover the full space with one slice for each process?
-bool laik_slicearray_isAll(Laik_SliceArray* sa);
-// does this cover the full space with one slice in exactly one task?
-int laik_slicearray_isSingle(Laik_SliceArray* sa);
-// are the slices of two slice arrays equal?
-bool laik_slicearray_isEqual(Laik_SliceArray* sa1, Laik_SliceArray* sa2);
-// do the slices of this partitioning cover the full space?
-bool laik_slicearray_coversSpace(Laik_SliceArray* sa);
-// get number of slices
-int laik_slicearray_slicecount(Laik_SliceArray* sa);
-int laik_slicearray_tidslicecount(Laik_SliceArray* sa, int tid);
-int laik_slicearray_tidmapcount(Laik_SliceArray* sa, int tid);
-unsigned int laik_slicearray_tidmapslicecount(Laik_SliceArray* sa, int tid, int mapNo);
-// get a given slice from the slice array
-Laik_TaskSlice* laik_slicearray_tslice(Laik_SliceArray* sa, int n);
-Laik_TaskSlice* laik_slicearray_tidslice(Laik_SliceArray* sa, int tid, int n);
-Laik_TaskSlice* laik_slicearray_tidmapslice(Laik_SliceArray* sa, int tid, int mapNo, int n);
+// does this list cover the full space with one range for each process?
+bool laik_rangelist_isAll(Laik_RangeList* list);
+// does this list cover the full space with one range in exactly one task?
+int laik_rangelist_isSingle(Laik_RangeList* list);
+// are the ranges of two range lists equal?
+bool laik_rangelist_isEqual(Laik_RangeList* r1, Laik_RangeList* r2);
+// do the ranges of this partitioning cover the full space?
+bool laik_rangelist_coversSpace(Laik_RangeList* list);
+// get number of ranges
+int laik_rangelist_rangecount(Laik_RangeList* list);
+int laik_rangelist_tidrangecount(Laik_RangeList* list, int tid);
+int laik_rangelist_tidmapcount(Laik_RangeList* list, int tid);
+unsigned int laik_rangelist_tidmaprangecount(Laik_RangeList* list, int tid, int mapNo);
+// get a given task range from a range list
+Laik_TaskRange* laik_rangelist_taskrange(Laik_RangeList* list, int n);
+Laik_TaskRange* laik_rangelist_tidrange(Laik_RangeList* list, int tid, int n);
+Laik_TaskRange* laik_rangelist_tidmaprange(Laik_RangeList* list, int tid, int mapNo, int n);
 
 
 /**
- * Laik_SliceFilter
+ * Laik_RangeFilter
  *
- * Allows to filter slices in a partitioner run, storing only a subset
+ * Allows to filter ranges in a partitioner run, storing only a subset
  * The filter is passed in laik_run_partitioner().
  */
-Laik_SliceFilter* laik_slicefilter_new(void);
-void laik_slicefilter_free(Laik_SliceFilter*);
-// set filter to only keep slices for own process when adding slices
-void laik_slicefilter_set_myfilter(Laik_SliceFilter* sf, Laik_Group* g);
-// add filter to only keep slices intersecting with slices in <sa>
-void laik_slicefilter_add_idxfilter(Laik_SliceFilter* sf, Laik_SliceArray* sa, int tid);
+Laik_RangeFilter* laik_rangefilter_new(void);
+void laik_rangefilter_free(Laik_RangeFilter*);
+// set filter to only keep ranges for own process when adding ranges
+void laik_rangefilter_set_myfilter(Laik_RangeFilter* sf, Laik_Group* g);
+// add filter to only keep ranges intersecting with ranges in <list>
+void laik_rangefilter_add_idxfilter(Laik_RangeFilter* sf, Laik_RangeList* list, int tid);
 
 
 // Partitioner API:
@@ -296,11 +296,11 @@ void laik_slicefilter_add_idxfilter(Laik_SliceFilter* sf, Laik_SliceArray* sa, i
 typedef enum _Laik_PartitionerFlag {
     LAIK_PF_None = 0,
 
-    // slices with same tag are grouped into same mapping
-    // (by default, each slice gets its own mapping, with the tag not used)
+    // ranges with same tag are grouped into same mapping
+    // (by default, each range gets its own mapping, with the tag not used)
     LAIK_PF_GroupByTag = 1,
 
-    // all slices which go into same mapping are packed
+    // all ranges which go into same mapping are packed
     // (by default, there is no packing, eventually with holes,
     //  but making local-to-global index calculation easy).
     LAIK_PF_Compact = 2,
@@ -309,12 +309,12 @@ typedef enum _Laik_PartitionerFlag {
     // (by default, LAIK checks for full coverage of the index space)
     LAIK_PF_NoFullCoverage = 4,
 
-    // the slices which go into same mapping may have overlapping indexes.
-    // This enables a slice merging algorithm
-    // (by default, we expect slices not to overlap)
+    // the ranges which go into same mapping may have overlapping indexes.
+    // This enables a range merging algorithm
+    // (by default, we expect ranges not to overlap)
     LAIK_PF_Merge = 8,
 
-    // use an internal data representation optimized for single index slices.
+    // use an internal data representation optimized for single index ranges.
     // this is useful for fine-grained partitioning, requiring indirections
     LAIK_PF_SingleIndex = 16
 
@@ -330,14 +330,14 @@ struct _Laik_PartitionerParams {
 
 // Signature for a partitioner algorithm
 //
-// We are given a new partitioning object without any slices yet (2st par),
-// which has to be populated with slices (calling laik_append_slice). The
+// We are given a new partitioning object without any ranges yet (2st par),
+// which has to be populated with ranges (calling laik_append_range). The
 // partitioning object specifies the group and space to run the partitioner on.
 // If 3rd par is not null, it provides partitioning borders the generated
 // partitioning may be based on, e.g. for incremental partitioners (modifying
 // a previous one) or for derived partitionings (e.g. extending by halos)
 typedef void
-    (*laik_run_partitioner_t)(Laik_SliceReceiver*, Laik_PartitionerParams*);
+    (*laik_run_partitioner_t)(Laik_RangeReceiver*, Laik_PartitionerParams*);
 
 
 // create application-specific partitioner
@@ -346,27 +346,27 @@ Laik_Partitioner* laik_new_partitioner(const char* name,
                                        Laik_PartitionerFlag flags);
 
 // run a partitioner with given input parameters and filter
-Laik_SliceArray* laik_run_partitioner(Laik_PartitionerParams* params,
-                                      Laik_SliceFilter* filter);
+Laik_RangeList* laik_run_partitioner(Laik_PartitionerParams* params,
+                                      Laik_RangeFilter* filter);
 
 // functions to be used in own implementation of a partitioner algorithm
 
-// add a slice which should be owned by a given process
+// add a range which should be owned by a given process
 //
 // the <tag> is a hint for the data layer (if >0):
-// - slices with same tag go into same mapping
+// - ranges with same tag go into same mapping
 // - when switching between partitionings, mappings are reused when they are
 //   given the same tag >0. For re-use of mappings, if tag 0 is specified,
 //   a heuristic is used which checks for highest overlap of indexes.
 //   This is also important for reservation semantics
 //
 // the <data> pointer is an arbitrary value which can be passed from
-//  application-specific partitioners to the code processing slices.
+//  application-specific partitioners to the code processing ranges.
 //  LAIK provided partitioners set <data> to 0.
-void laik_append_slice(Laik_SliceReceiver* r, int task, const Laik_Slice* s,
+void laik_append_range(Laik_RangeReceiver* r, int task, const Laik_Range* s,
                        int tag, void* data);
-// append 1d single-index slice
-void laik_append_index_1d(Laik_SliceReceiver* r, int task, int64_t idx);
+// append 1d single-index range
+void laik_append_index_1d(Laik_RangeReceiver* r, int task, int64_t idx);
 
 
 /**
@@ -380,20 +380,20 @@ Laik_Partitioning* laik_new_empty_partitioning(Laik_Group* g, Laik_Space* s,
 // create a new empty, invalid partitioning using same parameters as in given one
 Laik_Partitioning* laik_clone_empty_partitioning(Laik_Partitioning* p);
 
-// slices from a partitioner run without filter
-Laik_SliceArray* laik_partitioning_allslices(Laik_Partitioning*);
-// slices from a partitioner run keeping only slices of this task
-Laik_SliceArray* laik_partitioning_myslices(Laik_Partitioning*);
-// slices from run intersecting with own slices of <p1> and <p2>
-Laik_SliceArray* laik_partitioning_interslices(Laik_Partitioning* p1,
-                                               Laik_Partitioning* p2);
+// ranges from a partitioner run without filter
+Laik_RangeList* laik_partitioning_allranges(Laik_Partitioning*);
+// ranges from a partitioner run keeping only ranges of this process
+Laik_RangeList* laik_partitioning_myranges(Laik_Partitioning*);
+// ranges from run intersecting with own ranges of <p1> and <p2>
+Laik_RangeList* laik_partitioning_interranges(Laik_Partitioning* p1,
+                                              Laik_Partitioning* p2);
 
-// run the partitioner specified for the partitioning, keeping all slices
-void laik_partitioning_store_allslices(Laik_Partitioning* p);
-// run the partitioner specified for the partitioning, keeping only slices of this task
-void laik_partitioning_store_myslices(Laik_Partitioning* p);
-// run the partitioner specified for the partitioning, keeping intersecting slices
-void laik_partitioning_store_intersectslices(Laik_Partitioning* p, Laik_Partitioning* p2);
+// run the partitioner specified for the partitioning, keeping all ranges
+void laik_partitioning_store_allranges(Laik_Partitioning* p);
+// run the partitioner specified for the partitioning, keeping only ranges of own process
+void laik_partitioning_store_myranges(Laik_Partitioning* p);
+// run the partitioner specified for the partitioning, keeping intersecting ranges
+void laik_partitioning_store_intersectranges(Laik_Partitioning* p, Laik_Partitioning* p2);
 
 
 // create a new partitioning by running an offline partitioner algorithm.
@@ -403,7 +403,7 @@ Laik_Partitioning* laik_new_partitioning(Laik_Partitioner* pr,
                                          Laik_Group* g, Laik_Space* space,
                                          Laik_Partitioning* otherP);
 
-// new partitioning taking slices from another, migrating to new group
+// new partitioning taking ranges from another, migrating to new group
 Laik_Partitioning* laik_new_migrated_partitioning(Laik_Partitioning* other,
                                                   Laik_Group* newg);
 
@@ -419,32 +419,32 @@ void laik_partitioning_set_name(Laik_Partitioning* p, char* n);
 // - removed tasks must have empty partitiongs
 void laik_partitioning_migrate(Laik_Partitioning* p, Laik_Group* newg);
 
-// get number of slices for this task
-int laik_my_slicecount(Laik_Partitioning* p);
+// get number of ranges for own process
+int laik_my_rangecount(Laik_Partitioning* p);
 
 // how many mappings does the partitioning for this process ask for?
 int laik_my_mapcount(Laik_Partitioning* p);
 
-// get number of slices within a given mapping for this task
-int laik_my_mapslicecount(Laik_Partitioning* p, int mapNo);
+// get number of ranges within a given mapping for this task
+int laik_my_maprangecount(Laik_Partitioning* p, int mapNo);
 
-// get slice number <n> from the slices for this task
-Laik_TaskSlice* laik_my_slice(Laik_Partitioning* p, int n);
+// get range number <n> from ranges for own process
+Laik_TaskRange* laik_my_range(Laik_Partitioning* p, int n);
 
-// get slice number <n> within mapping <mapNo> from the slices for this task
-Laik_TaskSlice* laik_my_mapslice(Laik_Partitioning* p, int mapNo, int n);
+// get range number <n> within mapping <mapNo> from the ranges for own process
+Laik_TaskRange* laik_my_maprange(Laik_Partitioning* p, int mapNo, int n);
 
-// get borders of slice number <n> from the 1d slices for this task
-Laik_TaskSlice* laik_my_slice_1d(Laik_Partitioning* p, int n,
+// get borders of range number <n> from the 1d ranges for own process
+Laik_TaskRange* laik_my_range_1d(Laik_Partitioning* p, int n,
                                  int64_t* from, int64_t* to);
 
-// get borders of slice number <n> from the 2d slices for this task
-Laik_TaskSlice* laik_my_slice_2d(Laik_Partitioning* p, int n,
+// get borders of range number <n> from the 2d ranges for own process
+Laik_TaskRange* laik_my_range_2d(Laik_Partitioning* p, int n,
                                  int64_t* x1, int64_t* x2,
                                  int64_t* y1, int64_t* y2);
 
-// get borders of slice number <n> from the 3d slices for this task
-Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
+// get borders of range number <n> from the 3d ranges for own process
+Laik_TaskRange* laik_my_range_3d(Laik_Partitioning* p, int n,
                                  int64_t* x1, int64_t* x2,
                                  int64_t* y1, int64_t* y2,
                                  int64_t* z1, int64_t* z2);
@@ -453,21 +453,21 @@ Laik_TaskSlice* laik_my_slice_3d(Laik_Partitioning* p, int n,
 
 Laik_Space* laik_partitioning_get_space(Laik_Partitioning* p);
 Laik_Group* laik_partitioning_get_group(Laik_Partitioning* p);
-int laik_partitioning_slicecount(Laik_Partitioning* p);
-Laik_TaskSlice* laik_partitioning_get_tslice(Laik_Partitioning* p, int n);
+int laik_partitioning_rangecount(Laik_Partitioning* p);
+Laik_TaskRange* laik_partitioning_get_taskrange(Laik_Partitioning* p, int n);
 
 
-// get slice of a task slice
-const Laik_Slice* laik_taskslice_get_slice(Laik_TaskSlice* ts);
-int laik_taskslice_get_task(Laik_TaskSlice* ts);
-// applications can attach arbitrary values to a TaskSlice, to be
-// passed from application-specific partitioners to slice processing
-void* laik_taskslice_get_data(Laik_TaskSlice*);
-void laik_taskslice_set_data(Laik_TaskSlice*, void* data);
-// return the mapping number of this task slice, calculated from tags
+// get range of a task range
+const Laik_Range* laik_taskrange_get_range(Laik_TaskRange* trange);
+int laik_taskrange_get_task(Laik_TaskRange* trange);
+// applications can attach arbitrary values to a TaskRange, to be
+// passed from application-specific partitioners to range processing
+void* laik_taskrange_get_data(Laik_TaskRange*trange);
+void laik_taskrange_set_data(Laik_TaskRange*trange, void* data);
+// return the mapping number of this task range, calculated from tags
 // provided by the partitioner
-int laik_taskslice_get_mapNo(Laik_TaskSlice*);
-int laik_taskslice_get_tag(Laik_TaskSlice* ts);
+int laik_taskrange_get_mapNo(Laik_TaskRange*trange);
+int laik_taskrange_get_tag(Laik_TaskRange* trange);
 
 // get a custom data pointer from the partitioner
 void* laik_partitioner_data(Laik_Partitioner* partitioner);
