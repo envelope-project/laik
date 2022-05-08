@@ -1,3 +1,16 @@
+# Simplification of API
+
+* Always explicit allocation, introduce Laik_Allocation
+  - allocation object collects size requirements for partitionings + layout
+  - allocation may cover resources of multiple processes -> sharedMem backend
+  - virtual Array of Structs -> how?
+* no info which partitioning is active (no useless no-op switches)
+* introduce Laik_Update object encapsulating switch/update
+  - allow different abstraction/preparation levels
+  - also from one data container in another
+
+----
+
 # API Proposals and SW Engineering Process
 
 Keep track of open issues and needed changes here,
