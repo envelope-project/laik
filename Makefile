@@ -54,6 +54,9 @@ src/revinfo.o: git-version.h
 src/backend-mpi.o: $(SDIR)src/backend-mpi.c
 	$(MPICC) $(CFLAGS) -c -o src/backend-mpi.o $(SDIR)src/backend-mpi.c
 
+src/backend-shmem.o: $(SDIR)src/backend-shmem.c
+	$(MPICC) $(CFLAGS) -c -o src/backend-shmem.o $(SDIR)src/backend-shmem.c
+
 $(LAIKLIB): $(OBJS)
 	$(MPICC) $(CFLAGS) -shared -o $(abspath $(LAIKLIB)) $(OBJS) $(LDLIBS)
 

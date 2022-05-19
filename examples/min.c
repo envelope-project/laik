@@ -1,5 +1,6 @@
 #include "laik.h"
 #include <stdio.h>
+#include "laik-backend-shmem.h"
 
 int main(int argc, char* argv[])
 {

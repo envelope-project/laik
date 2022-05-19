@@ -3,7 +3,6 @@
 ![drawing](doc/logo/laiklogo.png)
 
 [![Build Status](https://travis-ci.org/envelope-project/laik.svg?branch=master)](https://travis-ci.org/envelope-project/laik)
-![Build and run tests](https://github.com/envelope-project/laik/workflows/Build%20and%20run%20tests/badge.svg)
 
 # A Library for Automatic Data Migration in Parallel Applications
 
