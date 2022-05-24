@@ -16,10 +16,10 @@
  */
 
 
-#ifdef USE_MPI
+#ifdef USE_SHMEM
 
 #include "laik-internal.h"
-#include "laik-backend-mpi.h"
+#include "laik-backend-shmem.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -1193,4 +1193,4 @@ static void laik_shmem_sync(Laik_KVStore* kvs)
 }
 
 
-#endif // USE_MPI
+#endif // USE_SHMEM

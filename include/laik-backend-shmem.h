@@ -15,8 +15,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LAIK_BACKEND_MPI_H
-#define LAIK_BACKEND_MPI_H
+#ifndef LAIK_BACKEND_SHMEM_H
+#define LAIK_BACKEND_SHMEM_H
 
 #include "laik.h"
 
@@ -27,4 +27,4 @@
 // returns the same object if called multiple times
 Laik_Instance* laik_init_shmem(int* argc, char*** argv);
 
-#endif // LAIK_BACKEND_MPI_H
+#endif // LAIK_BACKEND_SHMEM_H

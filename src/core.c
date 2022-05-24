@@ -18,6 +18,7 @@
 
 #include <laik-internal.h>
 #include <laik-backend-mpi.h>
+#include <laik-backend-shmem.h>
 #include <laik-backend-single.h>
 #include <laik-backend-tcp.h>
 #include <laik-backend-tcp2.h>
@@ -53,6 +54,15 @@ Laik_Instance* laik_init(int* argc, char*** argv)
         // default to MPI if available, or if explicitly wanted
         if ((override == 0) || (strcmp(override, "mpi") == 0)) {
             inst = laik_init_mpi(argc, argv);
+        }
+    }
+#endif
+
+#ifdef USE_SHMEM
+    if (inst == 0) {
+        // default to SHMEM if available, or if explicitly wanted
+        if ((override == 0) || (strcmp(override, "shmem") == 0)) {
+            inst = laik_init_shmem(argc, argv);
         }
     }
 #endif
@@ -95,6 +105,9 @@ Laik_Instance* laik_init(int* argc, char*** argv)
                  "Supported backends: "
 #ifdef USE_MPI
                  "mpi "
+#endif
+#ifdef USE_SHMEM
+                 "shmem "
 #endif
 #ifdef USE_TCP2
                  "tcp2 "

@@ -19,6 +19,7 @@ include-what-you-use \
     -D LAIK_TCP_DEBUG \
     -D LAIK_TCP_STATS \
     -D USE_MPI \
+    -D USE_SHMEM \
     -D USE_TCP \
     -I "${SRC}/include" \
     -I "${SRC}/src" \

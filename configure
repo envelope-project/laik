@@ -33,9 +33,11 @@ if "CC" in os.environ:
 parser = argparse.ArgumentParser()
 parser.add_argument("--no-tcp", help="disable TCP backend", action="store_true")
 parser.add_argument("--no-mpi", help="disable MPI backend", action="store_true")
+parser.add_argument("--no-shmem", help="disable SHMEM backend", action="store_true")
 parser.add_argument("--no-mqtt", help="disable MQTT support", action="store_true")
 args = parser.parse_args()
 use_mpi = not args.no_mpi
+use_shmem = not args.no_shmem
 use_tcp = not args.no_tcp
 use_mqtt = not args.no_mqtt
 
@@ -108,6 +110,36 @@ else:
         print("MPI backend disabled.")
     elif not mpi_found:
         print("MPI backend disabled ('"+ mpicc +"' not found).")
+        print("  Install MPI, or point MPICC to the compiler wrapper of an installed MPI.")
+        print("  On Ubuntu, install e.g. 'libopenmpi-dev'.")
+        mpicc = ""
+
+#------------------------------------
+# LAIK-internal SHMEM support
+
+#  check for mpicc, if found we enable SHMEM
+mpicc = ""
+if use_shmem:
+    if "MPICC" in os.environ:
+        mpicc = os.environ['MPICC']
+    if not mpicc:
+        mpicc = "mpicc"
+    mpi_found = distutils.spawn.find_executable(mpicc)
+if use_shmem and mpi_found:
+    print("MPI (SHMEM) backend enabled (using '" + mpicc + "' as compiler wrapper).")
+    defs += " -DUSE_SHMEM"
+    test_subdirs += " mpi"
+    mpiversion = os.popen('mpirun --version').read().strip()
+    if "Open MPI" in mpiversion:
+        print("  Detected OpenMPI (SHMEM)")
+        # required for tests with OpenMPI, otherwise tests may fail
+        # with "not enough slots" error on small machines
+        exports = "export MPIEXEC=mpiexec --oversubscribe --mca btl_base_warn_component_unused 0"
+else:
+    if not use_shmem:
+        print("MPI (SHMEM) backend disabled.")
+    elif not mpi_found:
+        print("MPI (SHMEM) backend disabled ('"+ mpicc +"' not found).")
         print("  Install MPI, or point MPICC to the compiler wrapper of an installed MPI.")
         print("  On Ubuntu, install e.g. 'libopenmpi-dev'.")
         mpicc = ""
