@@ -15,7 +15,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #ifdef USE_SHMEM
 
 #include "laik-internal.h"
@@ -29,59 +28,239 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <string.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <errno.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define SHM_KEY 0x123456
+#define PORT 8080
 
 // forward decls, types/structs , global variables
 
-static void laik_shmem_finalize(Laik_Instance* as);
-static void laik_shmem_prepare(Laik_ActionSeq* as);
-static void laik_shmem_cleanup(Laik_ActionSeq* as);
-static void laik_shmem_exec(Laik_ActionSeq* as);
-static void laik_shmem_updateGroup(Laik_Group* as);
-static bool laik_shmem_log_action(Laik_Action* as);
-static void laik_shmem_sync(Laik_KVStore* kvs);
+static void laik_shmem_finalize(Laik_Instance *as);
+static void laik_shmem_prepare(Laik_ActionSeq *as);
+static void laik_shmem_cleanup(Laik_ActionSeq *as);
+static void laik_shmem_exec(Laik_ActionSeq *as);
+static void laik_shmem_updateGroup(Laik_Group *as);
+static bool laik_shmem_log_action(Laik_Action *as);
+static void laik_shmem_sync(Laik_KVStore *kvs);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_shmem = {
-    .name        = "SHMEM (two-sided)",
-    .finalize    = laik_shmem_finalize,
-    .prepare     = laik_shmem_prepare,
-    .cleanup     = laik_shmem_cleanup,
-    .exec        = laik_shmem_exec,
+    .name = "SHMEM",
+    .finalize = laik_shmem_finalize,
+    .prepare = laik_shmem_prepare,
+    .cleanup = laik_shmem_cleanup,
+    .exec = laik_shmem_exec,
     .updateGroup = laik_shmem_updateGroup,
-    .log_action  = laik_shmem_log_action,
-    .sync        = laik_shmem_sync
-};
+    .log_action = laik_shmem_log_action,
+    .sync = laik_shmem_sync};
 
-static Laik_Instance* shmem_instance = 0;
+static Laik_Instance *shmem_instance = 0;
+
+int shmid = -1;
+int rank = -1;
+int size = -1;
+
+struct shmseg
+{
+    int port;
+    int size;
+};
 
 //----------------------------------------------------------------------------
 // error helpers
 
-static
-void laik_shmem_panic(int err) {
+static void laik_shmem_panic(int err)
+{
+    if (err != -3 && shmctl(shmid, IPC_RMID, 0) == -1)
+    {
+        perror("shmctl");
+        laik_shmem_panic(-3);
+    }
     laik_log(LAIK_LL_Panic, "SHMEM backend: error '%d'", err);
     exit(1);
 }
 
-
 //----------------------------------------------------------------------------
 // backend interface implementation: initialization
 
-Laik_Instance* laik_init_shmem(int* argc, char*** argv)
+Laik_Instance *laik_init_shmem(int *argc, char ***argv)
 {
     argc = argc;
-    argv = argv; // TODO remove if they weren't used in a later version
+    argv = argv;
     if (shmem_instance)
         return shmem_instance;
 
-    Laik_Instance* inst;
-    inst = laik_new_instance(&laik_backend_shmem, 1, 0, 0, 0, "local", 0);
+    struct shmseg *shmp;
+
+    shmid = shmget(SHM_KEY, sizeof(struct shmseg), IPC_EXCL | 0644 | IPC_CREAT);
+    if (shmid == -1)
+    {
+        sleep(0.5); //TODO adjust/minimize sleep time
+        int sock = 0, client_fd;
+        struct sockaddr_in serv_addr;
+
+        shmid = shmget(SHM_KEY, sizeof(struct shmseg), 0644 | IPC_CREAT);
+        if (shmid == -1)
+        {
+            perror("Shared memory");
+            laik_shmem_panic(0);
+        }
+
+        // Attach to the segment to get a pointer to it.
+        shmp = shmat(shmid, NULL, 0);
+        if (shmp == (void *)-1)
+        {
+            perror("Shared memory attach");
+            laik_shmem_panic(0);
+        }
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(shmp->port);
+
+        shmp->size++;
+
+        if (shmdt(shmp) == -1)
+        {
+            perror("shmdt");
+            laik_shmem_panic(0);
+        }
+
+        if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        {
+            printf("\n Socket creation error \n");
+            laik_shmem_panic(0);
+        }
+
+        // Convert IPv4 and IPv6 addresses from text to binary
+        // form
+        if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0)
+        {
+            printf("\nInvalid address/ Address not supported \n");
+            laik_shmem_panic(0);
+        }
+
+        sleep(1); //TODO adjust/minimize sleep time
+        if ((client_fd = connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) < 0)
+        {
+            printf("\nConnection Failed \n");
+            laik_shmem_panic(0);
+        }
+
+        read(sock, &size, sizeof(int));
+        read(sock, &rank, sizeof(int));
+
+        close(client_fd); // closing the connected socket
+
+        laik_log(2, "Client%d initialization completed", rank);
+    }
+    else
+    {
+        // Attach to the segment to get a pointer to it.
+        shmp = shmat(shmid, NULL, 0);
+        if (shmp == (void *)-1)
+        {
+            perror("Shared memory attach");
+            laik_shmem_panic(0);
+        }
+
+        shmp->port = PORT;
+        shmp->size = 1;
+        // Let the client processes notify the master about their existence by incrementing size
+        sleep(1); //TODO adjust/minimize sleep time
+        size = shmp->size;
+        int new_socket[size];
+
+        if (shmdt(shmp) == -1)
+        {
+            perror("shmdt");
+            laik_shmem_panic(0);
+        }
+
+        if (shmctl(shmid, IPC_RMID, 0) == -1)
+        {
+            perror("shmctl");
+            laik_shmem_panic(-3);
+        }
+
+        int server_fd;
+        struct sockaddr_in address;
+        int opt = 1;
+        int addrlen = sizeof(address);
+
+        // Creating socket file descriptor
+        if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
+        {
+            perror("socket failed");
+            exit(EXIT_FAILURE); // TOFO change theese
+            laik_shmem_panic(0);
+        }
+
+        // Forcefully attaching socket to the port 8080
+        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
+        {
+            perror("setsockopt");
+            exit(EXIT_FAILURE);
+            laik_shmem_panic(0);
+        }
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = INADDR_ANY;
+        address.sin_port = htons(PORT);
+
+        // Forcefully attaching socket to the port 8080
+        if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
+        {
+            perror("bind failed");
+            exit(EXIT_FAILURE);
+            laik_shmem_panic(0);
+        }
+        if (listen(server_fd, 3) < 0)
+        {
+            perror("listen");
+            exit(EXIT_FAILURE);
+            laik_shmem_panic(0);
+        }
+
+        for (int i = 0; i < size - 1; i++)
+        {
+            if ((new_socket[i] = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
+            {
+                perror("accept");
+                exit(EXIT_FAILURE);
+                laik_shmem_panic(0);
+            }
+        }
+
+        // Assign processes their ranks and tell them the group size.
+        rank = 0;
+        for (int i = 1; i < size; i++)
+        {
+            send(new_socket[i - 1], &size, sizeof(int), 0);
+            send(new_socket[i - 1], &i, sizeof(int), 0);
+        }
+
+        // closing the connected sockets
+        for (int i = 0; i < size - 1; i++)
+        {
+            close(new_socket[i]);
+        }
+
+        // closing the listening socket
+        shutdown(server_fd, SHUT_RDWR);
+
+        laik_log(2, "Master initialization completed");
+    }
+
+    Laik_Instance *inst;
+    inst = laik_new_instance(&laik_backend_shmem, size, rank, 0, 0, "local", 0);
 
     // create and attach initial world group
-    Laik_Group* world = laik_create_group(inst, 1);
-    world->size = 1;
-    world->myid = 0;
+    Laik_Group *world = laik_create_group(inst, size);
+    world->size = size;
+    world->myid = rank;
     world->locationid[0] = 0;
     inst->world = world;
 
@@ -91,19 +270,23 @@ Laik_Instance* laik_init_shmem(int* argc, char*** argv)
     return inst;
 }
 
-static void laik_shmem_finalize(Laik_Instance* inst){
+static void laik_shmem_finalize(Laik_Instance *inst)
+{
     // TODO: Implement needed finalize routines.
     assert(inst == shmem_instance);
 }
 
 // calc statistics updates for MPI-specific actions
-static void laik_shmem_aseq_calc_stats(Laik_ActionSeq* as){
+static void laik_shmem_aseq_calc_stats(Laik_ActionSeq *as)
+{
     as = as; // TODO: implement
 }
 
-static void laik_shmem_prepare(Laik_ActionSeq* as){
+static void laik_shmem_prepare(Laik_ActionSeq *as)
+{
     // TODO: Adjust method where necessary
-    if (laik_log_begin(1)) {
+    if (laik_log_begin(1))
+    {
         laik_log_append("SHMEM backend prepare:\n");
         laik_log_ActionSeq(as, false);
         laik_log_flush(0);
@@ -114,7 +297,8 @@ static void laik_shmem_prepare(Laik_ActionSeq* as){
 
     bool changed = laik_aseq_splitTransitionExecs(as);
     laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
-    if (as->actionCount == 0) {
+    if (as->actionCount == 0)
+    {
         laik_aseq_calc_stats(as);
         return;
     }
@@ -146,7 +330,7 @@ static void laik_shmem_prepare(Laik_ActionSeq* as){
     laik_log_ActionSeqIfChanged(changed, as, "After buffer allocation 3");
 
     changed = laik_aseq_sort_2phases(as);
-    //changed = laik_aseq_sort_rankdigits(as);
+    // changed = laik_aseq_sort_rankdigits(as);
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
 
     // TODO add something similar to mpi_async if needed
@@ -156,8 +340,10 @@ static void laik_shmem_prepare(Laik_ActionSeq* as){
     laik_shmem_aseq_calc_stats(as);
 }
 
-static void laik_shmem_cleanup(Laik_ActionSeq* as){
-    if (laik_log_begin(1)) {
+static void laik_shmem_cleanup(Laik_ActionSeq *as)
+{
+    if (laik_log_begin(1))
+    {
         laik_log_append("SHMEM backend cleanup:\n");
         laik_log_ActionSeq(as, false);
         laik_log_flush(0);
@@ -165,16 +351,19 @@ static void laik_shmem_cleanup(Laik_ActionSeq* as){
 
     assert(as->backend == &laik_backend_shmem);
 
-    //TODO: implement cleanup routines if necessary
+    // TODO: implement cleanup routines if necessary
 }
 
-static void laik_shmem_exec(Laik_ActionSeq* as){
-    if (as->actionCount == 0) {
+static void laik_shmem_exec(Laik_ActionSeq *as)
+{
+    if (as->actionCount == 0)
+    {
         laik_log(1, "SHMEM backend exec: nothing to do\n");
         return;
     }
 
-    if (as->backend == 0) {
+    if (as->backend == 0)
+    {
         // no preparation: do minimal transformations, sorting send/recv
         laik_log(1, "SHMEM backend exec: prepare before exec\n");
         laik_log_ActionSeqIfChanged(true, as, "Original sequence");
@@ -191,7 +380,8 @@ static void laik_shmem_exec(Laik_ActionSeq* as){
         assert(not_handled == 0); // there should be no SHMEM-specific actions
     }
 
-    if (laik_log_begin(1)) {
+    if (laik_log_begin(1))
+    {
         laik_log_append("SHMEM backend exec:\n");
         laik_log_ActionSeq(as, false);
         laik_log_flush(0);
@@ -205,72 +395,83 @@ static void laik_shmem_exec(Laik_ActionSeq* as){
     int elemsize = tc->data->elemsize;
     */
 
-    //TODO: Implement needed variables
+    // TODO: Implement needed variables
 
-    Laik_Action* a = as->action;
-    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    Laik_Action *a = as->action;
+    for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
+    {
         // Laik_BackendAction* ba = (Laik_BackendAction*) a; TODO: Uncomment when it will be used.
-        if (laik_log_begin(1)) {
+        if (laik_log_begin(1))
+        {
             laik_log_Action(a, as);
             laik_log_flush(0);
         }
 
-        switch(a->type) {
-            case LAIK_AT_BufReserve:
-            case LAIK_AT_Nop:
-                // no need to do anything
-                break;
+        switch (a->type)
+        {
+        case LAIK_AT_BufReserve:
+        case LAIK_AT_Nop:
+            // no need to do anything
+            break;
 
-            case 0: {
-                // TODO: Implement the handling of all the different Laik_Actions
-                break;
-            }
+        case 0:
+        {
+            // TODO: Implement the handling of all the different Laik_Actions
+            break;
+        }
         }
     }
-    assert( ((char*)as->action) + as->bytesUsed == ((char*)a) );
+    assert(((char *)as->action) + as->bytesUsed == ((char *)a));
 }
 
-static void laik_shmem_updateGroup(Laik_Group* g){
+static void laik_shmem_updateGroup(Laik_Group *g)
+{
     // calculate SHMEM communicator for group <g>
     // TODO: only supports shrinking of parent for now
     assert(g->parent);
     assert(g->parent->size >= g->size);
 
     laik_log(1, "SHMEM backend updateGroup: parent %d (size %d, myid %d) "
-             "=> group %d (size %d, myid %d)",
+                "=> group %d (size %d, myid %d)",
              g->parent->gid, g->parent->size, g->parent->myid,
              g->gid, g->size, g->myid);
 
     // only interesting if this task is still part of parent
-    if (g->parent->myid < 0) return;
+    if (g->parent->myid < 0)
+        return;
 
-    //TODO: implement updateGroup functionality
+    // TODO: implement updateGroup functionality
 }
 
-static bool laik_shmem_log_action(Laik_Action* a){
+static bool laik_shmem_log_action(Laik_Action *a)
+{
     // TODO: Insert needed action types.
-    switch(a->type) {
-        case 0: {
-            laik_log_append("Log the event");
-            break;
-        }
+    switch (a->type)
+    {
+    case 0:
+    {
+        laik_log_append("Log the event");
+        break;
+    }
 
-        default:
-            return false;
+    default:
+        return false;
     }
     a = a;
     return true;
 }
 
-static void laik_shmem_sync(Laik_KVStore* kvs){
+static void laik_shmem_sync(Laik_KVStore *kvs)
+{
     // TODO: Add SHMEM related variables
     assert(kvs->inst == shmem_instance);
-    Laik_Group* world = kvs->inst->world;
+    Laik_Group *world = kvs->inst->world;
     int myid = world->myid;
-    int count[2] = {0,0};
-    //int err = 0; TODO: Uncomment when it will be used.
+    int count[2] = {0, 0};
+    // int err = 0; TODO: Uncomment when it will be used.
 
-    if (myid > 0) {
+    if (myid > 0)
+    {
         return;
     }
 
@@ -288,26 +489,30 @@ static void laik_shmem_sync(Laik_KVStore* kvs){
     dst = &(kvs->changes);
     src = &changes;
 
-    for(int i = 1; i < world->size; i++) {
-        //TODO: Implement receiving of data
+    for (int i = 1; i < world->size; i++)
+    {
+        // TODO: Implement receiving of data
         laik_log(1, "SHMEM sync: getting %d changes (total %d chars) from T%d",
                  count[0] / 2, count[1], i);
         laik_kvs_changes_set_size(&recvd, 0, 0); // fresh reuse
         laik_kvs_changes_ensure_size(&recvd, count[0], count[1]);
-        if (count[0] == 0) {
+        if (count[0] == 0)
+        {
             assert(count[1] == 0);
             continue;
         }
 
         assert(count[1] > 0);
-        //TODO: Implement receiving of data
+        // TODO: Implement receiving of data
         laik_kvs_changes_set_size(&recvd, count[0], count[1]);
 
         // for merging, both inputs need to be sorted
         laik_kvs_changes_sort(&recvd);
 
         // swap src/dst: now merging can overwrite dst
-        tmp = src; src = dst; dst = tmp;
+        tmp = src;
+        src = dst;
+        dst = tmp;
 
         laik_kvs_changes_merge(dst, src, &recvd);
     }
@@ -316,7 +521,8 @@ static void laik_shmem_sync(Laik_KVStore* kvs){
     count[0] = dst->offUsed;
     count[1] = dst->dataUsed;
     assert(count[1] > count[0]); // more byte than offsets
-    for(int i = 1; i < world->size; i++) {
+    for (int i = 1; i < world->size; i++)
+    {
         laik_log(1, "SHMEM sync: sending %d changes (total %d chars) to T%d",
                  count[0] / 2, count[1], i);
         // TODO: Implement sending back of data

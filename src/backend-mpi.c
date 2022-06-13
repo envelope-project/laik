@@ -21,6 +21,9 @@
 #include "laik-internal.h"
 #include "laik-backend-mpi.h"
 
+#define SHM_SIZE = 64
+#define SHM_KEY = 334477
+
 #include <assert.h>
 #include <stdlib.h>
 #include <mpi.h>
