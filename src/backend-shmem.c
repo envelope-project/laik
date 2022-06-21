@@ -33,8 +33,9 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <time.h>
 
-#define SHM_KEY 0x123456
+#define SHM_KEY 0x1234567
 #define PORT 8080
 
 // forward decls, types/structs , global variables
@@ -84,6 +85,79 @@ static void laik_shmem_panic(int err)
     exit(1);
 }
 
+int shm_client_init()
+{
+    int port, shmid = -1;
+    time_t t_0;
+    struct shmseg *shmp;
+
+    // As long as it fails and three seconds haven't passed try again (wait for master)
+    t_0 = time(NULL);
+    while (time(NULL) - t_0 < 3 && shmid == -1)
+    {
+        shmid = shmget(SHM_KEY, sizeof(struct shmseg), 0644 | IPC_CREAT);
+    }
+    if (shmid == -1)
+    {
+        perror("Shared memory");
+        laik_shmem_panic(0);
+    }
+
+    // Attach to the segment to get a pointer to it.
+    shmp = shmat(shmid, NULL, 0);
+    if (shmp == (void *)-1)
+    {
+        perror("Shared memory attach");
+        laik_shmem_panic(0);
+    }
+
+    port = shmp->port;
+    shmp->size++;
+
+    if (shmdt(shmp) == -1)
+    {
+        perror("shmdt");
+        laik_shmem_panic(0);
+    }
+
+    return port;
+}
+
+int shm_master_init(int shmid)
+{
+    int size, old_size;
+    struct shmseg *shmp;
+
+    // Attach to the segment to get a pointer to it.
+    shmp = shmat(shmid, NULL, 0);
+    if (shmp == (void *)-1)
+    {
+        perror("Shared memory attach");
+        laik_shmem_panic(0);
+    }
+
+    shmp->port = PORT;
+    shmp->size = 1;
+    // Let the client processes notify the master about their existence by incrementing size
+    // Wait until no more processes join
+    sleep(1);
+    size = shmp->size;
+
+    if (shmdt(shmp) == -1)
+    {
+        perror("shmdt");
+        laik_shmem_panic(0);
+    }
+
+    if (shmctl(shmid, IPC_RMID, 0) == -1)
+    {
+        perror("shmctl");
+        laik_shmem_panic(-3);
+    }
+
+    return size;
+}
+
 //----------------------------------------------------------------------------
 // backend interface implementation: initialization
 
@@ -94,40 +168,17 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
     if (shmem_instance)
         return shmem_instance;
 
-    struct shmseg *shmp;
-
     shmid = shmget(SHM_KEY, sizeof(struct shmseg), IPC_EXCL | 0644 | IPC_CREAT);
     if (shmid == -1)
     {
-        sleep(0.5); //TODO adjust/minimize sleep time
-        int sock = 0, client_fd;
+        int sock = 0, client_fd = -1;
+        time_t t_0;
         struct sockaddr_in serv_addr;
 
-        shmid = shmget(SHM_KEY, sizeof(struct shmseg), 0644 | IPC_CREAT);
-        if (shmid == -1)
-        {
-            perror("Shared memory");
-            laik_shmem_panic(0);
-        }
-
-        // Attach to the segment to get a pointer to it.
-        shmp = shmat(shmid, NULL, 0);
-        if (shmp == (void *)-1)
-        {
-            perror("Shared memory attach");
-            laik_shmem_panic(0);
-        }
+        int port = shm_client_init();
 
         serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(shmp->port);
-
-        shmp->size++;
-
-        if (shmdt(shmp) == -1)
-        {
-            perror("shmdt");
-            laik_shmem_panic(0);
-        }
+        serv_addr.sin_port = htons(port);
 
         if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         {
@@ -135,16 +186,20 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
             laik_shmem_panic(0);
         }
 
-        // Convert IPv4 and IPv6 addresses from text to binary
-        // form
+        // Convert IPv4 and IPv6 addresses from text to binary form
         if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0)
         {
             printf("\nInvalid address/ Address not supported \n");
             laik_shmem_panic(0);
         }
 
-        sleep(1); //TODO adjust/minimize sleep time
-        if ((client_fd = connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) < 0)
+        // As long as it fails and three seconds haven't passed try again (wait for master)
+        t_0 = time(NULL);
+        while (time(NULL) - t_0 < 3 && client_fd < 0)
+        {
+            client_fd = connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+        }
+        if (client_fd < 0)
         {
             printf("\nConnection Failed \n");
             laik_shmem_panic(0);
@@ -153,38 +208,14 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
         read(sock, &size, sizeof(int));
         read(sock, &rank, sizeof(int));
 
-        close(client_fd); // closing the connected socket
+        close(client_fd); // closing the connected socket TODO: Maybe move to finalize
 
         laik_log(2, "Client%d initialization completed", rank);
     }
     else
     {
-        // Attach to the segment to get a pointer to it.
-        shmp = shmat(shmid, NULL, 0);
-        if (shmp == (void *)-1)
-        {
-            perror("Shared memory attach");
-            laik_shmem_panic(0);
-        }
-
-        shmp->port = PORT;
-        shmp->size = 1;
-        // Let the client processes notify the master about their existence by incrementing size
-        sleep(1); //TODO adjust/minimize sleep time
-        size = shmp->size;
+        size = shm_master_init(shmid);
         int new_socket[size];
-
-        if (shmdt(shmp) == -1)
-        {
-            perror("shmdt");
-            laik_shmem_panic(0);
-        }
-
-        if (shmctl(shmid, IPC_RMID, 0) == -1)
-        {
-            perror("shmctl");
-            laik_shmem_panic(-3);
-        }
 
         int server_fd;
         struct sockaddr_in address;
@@ -248,7 +279,7 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
             close(new_socket[i]);
         }
 
-        // closing the listening socket
+        // closing the listening socket TODO: Maybe move to finalize
         shutdown(server_fd, SHUT_RDWR);
 
         laik_log(2, "Master initialization completed");
@@ -259,7 +290,7 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
 
     // create and attach initial world group
     Laik_Group *world = laik_create_group(inst, size);
-    world->size = size;
+    world->size = size; // TODO rework world creation process
     world->myid = rank;
     world->locationid[0] = 0;
     inst->world = world;
