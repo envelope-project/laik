@@ -1,4 +1,3 @@
-#include "laik-internal.h"
 #include "shmem.h"
 
 #include <assert.h>
@@ -16,7 +15,7 @@
 #include <sys/socket.h>
 #include <time.h>
 
-#define SHM_KEY 0x1
+#define SHM_KEY 0x12
 #define PORT 8080
 #define BUFSIZE 1024
 
@@ -46,12 +45,6 @@ struct shmMaster
 struct shmClient client;
 struct shmMaster master;
 
-int laik_shmem_panic(int err)
-{
-    // TODO remove method
-    return err;
-}
-
 int hash(int x)
 {
     x = ((x >> 16) ^ x) * 0x45d9f3b;
@@ -60,105 +53,45 @@ int hash(int x)
     return x;
 }
 
-int shm_client_init()
-{
-    int port, shmid = -1;
-    time_t t_0;
-    struct shmseg *shmp;
-
-    // As long as it fails and three seconds haven't passed try again (wait for master)
-    t_0 = time(NULL);
-    while (time(NULL) - t_0 < 3 && shmid == -1)
-    {
-        shmid = shmget(SHM_KEY, sizeof(struct shmseg), 0644 | IPC_CREAT);
-    }
-    if (shmid == -1)
-    {
-        perror("Shared memory");
-        laik_shmem_panic(0);
-    }
-
-    // Attach to the segment to get a pointer to it.
-    shmp = shmat(shmid, NULL, 0);
-    if (shmp == (void *)-1)
-    {
-        perror("Shared memory attach");
-        laik_shmem_panic(0);
-    }
-
-    port = shmp->port;
-    shmp->size++;
-
-    if (shmdt(shmp) == -1)
-    {
-        perror("shmdt");
-        laik_shmem_panic(0);
-    }
-
-    return port;
-}
-
-int shm_master_init(int shmid)
-{
-    int size;
-    struct shmseg *shmp;
-
-    // Attach to the segment to get a pointer to it.
-    shmp = shmat(shmid, NULL, 0);
-    if (shmp == (void *)-1)
-    {
-        perror("Shared memory attach");
-        laik_shmem_panic(0);
-    }
-
-    shmp->port = PORT;
-    shmp->size = 1;
-    // Let the client processes notify the master about their existence by incrementing size
-    // Wait until no more processes join
-    sleep(1);
-    size = shmp->size;
-
-    if (shmdt(shmp) == -1)
-    {
-        perror("shmdt");
-        laik_shmem_panic(0);
-    }
-
-    if (shmctl(shmid, IPC_RMID, 0) == -1)
-    {
-        perror("shmctl");
-        laik_shmem_panic(-3);
-    }
-
-    return size;
-}
-
 int shmem_init()
 {
     int shmid = shmget(SHM_KEY, sizeof(struct shmseg), IPC_EXCL | 0644 | IPC_CREAT);
     if (shmid == -1)
     {
-        int sock = 0;
+        int port, shmid = -1, sock = 0;
         time_t t_0;
         struct sockaddr_in serv_addr;
+        struct shmseg *shmp;
 
-        int port = shm_client_init();
+        // As long as it fails and three seconds haven't passed try again (wait for master)
+        t_0 = time(NULL);
+        while (time(NULL) - t_0 < 3 && shmid == -1)
+        {
+            shmid = shmget(SHM_KEY, sizeof(struct shmseg), 0644 | IPC_CREAT);
+        }
+        if (shmid == -1)
+            return SHMEM_SHMGET_FAILED;
+
+        // Attach to the segment to get a pointer to it.
+        shmp = shmat(shmid, NULL, 0);
+        if (shmp == (void *)-1)
+            return SHMEM_SOCKET_ACCEPT_FAILED;
+
+        port = shmp->port;
+        shmp->size++;
+
+        if (shmdt(shmp) == -1)
+            return SHMEM_SHMDT_FAILED;
 
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(port);
 
         if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-        {
-            printf("\n Socket creation error \n");
-            laik_shmem_panic(0);
-        }
+            return SHMEM_SOCKET_CREATION_FAILED;
 
         // Convert IPv4 and IPv6 addresses from text to binary form
         if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0)
-        {
-            printf("\nInvalid address/ Address not supported \n");
-            laik_shmem_panic(0);
-        }
+            return SHMEM_INVALID_OR_UNSUPPORTED_ADRESS;
 
         // As long as it fails and three seconds haven't passed try again (wait for master)
         t_0 = time(NULL);
@@ -168,22 +101,37 @@ int shmem_init()
             client.socket_fd = connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
         }
         if (client.socket_fd < 0)
-        {
-            printf("\nConnection Failed \n");
-            laik_shmem_panic(0);
-        }
+            return SHMEM_SOCKET_CONNECTION_FAILED;
 
         read(sock, &client.size, sizeof(int));
         read(sock, &client.rank, sizeof(int));
 
         client.didInit = true;
         master.didInit = false;
-        laik_log(2, "Client%d initialization completed", client.rank);
     }
     else
     {
-        master.size = shm_master_init(shmid);
+        struct shmseg *shmp;
+
+        // Attach to the segment to get a pointer to it.
+        shmp = shmat(shmid, NULL, 0);
+        if (shmp == (void *)-1)
+            return SHMEM_SHMAT_FAILED;
+
+        shmp->port = PORT;
+        shmp->size = 1;
+        // Let the client processes notify the master about their existence by incrementing size
+        // Wait until no more processes join
+        sleep(1);
+        master.size = shmp->size;
         master.rank = 0;
+
+        if (shmdt(shmp) == -1)
+            return SHMEM_SHMDT_FAILED;
+
+        if (shmctl(shmid, IPC_RMID, 0) == -1)
+            return SHMEM_SHMCTL_FAILED;
+
         master.sockets = malloc(sizeof(int) * (master.size - 1));
 
         struct sockaddr_in address;
@@ -191,44 +139,26 @@ int shmem_init()
 
         // Creating socket file descriptor
         if ((master.server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
-        {
-            perror("socket failed");
-            exit(EXIT_FAILURE); // TOFO change theese
-            laik_shmem_panic(0);
-        }
+            return SHMEM_SOCKET_CREATION_FAILED;
 
         // Forcefully attaching socket to the port 8080
         if (setsockopt(master.server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
-        {
-            perror("setsockopt");
-            exit(EXIT_FAILURE);
-            laik_shmem_panic(0);
-        }
+            return SHMEM_SETSOCKOPT_FAILED;
+
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = INADDR_ANY;
         address.sin_port = htons(PORT);
 
         if (bind(master.server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
-        {
-            perror("bind failed");
-            exit(EXIT_FAILURE);
-            laik_shmem_panic(0);
-        }
+            return SHMEM_SOCKET_BIND_FAILED;
+
         if (listen(master.server_fd, 3) < 0)
-        {
-            perror("listen");
-            exit(EXIT_FAILURE);
-            laik_shmem_panic(0);
-        }
+            return SHMEM_SOCKET_LISTEN_FAILED;
 
         for (int i = 0; i < master.size - 1; i++)
         {
             if ((master.sockets[i] = accept(master.server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
-            {
-                perror("accept");
-                exit(EXIT_FAILURE);
-                laik_shmem_panic(0);
-            }
+                return SHMEM_SOCKET_ACCEPT_FAILED;
         }
 
         // Assign processes their ranks and tell them the group size.
@@ -241,10 +171,8 @@ int shmem_init()
 
         master.didInit = true;
         client.didInit = false;
-        laik_log(2, "Master initialization completed");
     }
 
-    laik_log(2, "SHMEM backend initialized\n");
     return SHMEM_SUCCESS;
 }
 
@@ -281,28 +209,23 @@ int shmem_send(const void *buffer, int count, int datatype, int recipient)
     int rank = client.didInit ? client.rank : 0;
     int shmAddr = hash(recipient + hash(rank));
 
-    int shmid = shmget(shmAddr, size + 1, 0644 | IPC_CREAT);
+    int shmid = shmget(shmAddr, size + 1 + sizeof(int), 0644 | IPC_CREAT);
     // Attach to the segment to get a pointer to it.
     shmp = shmat(shmid, NULL, 0);
     if (shmp == (void *)-1)
-    {
-        perror("Shared memory attach");
-        laik_shmem_panic(0);
-    }
+        return SHMEM_SHMAT_FAILED;
 
-    memcpy((shmp + 1), buffer, size);
+    memcpy((shmp + 1 + sizeof(int)), buffer, size);
     shmp[0] = 'r';
+    shmp[1] = count;
 
     if (shmdt(shmp) == -1)
-    {
-        perror("shmdt");
-        laik_shmem_panic(0);
-    }
+        return SHMEM_SHMDT_FAILED;
 
-    return 0;
+    return SHMEM_SUCCESS;
 }
 
-int shmem_recv(void *buffer, int count, int datatype, int sender)
+int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
 {
     char *shmp;
     int size = datatype * count;
@@ -313,64 +236,73 @@ int shmem_recv(void *buffer, int count, int datatype, int sender)
     // Attach to the segment to get a pointer to it.
     shmp = shmat(shmid, NULL, 0);
     if (shmp == (void *)-1)
-    {
-        perror("Shared memory attach");
-        laik_shmem_panic(0);
-    }
+        return SHMEM_SHMAT_FAILED;
 
     while (shmp[0] != 'r')
     {
     }
-    memcpy(buffer, (shmp + 1), size);
+    memcpy(buffer, (shmp + 1 + sizeof(int)), size);
+    *received = shmp[1]; // TODO memcpy only the needed amount of data (first read received then only memcopy the received)
 
     if (shmdt(shmp) == -1)
-    {
-        perror("shmdt");
-        laik_shmem_panic(0);
-    }
+        return SHMEM_SHMDT_FAILED;
 
     if (shmctl(shmid, IPC_RMID, 0) == -1)
-    {
-        perror("shmctl");
-        laik_shmem_panic(-3);
-    }
+        return SHMEM_SHMCTL_FAILED;
 
-    return 0;
-}
-
-int shmem_isend()
-{
-    return 0;
-}
-
-int shmem_irecv()
-{
-    return 0;
+    return SHMEM_SUCCESS;
 }
 
 int shmem_comm_split()
 {
-    return 0;
+    return SHMEM_SUCCESS;
 }
 
-int shmem_get_count()
+int shmem_error_string(int error, char *str)
 {
-    return 0;
-}
-
-int shmem_reduce()
-{
-    return 0;
-}
-
-int shmem_allreduce()
-{
-    return 0;
-}
-
-int shmem_wait()
-{
-    return 0;
+    switch (error)
+    {
+    case SHMEM_SUCCESS:
+        strcpy(str, "not an error: shmem success");
+        break;
+    case SHMEM_SHMGET_FAILED:
+        strcpy(str, "shmget failed");
+        break;
+    case SHMEM_SHMAT_FAILED:
+        strcpy(str, "shmat failed");
+        break;
+    case SHMEM_SHMDT_FAILED:
+        strcpy(str, "shmdt failed");
+        break;
+    case SHMEM_SHMCTL_FAILED:
+        strcpy(str, "shmctl failed");
+        break;
+    case SHMEM_INVALID_OR_UNSUPPORTED_ADRESS:
+        strcpy(str, "invalid or unsupported adress");
+        break;
+    case SHMEM_SOCKET_CONNECTION_FAILED:
+        strcpy(str, "socket connection failed");
+        break;
+    case SHMEM_SOCKET_CREATION_FAILED:
+        strcpy(str, "socked creation failed");
+        break;
+    case SHMEM_SETSOCKOPT_FAILED:
+        strcpy(str, "setsockopt failed");
+        break;
+    case SHMEM_SOCKET_BIND_FAILED:
+        strcpy(str, "socket bind failed");
+        break;
+    case SHMEM_SOCKET_LISTEN_FAILED:
+        strcpy(str, "socket listen failed");
+        break;
+    case SHMEM_SOCKET_ACCEPT_FAILED:
+        strcpy(str, "socket accept failed");
+        break;
+    default:
+        strcpy(str, "error unknown to shmem");
+        return SHMEM_FAILURE;
+    }
+    return SHMEM_SUCCESS;
 }
 
 int shmem_finalize()
@@ -392,5 +324,18 @@ int shmem_finalize()
     {
         close(client.socket_fd);
     }
+    return SHMEM_SUCCESS;
+}
+
+int main()
+{
+    shmem_init();
+
+    int rank, size;
+    shmem_comm_rank(&rank);
+    shmem_comm_size(&size);
+    printf("Hello from process %d of %d\n", rank, size);
+
+    shmem_finalize();
     return SHMEM_SUCCESS;
 }

@@ -73,16 +73,6 @@ typedef struct
 } MPIGroupData;
 
 //----------------------------------------------------------------
-// MPI backend behavior configurable by environment variables
-
-// LAIK_MPI_REDUCE: make use of MPI_(All)Reduce? Default: Yes
-// If not, we do own algorithm with send/recv.
-static int mpi_reduce = 1;
-
-// LAIK_MPI_ASYNC: convert send/recv to isend/irecv? Default: Yes
-static int mpi_async = 1;
-
-//----------------------------------------------------------------
 // buffer space for messages if packing/unpacking from/to not-1d layout
 // is necessary
 #define PACKBUFSIZE (10 * 1024 * 1024)
@@ -131,40 +121,6 @@ typedef struct
 
 #pragma pack(pop)
 
-static void laik_shmem_addMpiReq(Laik_ActionSeq *as, int round,
-                                 unsigned int count, MPI_Request *buf)
-{
-    Laik_A_MpiReq *a;
-    a = (Laik_A_MpiReq *)laik_aseq_addAction(as, sizeof(*a),
-                                             LAIK_AT_MpiReq, round, 0);
-    a->count = count;
-    a->req = buf;
-}
-
-static void laik_shmem_addMpiIrecv(Laik_ActionSeq *as, int round,
-                                   char *toBuf, unsigned int count, int from, int req_id)
-{
-    Laik_A_MpiIrecv *a;
-    a = (Laik_A_MpiIrecv *)laik_aseq_addAction(as, sizeof(*a),
-                                               LAIK_AT_MpiIrecv, round, 0);
-    a->buf = toBuf;
-    a->count = count;
-    a->from_rank = from;
-    a->req_id = req_id;
-}
-
-static void laik_shmem_addMpiIsend(Laik_ActionSeq *as, int round,
-                                   char *fromBuf, unsigned int count, int to, int req_id)
-{
-    Laik_A_MpiIsend *a;
-    a = (Laik_A_MpiIsend *)laik_aseq_addAction(as, sizeof(*a),
-                                               LAIK_AT_MpiIsend, round, 0);
-    a->buf = fromBuf;
-    a->count = count;
-    a->to_rank = to;
-    a->req_id = req_id;
-}
-
 // Wait action
 typedef struct
 {
@@ -172,118 +128,13 @@ typedef struct
     int req_id;
 } Laik_A_MpiWait;
 
-static void laik_shmem_addMpiWait(Laik_ActionSeq *as, int round, int req_id)
-{
-    Laik_A_MpiWait *a;
-    a = (Laik_A_MpiWait *)laik_aseq_addAction(as, sizeof(*a),
-                                              LAIK_AT_MpiWait, round, 0);
-    a->req_id = req_id;
-}
-
 static bool laik_shmem_log_action(Laik_Action *a)
 {
     switch (a->type)
     {
-    case LAIK_AT_MpiReq:
-    {
-        Laik_A_MpiReq *aa = (Laik_A_MpiReq *)a;
-        laik_log_append("MPI-Req: count %d, req %p", aa->count, aa->req);
-        break;
-    }
-
-    case LAIK_AT_MpiIsend:
-    {
-        Laik_A_MpiIsend *aa = (Laik_A_MpiIsend *)a;
-        laik_log_append("MPI-ISend: from %p ==> T%d, count %d, reqid %d",
-                        aa->buf, aa->to_rank, aa->count, aa->req_id);
-        break;
-    }
-
-    case LAIK_AT_MpiIrecv:
-    {
-        Laik_A_MpiIrecv *aa = (Laik_A_MpiIrecv *)a;
-        laik_log_append("MPI-IRecv: T%d ==> to %p, count %d, reqid %d",
-                        aa->from_rank, aa->buf, aa->count, aa->req_id);
-        break;
-    }
-
-    case LAIK_AT_MpiWait:
-    {
-        Laik_A_MpiWait *aa = (Laik_A_MpiWait *)a;
-        laik_log_append("MPI-Wait: reqid %d", aa->req_id);
-        break;
-    }
-
     default:
         return false;
     }
-    return true;
-}
-
-// transformation: split send/recv actions into isend/irecv + wait
-// - replace send with isend and wait for completion at end
-// - replace recv with irecv at begin and wait at original position
-bool laik_shmem_asyncSendRecv(Laik_ActionSeq *as)
-{
-    // must not have new actions, we want to start a new build
-    assert(as->newActionCount == 0);
-
-    unsigned int count = 0;
-    int maxround = 0;
-    Laik_Action *a = as->action;
-    for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
-    {
-        if (a->round > maxround)
-            maxround = a->round;
-        if ((a->type == LAIK_AT_BufRecv) || (a->type == LAIK_AT_BufSend))
-            count++;
-    }
-
-    if (count == 0)
-        return false;
-
-    // add 2 new rounds: 0 and maxround+2
-    // - round 0 gets MpiReq and all MpiIrecv actions
-    // - round maxround+2 gets Waits from MpiISend actions
-
-    MPI_Request *buf = malloc(count * sizeof(MPI_Request));
-    laik_shmem_addMpiReq(as, 0, count, buf);
-
-    int req_id = 0;
-    a = as->action;
-    for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
-    {
-        switch (a->type)
-        {
-        case LAIK_AT_BufSend:
-        {
-            Laik_A_BufSend *aa = (Laik_A_BufSend *)a;
-            laik_shmem_addMpiIsend(as, a->round + 1,
-                                   aa->buf, aa->count, aa->to_rank, req_id);
-            laik_shmem_addMpiWait(as, maxround + 2, req_id);
-            req_id++;
-            break;
-        }
-
-        case LAIK_AT_BufRecv:
-        {
-            Laik_A_BufRecv *aa = (Laik_A_BufRecv *)a;
-            laik_shmem_addMpiIrecv(as, 0,
-                                   aa->buf, aa->count, aa->from_rank, req_id);
-            laik_shmem_addMpiWait(as, a->round + 1, req_id);
-            req_id++;
-            break;
-        }
-
-        default:
-            // all rounds up by one due to new round 0
-            laik_aseq_add(a, as, a->round + 1);
-            break;
-        }
-    }
-    assert(count == (unsigned)req_id);
-
-    laik_aseq_activateNewActions(as);
     return true;
 }
 
@@ -294,14 +145,16 @@ static void laik_shmem_panic(int err)
 {
     laik_log(LAIK_LL_Panic, "SHMEM backend: error '%d'", err);
 
-    char str[MPI_MAX_ERROR_STRING];
+    char str[SHMEM_MAX_ERROR_STRING];
     int len;
 
-    assert(err != MPI_SUCCESS);
-    if (MPI_Error_string(err, str, &len) != MPI_SUCCESS)
-        laik_panic("MPI backend: Unknown MPI error!");
+    assert(err != SHMEM_SUCCESS);
+    if (shmem_error_string(err, str) == SHMEM_SUCCESS)
+        laik_log(LAIK_LL_Panic, "SHMEM backend: SHMEM error '%s'", str);
+    else if (MPI_Error_string(err, str, &len) == MPI_SUCCESS)
+        laik_log(LAIK_LL_Panic, "SHMEM backend: MPI error '%s'", str);
     else
-        laik_log(LAIK_LL_Panic, "MPI backend: MPI error '%s'", str);
+        laik_panic("SHMEM backend: Unknown error!");
     exit(1);
 }
 
@@ -366,6 +219,11 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
     if (err != SHMEM_SUCCESS)
         laik_shmem_panic(err);
 
+    // TODO Cut out once MPI Calls are replaced
+    err = MPI_Comm_rank(d->comm, &rank);
+    if (err != MPI_SUCCESS)
+        laik_shmem_panic(err);
+
     // Get the name of the processor
     char processor_name[MPI_MAX_PROCESSOR_NAME + 15];
     int name_len;
@@ -393,17 +251,6 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
 
     laik_log(2, "MPI backend initialized (at '%s', rank %d/%d)\n",
              inst->mylocation, rank, size);
-
-    // TODO remove
-    // do own reduce algorithm?
-    char *str = getenv("LAIK_MPI_REDUCE");
-    if (str)
-        mpi_reduce = atoi(str);
-
-    // do async convertion?
-    str = getenv("LAIK_MPI_ASYNC");
-    if (str)
-        mpi_async = atoi(str);
 
     shmem_instance = inst;
     return inst;
@@ -499,34 +346,30 @@ static MPI_Datatype getMPIDataType(Laik_Data *d)
     return mpiDataType;
 }
 
-static MPI_Op getMPIOp(Laik_ReductionOperation redOp)
+/*static int getSHMEMDataType(Laik_Data *d)
 {
-    MPI_Op mpiRedOp;
-    switch (redOp)
-    {
-    case LAIK_RO_Sum:
-        mpiRedOp = MPI_SUM;
-        break;
-    case LAIK_RO_Prod:
-        mpiRedOp = MPI_PROD;
-        break;
-    case LAIK_RO_Min:
-        mpiRedOp = MPI_MIN;
-        break;
-    case LAIK_RO_Max:
-        mpiRedOp = MPI_MAX;
-        break;
-    case LAIK_RO_And:
-        mpiRedOp = MPI_LAND;
-        break;
-    case LAIK_RO_Or:
-        mpiRedOp = MPI_LOR;
-        break;
-    default:
+    int dataType;
+    if (d->type == laik_Double)
+        dataType = sizeof(double);
+    else if (d->type == laik_Float)
+        dataType = sizeof(float);
+    else if (d->type == laik_Int64)
+        dataType = sizeof(int64_t);
+    else if (d->type == laik_Int32)
+        dataType = sizeof(int32_t);
+    else if (d->type == laik_Char)
+        dataType = sizeof(int8_t);
+    else if (d->type == laik_UInt64)
+        dataType = sizeof(uint64_t);
+    else if (d->type == laik_UInt32)
+        dataType = sizeof(uint32_t);
+    else if (d->type == laik_UChar)
+        dataType = sizeof(uint8_t);
+    else
         assert(0);
-    }
-    return mpiRedOp;
-}
+
+    return dataType;
+}*/
 
 static void laik_shmem_exec_packAndSend(Laik_Mapping *map, Laik_Range *range,
                                         int to_rank, uint64_t slc_size,
@@ -581,50 +424,6 @@ static void laik_shmem_exec_recvAndUnpack(Laik_Mapping *map, Laik_Range *range,
             break;
     }
     assert(count == slc_size);
-}
-
-static void laik_shmem_exec_reduce(Laik_TransitionContext *tc, Laik_BackendAction *a,
-                                   MPI_Datatype dataType, MPI_Comm comm)
-{
-    assert(mpi_reduce > 0);
-
-    MPI_Op mpiRedOp = getMPIOp(a->redOp);
-    int rootTask = a->rank;
-    int err;
-
-    if (rootTask == -1)
-    {
-        if (a->fromBuf == a->toBuf)
-        {
-            laik_log(1, "      exec MPI_Allreduce in-place, count %d", a->count);
-            err = MPI_Allreduce(MPI_IN_PLACE, a->toBuf, (int)a->count,
-                                dataType, mpiRedOp, comm);
-        }
-        else
-        {
-            laik_log(1, "      exec MPI_Allreduce, count %d", a->count);
-            err = MPI_Allreduce(a->fromBuf, a->toBuf, (int)a->count,
-                                dataType, mpiRedOp, comm);
-        }
-    }
-    else
-    {
-        if ((a->fromBuf == a->toBuf) && (tc->transition->group->myid == rootTask))
-        {
-            laik_log(1, "      exec MPI_Reduce in-place, count %d, root %d",
-                     a->count, rootTask);
-            err = MPI_Reduce(MPI_IN_PLACE, a->toBuf, (int)a->count,
-                             dataType, mpiRedOp, rootTask, comm);
-        }
-        else
-        {
-            laik_log(1, "      exec MPI_Reduce, count %d, root %d", a->count, rootTask);
-            err = MPI_Reduce(a->fromBuf, a->toBuf, (int)a->count,
-                             dataType, mpiRedOp, rootTask, comm);
-        }
-    }
-    if (err != MPI_SUCCESS)
-        laik_shmem_panic(err);
 }
 
 // a naive, manual reduction using send/recv:
@@ -810,15 +609,13 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
     MPI_Status st;
     int err, count;
 
-    // MPI_Request array: not set yet
-    int req_count = 0;
-    MPI_Request *req = 0;
+    // int dType = getSHMEMDataType(tc->data); // TODO merge with dataType, this way it has a double meaning
 
     Laik_Action *a = as->action;
     for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
     {
         Laik_BackendAction *ba = (Laik_BackendAction *)a;
-        if (laik_log_begin(1))
+        if (laik_log_begin(3)) // TODO change level back to 1
         {
             laik_log_Action(a, as);
             laik_log_flush(0);
@@ -831,53 +628,6 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
             // no need to do anything
             break;
 
-        case LAIK_AT_MpiReq:
-        {
-            // MPI-specific action: setup MPI_Request array
-            Laik_A_MpiReq *aa = (Laik_A_MpiReq *)a;
-            assert(aa->req != 0);
-            assert(aa->count > 0);
-            req_count = aa->count;
-            req = aa->req;
-            break;
-        }
-
-        case LAIK_AT_MpiIsend:
-        {
-            // MPI-specific action: call MPI_Isend
-            Laik_A_MpiIsend *aa = (Laik_A_MpiIsend *)a;
-            assert(aa->req_id < req_count);
-            err = MPI_Isend(aa->buf, aa->count,
-                            dataType, aa->to_rank, tag, comm, req + aa->req_id);
-            if (err != MPI_SUCCESS)
-                laik_shmem_panic(err);
-            break;
-        }
-
-        case LAIK_AT_MpiIrecv:
-        {
-            // MPI-specific action: exec MPI_IRecv
-            Laik_A_MpiIrecv *aa = (Laik_A_MpiIrecv *)a;
-            assert(aa->req_id < req_count);
-            err = MPI_Irecv(aa->buf, aa->count,
-                            dataType, aa->from_rank, tag, comm, req + aa->req_id);
-            if (err != MPI_SUCCESS)
-                laik_shmem_panic(err);
-            break;
-        }
-
-        case LAIK_AT_MpiWait:
-        {
-            // MPI-specific action: wait for request
-            Laik_A_MpiWait *aa = (Laik_A_MpiWait *)a;
-            assert(aa->req_id < req_count);
-            err = MPI_Wait(req + aa->req_id, &st);
-            if (err != MPI_SUCCESS)
-                laik_shmem_panic(err);
-            break;
-        }
-
-        // Beginn with refactoring here:
         case LAIK_AT_MapSend:
         {
             assert(ba->fromMapNo < fromList->count);
@@ -1037,7 +787,8 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
             break;
 
         case LAIK_AT_Reduce:
-            laik_shmem_exec_reduce(tc, ba, dataType, comm);
+            laik_log(42, "LAIK_AT_Reduce wanted but not implemented.");
+            laik_shmem_panic(42);
             break;
 
         case LAIK_AT_GroupReduce:
@@ -1127,14 +878,6 @@ static void laik_shmem_prepare(Laik_ActionSeq *as)
     changed = laik_aseq_flattenPacking(as);
     laik_log_ActionSeqIfChanged(changed, as, "After flattening actions");
 
-    if (mpi_reduce)
-    {
-        // detect group reduce actions which can be replaced by all-reduce
-        // can be prohibited by setting LAIK_MPI_REDUCE=0
-        changed = laik_aseq_replaceWithAllReduce(as);
-        laik_log_ActionSeqIfChanged(changed, as, "After all-reduce detection");
-    }
-
     changed = laik_aseq_combineActions(as);
     laik_log_ActionSeqIfChanged(changed, as, "After combining actions 1");
 
@@ -1160,14 +903,6 @@ static void laik_shmem_prepare(Laik_ActionSeq *as)
     // changed = laik_aseq_sort_rankdigits(as);
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
 
-    if (mpi_async)
-    {
-        changed = laik_shmem_asyncSendRecv(as);
-        laik_log_ActionSeqIfChanged(changed, as, "After makeing send/recv async");
-
-        changed = laik_aseq_sort_rounds(as);
-        laik_log_ActionSeqIfChanged(changed, as, "After sorting rounds 2");
-    }
     laik_aseq_freeTempSpace(as);
 
     laik_aseq_calc_stats(as);

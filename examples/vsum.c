@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
     uint64_t count;
 
     // do partial sums using different partitionings
-    double mysum[4] = { 0.0, 0.0, 0.0, 0.0 };
+    double mysum[4] = {0.0, 0.0, 0.0, 0.0 };
 
     Laik_Space* space;
     Laik_Data* array;

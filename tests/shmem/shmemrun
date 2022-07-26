@@ -22,7 +22,7 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-export LAIK_BACKEND= tcp2
+export LAIK_BACKEND=shmem
 export LAIK_SIZE=$procs
 total=$((procs + spares))
 for (( i=1; i<=$total; i++ )); do
