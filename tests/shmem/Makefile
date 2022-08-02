@@ -8,15 +8,18 @@ export LAUNCHER=$(SDIR)./shmemrun
 
 TDIR=$(SDIR)./../common
 
+# test-spmv2-shrink test-spmv2-shrink-inc 
+# test-jac3dri test-jac3deri test-jac3dari
+
 TESTS= \
     test-vsum test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \
-    test-spmv2-shrink test-spmv2-shrink-inc \
+    \
     test-jac1d test-jac1d-repart \
     test-jac2d test-jac2d-gen test-jac2d-noc \
     test-jac3d test-jac3d-gen test-jac3dr test-jac3d-noc test-jac3dr-noc \
     test-jac3de test-jac3der test-jac3da test-jac3dar \
-    test-jac3dri test-jac3deri test-jac3dari test-jac3d-rgx3 \
+    test-jac3d-rgx3 \
     test-markov test-markov2 test-markov2f \
     test-propagation2d test-propagation2do \
     test-kvstest test-location test-spaces \

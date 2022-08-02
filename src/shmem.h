@@ -14,6 +14,7 @@
 #define SHMEM_SOCKET_BIND_FAILED 9
 #define SHMEM_SOCKET_LISTEN_FAILED 10
 #define SHMEM_SOCKET_ACCEPT_FAILED 11
+#define SHMEM_RECV_BUFFER_TOO_SMALL 12
 
 #define SHMEM_MAX_ERROR_STRING 100
 
@@ -21,7 +22,13 @@ int shmem_init();
 
 int shmem_comm_size(int *sizePtr);
 
+int shmem_set_comm_size(int size);
+
 int shmem_comm_rank(int *rankPtr);
+
+int shmem_set_comm_rank(int rank);
+
+int shmem_get_identifier(int *ident);
 
 int shmem_send(const void* buffer, int count, int datatype, int recipient);
 

@@ -22,21 +22,15 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <mpi.h>
+#include <shmem.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <errno.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <time.h>
-
-#include <shmem.h>
-#include <mpi.h>
+#include <string.h>
 
 // forward decls, types/structs , global variables
 
@@ -45,32 +39,30 @@ static void laik_shmem_prepare(Laik_ActionSeq *);
 static void laik_shmem_cleanup(Laik_ActionSeq *);
 static void laik_shmem_exec(Laik_ActionSeq *as);
 static void laik_shmem_updateGroup(Laik_Group *);
-static bool laik_shmem_log_action(Laik_Action *a);
 static void laik_shmem_sync(Laik_KVStore *kvs);
 
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_shmem = {
-    .name = "SHMEM (two-sided)",
+    .name = "shmem (two-sided)",
     .finalize = laik_shmem_finalize,
     .prepare = laik_shmem_prepare,
     .cleanup = laik_shmem_cleanup,
     .exec = laik_shmem_exec,
     .updateGroup = laik_shmem_updateGroup,
-    .log_action = laik_shmem_log_action,
     .sync = laik_shmem_sync};
 
 static Laik_Instance *shmem_instance = 0;
 
 typedef struct
 {
-    MPI_Comm comm;
+    int comm;
     bool didInit;
-} MPIData;
+} SHMEMData;
 
 typedef struct
 {
-    MPI_Comm comm;
-} MPIGroupData;
+    int comm;
+} SHMEMGroupData;
 
 //----------------------------------------------------------------
 // buffer space for messages if packing/unpacking from/to not-1d layout
@@ -80,81 +72,17 @@ typedef struct
 static char packbuf[PACKBUFSIZE];
 
 //----------------------------------------------------------------------------
-// MPI-specific actions + transformation
-
-#define LAIK_AT_MpiReq (LAIK_AT_Backend + 0)
-#define LAIK_AT_MpiIrecv (LAIK_AT_Backend + 1)
-#define LAIK_AT_MpiIsend (LAIK_AT_Backend + 2)
-#define LAIK_AT_MpiWait (LAIK_AT_Backend + 3)
-
-// action structs must be packed
-#pragma pack(push, 1)
-
-// ReqBuf action: provide base address for MPI_Request array
-// referenced in following IRecv/Wait actions via req_it operands
-typedef struct
-{
-    Laik_Action h;
-    unsigned int count;
-    MPI_Request *req;
-} Laik_A_MpiReq;
-
-// IRecv action
-typedef struct
-{
-    Laik_Action h;
-    unsigned int count;
-    int from_rank;
-    int req_id;
-    char *buf;
-} Laik_A_MpiIrecv;
-
-// ISend action
-typedef struct
-{
-    Laik_Action h;
-    unsigned int count;
-    int to_rank;
-    int req_id;
-    char *buf;
-} Laik_A_MpiIsend;
-
-#pragma pack(pop)
-
-// Wait action
-typedef struct
-{
-    Laik_Action h;
-    int req_id;
-} Laik_A_MpiWait;
-
-static bool laik_shmem_log_action(Laik_Action *a)
-{
-    switch (a->type)
-    {
-    default:
-        return false;
-    }
-    return true;
-}
-
-//----------------------------------------------------------------------------
 // error helpers
 
 static void laik_shmem_panic(int err)
 {
-    laik_log(LAIK_LL_Panic, "SHMEM backend: error '%d'", err);
-
     char str[SHMEM_MAX_ERROR_STRING];
-    int len;
 
     assert(err != SHMEM_SUCCESS);
-    if (shmem_error_string(err, str) == SHMEM_SUCCESS)
-        laik_log(LAIK_LL_Panic, "SHMEM backend: SHMEM error '%s'", str);
-    else if (MPI_Error_string(err, str, &len) == MPI_SUCCESS)
-        laik_log(LAIK_LL_Panic, "SHMEM backend: MPI error '%s'", str);
+    if (shmem_error_string(err, str) != SHMEM_SUCCESS)
+        laik_panic("SHMEM backend: Unknown SHMEM error!");
     else
-        laik_panic("SHMEM backend: Unknown error!");
+        laik_log(LAIK_LL_Panic, "SHMEM backend: SHMEM error '%s'", str);
     exit(1);
 }
 
@@ -168,48 +96,33 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
 
     int err;
 
-    err = shmem_init();
-    if (err != SHMEM_SUCCESS)
-        laik_shmem_panic(err);
-
-    MPIData *d = malloc(sizeof(MPIData));
+    SHMEMData *d = malloc(sizeof(SHMEMData));
     if (!d)
     {
-        laik_panic("Out of memory allocating MPIData object");
+        laik_panic("Out of memory allocating SHMEMData object");
         exit(1); // not actually needed, laik_panic never returns
     }
     d->didInit = false;
 
-    MPIGroupData *gd = malloc(sizeof(MPIGroupData));
+    SHMEMGroupData *gd = malloc(sizeof(SHMEMGroupData));
     if (!gd)
     {
-        laik_panic("Out of memory allocating MPIGroupData object");
+        laik_panic("Out of memory allocating SHMEMGroupData object");
         exit(1); // not actually needed, laik_panic never returns
     }
 
-    // eventually initialize MPI first before accessing MPI_COMM_WORLD
+    // eventually initialize SHMEM
     if (argc)
     {
-        err = MPI_Init(argc, argv);
-        if (err != MPI_SUCCESS)
+        err = shmem_init();
+        if(err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
         d->didInit = true;
     }
 
-    // create own communicator duplicating WORLD to
-    // - not have to worry about conflicting use of MPI_COMM_WORLD by application
-    // - install error handler which passes errors through - we want them
-    MPI_Comm ownworld;
-    err = MPI_Comm_dup(MPI_COMM_WORLD, &ownworld);
-    if (err != MPI_SUCCESS)
-        laik_shmem_panic(err);
-    err = MPI_Comm_set_errhandler(ownworld, MPI_ERRORS_RETURN);
-    if (err != MPI_SUCCESS)
-        laik_shmem_panic(err);
-
-    // now finish initilization of <gd>/<d>, as MPI_Init is run
-    gd->comm = ownworld;
-    d->comm = ownworld;
+    // now finish initilization of <gd>/<d>
+    shmem_get_identifier(&gd->comm);
+    shmem_get_identifier(&d->comm);
 
     int size, rank;
     err = shmem_comm_size(&size);
@@ -219,29 +132,16 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
     if (err != SHMEM_SUCCESS)
         laik_shmem_panic(err);
 
-    // TODO Cut out once MPI Calls are replaced
-    err = MPI_Comm_rank(d->comm, &rank);
-    if (err != MPI_SUCCESS)
-        laik_shmem_panic(err);
-
-    // Get the name of the processor
-    char processor_name[MPI_MAX_PROCESSOR_NAME + 15];
-    int name_len;
-    err = MPI_Get_processor_name(processor_name, &name_len);
-    if (err != MPI_SUCCESS)
-        laik_shmem_panic(err);
-    snprintf(processor_name + name_len, 15, ":%d", getpid());
-
+    char *processor_name = "InterimNameProcessor";
     Laik_Instance *inst;
-    inst = laik_new_instance(&laik_backend_shmem, size, rank, 0, 0,
-                             processor_name, d);
+    inst = laik_new_instance(&laik_backend_shmem, size, rank, 0, 0, processor_name, d);
 
     // initial world group
     Laik_Group *world = laik_create_group(inst, size);
     world->size = size;
     world->myid = rank; // same as location ID of this process
     world->backend_data = gd;
-    // initial location IDs are the MPI ranks
+    // initial location IDs are the SHMEM ranks
     for (int i = 0; i < size; i++)
         world->locationid[i] = i;
     // attach world to instance
@@ -249,34 +149,25 @@ Laik_Instance *laik_init_shmem(int *argc, char ***argv)
 
     sprintf(inst->guid, "%d", rank);
 
-    laik_log(2, "MPI backend initialized (at '%s', rank %d/%d)\n",
+    laik_log(2, "SHMEM backend initialized (at '%s', rank %d/%d)\n",
              inst->mylocation, rank, size);
 
     shmem_instance = inst;
     return inst;
 }
 
-static MPIData *mpiData(Laik_Instance *i)
+static SHMEMData *shmemData(Laik_Instance *i)
 {
-    return (MPIData *)i->backend_data;
-}
-
-static MPIGroupData *mpiGroupData(Laik_Group *g)
-{
-    return (MPIGroupData *)g->backend_data;
+    return (SHMEMData *)i->backend_data;
 }
 
 static void laik_shmem_finalize(Laik_Instance *inst)
 {
     assert(inst == shmem_instance);
 
-    if (mpiData(shmem_instance)->didInit)
+    if (shmemData(shmem_instance)->didInit)
     {
-        int err = MPI_Finalize(); // TODO remove
-        if (err != MPI_SUCCESS)
-            laik_shmem_panic(err);
-
-        err = shmem_finalize();
+        int err = shmem_finalize();
         if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
     }
@@ -285,68 +176,10 @@ static void laik_shmem_finalize(Laik_Instance *inst)
 // update backend specific data for group if needed
 static void laik_shmem_updateGroup(Laik_Group *g)
 {
-    // calculate MPI communicator for group <g>
-    // TODO: only supports shrinking of parent for now
-    assert(g->parent);
-    assert(g->parent->size >= g->size);
-
-    laik_log(1, "MPI backend updateGroup: parent %d (size %d, myid %d) "
-                "=> group %d (size %d, myid %d)",
-             g->parent->gid, g->parent->size, g->parent->myid,
-             g->gid, g->size, g->myid);
-
-    // only interesting if this task is still part of parent
-    if (g->parent->myid < 0)
-        return;
-
-    MPIGroupData *gdParent = (MPIGroupData *)g->parent->backend_data;
-    assert(gdParent);
-
-    MPIGroupData *gd = (MPIGroupData *)g->backend_data;
-    assert(gd == 0); // must not be updated yet
-    gd = malloc(sizeof(MPIGroupData));
-    if (!gd)
-    {
-        laik_panic("Out of memory allocating MPIGroupData object");
-        exit(1); // not actually needed, laik_panic never returns
-    }
-    g->backend_data = gd;
-
-    laik_log(1, "MPI Comm_split: old myid %d => new myid %d",
-             g->parent->myid, g->fromParent[g->parent->myid]);
-
-    int err = MPI_Comm_split(gdParent->comm, g->myid < 0 ? MPI_UNDEFINED : 0,
-                             g->myid, &(gd->comm));
-    if (err != MPI_SUCCESS)
-        laik_shmem_panic(err);
+    return;
 }
 
-static MPI_Datatype getMPIDataType(Laik_Data *d)
-{
-    MPI_Datatype mpiDataType;
-    if (d->type == laik_Double)
-        mpiDataType = MPI_DOUBLE;
-    else if (d->type == laik_Float)
-        mpiDataType = MPI_FLOAT;
-    else if (d->type == laik_Int64)
-        mpiDataType = MPI_INT64_T;
-    else if (d->type == laik_Int32)
-        mpiDataType = MPI_INT32_T;
-    else if (d->type == laik_Char)
-        mpiDataType = MPI_INT8_T;
-    else if (d->type == laik_UInt64)
-        mpiDataType = MPI_UINT64_T;
-    else if (d->type == laik_UInt32)
-        mpiDataType = MPI_UINT32_T;
-    else if (d->type == laik_UChar)
-        mpiDataType = MPI_UINT8_T;
-    else
-        assert(0);
-
-    return mpiDataType;
-}
-
-/*static int getSHMEMDataType(Laik_Data *d)
+static int getSHMEMDataType(Laik_Data *d)
 {
     int dataType;
     if (d->type == laik_Double)
@@ -369,11 +202,9 @@ static MPI_Datatype getMPIDataType(Laik_Data *d)
         assert(0);
 
     return dataType;
-}*/
+}
 
-static void laik_shmem_exec_packAndSend(Laik_Mapping *map, Laik_Range *range,
-                                        int to_rank, uint64_t slc_size,
-                                        MPI_Datatype dataType, int tag, MPI_Comm comm)
+static void laik_shmem_exec_packAndSend(Laik_Mapping *map, Laik_Range *range, int to_rank, uint64_t slc_size, int dataType)
 {
     Laik_Index idx = range->from;
     int dims = range->space->dims;
@@ -381,12 +212,10 @@ static void laik_shmem_exec_packAndSend(Laik_Mapping *map, Laik_Range *range,
     uint64_t count = 0;
     while (1)
     {
-        packed = (map->layout->pack)(map, range, &idx,
-                                     packbuf, PACKBUFSIZE);
+        packed = (map->layout->pack)(map, range, &idx, packbuf, PACKBUFSIZE);
         assert(packed > 0);
-        int err = MPI_Send(packbuf, (int)packed,
-                           dataType, to_rank, tag, comm);
-        if (err != MPI_SUCCESS)
+        int err = shmem_send(packbuf, (int)packed, dataType, to_rank);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
 
         count += packed;
@@ -396,28 +225,19 @@ static void laik_shmem_exec_packAndSend(Laik_Mapping *map, Laik_Range *range,
     assert(count == slc_size);
 }
 
-static void laik_shmem_exec_recvAndUnpack(Laik_Mapping *map, Laik_Range *range,
-                                          int from_rank, uint64_t slc_size,
-                                          int elemsize,
-                                          MPI_Datatype dataType, int tag, MPI_Comm comm)
+static void laik_shmem_exec_recvAndUnpack(Laik_Mapping *map, Laik_Range *range, int from_rank, uint64_t slc_size, int elemsize, int dataType)
 {
-    MPI_Status st;
     Laik_Index idx = range->from;
     int dims = range->space->dims;
     int recvCount, unpacked;
     uint64_t count = 0;
     while (1)
     {
-        int err = MPI_Recv(packbuf, PACKBUFSIZE / elemsize,
-                           dataType, from_rank, tag, comm, &st);
-        if (err != MPI_SUCCESS)
-            laik_shmem_panic(err);
-        err = MPI_Get_count(&st, dataType, &recvCount);
-        if (err != MPI_SUCCESS)
+        int err = shmem_recv(packbuf, PACKBUFSIZE / elemsize, dataType, from_rank, &recvCount);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
 
-        unpacked = (map->layout->unpack)(map, range, &idx,
-                                         packbuf, recvCount * elemsize);
+        unpacked = (map->layout->unpack)(map, range, &idx, packbuf, recvCount * elemsize);
         assert(recvCount == unpacked);
         count += unpacked;
         if (laik_index_isEqual(dims, &idx, &(range->to)))
@@ -431,9 +251,7 @@ static void laik_shmem_exec_recvAndUnpack(Laik_Mapping *map, Laik_Range *range,
 // which are interested in the result. All other processes with input
 // send their data to him, he does the reduction, and sends to all processes
 // interested in the result
-static void laik_shmem_exec_groupReduce(Laik_TransitionContext *tc,
-                                        Laik_BackendAction *a,
-                                        MPI_Datatype dataType, MPI_Comm comm)
+static void laik_shmem_exec_groupReduce(Laik_TransitionContext *tc, Laik_BackendAction *a, int dataType)
 {
     assert(a->h.type == LAIK_AT_GroupReduce);
     Laik_Transition *t = tc->transition;
@@ -444,7 +262,6 @@ static void laik_shmem_exec_groupReduce(Laik_TransitionContext *tc,
     laik_log(1, "      exec reduce at T%d", reduceTask);
 
     int myid = t->group->myid;
-    MPI_Status st;
     int count, err;
 
     if (myid != reduceTask)
@@ -453,23 +270,18 @@ static void laik_shmem_exec_groupReduce(Laik_TransitionContext *tc,
 
         if (laik_trans_isInGroup(t, a->inputGroup, myid))
         {
-            laik_log(1, "        exec MPI_Send to T%d", reduceTask);
-            err = MPI_Send(a->fromBuf, (int)a->count, dataType,
-                           reduceTask, 1, comm);
-            if (err != MPI_SUCCESS)
+            laik_log(1, "        exec SHMEM_Send to T%d", reduceTask);
+            err = shmem_send(a->fromBuf, (int)a->count, dataType, reduceTask);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
         }
         if (laik_trans_isInGroup(t, a->outputGroup, myid))
         {
-            laik_log(1, "        exec MPI_Recv from T%d", reduceTask);
-            err = MPI_Recv(a->toBuf, (int)a->count, dataType,
-                           reduceTask, 1, comm, &st);
-            if (err != MPI_SUCCESS)
+            laik_log(1, "        exec SHMEM_Recv from T%d", reduceTask);
+            err = shmem_recv(a->toBuf, (int)a->count, dataType, reduceTask, &count);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
             // check that we received the expected number of elements
-            err = MPI_Get_count(&st, dataType, &count);
-            if (err != MPI_SUCCESS)
-                laik_shmem_panic(err);
             assert((int)a->count == count);
         }
         return;
@@ -504,18 +316,14 @@ static void laik_shmem_exec_groupReduce(Laik_TransitionContext *tc,
         if (inTask == myid)
             continue;
 
-        laik_log(1, "        exec MPI_Recv from T%d (buf off %d, count %d)",
+        laik_log(1, "        exec SHMEM_Recv from T%d (buf off %d, count %d)",
                  inTask, off, a->count);
 
         bufOff[ii++] = off;
-        err = MPI_Recv(packbuf + off, (int)a->count, dataType,
-                       inTask, 1, comm, &st);
-        if (err != MPI_SUCCESS)
+        err = shmem_recv(packbuf + off, (int)a->count, dataType, inTask, &count);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
         // check that we received the expected number of elements
-        err = MPI_Get_count(&st, dataType, &count);
-        if (err != MPI_SUCCESS)
-            laik_shmem_panic(err);
         assert((int)a->count == count);
         off += byteCount;
     }
@@ -554,9 +362,9 @@ static void laik_shmem_exec_groupReduce(Laik_TransitionContext *tc,
             continue;
         }
 
-        laik_log(1, "        exec MPI_Send result to T%d", outTask);
-        err = MPI_Send(a->toBuf, (int)a->count, dataType, outTask, 1, comm);
-        if (err != MPI_SUCCESS)
+        laik_log(1, "        exec SHMEM_Send result to T%d", outTask);
+        err = shmem_send(a->toBuf, (int)a->count, dataType, outTask);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
     }
 }
@@ -584,7 +392,7 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
         laik_log_ActionSeqIfChanged(changed, as, "After sorting");
 
         int not_handled = laik_aseq_calc_stats(as);
-        assert(not_handled == 0); // there should be no SHMEM-specific actions
+        assert(not_handled == 0);
     }
 
     if (laik_log_begin(1))
@@ -600,22 +408,14 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
     Laik_MappingList *toList = tc->toList;
     int elemsize = tc->data->elemsize;
 
-    // common for all MPI calls: tag, comm, datatype
-    int tag = 1;
-    MPIGroupData *gd = mpiGroupData(tc->transition->group);
-    assert(gd);
-    MPI_Comm comm = gd->comm;
-    MPI_Datatype dataType = getMPIDataType(tc->data);
-    MPI_Status st;
     int err, count;
-
-    // int dType = getSHMEMDataType(tc->data); // TODO merge with dataType, this way it has a double meaning
+    int dType = getSHMEMDataType(tc->data);
 
     Laik_Action *a = as->action;
     for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
     {
         Laik_BackendAction *ba = (Laik_BackendAction *)a;
-        if (laik_log_begin(3)) // TODO change level back to 1
+        if (laik_log_begin(3))
         {
             laik_log_Action(a, as);
             laik_log_flush(0);
@@ -633,9 +433,8 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
             assert(ba->fromMapNo < fromList->count);
             Laik_Mapping *fromMap = &(fromList->map[ba->fromMapNo]);
             assert(fromMap->base != 0);
-            err = MPI_Send(fromMap->base + ba->offset, ba->count,
-                           dataType, ba->rank, tag, comm);
-            if (err != MPI_SUCCESS)
+            err = shmem_send(fromMap->base + ba->offset, ba->count, dType, ba->rank);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
             break;
         }
@@ -644,19 +443,16 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
         {
             Laik_A_RBufSend *aa = (Laik_A_RBufSend *)a;
             assert(aa->bufID < ASEQ_BUFFER_MAX);
-            err = MPI_Send(as->buf[aa->bufID] + aa->offset, aa->count,
-                           dataType, aa->to_rank, tag, comm);
-            if (err != MPI_SUCCESS)
+            err = shmem_send(as->buf[aa->bufID] + aa->offset, aa->count, dType, aa->to_rank);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
             break;
         }
 
-        case LAIK_AT_BufSend:
-        {
-            Laik_A_BufSend *aa = (Laik_A_BufSend *)a;
-            err = MPI_Send(aa->buf, aa->count,
-                           dataType, aa->to_rank, tag, comm);
-            if (err != MPI_SUCCESS)
+        case LAIK_AT_BufSend: {
+            Laik_A_BufSend* aa = (Laik_A_BufSend*) a;
+            err = shmem_send(aa->buf, aa->count, dType, aa->to_rank);
+            if (err != SHMEM_SUCCESS) 
                 laik_shmem_panic(err);
             break;
         }
@@ -666,14 +462,8 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
             assert(ba->toMapNo < toList->count);
             Laik_Mapping *toMap = &(toList->map[ba->toMapNo]);
             assert(toMap->base != 0);
-            err = MPI_Recv(toMap->base + ba->offset, ba->count,
-                           dataType, ba->rank, tag, comm, &st);
-            if (err != MPI_SUCCESS)
-                laik_shmem_panic(err);
-
-            // check that we received the expected number of elements
-            err = MPI_Get_count(&st, dataType, &count);
-            if (err != MPI_SUCCESS)
+            err = shmem_recv(toMap->base + ba->offset, ba->count, dType, ba->rank, &count);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
             assert((int)ba->count == count);
             break;
@@ -683,30 +473,17 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
         {
             Laik_A_RBufRecv *aa = (Laik_A_RBufRecv *)a;
             assert(aa->bufID < ASEQ_BUFFER_MAX);
-            err = MPI_Recv(as->buf[aa->bufID] + aa->offset, aa->count,
-                           dataType, aa->from_rank, tag, comm, &st);
-            if (err != MPI_SUCCESS)
-                laik_shmem_panic(err);
-
-            // check that we received the expected number of elements
-            err = MPI_Get_count(&st, dataType, &count);
-            if (err != MPI_SUCCESS)
+            err = shmem_recv(as->buf[aa->bufID] + aa->offset, aa->count, dType, aa->from_rank, &count);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
             assert((int)ba->count == count);
             break;
         }
 
-        case LAIK_AT_BufRecv:
-        {
-            Laik_A_BufRecv *aa = (Laik_A_BufRecv *)a;
-            err = MPI_Recv(aa->buf, aa->count,
-                           dataType, aa->from_rank, tag, comm, &st);
-            if (err != MPI_SUCCESS)
-                laik_shmem_panic(err);
-
-            // check that we received the expected number of elements
-            err = MPI_Get_count(&st, dataType, &count);
-            if (err != MPI_SUCCESS)
+        case LAIK_AT_BufRecv: {
+            Laik_A_BufRecv* aa = (Laik_A_BufRecv*) a;
+            err = shmem_recv(aa->buf, aa->count, dType, aa->from_rank, &count);
+            if (err != SHMEM_SUCCESS) 
                 laik_shmem_panic(err);
             assert((int)ba->count == count);
             break;
@@ -758,15 +535,12 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
             assert(aa->fromMapNo < fromList->count);
             Laik_Mapping *fromMap = &(fromList->map[aa->fromMapNo]);
             assert(fromMap->base != 0);
-            laik_shmem_exec_packAndSend(fromMap, aa->range, aa->to_rank, aa->count,
-                                        dataType, tag, comm);
+            laik_shmem_exec_packAndSend(fromMap, aa->range, aa->to_rank, aa->count, dType);
             break;
         }
 
         case LAIK_AT_PackAndSend:
-            laik_shmem_exec_packAndSend(ba->map, ba->range, ba->rank,
-                                        (uint64_t)ba->count,
-                                        dataType, tag, comm);
+            laik_shmem_exec_packAndSend(ba->map, ba->range, ba->rank, (uint64_t)ba->count, dType);
             break;
 
         case LAIK_AT_MapRecvAndUnpack:
@@ -775,24 +549,16 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
             assert(aa->toMapNo < toList->count);
             Laik_Mapping *toMap = &(toList->map[aa->toMapNo]);
             assert(toMap->base);
-            laik_shmem_exec_recvAndUnpack(toMap, aa->range, aa->from_rank, aa->count,
-                                          elemsize, dataType, tag, comm);
+            laik_shmem_exec_recvAndUnpack(toMap, aa->range, aa->from_rank, aa->count, elemsize, dType);
             break;
         }
 
         case LAIK_AT_RecvAndUnpack:
-            laik_shmem_exec_recvAndUnpack(ba->map, ba->range, ba->rank,
-                                          (uint64_t)ba->count,
-                                          elemsize, dataType, tag, comm);
-            break;
-
-        case LAIK_AT_Reduce:
-            laik_log(42, "LAIK_AT_Reduce wanted but not implemented.");
-            laik_shmem_panic(42);
+            laik_shmem_exec_recvAndUnpack(ba->map, ba->range, ba->rank, (uint64_t)ba->count, elemsize, dType);
             break;
 
         case LAIK_AT_GroupReduce:
-            laik_shmem_exec_groupReduce(tc, ba, dataType, comm);
+            laik_shmem_exec_groupReduce(tc, ba, dType);
             break;
 
         case LAIK_AT_RBufLocalReduce:
@@ -817,7 +583,7 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
             break;
 
         default:
-            laik_log(LAIK_LL_Panic, "mpi_exec: no idea how to exec action %d (%s)",
+            laik_log(LAIK_LL_Panic, "shmem_exec: no idea how to exec action %d (%s)",
                      a->type, laik_at_str(a->type));
             assert(0);
         }
@@ -825,46 +591,16 @@ static void laik_shmem_exec(Laik_ActionSeq *as)
     assert(((char *)as->action) + as->bytesUsed == ((char *)a));
 }
 
-// calc statistics updates for MPI-specific actions
-static void laik_shmem_aseq_calc_stats(Laik_ActionSeq *as)
-{
-    unsigned int count;
-    Laik_TransitionContext *tc = as->context[0];
-    int current_tid = 0;
-    Laik_Action *a = as->action;
-    for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
-    {
-        assert(a->tid == current_tid); // TODO: only assumes actions from one transition
-        switch (a->type)
-        {
-        case LAIK_AT_MpiIsend:
-            count = ((Laik_A_MpiIsend *)a)->count;
-            as->msgAsyncSendCount++;
-            as->elemSendCount += count;
-            as->byteSendCount += count * tc->data->elemsize;
-            break;
-        case LAIK_AT_MpiIrecv:
-            count = ((Laik_A_MpiIrecv *)a)->count;
-            as->msgAsyncRecvCount++;
-            as->elemRecvCount += count;
-            as->byteRecvCount += count * tc->data->elemsize;
-            break;
-        default:
-            break;
-        }
-    }
-}
-
 static void laik_shmem_prepare(Laik_ActionSeq *as)
 {
     if (laik_log_begin(1))
     {
-        laik_log_append("MPI backend prepare:\n");
+        laik_log_append("SHMEM backend prepare:\n");
         laik_log_ActionSeq(as, false);
         laik_log_flush(0);
     }
 
-    // mark as prepared by MPI backend: for MPI-specific cleanup + action logging
+    // mark as prepared by SHMEM backend: for SHMEM-specific cleanup + action logging
     as->backend = &laik_backend_shmem;
 
     bool changed = laik_aseq_splitTransitionExecs(as);
@@ -906,26 +642,18 @@ static void laik_shmem_prepare(Laik_ActionSeq *as)
     laik_aseq_freeTempSpace(as);
 
     laik_aseq_calc_stats(as);
-    laik_shmem_aseq_calc_stats(as);
 }
 
 static void laik_shmem_cleanup(Laik_ActionSeq *as)
 {
     if (laik_log_begin(1))
     {
-        laik_log_append("MPI backend cleanup:\n");
+        laik_log_append("SHMEM backend cleanup:\n");
         laik_log_ActionSeq(as, false);
         laik_log_flush(0);
     }
 
     assert(as->backend == &laik_backend_shmem);
-
-    if ((as->actionCount > 0) && (as->action->type == LAIK_AT_MpiReq))
-    {
-        Laik_A_MpiReq *aa = (Laik_A_MpiReq *)as->action;
-        free(aa->req);
-        laik_log(1, "  freed MPI_Request array with %d entries", aa->count);
-    }
 }
 
 //----------------------------------------------------------------------------
@@ -934,12 +662,10 @@ static void laik_shmem_cleanup(Laik_ActionSeq *as)
 static void laik_shmem_sync(Laik_KVStore *kvs)
 {
     assert(kvs->inst == shmem_instance);
-    MPI_Comm comm = mpiData(shmem_instance)->comm;
     Laik_Group *world = kvs->inst->world;
     int myid = world->myid;
-    MPI_Status status;
     int count[2] = {0, 0};
-    int err;
+    int received, err;
 
     if (myid > 0)
     {
@@ -947,38 +673,38 @@ static void laik_shmem_sync(Laik_KVStore *kvs)
         count[0] = (int)kvs->changes.offUsed;
         assert((count[0] == 0) || ((count[0] & 1) == 1)); // 0 or odd number of offsets
         count[1] = (int)kvs->changes.dataUsed;
-        laik_log(1, "MPI sync: sending %d changes (total %d chars) to T0",
+        laik_log(1, "SHMEM sync: sending %d changes (total %d chars) to T0",
                  count[0] / 2, count[1]);
-        err = MPI_Send(count, 2, MPI_INTEGER, 0, 0, comm);
-        if (err != MPI_SUCCESS)
+        err = shmem_send(count, 2, sizeof(int), 0);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
         if (count[0] > 0)
         {
             assert(count[1] > 0);
-            err = MPI_Send(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm);
-            if (err != MPI_SUCCESS)
+            err = shmem_send(kvs->changes.off, count[0], sizeof(int), 0);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
-            err = MPI_Send(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm);
-            if (err != MPI_SUCCESS)
+            err = shmem_send(kvs->changes.data, count[1], sizeof(char), 0);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
         }
         else
             assert(count[1] == 0);
 
-        err = MPI_Recv(count, 2, MPI_INTEGER, 0, 0, comm, &status);
-        if (err != MPI_SUCCESS)
+        err = shmem_recv(count, 2, sizeof(int) , 0, &received);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
-        laik_log(1, "MPI sync: getting %d changes (total %d chars) from T0",
+        laik_log(1, "SHMEM sync: getting %d changes (total %d chars) from T0",
                  count[0] / 2, count[1]);
         if (count[0] > 0)
         {
             assert(count[1] > 0);
             laik_kvs_changes_ensure_size(&(kvs->changes), count[0], count[1]);
-            err = MPI_Recv(kvs->changes.off, count[0], MPI_INTEGER, 0, 0, comm, &status);
-            if (err != MPI_SUCCESS)
+            err = shmem_recv(kvs->changes.off, count[0], sizeof(int), 0, &received);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
-            err = MPI_Recv(kvs->changes.data, count[1], MPI_CHAR, 0, 0, comm, &status);
-            if (err != MPI_SUCCESS)
+            err = shmem_recv(kvs->changes.data, count[1], sizeof(char), 0, &received);
+            if (err != SHMEM_SUCCESS)
                 laik_shmem_panic(err);
             laik_kvs_changes_set_size(&(kvs->changes), count[0], count[1]);
             // TODO: opt - remove own changes from received ones
@@ -1006,10 +732,10 @@ static void laik_shmem_sync(Laik_KVStore *kvs)
 
     for (int i = 1; i < world->size; i++)
     {
-        err = MPI_Recv(count, 2, MPI_INTEGER, i, 0, comm, &status);
-        if (err != MPI_SUCCESS)
+        err = shmem_recv(count, 2, sizeof(int), i, &received);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
-        laik_log(1, "MPI sync: getting %d changes (total %d chars) from T%d",
+        laik_log(1, "SHMEM sync: getting %d changes (total %d chars) from T%d",
                  count[0] / 2, count[1], i);
         laik_kvs_changes_set_size(&recvd, 0, 0); // fresh reuse
         laik_kvs_changes_ensure_size(&recvd, count[0], count[1]);
@@ -1020,11 +746,11 @@ static void laik_shmem_sync(Laik_KVStore *kvs)
         }
 
         assert(count[1] > 0);
-        err = MPI_Recv(recvd.off, count[0], MPI_INTEGER, i, 0, comm, &status);
-        if (err != MPI_SUCCESS)
+        err = shmem_recv(recvd.off, count[0], sizeof(int), i, &received);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
-        err = MPI_Recv(recvd.data, count[1], MPI_CHAR, i, 0, comm, &status);
-        if (err != MPI_SUCCESS)
+        err = shmem_recv(recvd.data, count[1], sizeof(char), i, &received);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
         laik_kvs_changes_set_size(&recvd, count[0], count[1]);
 
@@ -1045,19 +771,19 @@ static void laik_shmem_sync(Laik_KVStore *kvs)
     assert(count[1] > count[0]); // more byte than offsets
     for (int i = 1; i < world->size; i++)
     {
-        laik_log(1, "MPI sync: sending %d changes (total %d chars) to T%d",
+        laik_log(1, "SHMEM sync: sending %d changes (total %d chars) to T%d",
                  count[0] / 2, count[1], i);
-        err = MPI_Send(count, 2, MPI_INTEGER, i, 0, comm);
-        if (err != MPI_SUCCESS)
+        err = shmem_send(count, 2, sizeof(int), i);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
         if (count[0] == 0)
             continue;
 
-        err = MPI_Send(dst->off, count[0], MPI_INTEGER, i, 0, comm);
-        if (err != MPI_SUCCESS)
+        err = shmem_send(dst->off, count[0], sizeof(int), i);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
-        err = MPI_Send(dst->data, count[1], MPI_CHAR, i, 0, comm);
-        if (err != MPI_SUCCESS)
+        err = shmem_send(dst->data, count[1], sizeof(char), i);
+        if (err != SHMEM_SUCCESS)
             laik_shmem_panic(err);
     }
 
