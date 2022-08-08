@@ -118,15 +118,12 @@ else:
 # LAIK-internal SHMEM support
 
 if use_shmem:
-    #TODO: add files which need to be searched first.
-    shmem_found = True
-if use_shmem and shmem_found:
     print("SHMEM backend enabled")
     defs += " -DUSE_SHMEM"
-    test_subdirs += " mpi"
+    test_subdirs += " shmem"
 else:
     if not use_shmem:
-        print("MPI backend disabled.")
+        print("SHMEM backend disabled.")
 
 #------------------------------------
 # TCP backend support
