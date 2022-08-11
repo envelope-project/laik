@@ -22,11 +22,9 @@ int shmem_init();
 
 int shmem_comm_size(int *sizePtr);
 
-int shmem_set_comm_size(int size);
-
 int shmem_comm_rank(int *rankPtr);
 
-int shmem_set_comm_rank(int rank);
+int shmem_comm_colour(int *colourPtr);
 
 int shmem_get_identifier(int *ident);
 
@@ -34,9 +32,16 @@ int shmem_send(const void* buffer, int count, int datatype, int recipient);
 
 int shmem_recv(void* buffer, int count, int datatype, int sender, int *recieved);
 
-int shmem_comm_split();
-
 int shmem_error_string(int error, char *str);
 
+int shmem_secondary_init(int primaryRank, int *groupColour);
+
+int shmem_finish_secondary_init(int size);
+
+int shmem_calculate_groups(int *colours, int **groups, int size);
+
+int shmem_set_group(int *group, int size);
+
 int shmem_finalize();
+
 #endif

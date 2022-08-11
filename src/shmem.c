@@ -4,34 +4,30 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/ipc.h>
 #include <sys/shm.h>
-#include <errno.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #include <time.h>
 #include <signal.h>
 #include <stdatomic.h>
 
-#include <errno.h>
+//#include <mpi.h>
 
 #define SHM_KEY 0x33 // TODO über SHMEM_RUN dynamisch key generieren (prüfen ob besetzt und dann neuen erzeugen) und key dann als Umgebungsvariable verteilen
-#define PORT 8080
 #define MAX_WAITTIME 8
 
 struct shmInitSeg
 {
     atomic_int rank;
+    int primaryRank;
+    bool didInit;
 };
 
 struct groupInfo
 {
     int size;
     int rank;
+    int colour;
+    int *group;
 };
 
 struct groupInfo groupInfo;
@@ -39,7 +35,7 @@ int openShmid = -1;
 
 void deleteOpenShmSeg()
 {
-    if(openShmid != -1)
+    if (openShmid != -1)
         shmctl(openShmid, IPC_RMID, 0);
 }
 
@@ -106,21 +102,15 @@ int shmem_comm_size(int *sizePtr)
     return SHMEM_SUCCESS;
 }
 
-int shmem_set_comm_size(int size)
-{
-    groupInfo.size = size;
-    return SHMEM_SUCCESS;
-}
-
 int shmem_comm_rank(int *rankPtr)
 {
     *rankPtr = groupInfo.rank;
     return SHMEM_SUCCESS;
 }
 
-int shmem_set_comm_rank(int rank)
+int shmem_comm_colour(int *colourPtr)
 {
-    groupInfo.rank = rank;
+    *colourPtr = groupInfo.colour;
     return SHMEM_SUCCESS;
 }
 
@@ -284,64 +274,220 @@ int shmem_error_string(int error, char *str)
 int shmem_finalize()
 {
     deleteOpenShmSeg();
+
+    if (groupInfo.group != NULL)
+        free(groupInfo.group);
+
     return SHMEM_SUCCESS;
 }
 
-int main()
+int shmem_secondary_init(int primaryRank, int *groupColour)
 {
-    shmem_init();
+    signal(SIGINT, deleteOpenShmSeg);
 
-    int rank, size;
-    shmem_comm_rank(&rank);
-    shmem_comm_size(&size);
+    groupInfo.colour = *groupColour;
 
-    if (size >= 2)
+    struct shmInitSeg *shmp;
+    int shmid = shmget(SHM_KEY, sizeof(struct shmInitSeg), IPC_EXCL | 0644 | IPC_CREAT);
+    if (shmid == -1)
     {
-        int bufSize = 10, err, received;
-        int msg1[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-        int msg2[] = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
-        char errMsg[SHMEM_MAX_ERROR_STRING];
-        int buf[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-        switch (rank)
+        // Client initialization
+        time_t t_0;
+
+        // As long as it fails and three seconds haven't passed try again (wait for master)
+        t_0 = time(NULL);
+        while (time(NULL) - t_0 < MAX_WAITTIME && shmid == -1)
         {
-        case 0:
-            err = shmem_send(msg1, 10, sizeof(int), 1);
-            if (err != SHMEM_SUCCESS)
-            {
-                shmem_error_string(err, errMsg);
-                printf("%s\n", errMsg);
-                return SHMEM_FAILURE;
-            }
-            err = shmem_send(msg2, 10, sizeof(int), 1);
-            if (err != SHMEM_SUCCESS)
-            {
-                shmem_error_string(err, errMsg);
-                printf("%s\n", errMsg);
-                return SHMEM_FAILURE;
-            }
-            printf("Master sent 2 arrays to process 1 ({0,1,2,3,4,5,6,7,8,9} and {9,8,7,6,5,4,3,2,1,0})\n");
-            break;
-        case 1:
-            err = shmem_recv(buf, bufSize, sizeof(int), 0, &received);
-            if (err != SHMEM_SUCCESS)
-            {
-                shmem_error_string(err, errMsg);
-                printf("%s\n", errMsg);
-                return SHMEM_FAILURE;
-            }
-            printf("Process 1 received {%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9]);
-            err = shmem_recv(buf, bufSize, sizeof(int), 0, &received);
-            if (err != SHMEM_SUCCESS)
-            {
-                shmem_error_string(err, errMsg);
-                printf("%s\n", errMsg);
-                return SHMEM_FAILURE;
-            }
-            printf(" and {%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9]);
-            break;
+            shmid = shmget(SHM_KEY, 0, IPC_CREAT | 0644); // TODO maybe remove IPC_Creat might not be needed
         }
+        if (shmid == -1)
+            return SHMEM_SHMGET_FAILED;
+
+        // Attach to the segment to get a pointer to it.
+        shmp = shmat(shmid, NULL, 0);
+        if (shmp == (void *)-1)
+            return SHMEM_SHMAT_FAILED;
+
+        groupInfo.rank = ++shmp->rank;
+        while (!shmp->didInit)
+        {
+        }
+        *groupColour = shmp->primaryRank;
+
+        if (shmdt(shmp) == -1)
+            return SHMEM_SHMDT_FAILED;
+    }
+    else
+    {
+        // Master initialization
+        openShmid = shmid;
+
+        groupInfo.rank = 0;
+        *groupColour = primaryRank;
+
+        shmp = shmat(shmid, NULL, 0);
+        if (shmp == (void *)-1)
+            return SHMEM_SHMAT_FAILED;
+
+        shmp->primaryRank = primaryRank;
+        shmp->didInit = true;
+
+        if (shmdt(shmp) == -1)
+            return SHMEM_SHMDT_FAILED;
+    }
+    return SHMEM_SUCCESS;
+}
+
+int shmem_finish_secondary_init(int size)
+{
+    if (groupInfo.rank == 0 && shmctl(openShmid, IPC_RMID, 0) == -1)
+        return SHMEM_SHMCTL_FAILED;
+    openShmid = -1;
+
+    groupInfo.size = size;
+
+    return SHMEM_SUCCESS;
+}
+
+struct intList
+{
+    int val;
+    struct intList *next;
+};
+
+void add_element(int val, struct intList **head)
+{
+    struct intList *new = malloc(sizeof(struct intList));
+    new->val = val;
+
+    if (*head == NULL)
+    {
+        *head = new;
+        return;
     }
 
+    (*head)->next = new;
+    *head = new;
+}
+
+void increment_val(struct intList **current)
+{
+    if (*current == NULL)
+    {
+        *current = malloc(sizeof(struct intList));
+        (*current)->val = 0;
+    }
+
+    (*current)->val++;
+}
+
+void intList_to_array(struct intList *list, int **arr)
+{
+    if (list == NULL)
+    {
+        *arr = malloc(sizeof(int));
+        *arr = 0;
+        return;
+    }
+
+    int length = list->val + 1;
+    *arr = malloc(length * sizeof(int));
+    for (int i = 0; i < length; i++, list = list->next)
+    {
+        (*arr)[i] = list->val;
+    }
+}
+
+int shmem_calculate_groups(int *colours, int **groups, int size)
+{
+    struct intList **tails = malloc(size * sizeof(struct intList *));
+    struct intList **heads = malloc(size * sizeof(struct intList *));
+    for (int i = 0; i < size; i++)
+    {
+        struct intList *new = malloc(sizeof(struct intList));
+        new->val = 0;
+        tails[i] = new;
+        heads[i] = new;
+    }
+
+    for (int i = 0; i < size; i++)
+    {
+        increment_val(&heads[colours[i]]);
+        add_element(i, &tails[colours[i]]);
+    }
+
+    for (int i = 0; i < size; i++)
+    {
+        intList_to_array(heads[i], &groups[i]);
+    }
+    return SHMEM_SUCCESS;
+}
+
+int shmem_set_group(int *group, int size)
+{
+    groupInfo.group = malloc(size * sizeof(int));
+    memcpy(groupInfo.group, group, size * sizeof(int));
+    return SHMEM_SUCCESS;
+}
+
+int main(int argc, char **argv)
+{
+    /*int err = MPI_Init(&argc, &argv);
+
+    MPI_Comm comm;
+    err = MPI_Comm_dup(MPI_COMM_WORLD, &comm);
+    err = MPI_Comm_set_errhandler(comm, MPI_ERRORS_RETURN);
+
+    int size, rank;
+    err = MPI_Comm_size(comm, &size);
+    err = MPI_Comm_rank(comm, &rank);
+
+    // Secondary shared memory backend initialization
+    int colour, secondary_size = 0;
+    shmem_secondary_init(rank, &colour);
+
+    MPI_Status st;
+    if (rank == 0)
+    {
+        int colours[size];
+        colours[0] = colour;
+        for (int i = 1; i < size; i++)
+        {
+            MPI_Recv(&colours[i], 1, MPI_INTEGER, i, 0, comm, &st);
+        }
+
+        int *groups[size];
+        shmem_calculate_groups(colours, groups, size);
+        
+        for (int i = 1; i < size; i++)
+        {
+            MPI_Send(&groups[colours[i]][0], 1, MPI_INTEGER, i, 0, comm);
+            MPI_Send(groups[colours[i]]+1, groups[colours[i]][0], MPI_INTEGER, i, 0, comm);
+        }
+
+        secondary_size = groups[colours[0]][0];
+        shmem_set_group(groups[colours[0]]+1, groups[colours[0]][0]);
+    }
+    else
+    {
+        MPI_Send(&colour, 1, MPI_INTEGER, 0, 0, comm);
+
+        MPI_Recv(&secondary_size, 1, MPI_INTEGER, 0, 0, comm, &st);
+        int *group = malloc(sizeof(int) * secondary_size);
+        MPI_Recv(group, secondary_size, MPI_INTEGER, 0, 0, comm, &st);
+        shmem_set_group(group, secondary_size);
+        free(group);
+    }
+
+    printf("rank %d {", rank);
+    for(int i = 0; i < secondary_size; i++){
+        printf("%d, ", groupInfo.group[i]);
+    }
+    printf("}\n");
+
+    shmem_finish_secondary_init(secondary_size);
     shmem_finalize();
+
+    MPI_Finalize();*/
     return SHMEM_SUCCESS;
 }
