@@ -297,9 +297,21 @@ static void laik_mpi_panic(int err)
     exit(1);
 }
 
+MPI_Comm initComm;
+
+int sendIntegers(int *buf, int count, int receiver)
+{
+    return MPI_Send(buf, count, MPI_INTEGER, receiver, 0, initComm);
+}
+
+int recvIntegers(int *buf, int count, int sender)
+{
+    MPI_Status st;
+    return MPI_Recv(buf, count, MPI_INTEGER, sender, 0, initComm, &st);
+}
+
 //----------------------------------------------------------------------------
 // backend interface implementation: initialization
-
 Laik_Instance *laik_init_mpi(int *argc, char ***argv)
 {
     if (mpi_instance)
@@ -390,47 +402,15 @@ Laik_Instance *laik_init_mpi(int *argc, char ***argv)
     // do async convertion?
     str = getenv("LAIK_MPI_ASYNC");
     if (str)
-        mpi_async = atoi(str);
+        mpi_async = atoi(str); 
 
-        // Secondary shared memory backend initialization
-    int colour, secondary_size = 0;
-    shmem_secondary_init(rank, &colour);
-    
-    MPI_Status st;
-    if (rank == 0)
-    {
-        int colours[size];
-        colours[0] = colour;
-        for (int i = 1; i < size; i++)
-        {
-            MPI_Recv(&colours[i], 1, MPI_INTEGER, i, 0, d->comm, &st);
-        }
-
-        int *groups[size];
-        shmem_calculate_groups(colours, groups, size);
-        
-        for (int i = 1; i < size; i++)
-        {
-            MPI_Send(&groups[colours[i]][0], 1, MPI_INTEGER, i, 0, d->comm);
-            MPI_Send(groups[colours[i]]+1, groups[colours[i]][0], MPI_INTEGER, i, 0, d->comm);
-        }
-
-        secondary_size = groups[colours[0]][0];
-        shmem_set_group(groups[colours[0]]+1, groups[colours[0]][0]);
-    }
-    else
-    {
-        MPI_Send(&colour, 1, MPI_INTEGER, 0, 0, d->comm);
-
-        MPI_Recv(&secondary_size, 1, MPI_INTEGER, 0, 0, d->comm, &st);
-        int *group = malloc(sizeof(int) * secondary_size);
-        MPI_Recv(group, secondary_size, MPI_INTEGER, 0, 0, d->comm, &st);
-        shmem_set_group(group, secondary_size);
-        free(group);
-    }
-
-    shmem_finish_secondary_init(secondary_size);
-    shmem_finalize();
+    // Secondary backend initialization.
+    int (*send)(int *, int, int);
+    int (*recv)(int *, int, int);
+    send = &sendIntegers;
+    recv = &recvIntegers;
+    initComm = d->comm;
+    shmem_secondary_init(rank, size, send, recv);
 
     mpi_instance = inst;
     return inst;
@@ -456,6 +436,10 @@ static void laik_mpi_finalize(Laik_Instance *inst)
         if (err != MPI_SUCCESS)
             laik_mpi_panic(err);
     }
+
+    int err = shmem_finalize();
+    if (err != SHMEM_SUCCESS)
+        laik_mpi_panic(-1);
 }
 
 // update backend specific data for group if needed

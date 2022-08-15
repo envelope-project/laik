@@ -10,15 +10,14 @@
 #include <signal.h>
 #include <stdatomic.h>
 
-//#include <mpi.h>
-
 #define SHM_KEY 0x33 // TODO über SHMEM_RUN dynamisch key generieren (prüfen ob besetzt und dann neuen erzeugen) und key dann als Umgebungsvariable verteilen
 #define MAX_WAITTIME 8
+
 
 struct shmInitSeg
 {
     atomic_int rank;
-    int primaryRank;
+    int colour;
     bool didInit;
 };
 
@@ -281,11 +280,10 @@ int shmem_finalize()
     return SHMEM_SUCCESS;
 }
 
-int shmem_secondary_init(int primaryRank, int *groupColour)
+int shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int *, int, int),
+                         int (*recv)(int *, int, int))
 {
     signal(SIGINT, deleteOpenShmSeg);
-
-    groupInfo.colour = *groupColour;
 
     struct shmInitSeg *shmp;
     int shmid = shmget(SHM_KEY, sizeof(struct shmInitSeg), IPC_EXCL | 0644 | IPC_CREAT);
@@ -308,11 +306,11 @@ int shmem_secondary_init(int primaryRank, int *groupColour)
         if (shmp == (void *)-1)
             return SHMEM_SHMAT_FAILED;
 
-        groupInfo.rank = ++shmp->rank;
         while (!shmp->didInit)
         {
         }
-        *groupColour = shmp->primaryRank;
+        groupInfo.rank = ++shmp->rank;
+        groupInfo.colour = shmp->colour;
 
         if (shmdt(shmp) == -1)
             return SHMEM_SHMDT_FAILED;
@@ -323,28 +321,55 @@ int shmem_secondary_init(int primaryRank, int *groupColour)
         openShmid = shmid;
 
         groupInfo.rank = 0;
-        *groupColour = primaryRank;
+        groupInfo.colour = primaryRank;
 
         shmp = shmat(shmid, NULL, 0);
         if (shmp == (void *)-1)
             return SHMEM_SHMAT_FAILED;
 
-        shmp->primaryRank = primaryRank;
+        shmp->colour = primaryRank;
         shmp->didInit = true;
 
         if (shmdt(shmp) == -1)
             return SHMEM_SHMDT_FAILED;
     }
-    return SHMEM_SUCCESS;
-}
 
-int shmem_finish_secondary_init(int size)
-{
+    // Get the colours of each process at master, calculate the groups and send each process their group.
+    if (primaryRank == 0)
+    {
+        int colours[primarySize];
+        colours[0] = primaryRank;
+        for (int i = 1; i < primarySize; i++)
+        {
+            (*recv)(&colours[i], 1, i);
+        }
+
+        int *groups[primarySize];
+        shmem_calculate_groups(colours, groups, primarySize);
+
+        for (int i = 1; i < primarySize; i++)
+        {
+            (*send)(&groups[colours[i]][0], 1, i);
+            (*send)(groups[colours[i]] + 1, groups[colours[i]][0], i);
+        }
+
+        groupInfo.size = groups[colours[0]][0];
+        shmem_set_group(groups[colours[0]] + 1, groups[colours[0]][0]);
+    }
+    else
+    {
+        (*send)(&groupInfo.colour, 1, 0);
+
+        (*recv)(&groupInfo.size, 1, 0);
+        int *group = malloc(sizeof(int) * groupInfo.size);
+        (*recv)(group, groupInfo.size, 0);
+        shmem_set_group(group, groupInfo.size);
+        free(group);
+    }
+
     if (groupInfo.rank == 0 && shmctl(openShmid, IPC_RMID, 0) == -1)
         return SHMEM_SHMCTL_FAILED;
     openShmid = -1;
-
-    groupInfo.size = size;
 
     return SHMEM_SUCCESS;
 }
@@ -430,6 +455,125 @@ int shmem_set_group(int *group, int size)
     return SHMEM_SUCCESS;
 }
 
+/*bool laik_shmem_useShmem(Laik_ActionSeq *as)
+{
+    // must not have new actions, we want to start a new build
+    assert(as->newActionCount == 0);
+
+    unsigned int count = 0;
+    int maxround = 0;
+    Laik_Action *a = as->action;
+    for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
+    {
+        if (a->round > maxround)
+            maxround = a->round;
+        if ((a->type == LAIK_AT_BufRecv) || (a->type == LAIK_AT_BufSend))
+            count++;
+    }
+
+    if (count == 0)
+        return false;
+
+    // add 2 new rounds: 0 and maxround+2
+    // - round 0 gets MpiReq and all MpiIrecv actions
+    // - round maxround+2 gets Waits from MpiISend actions
+
+    MPI_Request *buf = malloc(count * sizeof(MPI_Request));
+    laik_mpi_addMpiReq(as, 0, count, buf);
+
+    int req_id = 0;
+    a = as->action;
+    for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
+    {
+        switch (a->type)
+        {
+        case LAIK_AT_MapSend:
+        {
+            break;
+        }
+
+        case LAIK_AT_RBufSend:
+        {
+            break;
+        }
+
+        case LAIK_AT_BufSend:
+        {
+            Laik_A_BufSend *aa = (Laik_A_BufSend *)a;
+            laik_mpi_addMpiIsend(as, a->round + 1,
+                                 aa->buf, aa->count, aa->to_rank, req_id);
+            laik_mpi_addMpiWait(as, maxround + 2, req_id);
+            req_id++;
+            break;
+        }
+
+        case LAIK_AT_MapRecv:
+        {
+            break;
+        }
+
+        case LAIK_AT_RBufRecv:
+        {
+            break;
+        }
+
+        case LAIK_AT_BufRecv:
+        {
+            Laik_A_BufRecv *aa = (Laik_A_BufRecv *)a;
+            laik_mpi_addMpiIrecv(as, 0,
+                                 aa->buf, aa->count, aa->from_rank, req_id);
+            laik_mpi_addMpiWait(as, a->round + 1, req_id);
+            req_id++;
+            break;
+        }
+
+        case LAIK_AT_MapPackAndSend:
+        {
+            break;
+        }
+
+        case LAIK_AT_PackAndSend:
+        {
+            break;
+        }
+
+        case LAIK_AT_MapRecvAndUnpack:
+        {
+            break;
+        }
+
+        case LAIK_AT_RecvAndUnpack:
+        {
+            break;
+        }
+
+        case LAIK_AT_GroupReduce:
+        {
+            break;
+        }
+
+        default:
+            // all rounds up by one due to new round 0
+            laik_aseq_add(a, as, a->round + 1);
+            break;
+        }
+    }
+    assert(count == (unsigned)req_id);
+
+    laik_aseq_activateNewActions(as);
+    return true;
+}
+
+static void laik_mpi_addMpiReq(Laik_ActionSeq *as, int round,
+                               unsigned int count, MPI_Request *buf)
+{
+    Laik_A_MpiReq *a;
+    a = (Laik_A_MpiReq *)laik_aseq_addAction(as, sizeof(*a),
+                                             LAIK_AT_MpiReq, round, 0);
+    a->count = count;
+    a->req = buf;
+}*/
+
 int main(int argc, char **argv)
 {
     /*int err = MPI_Init(&argc, &argv);
@@ -442,50 +586,20 @@ int main(int argc, char **argv)
     err = MPI_Comm_size(comm, &size);
     err = MPI_Comm_rank(comm, &rank);
 
-    // Secondary shared memory backend initialization
-    int colour, secondary_size = 0;
-    shmem_secondary_init(rank, &colour);
+    int (*send)(int *, int, int);
+    int (*recv)(int *, int, int);
+    send = &sendIntegers;
+    recv = &recvIntegers;
+    initComm = comm;
+    shmem_secondary_init(rank, size, send, recv);
 
-    MPI_Status st;
-    if (rank == 0)
+    printf("rank %d (of %d) {", rank, groupInfo.size);
+    for (int i = 0; i < groupInfo.size; i++)
     {
-        int colours[size];
-        colours[0] = colour;
-        for (int i = 1; i < size; i++)
-        {
-            MPI_Recv(&colours[i], 1, MPI_INTEGER, i, 0, comm, &st);
-        }
-
-        int *groups[size];
-        shmem_calculate_groups(colours, groups, size);
-        
-        for (int i = 1; i < size; i++)
-        {
-            MPI_Send(&groups[colours[i]][0], 1, MPI_INTEGER, i, 0, comm);
-            MPI_Send(groups[colours[i]]+1, groups[colours[i]][0], MPI_INTEGER, i, 0, comm);
-        }
-
-        secondary_size = groups[colours[0]][0];
-        shmem_set_group(groups[colours[0]]+1, groups[colours[0]][0]);
-    }
-    else
-    {
-        MPI_Send(&colour, 1, MPI_INTEGER, 0, 0, comm);
-
-        MPI_Recv(&secondary_size, 1, MPI_INTEGER, 0, 0, comm, &st);
-        int *group = malloc(sizeof(int) * secondary_size);
-        MPI_Recv(group, secondary_size, MPI_INTEGER, 0, 0, comm, &st);
-        shmem_set_group(group, secondary_size);
-        free(group);
-    }
-
-    printf("rank %d {", rank);
-    for(int i = 0; i < secondary_size; i++){
         printf("%d, ", groupInfo.group[i]);
     }
     printf("}\n");
 
-    shmem_finish_secondary_init(secondary_size);
     shmem_finalize();
 
     MPI_Finalize();*/
