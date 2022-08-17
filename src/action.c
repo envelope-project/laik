@@ -294,6 +294,7 @@ void laik_aseq_addRBufSend(Laik_ActionSeq* as, int round,
     a->offset = byteOffset;
     a->count = count;
     a->to_rank = to;
+    a->shmem = false;
 }
 
 // append recv action into buffer referencing a previous reserve action
@@ -308,6 +309,7 @@ void laik_aseq_addRBufRecv(Laik_ActionSeq* as, int round,
     a->offset = byteOffset;
     a->count = count;
     a->from_rank = from;
+    a->shmem = false;
 }
 
 // append action to call a local reduce operation
@@ -398,6 +400,7 @@ void laik_aseq_addBufSend(Laik_ActionSeq* as, int round,
     a->buf = fromBuf;
     a->count = count;
     a->to_rank = to;
+    a->shmem = false;
 }
 
 // append recv action into a mapping with offset
@@ -424,6 +427,7 @@ void laik_aseq_addBufRecv(Laik_ActionSeq* as, int round,
     a->buf = toBuf;
     a->count = count;
     a->from_rank = from;
+    a->shmem = false;
 }
 
 void laik_aseq_addPackAndSend(Laik_ActionSeq* as, int round,

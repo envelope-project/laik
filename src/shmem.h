@@ -39,7 +39,9 @@ int shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int *, in
 
 int shmem_calculate_groups(int *colours, int **groups, int size);
 
-int shmem_set_group(int *group, int size);
+int shmem_get_colours(int *buf);
+
+int shmem_get_secondaryRanks(int *buf);
 
 int shmem_finalize();
 

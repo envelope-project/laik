@@ -30,7 +30,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
+
 #include <shmem.h>
+#include <laik-backend-shmem.h>
 
 // forward decls, types/structs , global variables
 
@@ -74,7 +76,7 @@ typedef struct
 static int mpi_reduce = 1;
 
 // LAIK_MPI_ASYNC: convert send/recv to isend/irecv? Default: Yes
-static int mpi_async = 1;
+static int mpi_async = 0; //TODO change back
 
 //----------------------------------------------------------------
 // buffer space for messages if packing/unpacking from/to not-1d layout
@@ -410,7 +412,7 @@ Laik_Instance *laik_init_mpi(int *argc, char ***argv)
     send = &sendIntegers;
     recv = &recvIntegers;
     initComm = d->comm;
-    shmem_secondary_init(rank, size, send, recv);
+    laik_shmem_secondary_init(rank, size, send, recv);
 
     mpi_instance = inst;
     return inst;
@@ -437,7 +439,7 @@ static void laik_mpi_finalize(Laik_Instance *inst)
             laik_mpi_panic(err);
     }
 
-    int err = shmem_finalize();
+    int err = laik_shmem_secondary_finalize();
     if (err != SHMEM_SUCCESS)
         laik_mpi_panic(-1);
 }
@@ -899,6 +901,11 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_RBufSend:
         {
             Laik_A_RBufSend *aa = (Laik_A_RBufSend *)a;
+            if(aa->shmem)
+            {
+                laik_shmem_secondary_exec(as, a);
+                break;
+            }
             assert(aa->bufID < ASEQ_BUFFER_MAX);
             err = MPI_Send(as->buf[aa->bufID] + aa->offset, aa->count,
                            dataType, aa->to_rank, tag, comm);
@@ -910,6 +917,11 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_BufSend:
         {
             Laik_A_BufSend *aa = (Laik_A_BufSend *)a;
+            if(aa->shmem)
+            {
+                laik_shmem_secondary_exec(as, a);
+                break;
+            }
             err = MPI_Send(aa->buf, aa->count,
                            dataType, aa->to_rank, tag, comm);
             if (err != MPI_SUCCESS)
@@ -938,6 +950,11 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_RBufRecv:
         {
             Laik_A_RBufRecv *aa = (Laik_A_RBufRecv *)a;
+            if(aa->shmem)
+            {
+                laik_shmem_secondary_exec(as, a);
+                break;
+            }
             assert(aa->bufID < ASEQ_BUFFER_MAX);
             err = MPI_Recv(as->buf[aa->bufID] + aa->offset, aa->count,
                            dataType, aa->from_rank, tag, comm, &st);
@@ -955,6 +972,11 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_BufRecv:
         {
             Laik_A_BufRecv *aa = (Laik_A_BufRecv *)a;
+            if(aa->shmem)
+            {
+                laik_shmem_secondary_exec(as, a);
+                break;
+            }
             err = MPI_Recv(aa->buf, aa->count,
                            dataType, aa->from_rank, tag, comm, &st);
             if (err != MPI_SUCCESS)
@@ -1165,6 +1187,9 @@ static void laik_mpi_prepare(Laik_ActionSeq *as)
     changed = laik_aseq_sort_2phases(as);
     // changed = laik_aseq_sort_rankdigits(as);
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
+
+    changed = laik_aseq_replaceWithShmemCalls(as);
+    laik_log_ActionSeqIfChanged(changed, as, "After replacing with shmem calls");
 
     if (mpi_async)
     {
