@@ -102,6 +102,7 @@ typedef struct {
     int fromMapNo;
     Laik_Range* range;
     unsigned int count;
+    bool shmem;
 } Laik_A_MapPackAndSend;
 
 
@@ -133,6 +134,7 @@ typedef struct {
     int toMapNo;
     Laik_Range* range;
     unsigned int count;
+    bool shmem;
 } Laik_A_MapRecvAndUnpack;
 
 

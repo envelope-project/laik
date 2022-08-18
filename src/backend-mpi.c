@@ -1033,6 +1033,11 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_MapPackAndSend:
         {
             Laik_A_MapPackAndSend *aa = (Laik_A_MapPackAndSend *)a;
+            if(aa->shmem)
+            {
+                laik_shmem_secondary_exec(as, a);
+                break;
+            }
             assert(aa->fromMapNo < fromList->count);
             Laik_Mapping *fromMap = &(fromList->map[aa->fromMapNo]);
             assert(fromMap->base != 0);
@@ -1042,14 +1047,26 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         }
 
         case LAIK_AT_PackAndSend:
+        {
+            if(ba->shmem)
+            {
+                laik_shmem_secondary_exec(as, a);
+                break;
+            }
             laik_mpi_exec_packAndSend(ba->map, ba->range, ba->rank,
                                       (uint64_t)ba->count,
                                       dataType, tag, comm);
             break;
+        }
 
         case LAIK_AT_MapRecvAndUnpack:
         {
             Laik_A_MapRecvAndUnpack *aa = (Laik_A_MapRecvAndUnpack *)a;
+            if(aa->shmem)
+            {
+                laik_shmem_secondary_exec(as, a);
+                break;
+            }
             assert(aa->toMapNo < toList->count);
             Laik_Mapping *toMap = &(toList->map[aa->toMapNo]);
             assert(toMap->base);
@@ -1059,6 +1076,11 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         }
 
         case LAIK_AT_RecvAndUnpack:
+            if(ba->shmem)
+            {
+                laik_shmem_secondary_exec(as, a);
+                break;
+            }
             laik_mpi_exec_recvAndUnpack(ba->map, ba->range, ba->rank,
                                         (uint64_t)ba->count,
                                         elemsize, dataType, tag, comm);

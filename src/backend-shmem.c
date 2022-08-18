@@ -876,6 +876,42 @@ bool laik_aseq_replaceWithShmemCalls(Laik_ActionSeq *as)
             }
             break;
         }
+        case LAIK_AT_MapPackAndSend:
+        {
+            Laik_A_MapPackAndSend *aa = (Laik_A_MapPackAndSend *)a;
+            if(colours[rank] == colours[aa->to_rank]){
+                aa->to_rank = secondaryRanks[aa->to_rank];
+                aa->shmem = true;
+            }
+            break;
+        }
+        case LAIK_AT_PackAndSend:
+        {
+            Laik_BackendAction *ba = (Laik_BackendAction *)a;
+            if(colours[rank] == colours[ba->rank]){
+                ba->rank = secondaryRanks[ba->rank];
+                ba->shmem = true;
+            }
+            break;
+        }
+        case LAIK_AT_MapRecvAndUnpack:
+        {
+            Laik_A_MapRecvAndUnpack *aa = (Laik_A_MapRecvAndUnpack *)a;
+            if(colours[rank] == colours[aa->from_rank]){
+                aa->from_rank = secondaryRanks[aa->from_rank];
+                aa->shmem = true;
+            }
+            break;
+        }
+        case LAIK_AT_RecvAndUnpack:
+        {
+            Laik_BackendAction *ba = (Laik_BackendAction *)a;
+            if(colours[rank] == colours[ba->rank]){
+                ba->rank = secondaryRanks[ba->rank];
+                ba->shmem = true;
+            }
+            break;
+        }
         default:
             break;
         }
@@ -892,6 +928,7 @@ void laik_shmem_secondary_exec(Laik_ActionSeq *as, Laik_Action *a)
     Laik_TransitionContext *tc = as->context[0];
     Laik_MappingList *fromList = tc->fromList;
     Laik_MappingList *toList = tc->toList;
+    int elemsize = tc->data->elemsize;
 
     int err, count;
     int dType = getSHMEMDataType(tc->data);
@@ -955,6 +992,34 @@ void laik_shmem_secondary_exec(Laik_ActionSeq *as, Laik_Action *a)
         if (err != SHMEM_SUCCESS) 
             laik_shmem_panic(err);
         assert((int)ba->count == count);
+        break;
+    }
+    case LAIK_AT_MapPackAndSend:
+    {
+        Laik_A_MapPackAndSend *aa = (Laik_A_MapPackAndSend *)a;
+        assert(aa->fromMapNo < fromList->count);
+        Laik_Mapping *fromMap = &(fromList->map[aa->fromMapNo]);
+        assert(fromMap->base != 0);
+        laik_shmem_exec_packAndSend(fromMap, aa->range, aa->to_rank, aa->count, dType);
+        break;
+    }
+    case LAIK_AT_PackAndSend:
+    {
+        laik_shmem_exec_packAndSend(ba->map, ba->range, ba->rank, (uint64_t)ba->count, dType);
+        break;
+    }
+    case LAIK_AT_MapRecvAndUnpack:
+    {
+        Laik_A_MapRecvAndUnpack *aa = (Laik_A_MapRecvAndUnpack *)a;
+        assert(aa->toMapNo < toList->count);
+        Laik_Mapping *toMap = &(toList->map[aa->toMapNo]);
+        assert(toMap->base);
+        laik_shmem_exec_recvAndUnpack(toMap, aa->range, aa->from_rank, aa->count, elemsize, dType);
+        break;
+    }
+    case LAIK_AT_RecvAndUnpack:
+    {
+        laik_shmem_exec_recvAndUnpack(ba->map, ba->range, ba->rank, (uint64_t)ba->count, elemsize, dType);
         break;
     }
     default:
