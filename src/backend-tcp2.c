@@ -2749,7 +2749,7 @@ Laik_Group* tcp2_resize(Laik_ResizeRequests* resizeReqs)
         return 0;
     }
 
-    // create new group from current world group, with parent relatinship
+    // create new group from current world group, with parent relationship
     Laik_Group* w = instance->world;
     Laik_Group* g = laik_create_group(instance, d->maxid + 1);
     g->parent = w;
