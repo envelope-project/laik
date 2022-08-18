@@ -37,8 +37,6 @@ int shmem_error_string(int error, char *str);
 int shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int *, int, int),
                          int (*recv)(int *, int, int));
 
-int shmem_calculate_groups(int *colours, int **groups, int size);
-
 int shmem_get_colours(int *buf);
 
 int shmem_get_secondaryRanks(int *buf);

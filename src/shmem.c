@@ -353,16 +353,20 @@ int shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int *, in
             (*recv)(&groupInfo.secondaryRanks[i], 1, i);
         }
 
-        int *groups[primarySize]; //TODO remove the unnecesary group building only the size is relevant.
-        shmem_calculate_groups(groupInfo.colours, groups, primarySize);
+        int groupSizes[primarySize];
+        memset(groupSizes, 0, primarySize * sizeof(int));
+        for (int i = 0; i < primarySize; i++)
+        {
+            groupSizes[groupInfo.colours[i]]++;
+        }
 
         for (int i = 1; i < primarySize; i++)
         {
-            (*send)(&groups[groupInfo.colours[i]][0], 1, i); // TODO remove the &***[0] part
+            (*send)(&groupSizes[groupInfo.colours[i]], 1, i);
             (*send)(groupInfo.colours, primarySize, i);
             (*send)(groupInfo.secondaryRanks, primarySize, i);
         }
-        groupInfo.size = groups[groupInfo.colours[0]][0];
+        groupInfo.size = groupSizes[groupInfo.colours[0]];
     }
     else
     {
@@ -380,80 +384,6 @@ int shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int *, in
         return SHMEM_SHMCTL_FAILED;
     openShmid = -1;
 
-    return SHMEM_SUCCESS;
-}
-
-struct intList
-{
-    int val;
-    struct intList *next;
-};
-
-void add_element(int val, struct intList **head)
-{
-    struct intList *new = malloc(sizeof(struct intList));
-    new->val = val;
-
-    if (*head == NULL)
-    {
-        *head = new;
-        return;
-    }
-
-    (*head)->next = new;
-    *head = new;
-}
-
-void increment_val(struct intList **current)
-{
-    if (*current == NULL)
-    {
-        *current = malloc(sizeof(struct intList));
-        (*current)->val = 0;
-    }
-
-    (*current)->val++;
-}
-
-void intList_to_array(struct intList *list, int **arr)
-{
-    if (list == NULL)
-    {
-        *arr = malloc(sizeof(int));
-        *arr = 0;
-        return;
-    }
-
-    int length = list->val + 1;
-    *arr = malloc(length * sizeof(int));
-    for (int i = 0; i < length; i++, list = list->next)
-    {
-        (*arr)[i] = list->val;
-    }
-}
-
-int shmem_calculate_groups(int *colours, int **groups, int size)
-{
-    struct intList **tails = malloc(size * sizeof(struct intList *));
-    struct intList **heads = malloc(size * sizeof(struct intList *));
-    for (int i = 0; i < size; i++)
-    {
-        struct intList *new = malloc(sizeof(struct intList));
-        new->val = 0;
-        tails[i] = new;
-        heads[i] = new;
-    }
-
-    for (int i = 0; i < size; i++)
-    {
-        increment_val(&heads[colours[i]]);
-        add_element(i, &tails[colours[i]]);
-    }
-
-    for (int i = 0; i < size; i++)
-    {
-        intList_to_array(heads[i], &groups[i]);
-    }
     return SHMEM_SUCCESS;
 }
 
