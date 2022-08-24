@@ -76,7 +76,7 @@ typedef struct
 static int mpi_reduce = 1;
 
 // LAIK_MPI_ASYNC: convert send/recv to isend/irecv? Default: Yes
-static int mpi_async = 0; //TODO change back
+static int mpi_async = 1;
 
 //----------------------------------------------------------------
 // buffer space for messages if packing/unpacking from/to not-1d layout
@@ -901,11 +901,6 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_RBufSend:
         {
             Laik_A_RBufSend *aa = (Laik_A_RBufSend *)a;
-            if(aa->shmem)
-            {
-                laik_shmem_secondary_exec(as, a);
-                break;
-            }
             assert(aa->bufID < ASEQ_BUFFER_MAX);
             err = MPI_Send(as->buf[aa->bufID] + aa->offset, aa->count,
                            dataType, aa->to_rank, tag, comm);
@@ -917,11 +912,6 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_BufSend:
         {
             Laik_A_BufSend *aa = (Laik_A_BufSend *)a;
-            if(aa->shmem)
-            {
-                laik_shmem_secondary_exec(as, a);
-                break;
-            }
             err = MPI_Send(aa->buf, aa->count,
                            dataType, aa->to_rank, tag, comm);
             if (err != MPI_SUCCESS)
@@ -950,11 +940,6 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_RBufRecv:
         {
             Laik_A_RBufRecv *aa = (Laik_A_RBufRecv *)a;
-            if(aa->shmem)
-            {
-                laik_shmem_secondary_exec(as, a);
-                break;
-            }
             assert(aa->bufID < ASEQ_BUFFER_MAX);
             err = MPI_Recv(as->buf[aa->bufID] + aa->offset, aa->count,
                            dataType, aa->from_rank, tag, comm, &st);
@@ -972,11 +957,6 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_BufRecv:
         {
             Laik_A_BufRecv *aa = (Laik_A_BufRecv *)a;
-            if(aa->shmem)
-            {
-                laik_shmem_secondary_exec(as, a);
-                break;
-            }
             err = MPI_Recv(aa->buf, aa->count,
                            dataType, aa->from_rank, tag, comm, &st);
             if (err != MPI_SUCCESS)
@@ -1033,11 +1013,6 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_MapPackAndSend:
         {
             Laik_A_MapPackAndSend *aa = (Laik_A_MapPackAndSend *)a;
-            if(aa->shmem)
-            {
-                laik_shmem_secondary_exec(as, a);
-                break;
-            }
             assert(aa->fromMapNo < fromList->count);
             Laik_Mapping *fromMap = &(fromList->map[aa->fromMapNo]);
             assert(fromMap->base != 0);
@@ -1048,11 +1023,6 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
 
         case LAIK_AT_PackAndSend:
         {
-            if(ba->shmem)
-            {
-                laik_shmem_secondary_exec(as, a);
-                break;
-            }
             laik_mpi_exec_packAndSend(ba->map, ba->range, ba->rank,
                                       (uint64_t)ba->count,
                                       dataType, tag, comm);
@@ -1062,11 +1032,6 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         case LAIK_AT_MapRecvAndUnpack:
         {
             Laik_A_MapRecvAndUnpack *aa = (Laik_A_MapRecvAndUnpack *)a;
-            if(aa->shmem)
-            {
-                laik_shmem_secondary_exec(as, a);
-                break;
-            }
             assert(aa->toMapNo < toList->count);
             Laik_Mapping *toMap = &(toList->map[aa->toMapNo]);
             assert(toMap->base);
@@ -1076,11 +1041,6 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
         }
 
         case LAIK_AT_RecvAndUnpack:
-            if(ba->shmem)
-            {
-                laik_shmem_secondary_exec(as, a);
-                break;
-            }
             laik_mpi_exec_recvAndUnpack(ba->map, ba->range, ba->rank,
                                         (uint64_t)ba->count,
                                         elemsize, dataType, tag, comm);
@@ -1116,9 +1076,11 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
             break;
 
         default:
-            laik_log(LAIK_LL_Panic, "mpi_exec: no idea how to exec action %d (%s)",
-                     a->type, laik_at_str(a->type));
-            assert(0);
+            if(!laik_shmem_secondary_exec(as, a)){
+                laik_log(LAIK_LL_Panic, "mpi_exec: no idea how to exec action %d (%s)",
+                         a->type, laik_at_str(a->type));
+                assert(0);
+            }
         }
     }
     assert(((char *)as->action) + as->bytesUsed == ((char *)a));

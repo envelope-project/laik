@@ -83,7 +83,6 @@ typedef struct {
     unsigned int offset;
     unsigned int count;
     int to_rank;
-    bool shmem;
 } Laik_A_RBufSend;
 
 // BufSend action
@@ -92,7 +91,6 @@ typedef struct {
     unsigned int count;
     int to_rank;
     char* buf;
-    bool shmem;
 } Laik_A_BufSend;
 
 // MapPackAndSend action
@@ -102,7 +100,6 @@ typedef struct {
     int fromMapNo;
     Laik_Range* range;
     unsigned int count;
-    bool shmem;
 } Laik_A_MapPackAndSend;
 
 
@@ -115,7 +112,6 @@ typedef struct {
     unsigned int offset;
     unsigned int count;
     int from_rank;
-    bool shmem;
 } Laik_A_RBufRecv;
 
 // BufRecv action
@@ -124,7 +120,6 @@ typedef struct {
     unsigned int count;
     int from_rank;
     char* buf;
-    bool shmem;
 } Laik_A_BufRecv;
 
 // MapRecvAndUnpack action
@@ -134,7 +129,6 @@ typedef struct {
     int toMapNo;
     Laik_Range* range;
     unsigned int count;
-    bool shmem;
 } Laik_A_MapRecvAndUnpack;
 
 
@@ -163,9 +157,6 @@ typedef struct _Laik_BackendAction {
     // subgroup IDs defined in transition
     int inputGroup, outputGroup;   // for GroupReduce
     Laik_ReductionOperation redOp; // for GroupReduce, Reduce
-
-    bool shmem; // for shmem support
-
 } Laik_BackendAction;
 
 #pragma pack(pop)

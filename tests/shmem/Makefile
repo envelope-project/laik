@@ -8,9 +8,6 @@ export LAUNCHER=$(SDIR)./shmemrun
 
 TDIR=$(SDIR)./../common
 
-# test-spmv2-shrink test-spmv2-shrink-inc 
-# test-jac3dri test-jac3deri test-jac3dari
-
 TESTS= \
     test-vsum test-vsum2 \
     test-spmv test-spmv2 test-spmv2r \

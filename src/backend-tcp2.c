@@ -1827,7 +1827,6 @@ int startup_non_master(InstData* d)
     return d->peers + 1;
 }
 
-
 Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
 {
     char* str;

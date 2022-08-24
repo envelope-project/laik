@@ -31,6 +31,6 @@ int laik_shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int 
                          int (*recv)(int *, int, int));
 int laik_shmem_secondary_finalize();
 bool laik_aseq_replaceWithShmemCalls(Laik_ActionSeq *as);
-void laik_shmem_secondary_exec(Laik_ActionSeq *as, Laik_Action *a);
+bool laik_shmem_secondary_exec(Laik_ActionSeq *as, Laik_Action *a);
 
 #endif // LAIK_BACKEND_SHMEM_H
