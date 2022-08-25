@@ -1,3 +1,20 @@
+/*
+ * This file is part of the LAIK library.
+ * Copyright (c) 2017, 2018 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+ *
+ * LAIK is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, version 3 or later.
+ *
+ * LAIK is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "shmem.h"
 
 #include <assert.h>
@@ -221,7 +238,6 @@ int shmem_comm_split()
     return SHMEM_SUCCESS;
 }
 
-// TODO filter out not used erroro codes
 int shmem_error_string(int error, char *str)
 {
     switch (error)
@@ -240,27 +256,6 @@ int shmem_error_string(int error, char *str)
         break;
     case SHMEM_SHMCTL_FAILED:
         strcpy(str, "shmctl failed");
-        break;
-    case SHMEM_INVALID_OR_UNSUPPORTED_ADRESS:
-        strcpy(str, "invalid or unsupported adress");
-        break;
-    case SHMEM_SOCKET_CONNECTION_FAILED:
-        strcpy(str, "socket connection failed");
-        break;
-    case SHMEM_SOCKET_CREATION_FAILED:
-        strcpy(str, "socked creation failed");
-        break;
-    case SHMEM_SETSOCKOPT_FAILED:
-        strcpy(str, "setsockopt failed");
-        break;
-    case SHMEM_SOCKET_BIND_FAILED:
-        strcpy(str, "socket bind failed");
-        break;
-    case SHMEM_SOCKET_LISTEN_FAILED:
-        strcpy(str, "socket listen failed");
-        break;
-    case SHMEM_SOCKET_ACCEPT_FAILED:
-        strcpy(str, "socket accept failed");
         break;
     case SHMEM_RECV_BUFFER_TOO_SMALL:
         strcpy(str, "recv was given a too small buffer");

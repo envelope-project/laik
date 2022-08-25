@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <shmem.h>
 
 
 // provided allocators
@@ -1640,7 +1641,6 @@ void def_free(Laik_Data* d, void* ptr)
 
     free(ptr);
 }
-
 
 Laik_Allocator* laik_new_allocator(Laik_malloc_t malloc_func,
                                    Laik_free_t free_func,

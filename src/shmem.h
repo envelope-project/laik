@@ -1,3 +1,20 @@
+/*
+ * This file is part of the LAIK library.
+ * Copyright (c) 2017, 2018 Josef Weidendorfer <Josef.Weidendorfer@gmx.de>
+ *
+ * LAIK is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, version 3 or later.
+ *
+ * LAIK is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef SHMEM_H
 #define SHMEM_H
 
@@ -7,14 +24,7 @@
 #define SHMEM_SHMAT_FAILED 2
 #define SHMEM_SHMDT_FAILED 3
 #define SHMEM_SHMCTL_FAILED 4
-#define SHMEM_INVALID_OR_UNSUPPORTED_ADRESS 5
-#define SHMEM_SOCKET_CONNECTION_FAILED 6
-#define SHMEM_SOCKET_CREATION_FAILED 7
-#define SHMEM_SETSOCKOPT_FAILED 8
-#define SHMEM_SOCKET_BIND_FAILED 9
-#define SHMEM_SOCKET_LISTEN_FAILED 10
-#define SHMEM_SOCKET_ACCEPT_FAILED 11
-#define SHMEM_RECV_BUFFER_TOO_SMALL 12
+#define SHMEM_RECV_BUFFER_TOO_SMALL 5
 
 #define SHMEM_MAX_ERROR_STRING 100
 
