@@ -1676,7 +1676,11 @@ Laik_Allocator* laik_get_allocator(Laik_Data* d)
 // returns an allocator with default policy LAIK_MP_NewAllocOnRepartition
 Laik_Allocator* laik_new_allocator_def()
 {
+#ifdef USE_SHMEM
+    Laik_Allocator* a = laik_new_allocator(def_shmem_malloc, def_shmem_free, 0);
+#else
     Laik_Allocator* a = laik_new_allocator(def_malloc, def_free, 0);
+#endif
     a->policy = LAIK_MP_NewAllocOnRepartition;
 
     return a;

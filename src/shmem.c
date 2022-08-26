@@ -26,6 +26,8 @@
 #include <time.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <laik.h>
+#include <unistd.h>
 
 #define SHM_KEY 0x33 // TODO über SHMEM_RUN dynamisch key generieren (prüfen ob besetzt und dann neuen erzeugen) und key dann als Umgebungsvariable verteilen
 #define MAX_WAITTIME 8
@@ -47,6 +49,16 @@ struct groupInfo
     int *secondaryRanks;
 };
 
+struct shmList
+{
+    void *ptr;
+    int shmid;
+    struct shmList *next;
+};
+
+struct shmList *head;
+struct shmList *tail;
+
 struct groupInfo groupInfo;
 int openShmid = -1;
 
@@ -54,6 +66,13 @@ void deleteOpenShmSeg()
 {
     if (openShmid != -1)
         shmctl(openShmid, IPC_RMID, 0);
+
+    struct shmList *l = head;
+    while(l != NULL){
+        shmdt(l->ptr);
+        shmctl(l->shmid, IPC_RMID, 0);
+        l = l->next;
+    }
 }
 
 int shmem_init()
@@ -147,10 +166,9 @@ int hash(int x)
 
 int shmem_send(const void *buffer, int count, int datatype, int recipient)
 {
-
     char *shmp;
     int size = datatype * count;
-    int shmAddr = hash(recipient + hash(groupInfo.rank));
+    int shmAddr = hash(recipient + hash(groupInfo.rank)) + 1000;
 
     int shmid = shmget(shmAddr, size + 1 + sizeof(int), 0644 | IPC_CREAT);
     if (shmid == -1)
@@ -195,7 +213,7 @@ int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
 {
     char *shmp;
     int bufSize = datatype * count;
-    int shmAddr = hash(groupInfo.rank + hash(sender));
+    int shmAddr = hash(groupInfo.rank + hash(sender)) + 1000;
 
     time_t t_0 = time(NULL);
     int shmid = shmget(shmAddr, 0, 0644);
@@ -394,34 +412,120 @@ int shmem_get_secondaryRanks(int *buf)
     return SHMEM_SUCCESS;
 }
 
+void register_shmSeg(void *ptr, int shmid)
+{
+    struct shmList *new = malloc(sizeof(struct shmList));
+    new->ptr = ptr;
+    new->shmid = shmid;
+
+    if (head == NULL)
+    {
+        head = new;
+        tail = new;
+        return;
+    }
+    head->next = new;
+    head = new;
+}
+
+int get_shmid(void *ptr, int *shmid)
+{
+    if(tail == NULL)
+        return SHMEM_FAILURE;
+
+    struct shmList *previous = NULL;
+    struct shmList *current = tail;
+
+    while(current != NULL)
+    {
+        if(ptr == current->ptr)
+        {
+            *shmid = current->shmid;
+            if(previous == NULL)
+            {
+                tail = current->next;
+            }
+            else
+            {
+                previous->next = current->next;
+            }
+
+            if(current->next == NULL){
+                head = previous;
+            }
+
+            return SHMEM_SUCCESS;
+        }
+        previous = current;
+        current = current->next;
+    }
+    return SHMEM_FAILURE;
+}
+
+static int cnt = 0;
+
+void* def_shmem_malloc(Laik_Data* d, size_t size){
+    (void) d; // not used in this implementation of interface
+
+    int shmAddr = hash(groupInfo.rank + hash(cnt++));
+    int shmid = shmget(shmAddr, size, 0644 | IPC_CREAT | IPC_EXCL);
+    if (shmid == -1)
+    {
+        laik_panic("def_shmem_malloc couldn't create the shared memory segment");
+        return NULL;
+    }
+
+    // Attach to the segment to get a pointer to it.
+    void *ptr = shmat(shmid, NULL, 0);
+    if (ptr == (void *)-1)
+    {
+        laik_panic("def_shmem_malloc couldn't attach to the shared memory segment");
+        return NULL;
+    }
+
+    register_shmSeg(ptr, shmid);
+
+    return ptr;
+}
+
+void def_shmem_free(Laik_Data* d, void* ptr){
+    (void) d; // not used in this implementation of interface
+
+    int shmid;
+    if(get_shmid(ptr, &shmid) == SHMEM_FAILURE)
+        laik_panic("def_shmem_free couldn't find the given shared memory segment");
+
+    if (shmdt(ptr) == -1)
+        laik_panic("def_shmem_free couldn't detach from the given pointer");
+
+    if (shmctl(shmid, IPC_RMID, 0) == -1)
+        laik_panic("def_shmem_free couldn't destroy the shared memory segment");
+}
+
 int main(int argc, char **argv)
 {
-    /*int err = MPI_Init(&argc, &argv);
+    (void)argc;
+    (void) argv;
 
-    MPI_Comm comm;
-    err = MPI_Comm_dup(MPI_COMM_WORLD, &comm);
-    err = MPI_Comm_set_errhandler(comm, MPI_ERRORS_RETURN);
+    int a = 1, b = 2, c = 3;
+    int *x = &a;
+    int *y = &b;
+    int *z = &c;
 
-    int size, rank;
-    err = MPI_Comm_size(comm, &size);
-    err = MPI_Comm_rank(comm, &rank);
+    register_shmSeg(x, a);
+    register_shmSeg(y, b);
+    register_shmSeg(z, c);
 
-    int (*send)(int *, int, int);
-    int (*recv)(int *, int, int);
-    send = &sendIntegers;
-    recv = &recvIntegers;
-    initComm = comm;
-    shmem_secondary_init(rank, size, send, recv);
+    int var = -1;
+    get_shmid(y, &var);
+    assert(var == 2);
+    get_shmid(z, &var);
+    assert(var == 3);
+    get_shmid(x, &var);
+    assert(var == 1);
 
-    printf("rank %d (of %d) {", rank, groupInfo.size);
-    for (int i = 0; i < groupInfo.size; i++)
-    {
-        printf("%d, ", groupInfo.group[i]);
-    }
-    printf("}\n");
+    assert(tail == NULL);
+    assert(head == NULL);
 
-    shmem_finalize();
-
-    MPI_Finalize();*/
     return SHMEM_SUCCESS;
 }

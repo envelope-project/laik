@@ -18,6 +18,9 @@
 #ifndef SHMEM_H
 #define SHMEM_H
 
+#include<stddef.h>
+#include<laik.h>
+
 #define SHMEM_FAILURE -1
 #define SHMEM_SUCCESS 0
 #define SHMEM_SHMGET_FAILED 1
@@ -52,5 +55,9 @@ int shmem_get_colours(int *buf);
 int shmem_get_secondaryRanks(int *buf);
 
 int shmem_finalize();
+
+void* def_shmem_malloc(Laik_Data* d, size_t size);
+
+void def_shmem_free(Laik_Data* d, void* ptr);
 
 #endif

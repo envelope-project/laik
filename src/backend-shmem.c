@@ -103,6 +103,9 @@ static void laik_shmem_panic(int err)
 
 Laik_Instance *laik_init_shmem(int *argc, char ***argv)
 {
+    (void) argc;
+    (void) argv;
+    
     if (shmem_instance)
         return shmem_instance;
 
@@ -188,6 +191,7 @@ static void laik_shmem_finalize(Laik_Instance *inst)
 // update backend specific data for group if needed
 static void laik_shmem_updateGroup(Laik_Group *g)
 {
+    (void) g;
     return;
 }
 
