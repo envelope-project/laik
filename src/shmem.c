@@ -62,12 +62,11 @@ struct shmList *tail;
 struct groupInfo groupInfo;
 int openShmid = -1;
 
-void deleteOpenShmSeg()
+void deleteOpenShmSegs()
 {
     if (openShmid != -1)
         shmctl(openShmid, IPC_RMID, 0);
-
-    struct shmList *l = head;
+    struct shmList *l = tail;
     while(l != NULL){
         shmdt(l->ptr);
         shmctl(l->shmid, IPC_RMID, 0);
@@ -77,7 +76,7 @@ void deleteOpenShmSeg()
 
 int shmem_init()
 {
-    signal(SIGINT, deleteOpenShmSeg);
+    signal(SIGINT, deleteOpenShmSegs);
 
     char *str = getenv("LAIK_SIZE");
     groupInfo.size = str ? atoi(str) : 1;
@@ -168,22 +167,12 @@ int shmem_send(const void *buffer, int count, int datatype, int recipient)
 {
     char *shmp;
     int size = datatype * count;
-    int shmAddr = hash(recipient + hash(groupInfo.rank)) + 1000;
+    int shmAddr = hash(recipient + hash(groupInfo.rank)) + 123456789;
 
     int shmid = shmget(shmAddr, size + 1 + sizeof(int), 0644 | IPC_CREAT);
     if (shmid == -1)
     {
-        // TODO eventuell rauskürzen da nicht gebraucht
-        shmid = shmget(shmAddr, 0, 0644 | IPC_CREAT);
-        if (shmid == -1)
-            return SHMEM_SHMGET_FAILED;
-
-        if (shmctl(shmid, IPC_RMID, 0) == -1)
-            return SHMEM_SHMCTL_FAILED;
-
-        shmid = shmget(shmAddr, size + 1 + sizeof(int), 0644 | IPC_CREAT);
-        if (shmid == -1)
-            return SHMEM_SHMGET_FAILED;
+        return SHMEM_SHMGET_FAILED;
     }
     openShmid = shmid;
 
@@ -213,7 +202,7 @@ int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
 {
     char *shmp;
     int bufSize = datatype * count;
-    int shmAddr = hash(groupInfo.rank + hash(sender)) + 1000;
+    int shmAddr = hash(groupInfo.rank + hash(sender)) + 123456789;
 
     time_t t_0 = time(NULL);
     int shmid = shmget(shmAddr, 0, 0644);
@@ -287,8 +276,7 @@ int shmem_error_string(int error, char *str)
 
 int shmem_finalize()
 {
-    deleteOpenShmSeg();
-
+    deleteOpenShmSegs();
     if (groupInfo.colours != NULL)
         free(groupInfo.colours);
     
@@ -301,7 +289,7 @@ int shmem_finalize()
 int shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int *, int, int),
                          int (*recv)(int *, int, int))
 {
-    signal(SIGINT, deleteOpenShmSeg);
+    signal(SIGINT, deleteOpenShmSegs);
 
     struct shmInitSeg *shmp;
     int shmid = shmget(SHM_KEY, sizeof(struct shmInitSeg), IPC_EXCL | 0644 | IPC_CREAT);
@@ -417,6 +405,7 @@ void register_shmSeg(void *ptr, int shmid)
     struct shmList *new = malloc(sizeof(struct shmList));
     new->ptr = ptr;
     new->shmid = shmid;
+    new->next = NULL;
 
     if (head == NULL)
     {
@@ -453,7 +442,6 @@ int get_shmid(void *ptr, int *shmid)
             if(current->next == NULL){
                 head = previous;
             }
-
             return SHMEM_SUCCESS;
         }
         previous = current;
@@ -493,39 +481,21 @@ void def_shmem_free(Laik_Data* d, void* ptr){
 
     int shmid;
     if(get_shmid(ptr, &shmid) == SHMEM_FAILURE)
-        laik_panic("def_shmem_free couldn't find the given shared memory segment");
+        return;
+        //laik_panic("def_shmem_free couldn't find the given shared memory segment");
 
     if (shmdt(ptr) == -1)
         laik_panic("def_shmem_free couldn't detach from the given pointer");
 
     if (shmctl(shmid, IPC_RMID, 0) == -1)
         laik_panic("def_shmem_free couldn't destroy the shared memory segment");
+    
 }
 
 int main(int argc, char **argv)
 {
     (void)argc;
     (void) argv;
-
-    int a = 1, b = 2, c = 3;
-    int *x = &a;
-    int *y = &b;
-    int *z = &c;
-
-    register_shmSeg(x, a);
-    register_shmSeg(y, b);
-    register_shmSeg(z, c);
-
-    int var = -1;
-    get_shmid(y, &var);
-    assert(var == 2);
-    get_shmid(z, &var);
-    assert(var == 3);
-    get_shmid(x, &var);
-    assert(var == 1);
-
-    assert(tail == NULL);
-    assert(head == NULL);
 
     return SHMEM_SUCCESS;
 }
