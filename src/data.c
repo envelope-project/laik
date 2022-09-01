@@ -1315,14 +1315,12 @@ void laik_switchto_partitioning(Laik_Data* d,
             return;
         }
     }
-
     Laik_MappingList* toList = prepareMaps(d, toP);
     Laik_Transition* t = do_calc_transition(d->space,
                                             d->activePartitioning, toP,
                                             flow, redOp);
-
+    
     doTransition(d, t, 0, d->activeMappings, toList);
-
     // if we migrated to common group before, migrate back
     if (commonGroup) {
         laik_partitioning_migrate(d->activePartitioning, fromGroup);
@@ -1366,7 +1364,6 @@ Laik_Partitioning* laik_switchto_new_partitioning(Laik_Data* d, Laik_Group* g,
 
     laik_log(1, "switch data '%s' to new partitioning '%s'",
              d->name, p->name);
-
     laik_switchto_partitioning(d, p, flow, redOp);
     return p;
 }

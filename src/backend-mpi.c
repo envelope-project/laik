@@ -833,6 +833,8 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
             laik_log_flush(0);
         }
 
+        int rank;
+        shmem_comm_rank(&rank);
         switch (a->type)
         {
         case LAIK_AT_BufReserve:

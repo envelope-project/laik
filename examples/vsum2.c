@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
     // partial sum (according to master partitioning)
     laik_get_map_1d(a, 0, (void**) &base, &count);
     for(uint64_t i = 0; i < count; i++) mysum[0] += base[i];
-
+    
     laik_set_phase(inst, 2, "block", NULL);
 
     // distribute data equally among all
@@ -79,11 +79,11 @@ int main(int argc, char* argv[])
                                    laik_new_block_partitioner(0, 2, 0, 0, 0),
                                    LAIK_DF_Preserve, LAIK_RO_None);
     // partial sum using equally-sized blocks, outer loop over ranges
+    
     for(int sNo = 0;; sNo++) {
         if (laik_get_map_1d(a, sNo, (void**) &base, &count) == 0) break;
         for(uint64_t i = 0; i < count; i++) mysum[1] += base[i];
     }
-
     laik_set_phase(inst, 3, "element-wise", NULL);
 
     // distribution using element-wise weights equal to index

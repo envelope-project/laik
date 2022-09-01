@@ -963,6 +963,9 @@ bool laik_shmem_secondary_exec(Laik_ActionSeq *as, Laik_Action *a)
 
     Laik_BackendAction *ba = (Laik_BackendAction *)a;
 
+    int rank;
+    shmem_comm_rank(&rank);
+
     switch (a->type)
     {
     case LAIK_AT_ShmemMapSend:

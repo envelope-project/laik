@@ -53,6 +53,7 @@ struct shmList
 {
     void *ptr;
     int shmid;
+    int size;
     struct shmList *next;
 };
 
@@ -163,13 +164,120 @@ int hash(int x)
     return x;
 }
 
-int shmem_send(const void *buffer, int count, int datatype, int recipient)
+int get_shmid(void *ptr, int *shmid, int *offset)
+{
+    for(struct shmList *l = tail; l != NULL; l = l->next)
+    {
+        int diff = (int) (ptr - l->ptr);
+        if(diff >= 0 && diff < l->size)
+        {
+            *offset = diff;
+            *shmid = l->shmid;
+            return SHMEM_SUCCESS;
+        }
+    }
+    return SHMEM_SEGMENT_NOT_FOUND;
+}
+
+struct metaInfos{
+    char status;
+    int count;
+    int shmid;
+    int offset;
+};
+
+int shmem_2cpy_send(const void *buffer, int count, int datatype, int recipient)
 {
     char *shmp;
     int size = datatype * count;
     int shmAddr = hash(recipient + hash(groupInfo.rank)) + 123456789;
 
-    int shmid = shmget(shmAddr, size + 1 + sizeof(int), 0644 | IPC_CREAT);
+    int shmid = shmget(shmAddr, size + 1 + 2 * sizeof(int), 0644 | IPC_CREAT);
+    if (shmid == -1)
+    {
+        return SHMEM_SHMGET_FAILED;
+    }
+    openShmid = shmid;
+
+    // Attach to the segment to get a pointer to it.
+    shmp = shmat(shmid, NULL, 0);
+    if (shmp == (void *)-1)
+        return SHMEM_SHMAT_FAILED;
+
+    int x = -1;
+
+    shmp[0] = 'd';
+    memcpy(shmp + 1, &x, sizeof(int));
+    memcpy(shmp + 1 + sizeof(int), &count, sizeof(int));
+    memcpy((shmp + 1 + 2 * sizeof(int)), buffer, size);
+    shmp[0] = 'r';
+    while (shmp[0] != 'd')
+    {
+    }
+
+    if (shmdt(shmp) == -1)
+        return SHMEM_SHMDT_FAILED;
+
+    shmctl(shmid, IPC_RMID, 0);
+    openShmid = -1;
+
+    return SHMEM_SUCCESS;
+}
+
+int shmem_2cpy_recv(void *buffer, int count, int datatype, int sender, int *received)
+{
+    char *shmp;
+    int bufSize = datatype * count;
+    int shmAddr = hash(groupInfo.rank + hash(sender)) + 123456789;
+
+    time_t t_0 = time(NULL);
+    int shmid = shmget(shmAddr, 0, 0644);
+    while (shmid == -1 && time(NULL) - t_0 < MAX_WAITTIME)
+        shmid = shmget(shmAddr, 0, 0644);
+    if (shmid == -1)
+        return SHMEM_SHMGET_FAILED;
+
+    // Attach to the segment to get a pointer to it.
+    shmp = shmat(shmid, NULL, 0);
+    if (shmp == (void *)-1)
+        return SHMEM_SHMAT_FAILED;
+
+    while (shmp[0] != 'r')
+    {
+    }
+    memcpy(received, shmp + 1 + sizeof(int), sizeof(int));
+    int receivedSize = *received * datatype;
+    if (bufSize < receivedSize)
+    {
+        memcpy(buffer, (shmp + 1 + 2 * sizeof(int)), bufSize);
+        return SHMEM_RECV_BUFFER_TOO_SMALL;
+    }
+    else
+    {
+        memcpy(buffer, (shmp + 1 + 2 * sizeof(int)), receivedSize);
+    }
+    shmp[0] = 'd';
+
+    if (shmdt(shmp) == -1)
+        return SHMEM_SHMDT_FAILED;
+
+    shmctl(shmid, IPC_RMID, 0);
+
+    return SHMEM_SUCCESS;
+}
+
+int shmem_send(void *buffer, int count, int datatype, int recipient)
+{
+    int shmid2, offset;
+    if(get_shmid(buffer, &shmid2, &offset) == SHMEM_SEGMENT_NOT_FOUND){
+        return shmem_2cpy_send(buffer, count, datatype, recipient);
+    }
+
+    (void) datatype;
+    char *shmp;
+    int shmAddr = hash(recipient + hash(groupInfo.rank)) + 123456789;
+
+    int shmid = shmget(shmAddr, 1 + 3 * sizeof(int), 0644 | IPC_CREAT);
     if (shmid == -1)
     {
         return SHMEM_SHMGET_FAILED;
@@ -182,8 +290,9 @@ int shmem_send(const void *buffer, int count, int datatype, int recipient)
         return SHMEM_SHMAT_FAILED;
 
     shmp[0] = 'd';
-    memcpy((shmp + 1 + sizeof(int)), buffer, size);
     memcpy(shmp + 1, &count, sizeof(int));
+    memcpy(shmp + 1 + sizeof(int), &shmid2, sizeof(int));
+    memcpy(shmp + 1 + 2 * sizeof(int), &offset, sizeof(int));
     shmp[0] = 'r';
     while (shmp[0] != 'd')
     {
@@ -219,22 +328,34 @@ int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
     while (shmp[0] != 'r')
     {
     }
+    int shmid2, offset;
     memcpy(received, shmp + 1, sizeof(int));
+    if(*received == -1){
+        return shmem_2cpy_recv(buffer, count, datatype, sender, received);
+    }
+    memcpy(&shmid2,  shmp + 1 + sizeof(int), sizeof(int));
+    memcpy(&offset, shmp + 1 + 2 * sizeof(int), sizeof(int));
+    char *shmp2 = shmat(shmid2, NULL, 0);
+    if (shmp2 == (void *)-1)
+        return SHMEM_SHMAT_FAILED;
+
     int receivedSize = *received * datatype;
     if (bufSize < receivedSize)
     {
-        memcpy(buffer, (shmp + 1 + sizeof(int)), bufSize);
+        memcpy(buffer, shmp2 + offset, bufSize);
         return SHMEM_RECV_BUFFER_TOO_SMALL;
     }
     else
     {
-        memcpy(buffer, (shmp + 1 + sizeof(int)), receivedSize);
+        memcpy(buffer, shmp2 + offset, receivedSize);
     }
-    shmp[0] = 'd';
 
-    if (shmdt(shmp) == -1)
+    if (shmdt(shmp2) == -1)
         return SHMEM_SHMDT_FAILED;
 
+    shmp[0] = 'd';
+    if (shmdt(shmp) == -1)
+        return SHMEM_SHMDT_FAILED;
     shmctl(shmid, IPC_RMID, 0);
 
     return SHMEM_SUCCESS;
@@ -266,6 +387,9 @@ int shmem_error_string(int error, char *str)
         break;
     case SHMEM_RECV_BUFFER_TOO_SMALL:
         strcpy(str, "recv was given a too small buffer");
+        break;
+    case SHMEM_SEGMENT_NOT_FOUND:
+        strcpy(str, "get_shmid couldn't find a segment the given pointer points at");
         break;
     default:
         strcpy(str, "error unknown to shmem");
@@ -400,11 +524,12 @@ int shmem_get_secondaryRanks(int *buf)
     return SHMEM_SUCCESS;
 }
 
-void register_shmSeg(void *ptr, int shmid)
+void register_shmSeg(void *ptr, int shmid, int size)
 {
     struct shmList *new = malloc(sizeof(struct shmList));
     new->ptr = ptr;
     new->shmid = shmid;
+    new->size = size;
     new->next = NULL;
 
     if (head == NULL)
@@ -417,10 +542,11 @@ void register_shmSeg(void *ptr, int shmid)
     head = new;
 }
 
-int get_shmid(void *ptr, int *shmid)
+int get_shmid_and_destroy(void *ptr, int *shmid)
 {
+    // TODO add free
     if(tail == NULL)
-        return SHMEM_FAILURE;
+        return SHMEM_SEGMENT_NOT_FOUND;
 
     struct shmList *previous = NULL;
     struct shmList *current = tail;
@@ -447,7 +573,7 @@ int get_shmid(void *ptr, int *shmid)
         previous = current;
         current = current->next;
     }
-    return SHMEM_FAILURE;
+    return SHMEM_SEGMENT_NOT_FOUND;
 }
 
 static int cnt = 0;
@@ -462,7 +588,7 @@ void* def_shmem_malloc(Laik_Data* d, size_t size){
         laik_panic("def_shmem_malloc couldn't create the shared memory segment");
         return NULL;
     }
-
+    
     // Attach to the segment to get a pointer to it.
     void *ptr = shmat(shmid, NULL, 0);
     if (ptr == (void *)-1)
@@ -471,8 +597,7 @@ void* def_shmem_malloc(Laik_Data* d, size_t size){
         return NULL;
     }
 
-    register_shmSeg(ptr, shmid);
-
+    register_shmSeg(ptr, shmid, size);
     return ptr;
 }
 
@@ -480,9 +605,8 @@ void def_shmem_free(Laik_Data* d, void* ptr){
     (void) d; // not used in this implementation of interface
 
     int shmid;
-    if(get_shmid(ptr, &shmid) == SHMEM_FAILURE)
-        return;
-        //laik_panic("def_shmem_free couldn't find the given shared memory segment");
+    if(get_shmid_and_destroy(ptr, &shmid) != SHMEM_SUCCESS)
+        laik_panic("def_shmem_free couldn't find the given shared memory segment");
 
     if (shmdt(ptr) == -1)
         laik_panic("def_shmem_free couldn't detach from the given pointer");

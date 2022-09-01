@@ -28,6 +28,7 @@
 #define SHMEM_SHMDT_FAILED 3
 #define SHMEM_SHMCTL_FAILED 4
 #define SHMEM_RECV_BUFFER_TOO_SMALL 5
+#define SHMEM_SEGMENT_NOT_FOUND 6
 
 #define SHMEM_MAX_ERROR_STRING 100
 
@@ -41,7 +42,7 @@ int shmem_comm_colour(int *colourPtr);
 
 int shmem_get_identifier(int *ident);
 
-int shmem_send(const void *buffer, int count, int datatype, int recipient);
+int shmem_send(void *buffer, int count, int datatype, int recipient);
 
 int shmem_recv(void *buffer, int count, int datatype, int sender, int *recieved);
 
