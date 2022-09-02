@@ -130,8 +130,9 @@ int main(int argc, char* argv[])
 
     if (myid == 0) {
         // statistics
-        printf("Average time per iteration: %lf s\n",
-               (end_time - start_time)/(double)(2*iters));
+        printf("Time: %lf s (average per iteration: %lf ms)\n",
+	       end_time - start_time,
+               (end_time - start_time) * 1e3 / (double)iters);
         printf("GB/s: %lf\n",
                8.0 * 2 * iters * size / (end_time - start_time) / 1.0e9 );
     }
