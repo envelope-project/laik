@@ -49,6 +49,13 @@ struct groupInfo
     int *secondaryRanks;
 };
 
+struct metaInfos{
+    int receiver;
+    int count;
+    int shmid;
+    int offset;
+};
+
 struct shmList
 {
     void *ptr;
@@ -62,17 +69,49 @@ struct shmList *tail;
 
 struct groupInfo groupInfo;
 int openShmid = -1;
+int metaShmid = -1;
+
+int hash(int x)
+{
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x;
+}
 
 void deleteOpenShmSegs()
 {
     if (openShmid != -1)
         shmctl(openShmid, IPC_RMID, 0);
+
+    if (metaShmid != -1)
+        shmctl(metaShmid, IPC_RMID, 0);
+
     struct shmList *l = tail;
     while(l != NULL){
         shmdt(l->ptr);
         shmctl(l->shmid, IPC_RMID, 0);
         l = l->next;
     }
+}
+
+int createMetaInfoSeg()
+{
+    int shmAddr = hash(groupInfo.rank) + 123456;
+    metaShmid = shmget(shmAddr, sizeof(struct metaInfos), 0644 | IPC_CREAT);
+    if (metaShmid == -1)
+        return SHMEM_SHMGET_FAILED;
+
+    struct metaInfos *shmp = shmat(metaShmid, NULL, 0);
+    if (shmp == (void *)-1)
+        return SHMEM_SHMAT_FAILED; 
+
+    shmp->receiver = -1;
+
+    if (shmdt(shmp) == -1)
+        return SHMEM_SHMDT_FAILED;
+    
+    return SHMEM_SUCCESS;
 }
 
 int shmem_init()
@@ -129,6 +168,12 @@ int shmem_init()
 
         openShmid = -1;
     }
+
+    // Open the meta info shm segment and set it to ready
+    int err = createMetaInfoSeg();
+    if(err != SHMEM_SUCCESS)
+        return err;
+
     return SHMEM_SUCCESS;
 }
 
@@ -156,14 +201,6 @@ int shmem_get_identifier(int *ident)
     return SHMEM_SUCCESS;
 }
 
-int hash(int x)
-{
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = (x >> 16) ^ x;
-    return x;
-}
-
 int get_shmid(void *ptr, int *shmid, int *offset)
 {
     for(struct shmList *l = tail; l != NULL; l = l->next)
@@ -179,46 +216,39 @@ int get_shmid(void *ptr, int *shmid, int *offset)
     return SHMEM_SEGMENT_NOT_FOUND;
 }
 
-struct metaInfos{
-    char status;
-    int count;
-    int shmid;
-    int offset;
-};
-
 int shmem_2cpy_send(const void *buffer, int count, int datatype, int recipient)
 {
-    char *shmp;
     int size = datatype * count;
     int shmAddr = hash(recipient + hash(groupInfo.rank)) + 123456789;
-
-    int shmid = shmget(shmAddr, size + 1 + 2 * sizeof(int), 0644 | IPC_CREAT);
-    if (shmid == -1)
-    {
+    int bufShmid = shmget(shmAddr, size, 0644 | IPC_CREAT);
+    if (bufShmid == -1)
         return SHMEM_SHMGET_FAILED;
-    }
-    openShmid = shmid;
+    openShmid = bufShmid;
 
     // Attach to the segment to get a pointer to it.
-    shmp = shmat(shmid, NULL, 0);
+    char *bufShmp = shmat(bufShmid, NULL, 0);
+    if (bufShmp == (void *)-1)
+        return SHMEM_SHMAT_FAILED;
+
+    struct metaInfos *shmp = shmat(metaShmid, NULL, 0);
     if (shmp == (void *)-1)
         return SHMEM_SHMAT_FAILED;
 
-    int x = -1;
-
-    shmp[0] = 'd';
-    memcpy(shmp + 1, &x, sizeof(int));
-    memcpy(shmp + 1 + sizeof(int), &count, sizeof(int));
-    memcpy((shmp + 1 + 2 * sizeof(int)), buffer, size);
-    shmp[0] = 'r';
-    while (shmp[0] != 'd')
+    shmp->count = count;
+    shmp->shmid = -1;
+    memcpy(bufShmp, buffer, size);
+    shmp->receiver = recipient;
+    while (shmp->receiver != -1)
     {
     }
 
     if (shmdt(shmp) == -1)
         return SHMEM_SHMDT_FAILED;
 
-    shmctl(shmid, IPC_RMID, 0);
+    if (shmdt(bufShmp) == -1)
+        return SHMEM_SHMDT_FAILED;
+
+    shmctl(bufShmid, IPC_RMID, 0);
     openShmid = -1;
 
     return SHMEM_SUCCESS;
@@ -226,93 +256,87 @@ int shmem_2cpy_send(const void *buffer, int count, int datatype, int recipient)
 
 int shmem_2cpy_recv(void *buffer, int count, int datatype, int sender, int *received)
 {
-    char *shmp;
     int bufSize = datatype * count;
-    int shmAddr = hash(groupInfo.rank + hash(sender)) + 123456789;
+    int bufShmAddr = hash(groupInfo.rank + hash(sender)) + 123456789;
 
     time_t t_0 = time(NULL);
+    int bufShmid = shmget(bufShmAddr, 0, 0644);
+    while (bufShmid == -1 && time(NULL) - t_0 < MAX_WAITTIME)
+        bufShmid = shmget(bufShmAddr, 0, 0644);
+    if (bufShmid == -1)
+        return SHMEM_SHMGET_FAILED;
+
+    char *bufShmp = shmat(bufShmid, NULL, 0);
+    if (bufShmp == (void *)-1)
+        return SHMEM_SHMAT_FAILED;
+
+    int shmAddr = hash(sender) + 123456;
     int shmid = shmget(shmAddr, 0, 0644);
-    while (shmid == -1 && time(NULL) - t_0 < MAX_WAITTIME)
-        shmid = shmget(shmAddr, 0, 0644);
     if (shmid == -1)
         return SHMEM_SHMGET_FAILED;
 
-    // Attach to the segment to get a pointer to it.
-    shmp = shmat(shmid, NULL, 0);
+    struct metaInfos *shmp = shmat(shmid, NULL, 0);
     if (shmp == (void *)-1)
         return SHMEM_SHMAT_FAILED;
 
-    while (shmp[0] != 'r')
+    while (shmp->receiver != groupInfo.rank)
     {
     }
-    memcpy(received, shmp + 1 + sizeof(int), sizeof(int));
+    *received = shmp->count;
     int receivedSize = *received * datatype;
     if (bufSize < receivedSize)
     {
-        memcpy(buffer, (shmp + 1 + 2 * sizeof(int)), bufSize);
+        memcpy(buffer, bufShmp, bufSize);
         return SHMEM_RECV_BUFFER_TOO_SMALL;
     }
     else
     {
-        memcpy(buffer, (shmp + 1 + 2 * sizeof(int)), receivedSize);
+        memcpy(buffer, bufShmp, receivedSize);
     }
-    shmp[0] = 'd';
+    shmp->receiver = -1;
 
     if (shmdt(shmp) == -1)
         return SHMEM_SHMDT_FAILED;
 
-    shmctl(shmid, IPC_RMID, 0);
+    if (shmdt(bufShmp) == -1)
+        return SHMEM_SHMDT_FAILED;
+
+    shmctl(bufShmid, IPC_RMID, 0);
 
     return SHMEM_SUCCESS;
 }
 
 int shmem_send(void *buffer, int count, int datatype, int recipient)
 {
-    int shmid2, offset;
-    if(get_shmid(buffer, &shmid2, &offset) == SHMEM_SEGMENT_NOT_FOUND){
+    (void) datatype;
+
+    int bufShmid, offset;
+    if(get_shmid(buffer, &bufShmid, &offset) == SHMEM_SEGMENT_NOT_FOUND){
         return shmem_2cpy_send(buffer, count, datatype, recipient);
     }
 
-    (void) datatype;
-    char *shmp;
-    int shmAddr = hash(recipient + hash(groupInfo.rank)) + 123456789;
-
-    int shmid = shmget(shmAddr, 1 + 3 * sizeof(int), 0644 | IPC_CREAT);
-    if (shmid == -1)
-    {
-        return SHMEM_SHMGET_FAILED;
-    }
-    openShmid = shmid;
-
     // Attach to the segment to get a pointer to it.
-    shmp = shmat(shmid, NULL, 0);
+    struct metaInfos *shmp = shmat(metaShmid, NULL, 0);
     if (shmp == (void *)-1)
         return SHMEM_SHMAT_FAILED;
 
-    shmp[0] = 'd';
-    memcpy(shmp + 1, &count, sizeof(int));
-    memcpy(shmp + 1 + sizeof(int), &shmid2, sizeof(int));
-    memcpy(shmp + 1 + 2 * sizeof(int), &offset, sizeof(int));
-    shmp[0] = 'r';
-    while (shmp[0] != 'd')
+    shmp->count = count;
+    shmp->shmid = bufShmid;
+    shmp->offset = offset;
+    shmp->receiver = recipient;
+    while (shmp->receiver != -1)
     {
     }
 
     if (shmdt(shmp) == -1)
         return SHMEM_SHMDT_FAILED;
 
-    shmctl(shmid, IPC_RMID, 0);
-    openShmid = -1;
-
     return SHMEM_SUCCESS;
 }
 
 int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
 {
-    char *shmp;
-    int bufSize = datatype * count;
-    int shmAddr = hash(groupInfo.rank + hash(sender)) + 123456789;
-
+    int shmAddr = hash(sender) + 123456; //TODO make constant
     time_t t_0 = time(NULL);
     int shmid = shmget(shmAddr, 0, 0644);
     while (shmid == -1 && time(NULL) - t_0 < MAX_WAITTIME)
@@ -321,48 +345,45 @@ int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
         return SHMEM_SHMGET_FAILED;
 
     // Attach to the segment to get a pointer to it.
-    shmp = shmat(shmid, NULL, 0);
+    struct metaInfos *shmp = shmat(shmid, NULL, 0);
     if (shmp == (void *)-1)
         return SHMEM_SHMAT_FAILED;
 
-    while (shmp[0] != 'r')
+    while (shmp->receiver != groupInfo.rank)
     {
     }
-    int shmid2, offset;
-    memcpy(received, shmp + 1, sizeof(int));
-    if(*received == -1){
+
+    if(shmp->shmid == -1){
         return shmem_2cpy_recv(buffer, count, datatype, sender, received);
     }
-    memcpy(&shmid2,  shmp + 1 + sizeof(int), sizeof(int));
-    memcpy(&offset, shmp + 1 + 2 * sizeof(int), sizeof(int));
-    char *shmp2 = shmat(shmid2, NULL, 0);
-    if (shmp2 == (void *)-1)
+
+    *received = shmp->count;
+    int bufShmid = shmp->shmid;
+    int offset = shmp->offset;
+
+    char *bufShmp = shmat(bufShmid, NULL, 0);
+    if (bufShmp == (void *)-1)
         return SHMEM_SHMAT_FAILED;
 
+    int bufSize = datatype * count;
     int receivedSize = *received * datatype;
     if (bufSize < receivedSize)
     {
-        memcpy(buffer, shmp2 + offset, bufSize);
+        memcpy(buffer, bufShmp + offset, bufSize);
         return SHMEM_RECV_BUFFER_TOO_SMALL;
     }
     else
     {
-        memcpy(buffer, shmp2 + offset, receivedSize);
+        memcpy(buffer, bufShmp + offset, receivedSize);
     }
 
-    if (shmdt(shmp2) == -1)
+    if (shmdt(bufShmp) == -1)
         return SHMEM_SHMDT_FAILED;
 
-    shmp[0] = 'd';
+    shmp->receiver = -1;
     if (shmdt(shmp) == -1)
         return SHMEM_SHMDT_FAILED;
-    shmctl(shmid, IPC_RMID, 0);
 
-    return SHMEM_SUCCESS;
-}
-
-int shmem_comm_split()
-{
     return SHMEM_SUCCESS;
 }
 
@@ -508,6 +529,11 @@ int shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int *, in
     if (groupInfo.rank == 0 && shmctl(openShmid, IPC_RMID, 0) == -1)
         return SHMEM_SHMCTL_FAILED;
     openShmid = -1;
+
+    // Open the own meta info shm segment and set it to ready
+    int err = createMetaInfoSeg();
+    if (err != SHMEM_SUCCESS)
+        return err;
 
     return SHMEM_SUCCESS;
 }
