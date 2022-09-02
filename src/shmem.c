@@ -29,9 +29,11 @@
 #include <laik.h>
 #include <unistd.h>
 
-#define SHM_KEY 0x33 // TODO über SHMEM_RUN dynamisch key generieren (prüfen ob besetzt und dann neuen erzeugen) und key dann als Umgebungsvariable verteilen
-#define MAX_WAITTIME 8
-
+#define SHM_KEY 0x123
+#define MAX_WAITTIME 1
+#define ALLOC_OFFSET 0x333
+#define META_OFFSET 0x666
+#define BUF_OFFSET 0x999
 
 struct shmInitSeg
 {
@@ -97,7 +99,7 @@ void deleteOpenShmSegs()
 
 int createMetaInfoSeg()
 {
-    int shmAddr = hash(groupInfo.rank) + 123456;
+    int shmAddr = hash(groupInfo.rank) + META_OFFSET;
     metaShmid = shmget(shmAddr, sizeof(struct metaInfos), 0644 | IPC_CREAT);
     if (metaShmid == -1)
         return SHMEM_SHMGET_FAILED;
@@ -132,7 +134,7 @@ int shmem_init()
         t_0 = time(NULL);
         while (time(NULL) - t_0 < MAX_WAITTIME && shmid == -1)
         {
-            shmid = shmget(SHM_KEY, 0, IPC_CREAT | 0644); // TODO maybe remove IPC_Creat might not be needed
+            shmid = shmget(SHM_KEY, 0, IPC_CREAT | 0644);
         }
         if (shmid == -1)
             return SHMEM_SHMGET_FAILED;
@@ -219,7 +221,7 @@ int get_shmid(void *ptr, int *shmid, int *offset)
 int shmem_2cpy_send(const void *buffer, int count, int datatype, int recipient)
 {
     int size = datatype * count;
-    int shmAddr = hash(recipient + hash(groupInfo.rank)) + 123456789;
+    int shmAddr = hash(recipient + hash(groupInfo.rank)) + BUF_OFFSET;
     int bufShmid = shmget(shmAddr, size, 0644 | IPC_CREAT);
     if (bufShmid == -1)
         return SHMEM_SHMGET_FAILED;
@@ -257,7 +259,7 @@ int shmem_2cpy_send(const void *buffer, int count, int datatype, int recipient)
 int shmem_2cpy_recv(void *buffer, int count, int datatype, int sender, int *received)
 {
     int bufSize = datatype * count;
-    int bufShmAddr = hash(groupInfo.rank + hash(sender)) + 123456789;
+    int bufShmAddr = hash(groupInfo.rank + hash(sender)) + BUF_OFFSET;
 
     time_t t_0 = time(NULL);
     int bufShmid = shmget(bufShmAddr, 0, 0644);
@@ -270,7 +272,7 @@ int shmem_2cpy_recv(void *buffer, int count, int datatype, int sender, int *rece
     if (bufShmp == (void *)-1)
         return SHMEM_SHMAT_FAILED;
 
-    int shmAddr = hash(sender) + 123456;
+    int shmAddr = hash(sender) + META_OFFSET;
     int shmid = shmget(shmAddr, 0, 0644);
     if (shmid == -1)
         return SHMEM_SHMGET_FAILED;
@@ -336,7 +338,7 @@ int shmem_send(void *buffer, int count, int datatype, int recipient)
 
 int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
 {
-    int shmAddr = hash(sender) + 123456; //TODO make constant
+    int shmAddr = hash(sender) + META_OFFSET;
     time_t t_0 = time(NULL);
     int shmid = shmget(shmAddr, 0, 0644);
     while (shmid == -1 && time(NULL) - t_0 < MAX_WAITTIME)
@@ -447,7 +449,7 @@ int shmem_secondary_init(int primaryRank, int primarySize, int (*send)(int *, in
         t_0 = time(NULL);
         while (time(NULL) - t_0 < MAX_WAITTIME && shmid == -1)
         {
-            shmid = shmget(SHM_KEY, 0, IPC_CREAT | 0644); // TODO maybe remove IPC_Creat might not be needed
+            shmid = shmget(SHM_KEY, 0, IPC_CREAT | 0644);
         }
         if (shmid == -1)
             return SHMEM_SHMGET_FAILED;
@@ -570,7 +572,6 @@ void register_shmSeg(void *ptr, int shmid, int size)
 
 int get_shmid_and_destroy(void *ptr, int *shmid)
 {
-    // TODO add free
     if(tail == NULL)
         return SHMEM_SEGMENT_NOT_FOUND;
 
@@ -594,6 +595,7 @@ int get_shmid_and_destroy(void *ptr, int *shmid)
             if(current->next == NULL){
                 head = previous;
             }
+            free(current);
             return SHMEM_SUCCESS;
         }
         previous = current;
@@ -607,7 +609,7 @@ static int cnt = 0;
 void* def_shmem_malloc(Laik_Data* d, size_t size){
     (void) d; // not used in this implementation of interface
 
-    int shmAddr = hash(groupInfo.rank + hash(cnt++));
+    int shmAddr = hash(groupInfo.rank + hash(cnt++)) + ALLOC_OFFSET;
     int shmid = shmget(shmAddr, size, 0644 | IPC_CREAT | IPC_EXCL);
     if (shmid == -1)
     {
