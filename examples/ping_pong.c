@@ -23,8 +23,8 @@
 #include <laik.h>
 #include <stdio.h>
 
-// custom partitioner: single process given in params gets access to all values
-void runPart(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
+// custom partitioner: single process gets access to all values
+void runAllSingle(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
 {
     int proc = *(int*) laik_partitioner_data(p->partitioner);
     Laik_Space* space = p->space;
@@ -34,17 +34,55 @@ void runPart(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
     laik_append_range(r, proc, &range, 0, 0);
 }
 
-Laik_Partitioner* allSingle(int* proc)
-{
-    return laik_new_partitioner("allSingle", runPart, proc, 0);
-}
-
-// main
 
 int main(int argc, char* argv[])
 {
     Laik_Instance* instance = laik_init(&argc, &argv);
     Laik_Group *world = laik_world(instance);
+
+    // default run mode
+    int use_reservation = 1;
+    int use_actions = 1;
+    // run parameters (defaults are set after parsing arguments)
+    long size = 0;
+    int iters = 0;
+
+    // parse command line arguments
+    int arg = 1;
+    while((arg < argc) && (argv[arg][0] == '-')) {
+        if (argv[arg][1] == 'r') use_reservation = 0;
+        if (argv[arg][1] == 'a') use_actions = 0;
+        if (argv[arg][1] == 'h') {
+            printf("Ping-pong micro-benchmark for LAIK\n"
+                   "Usage: %s [options] [<size> [<iters>]]\n"
+                   "\nArguments:\n"
+                   " <size>  : number of double entries transfered (def: 100M)\n"
+                   " <iters> : number of repetitions (def: 10)\n"
+                   "\nOptions:\n"
+                   " -r: do not use reservation\n"
+                   " -a: do not pre-calculate action sequence\n"
+                   " -h: this help text\n", argv[0]);
+            exit(1);
+        }
+        arg++;
+    }
+    if (argc > arg) size = atoi(argv[arg]);
+    if (argc > arg + 1) iters = atoi(argv[arg + 1]);
+
+    // set to defaults if not set by arguments
+    if (size == 0) size = 100000000;
+    if (iters == 0) iters = 10;
+
+    // print benchmark run parameters
+    int myid = laik_myid(world);
+    if (myid == 0){
+        printf("Run %d iterations (%ld doubles) [%sreservation/%sactions]\n",
+               iters, size,
+               use_reservation ? "with ":"no ", use_actions ? "with ":"no ");
+    }
+
+    // setup LAIK objects
+
     int worldsize = laik_size(world);
     if (worldsize < 2) {
         printf("Error: cannot run ping-pong with 1 process\n");
@@ -52,34 +90,18 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
-    // default to 100M double entries
-    long size = 0;
-    if (argc > 1) size = atoi(argv[1]);
-    if (size == 0) size = 100000000;
-
-    // default to 10 iterations
-    int iters = 0;
-    if (argc > 2) iters = atoi(argv[2]);
-    if (iters == 0) iters = 10;
-
-    int myid = laik_myid(world);
-    if (myid == 0){
-        printf("Running %d iterations ping-pong (%ld doubles)\n", iters, size);
-    }
-
     Laik_Space* space = laik_new_space_1d(instance, size);
     Laik_Data* array = laik_new_data(space, laik_Double);
 
-    // run the ping pong between first and last process in world
+    // run the ping-pong between first and last process in world
+    Laik_Partitioner *pr0, *pr1;
     Laik_Partitioning *p0, *p1;
     int proc0 = 0;
-    p0 = laik_new_partitioning(allSingle(&proc0), world, space, 0);
     int proc1 = worldsize - 1;
-    p1 = laik_new_partitioning(allSingle(&proc1), world, space, 0);
-
-    // optimizations
-    int use_reservation = 1;
-    int use_actions = 1;
+    pr0 = laik_new_partitioner("allFirst", runAllSingle, &proc0, 0);
+    pr1 = laik_new_partitioner("allLast", runAllSingle, &proc1, 0);
+    p0 = laik_new_partitioning(pr0, world, space, 0);
+    p1 = laik_new_partitioning(pr1, world, space, 0);
 
     Laik_Reservation* reservation = 0;
     if (use_reservation) {
