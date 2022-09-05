@@ -9,6 +9,7 @@ EXAMPLES = min vsum vsum2 spmv spmv2 \
     markov-ser markov markov2 \
     propagation1d propagation2d \
     resize vsum3 \
+    ping_pong \
     README-example
 
 LDFLAGS = $(OPT)
@@ -52,6 +53,8 @@ resize: resize.o $(LAIKLIB)
 vsum3: vsum3.o $(LAIKLIB)
 
 README-example: README-example.o $(LAIKLIB)
+
+ping_pong: ping_pong.o $(LAIKLIB)
 
 clean:
 	rm -f *.o *~ *.ppm $(EXAMPLES)

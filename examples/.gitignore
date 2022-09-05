@@ -18,6 +18,7 @@ markov
 markov2
 propagation1d
 propagation2d
+ping_pong
 README-example
 /raytracer
 /raytracer.c
