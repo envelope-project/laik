@@ -36,7 +36,7 @@ void runPairParter(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
     assert((phase == 0) || (phase == 1));
     int pairs = laik_size(p->group) / 2;
     Laik_Space* space = p->space;
-    int size = laik_space_size(space);
+    int64_t size = laik_space_size(space);
  
     Laik_Range range;
     for(int p = 0; p < pairs; p++) {
@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
         }
         arg++;
     }
-    if (argc > arg) size = atoi(argv[arg]);
+    if (argc > arg) size = atol(argv[arg]);
     if (argc > arg + 1) iters = atoi(argv[arg + 1]);
 
     // set to defaults if not set by arguments
