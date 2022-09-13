@@ -16,22 +16,36 @@
 
 /**
  * Ping-pong micro-benchmark
- * Update values of an array repeatedly between process 0 and 1
+ *
+ * Update values of an array repeatedly between
+ * pair processes with even and odd ranks (or 1st and 2nd half of ranks)
  */
 
 
 #include <laik.h>
+#include <assert.h>
 #include <stdio.h>
 
-// custom partitioner: single process gets access to all values
-void runAllSingle(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
+// custom partitioner: pairs can access pieces depending on phase 0/1
+// e.g. with 4 processes (0-3) and 1d space with 1000 elems
+// - phase 0: proc 0 has access to [0-500[, proc 2 to [500-1000[
+// - phase 1: proc 1 has access to [0-500[, proc 3 to [500-1000[
+void runPairParter(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
 {
-    int proc = *(int*) laik_partitioner_data(p->partitioner);
+    int phase = *(int*) laik_partitioner_data(p->partitioner);
+    assert((phase == 0) || (phase == 1));
+    int pairs = laik_size(p->group) / 2;
     Laik_Space* space = p->space;
+    int64_t size = laik_space_size(space);
  
     Laik_Range range;
-    laik_range_init_1d(&range, space, 0, laik_space_size(space));
-    laik_append_range(r, proc, &range, 0, 0);
+    for(int p = 0; p < pairs; p++) {
+        // array is split up in consecutive pieces among pairs
+        laik_range_init_1d(&range, space,
+                           size * p / pairs, size * (p+1) / pairs);
+        // give it to even or odd process in pair, depending on phase
+        laik_append_range(r, 2 * p + phase, &range, 0, 0);
+    }
 }
 
 
@@ -66,7 +80,7 @@ int main(int argc, char* argv[])
         }
         arg++;
     }
-    if (argc > arg) size = atoi(argv[arg]);
+    if (argc > arg) size = atol(argv[arg]);
     if (argc > arg + 1) iters = atoi(argv[arg + 1]);
 
     // set to defaults if not set by arguments
@@ -96,10 +110,9 @@ int main(int argc, char* argv[])
     // run the ping-pong between first and last process in world
     Laik_Partitioner *pr0, *pr1;
     Laik_Partitioning *p0, *p1;
-    int proc0 = 0;
-    int proc1 = worldsize - 1;
-    pr0 = laik_new_partitioner("allFirst", runAllSingle, &proc0, 0);
-    pr1 = laik_new_partitioner("allLast", runAllSingle, &proc1, 0);
+    int phase0 = 0, phase1 = 1;
+    pr0 = laik_new_partitioner("even", runPairParter, &phase0, 0);
+    pr1 = laik_new_partitioner("odd", runPairParter, &phase1, 0);
     p0 = laik_new_partitioning(pr0, world, space, 0);
     p1 = laik_new_partitioning(pr1, world, space, 0);
 
@@ -123,14 +136,13 @@ int main(int argc, char* argv[])
         actionsToP0 = laik_calc_actions(array, p1_to_p0, reservation, reservation);
     }
 
-    // initialization by proc 0
+    // initialization by even procs
     laik_switchto_partitioning(array, p0, LAIK_DF_None, LAIK_RO_None);
     double * base;
-    laik_get_map_1d(array, 0, (void**) &base, 0);
-    if (myid == 0){
-        for (long i=0; i<size; ++i)
-            base[i] = (double) i;
-    }
+    uint64_t count;
+    laik_get_map_1d(array, 0, (void**) &base, &count);
+    for(uint64_t i=0; i < count; ++i)
+        base[i] = (double) i;
 
     // ping pong
     double start_time, end_time;
