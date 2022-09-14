@@ -336,17 +336,8 @@ int shmem_send(void *buffer, int count, int datatype, int recipient)
     return SHMEM_SUCCESS;
 }
 
-#include <time.h>
-static inline double curtime(void) {
-    struct timespec t;
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    return t.tv_sec + t.tv_nsec * 1e-9;
-}
-double sum = 0;
 int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
 {
-    memset(buffer, 0, datatype * count);
-
     int shmAddr = hash(sender) + META_OFFSET;
     time_t t_0 = time(NULL);
     int shmid = shmget(shmAddr, 0, 0644);
@@ -378,7 +369,6 @@ int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
 
     int bufSize = datatype * count;
     int receivedSize = *received * datatype;
-    double t0 = curtime();
     if (bufSize < receivedSize)
     {
         memcpy(buffer, bufShmp + offset, bufSize);
@@ -388,7 +378,6 @@ int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
     {
         memcpy(buffer, bufShmp + offset, receivedSize);
     }
-    double t1 = curtime();
 
     if (shmdt(bufShmp) == -1)
         return SHMEM_SHMDT_FAILED;
@@ -397,8 +386,6 @@ int shmem_recv(void *buffer, int count, int datatype, int sender, int *received)
     if (shmdt(shmp) == -1)
         return SHMEM_SHMDT_FAILED;
 
-    sum += t1 - t0;
-    printf("p%d recv: took %fs of total %fs\n", groupInfo.rank, t1 - t0, sum);
     return SHMEM_SUCCESS;
 }
 
