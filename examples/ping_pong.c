@@ -52,6 +52,20 @@ void runPairParter(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
     }
 }
 
+// partitioner for aggregating times: access to data in 1st procs of pairs
+void run1stInPairParter(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
+{
+    Laik_Space* space = p->space;
+    Laik_Range range;
+    laik_range_init_1d(&range, space, 0, laik_space_size(space));
+    int pairs = laik_size(p->group) / 2;
+    for(int p = 0; p < pairs; p++) {
+        int proc = use_spread ? p : 2 * p;
+        laik_append_range(r, proc, &range, 0, 0);
+    }
+}
+
+
 
 int main(int argc, char* argv[])
 {
@@ -176,15 +190,30 @@ int main(int argc, char* argv[])
             laik_switchto_partitioning(array, p0, LAIK_DF_Preserve, LAIK_RO_None);
     }
     end_time = laik_wtime();
+    double dt = end_time - start_time;
+    printf("T%d: time %lf\n", myid, dt);
+
+    if (pairs > 1) {
+        // aggregate time from 1st processes in each pair on master
+        Laik_Data* sum = laik_new_data_1d(instance, laik_Double, 1);
+        Laik_Partitioner* pr = laik_new_partitioner("1st", run1stInPairParter, 0,0);
+        laik_switchto_new_partitioning(sum, world, pr, LAIK_DF_None, LAIK_RO_None);
+        laik_get_map_1d(sum, 0, (void**) &base, 0);
+        if (base) // all 1st processes of pairs
+            base[0] = dt;
+        laik_switchto_new_partitioning(sum, world, laik_Master,
+                                       LAIK_DF_Preserve, LAIK_RO_Sum);
+        laik_get_map_1d(sum, 0, (void**) &base, 0);
+        if (base) // only master
+            dt = base[0] / pairs;
+    }
 
     if (myid == 0) {
         // statistics
         printf("Time: %.3lf s (average per iteration: %.3lf ms, per phase: %.3lf ms)\n",
-               end_time - start_time,
-               (end_time - start_time) * 1e3 / (double)iters,
-               (end_time - start_time) * 1e3 / (double)iters / 2);
+               dt, dt * 1e3 / (double)iters, dt * 1e3 / (double)iters / 2);
         printf("GB/s: %lf\n",
-               8.0 * 2 * iters * size / (end_time - start_time) / 1.0e9 );
+               8.0 * 2 * iters * size / dt / 1.0e9 );
     }
 
     laik_finalize(instance);
