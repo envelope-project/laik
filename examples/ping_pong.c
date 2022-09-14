@@ -170,9 +170,6 @@ int main(int argc, char* argv[])
     for(uint64_t i=0; i < count; ++i)
         base[i] = (double) i;
 
-    if (myid == 0)
-        printf("Init done, starting...\n");
-
     // ping pong
     double start_time, end_time;
     start_time = laik_wtime();
@@ -191,7 +188,6 @@ int main(int argc, char* argv[])
     }
     end_time = laik_wtime();
     double dt = end_time - start_time;
-    printf("T%d: time %lf\n", myid, dt);
 
     if (pairs > 1) {
         // aggregate time from 1st processes in each pair on master
