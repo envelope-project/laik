@@ -212,7 +212,7 @@ static bool laik_mpi_log_action(Laik_Action *a)
     }
 
     default:
-        return false;
+        return laik_shmem_log_action(a);
     }
     return true;
 }
@@ -772,6 +772,14 @@ static void laik_mpi_exec_groupReduce(Laik_TransitionContext *tc,
     }
 }
 
+#include <time.h>
+static inline double curtime(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec + t.tv_nsec * 1e-9;
+}
+double tsum = 0;
+
 static void laik_mpi_exec(Laik_ActionSeq *as)
 {
     if (as->actionCount == 0)
@@ -914,11 +922,17 @@ static void laik_mpi_exec(Laik_ActionSeq *as)
 
         case LAIK_AT_BufSend:
         {
+            int rank;
+            MPI_Comm_rank(comm, &rank);
+            double t0 = curtime();
             Laik_A_BufSend *aa = (Laik_A_BufSend *)a;
             err = MPI_Send(aa->buf, aa->count,
                            dataType, aa->to_rank, tag, comm);
             if (err != MPI_SUCCESS)
                 laik_mpi_panic(err);
+            double t1 = curtime();
+            tsum += t1 -t0;
+            printf("p%d: Send took %fs of %fs\n", rank, t1 - t0, tsum);
             break;
         }
 

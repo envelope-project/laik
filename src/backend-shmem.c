@@ -49,7 +49,8 @@ static Laik_Backend laik_backend_shmem = {
     .cleanup = laik_shmem_cleanup,
     .exec = laik_shmem_exec,
     .updateGroup = laik_shmem_updateGroup,
-    .sync = laik_shmem_sync};
+    .sync = laik_shmem_sync
+};
 
 static Laik_Instance *shmem_instance = 0;
 
@@ -1056,6 +1057,89 @@ bool laik_shmem_secondary_exec(Laik_ActionSeq *as, Laik_Action *a)
     default:
         laik_log(LAIK_LL_Panic, "shmem_secondary_exec: no idea how to exec action %d (%s)",
                      a->type, laik_at_str(a->type));
+        return false;
+    }
+    return true;
+}
+
+bool laik_shmem_log_action(Laik_Action *a){
+    switch (a->type)
+    {
+    case LAIK_AT_ShmemMapSend:
+    {
+        laik_log_append("ShmemMapSend");
+        break;
+    }
+    case LAIK_AT_ShmemRBufSend:
+    {
+        Laik_A_RBufSend* aa = (Laik_A_RBufSend*) a;
+        laik_log_append(": from buf %d, off %lld, count %d ==> T%d (shmem)",
+                        aa->bufID, (long long int) aa->offset,
+                        aa->count,
+                        aa->to_rank);
+        break;
+    }
+    case LAIK_AT_ShmemBufSend:
+    {
+        Laik_A_BufSend* aa = (Laik_A_BufSend*) a;
+        laik_log_append(": from %p, count %d ==> T%d (shmem)", 
+                        aa->buf, 
+                        aa->count, 
+                        aa->to_rank);
+        break;
+    }
+    case LAIK_AT_ShmemMapRecv:
+    {
+        laik_log_append("ShmemMapRecv");
+        break;
+    }
+    case LAIK_AT_ShmemRBufRecv:
+    {
+        Laik_A_RBufRecv* aa = (Laik_A_RBufRecv*) a;
+        laik_log_append(": T%d ==> to buf %d, off %lld, count %d (shmem)",
+                        aa->from_rank,
+                        aa->bufID, (long long int) aa->offset,
+                        aa->count);
+        break;
+    }
+    case LAIK_AT_ShmemBufRecv:
+    {
+        Laik_A_BufRecv* aa = (Laik_A_BufRecv*) a;
+        laik_log_append(": T%d ==> to %p, count %d (shmem)",
+                        aa->from_rank,
+                        aa->buf,
+                        aa->count);
+        break;
+    }
+    case LAIK_AT_ShmemMapPackAndSend:
+    {
+        Laik_A_MapPackAndSend* aa = (Laik_A_MapPackAndSend*) a;
+        laik_log_append(": ");
+        laik_log_Range(aa->range);
+        laik_log_append(" mapNo %d, count %llu ==> T%d (shmem)",
+                        aa->fromMapNo, (unsigned long long) aa->count, aa->to_rank);
+        break;
+    }
+    case LAIK_AT_ShmemPackAndSend:
+    {
+        laik_log_append("ShmemPackAndSend");
+        break;
+    }
+    case LAIK_AT_ShmemMapRecvAndUnpack:
+    {
+        Laik_A_MapRecvAndUnpack* aa = (Laik_A_MapRecvAndUnpack*) a;
+        laik_log_append(": T%d ==> ", aa->from_rank);
+        laik_log_Range(aa->range);
+        laik_log_append(" mapNo %d, count %llu (shmem)",
+                        aa->toMapNo, (unsigned long long) aa->count);
+        break;
+    }
+    case LAIK_AT_ShmemRecvAndUnpack:
+    {
+        laik_log_append("ShmemPackAndSend");
+        break;
+    }
+    default:
         return false;
     }
     return true;
