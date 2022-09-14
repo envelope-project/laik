@@ -17,8 +17,7 @@
 /**
  * Ping-pong micro-benchmark
  *
- * Update values of an array repeatedly between
- * pair processes with even and odd ranks (or 1st and 2nd half of ranks)
+ * Update values of an array repeatedly between pairs of processes
  */
 
 
@@ -26,10 +25,15 @@
 #include <assert.h>
 #include <stdio.h>
 
+// by default, process pairs exchanging data are close to each other by
+// their process ID in the world group, ie. [0,1], [2,3] and so on.
+// With use_spread = 1 (option "-s"), pairs are arranged such that the
+// first half of processes exchanges data with the 2nd half instaed, ie.
+// with 20 processes that is [0,10], [1,11] and so on
+int use_spread = 0;
+
+
 // custom partitioner: pairs can access pieces depending on phase 0/1
-// e.g. with 4 processes (0-3) and 1d space with 1000 elems
-// - phase 0: proc 0 has access to [0-500[, proc 2 to [500-1000[
-// - phase 1: proc 1 has access to [0-500[, proc 3 to [500-1000[
 void runPairParter(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
 {
     int phase = *(int*) laik_partitioner_data(p->partitioner);
@@ -43,8 +47,8 @@ void runPairParter(Laik_RangeReceiver* r, Laik_PartitionerParams* p)
         // array is split up in consecutive pieces among pairs
         laik_range_init_1d(&range, space,
                            size * p / pairs, size * (p+1) / pairs);
-        // give it to even or odd process in pair, depending on phase
-        laik_append_range(r, 2 * p + phase, &range, 0, 0);
+        int proc = use_spread ? p + phase * pairs : 2 * p + phase;
+        laik_append_range(r, proc, &range, 0, 0);
     }
 }
 
@@ -66,6 +70,7 @@ int main(int argc, char* argv[])
     while((arg < argc) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'r') use_reservation = 0;
         if (argv[arg][1] == 'a') use_actions = 0;
+        if (argv[arg][1] == 's') use_spread = 1;
         if (argv[arg][1] == 'h') {
             printf("Ping-pong micro-benchmark for LAIK\n"
                    "Usage: %s [options] [<size> [<iters>]]\n"
@@ -75,6 +80,7 @@ int main(int argc, char* argv[])
                    "\nOptions:\n"
                    " -r: do not use reservation\n"
                    " -a: do not pre-calculate action sequence\n"
+                   " -s: arrange process pairs spread instead of close\n"
                    " -h: this help text\n", argv[0]);
             exit(1);
         }
@@ -87,27 +93,33 @@ int main(int argc, char* argv[])
     if (size == 0) size = 100000000;
     if (iters == 0) iters = 10;
 
-    // print benchmark run parameters
-    int myid = laik_myid(world);
-    if (myid == 0){
-        printf("Run %d iterations (%ld doubles) [%sreservation/%sactions]\n",
-               iters, size,
-               use_reservation ? "with ":"no ", use_actions ? "with ":"no ");
-    }
-
-    // setup LAIK objects
-
-    int worldsize = laik_size(world);
-    if (worldsize < 2) {
-        printf("Error: cannot run ping-pong with 1 process\n");
+    int pairs = laik_size(world) / 2;
+    if (pairs == 0) {
+        printf("Error: need at least one process pair to run ping-pong\n");
         laik_finalize(instance);
         exit(1);
     }
 
+    // print benchmark run parameters
+    int myid = laik_myid(world);
+    if (myid == 0) {
+        double sizeMB = .000001 * sizeof(double) * size;
+        printf("Do %d iterations, %d pairs (%s arrangement: 0/%d, %d/%d ...)\n",
+               iters, pairs, use_spread ? "spread":"close",
+               use_spread ? pairs : 1, use_spread ? 1 : 2, use_spread ? 1 + pairs : 3);
+        printf(" with %ld doubles (%.3f MB, per pair %.3f MB)\n",
+               size, sizeMB, sizeMB / pairs);
+        printf(" mode: %sreservation, %spre-calculated actions\n",
+               use_reservation ? "with ":"no ", use_actions ? "with ":"no ");
+    }
+
+
+    // setup LAIK objects
+
     Laik_Space* space = laik_new_space_1d(instance, size);
     Laik_Data* array = laik_new_data(space, laik_Double);
 
-    // run the ping-pong between first and last process in world
+    // run the ping-pong between pairs, using our custom partitioner
     Laik_Partitioner *pr0, *pr1;
     Laik_Partitioning *p0, *p1;
     int phase0 = 0, phase1 = 1;
@@ -144,6 +156,9 @@ int main(int argc, char* argv[])
     for(uint64_t i=0; i < count; ++i)
         base[i] = (double) i;
 
+    if (myid == 0)
+        printf("Init done, starting...\n");
+
     // ping pong
     double start_time, end_time;
     start_time = laik_wtime();
@@ -164,9 +179,10 @@ int main(int argc, char* argv[])
 
     if (myid == 0) {
         // statistics
-        printf("Time: %lf s (average per iteration: %lf ms)\n",
-	       end_time - start_time,
-               (end_time - start_time) * 1e3 / (double)iters);
+        printf("Time: %.3lf s (average per iteration: %.3lf ms, per phase: %.3lf ms)\n",
+               end_time - start_time,
+               (end_time - start_time) * 1e3 / (double)iters,
+               (end_time - start_time) * 1e3 / (double)iters / 2);
         printf("GB/s: %lf\n",
                8.0 * 2 * iters * size / (end_time - start_time) / 1.0e9 );
     }
