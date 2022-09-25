@@ -1,18 +1,18 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-# Configure script for LAIK:
-# - tests for required/wanted packages
-# - generates a Makefile.config
-# - if not called from top source dir, create Makefiles to
-#   enable out-of-source build
+# LAIK configure script for:
+# - test for packages to automatically enable optional features
+# - generate a Makefile.config to enable requested features
+# - support out-of-source builds by creating Makefiles if
+#   called outside of source directory
 #
-# There is no need to run this script:
-# - with Makefile.config empty, sensible defaults will be used
+# Using this script is optional:
+# - with Makefile.config empty/non-existing, sensible defaults are used
 # - you can modify/create your own Makefile.config
 
 import os
 import subprocess
-import distutils.spawn
+import shutil
 import argparse
 
 defs = ""
@@ -57,7 +57,7 @@ if use_mqtt:
             protobuf_ipath = ipath
             break
     # check for protobuf compiler
-    protoc_found = distutils.spawn.find_executable("protoc-c")
+    protoc_found = bool(shutil.which("protoc-c"))
 
 mqtt_enabled = use_mqtt and mosq_found and protobuf_found and protoc_found
 if mqtt_enabled:
@@ -92,7 +92,7 @@ if use_mpi:
         mpicc = os.environ['MPICC']
     if not mpicc:
         mpicc = "mpicc"
-    mpi_found = distutils.spawn.find_executable(mpicc)
+    mpi_found = bool(shutil.which(mpicc))
 if use_mpi and mpi_found:
     print("MPI backend enabled (using '" + mpicc + "' as compiler wrapper).")
     defs += " -DUSE_MPI"
@@ -116,7 +116,7 @@ else:
 # TCP backend support
 
 if use_tcp:
-    pkgc_found = distutils.spawn.find_executable('pkg-config')
+    pkgc_found = bool(shutil.which("pkg-config"))
     if pkgc_found:
         # check gio version
         glib_versionok = not subprocess.call(['pkg-config', '--atleast-version=2.44', 'gio-2.0'])
@@ -155,7 +155,7 @@ if "CXX" in os.environ:
 mycxx = cxx
 if not mycxx:
     mycxx = "c++"
-cxx_found = distutils.spawn.find_executable(mycxx)
+cxx_found = bool(shutil.which(mycxx))
 if not cxx_found:
     print("C++ compiler not found. C++ examples disabled.")
     print("  Set CXX to specify the C++ compiler.")
