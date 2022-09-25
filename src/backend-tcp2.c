@@ -744,7 +744,7 @@ int got_binary_data(InstData* d, int lid, char* buf, int len)
 void got_data(InstData* d, int lid, char* msg)
 {
     // data <len> <hexbyte> ...
-    char cmd[20];
+    char cmd[21];
     int len, i;
     if (sscanf(msg, "%20s %d %n", cmd, &len, &i) < 2) {
         laik_log(LAIK_LL_Warning, "cannot parse data command '%s'; ignoring", msg);
@@ -850,7 +850,7 @@ void got_register(InstData* d, int fd, int lid, char* msg)
         return;
     }
 
-    char cmd[20], l[50], h[50], flags[5];
+    char cmd[21], l[51], h[51], flags[5];
     int p, res;
     res = sscanf(msg, "%20s %50s %50s %d %4s", cmd, l, h, &p, flags);
     if (res < 2) {
@@ -884,7 +884,7 @@ void got_register(InstData* d, int fd, int lid, char* msg)
     d->fds[fd].lid = lid;
     assert(lid < MAX_PEERS);
 
-    char loc[60];
+    char loc[70];
     sprintf(loc, "L%d:%s", lid, l);
 
     laik_log(1, "TCP2 registered new LID %d: location %s (at host %s, port %d, flags %c)",
@@ -920,7 +920,7 @@ void got_myid(InstData* d, int fd, int lid, char* msg)
     // myid <lid>
     // used on re-connection of other peer: peer must already be known
 
-    char cmd[20];
+    char cmd[21];
     int peerid;
     if (sscanf(msg, "%20s %d", cmd, &peerid) < 2) {
         laik_log(LAIK_LL_Warning, "cannot parse myid command '%s'; ignoring", msg);
@@ -976,8 +976,8 @@ void got_cutoff(InstData* d, int fd, char* msg)
         return;
     }
 
-    char cmd[20];
-    char pattern[50];
+    char cmd[21];
+    char pattern[41];
     if (sscanf(msg, "%20s %40s", cmd, pattern) < 2) {
         laik_log(LAIK_LL_Warning, "cannot parse cutoff command '%s'; ignoring", msg);
         return;
@@ -1124,7 +1124,7 @@ void got_id(InstData* d, int from_lid, char* msg)
         return;
     }
 
-    char cmd[20], l[50], h[50], flags[5];
+    char cmd[21], l[51], h[51], flags[5];
     int lid, p;
     if (sscanf(msg, "%20s %d %50s %50s %d %4s", cmd, &lid, l, h, &p, flags) < 6) {
         laik_log(LAIK_LL_Warning, "cannot parse id command '%s'; ignoring", msg);
@@ -1213,7 +1213,7 @@ void got_phase(InstData* d, char* msg)
         return;
     }
 
-    char cmd[20];
+    char cmd[21];
     int phase, epoch;
     if (sscanf(msg, "%20s %d %d", cmd, &phase, &epoch) < 3) {
         laik_log(LAIK_LL_Warning, "cannot parse phase command '%s'; ignoring", msg);
@@ -1229,7 +1229,7 @@ void got_phase(InstData* d, char* msg)
 void got_enterresize(InstData* d, int lid, char* msg)
 {
     // enterresize [<phase> [<epoch>]]
-    char cmd[20];
+    char cmd[21];
     int phase, epoch;
     int res = sscanf(msg, "%20s %d %d", cmd, &phase, &epoch);
     if (res < 1) {
@@ -1254,7 +1254,7 @@ void got_enterresize(InstData* d, int lid, char* msg)
 void got_backedout(InstData* d, int lid, char* msg)
 {
     // backedout <lid>
-    char cmd[20];
+    char cmd[21];
     int backedout_lid;
     if (sscanf(msg, "%20s %d", cmd, &backedout_lid) < 2) {
         laik_log(LAIK_LL_Warning, "cannot parse backedout command '%s'; ignoring", msg);
@@ -1290,7 +1290,7 @@ void got_backedout(InstData* d, int lid, char* msg)
 void got_allowsend(InstData* d, int lid, char* msg)
 {
     // allowsend <count> <elemsize>
-    char cmd[20];
+    char cmd[21];
     int count, esize;
     if (sscanf(msg, "%20s %d %d", cmd, &count, &esize) < 3) {
         laik_log(LAIK_LL_Warning, "cannot parse allowsend command '%s'; ignoring", msg);
@@ -1315,7 +1315,7 @@ void got_kvs_allow(InstData* d, int lid, char* msg)
         return;
     }
 
-    char cmd[20];
+    char cmd[21];
     char name[30];
     if (sscanf(msg, "%20s %29s", cmd, name) < 2) {
         laik_log(LAIK_LL_Warning, "cannot parse 'kvs allow' command '%s'; ignoring", msg);
@@ -1330,7 +1330,7 @@ void got_kvs_allow(InstData* d, int lid, char* msg)
 
 void got_kvs_changes(InstData* d, int lid, char* msg)
 {
-    char cmd[20];
+    char cmd[21];
     int changes = 0;
     if (sscanf(msg, "%20s %d", cmd, &changes) < 2) {
         laik_log(LAIK_LL_Warning, "cannot parse 'kvs changes' command '%s'; ignoring", msg);
@@ -1348,8 +1348,8 @@ void got_kvs_changes(InstData* d, int lid, char* msg)
 
 void got_kvs_data(InstData* d, int lid, char* msg)
 {
-    char cmd[20], key[30], value[110];
-    if (sscanf(msg, "%20s %29s %100[^\n]", cmd, key, value) < 3) {
+    char cmd[21], key[31], value[101];
+    if (sscanf(msg, "%20s %30s %100[^\n]", cmd, key, value) < 3) {
         laik_log(LAIK_LL_Warning, "cannot parse kvs data command '%s'; ignoring", msg);
         return;
     }
