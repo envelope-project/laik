@@ -3,7 +3,6 @@
 ![drawing](doc/logo/laiklogo.png)
 
 [![Build Status](https://travis-ci.org/envelope-project/laik.svg?branch=master)](https://travis-ci.org/envelope-project/laik)
-![Build and run tests](https://github.com/envelope-project/laik/workflows/Build%20and%20run%20tests/badge.svg)
 
 # A Library for Automatic Data Migration in Parallel Applications
 
@@ -29,8 +28,9 @@ For more details, see the [overview](doc/Overview.md) section in the documentati
 * use of LAIK data containers can significantly reduce application code
   required for explicit data communication. This makes maintainance easier.
   
-* the declarative style of programming allows LAIK to trigger communication
-  early, enabling it to overlap communication and computation.
+* the declarative, abstract style of specifying data exchange requirements
+  (what, not how) allows LAIK to come up with optimal communication schedules,
+  and offloading reductions
 
   
 # Example
@@ -126,8 +126,9 @@ to use performance counters for profiling. C++ is used in some examples.
 
 # Publications
 
-* Josef Weidendorfer, Dai Yang, and Carsten Trinitis. LAIK: A Library for Fault Tolerant Distribution of Global Data for Parallel Applications. In Proceedings of the 27th PARS Workshop (PARS 2017). Hagen, DE, 2017. [PDF](https://mediatum.ub.tum.de/1375185)
+* Josef&nbsp;Weidendorfer, Dai&nbsp;Yang, and Carsten&nbsp;Trinitis. LAIK: A Library for Fault Tolerant Distribution of Global Data for Parallel Applications. In <I>Proceedings of the 27th PARS Workshop (PARS 2017)</I>. Hagen, DE, 2017. [PDF](https://mediatum.ub.tum.de/1375185)
 
+* Amir&nbsp;Raoofy, Dai&nbsp;Yang, Josef&nbsp;Weidendorfer, Carsten&nbsp;Trinitis, and Martin&nbsp;Schulz. Enabling Malleability for Livermore Unstructured Lagrangian Explicit Shock Hydrodynamics using LAIK. In <I>Proceedings of the 29th PARS Workshop (PARS 2019)</I>. Berlin, DE, 2019.
 
 # License
 
