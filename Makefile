@@ -17,6 +17,10 @@ SRCS += $(wildcard $(SDIR)src/backends/tcp/*.c)
 IFLAGS += $(TCP_INC)
 LDLIBS += $(TCP_LIBS)
 endif
+ifdef USE_FABRIC
+IFLAGS += $(FABRIC_INC)
+LDLIBS += $(FABRIC_LIBS)
+endif
 HEADERS = $(wildcard $(SDIR)include/*.h $(SDIR)include/laik/*.h)
 OBJS = $(SRCS:$(SDIR)%.c=%.o)
 
