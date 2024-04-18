@@ -17,6 +17,7 @@
 
 
 #include <laik-internal.h>
+#include <laik-backend-fabric.h>
 #include <laik-backend-mpi.h>
 #include <laik-backend-single.h>
 #include <laik-backend-tcp.h>
@@ -65,6 +66,14 @@ Laik_Instance* laik_init(int* argc, char*** argv)
     }
 #endif
 
+#ifdef USE_FABRIC
+    if (inst == 0) {
+        if ((override == 0) || (strcmp(override, "fabric") == 0)) {
+            inst = laik_init_fabric(argc, argv);
+        }
+    }
+#endif
+
     if (inst == 0) {
         // fall-back to "single" backend as default if MPI is not available, or
         // if "single" backend is explicitly requested
@@ -98,6 +107,9 @@ Laik_Instance* laik_init(int* argc, char*** argv)
 #endif
 #ifdef USE_TCP2
                  "tcp2 "
+#endif
+#ifdef USE_FABRIC
+                 "fabric "
 #endif
 #ifdef USE_TCP
                  "tcp "
