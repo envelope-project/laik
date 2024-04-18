@@ -36,8 +36,7 @@ static struct fi_info *info;
 static struct fid_fabric *fabric;
 static struct fid_domain *domain;
 static struct fid_ep *ep;
-/* TODO: Can we use FI_SYMMETRIC? */
-static struct fi_av_attr av_attr = { .type = FI_AV_TABLE };
+static struct fi_av_attr av_attr = { 0 };
 static struct fi_cq_attr cq_attr = { 0 };
 static struct fi_eq_attr eq_attr = { 0 };
 static struct fid_av *av;
@@ -94,19 +93,40 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   if (ret || !info) laik_panic("No suitable fabric provider found!");
   laik_log(ll, "Selected fabric \"%s\", domain \"%s\"",
       info->fabric_attr->name, info->domain_attr->name);
+  laik_log(ll, "Addressing format is: %d", info->addr_format);
   fi_freeinfo(hints);
 
   /* Set up address vector */
   PANIC_NZ(fi_fabric(info->fabric_attr, &fabric, NULL));
   PANIC_NZ(fi_domain(fabric, info, &domain, NULL));
+/* TODO: Can we use FI_SYMMETRIC? */
+  av_attr.type = FI_AV_TABLE;
+  av_attr.count = world_size;
   PANIC_NZ(fi_av_open(domain, &av_attr, &av, NULL));
+
+  /* Open the endpoint, bind it to an event queue and a completion queue */
+  PANIC_NZ(fi_endpoint(domain, info, &ep, NULL));
+  PANIC_NZ(fi_cq_open(domain, &cq_attr, &cq, NULL));
+  PANIC_NZ(fi_eq_open(fabric, &eq_attr, &eq, NULL));
+  PANIC_NZ(fi_ep_bind(ep, &av->fid, 0));
+  PANIC_NZ(fi_ep_bind(ep, &cq->fid, FI_TRANSMIT|FI_RECV));
+  PANIC_NZ(fi_ep_bind(ep, &eq->fid, 0)); /* TODO: is 0 OK here? */
+  PANIC_NZ(fi_enable(ep));
+
+  /* Get the address of the endpoint */
+  /* TODO: Don't hard-code array length, call fi_getname twice instead */
+  char fi_addr[160]; 
+  size_t fi_addrlen = 160;
+  PANIC_NZ(fi_getname(&ep->fid, fi_addr, &fi_addrlen));
+  laik_log(ll, "Got libfabric EP addr of length %zu:", fi_addrlen);
+  laik_log_hexdump(ll, fi_addrlen, fi_addr);
 
   /* Sync node addresses over regular sockets, using a similar process as the
    * tcp2 backend, since libfabric features aren't needed here.
-   *
-   * Also, I couldn't figure out how to get the address that an endpoint in
-   * libfabric is bound to; fi_getname didn't work the way I expected, it
-   * returned 24 bytes of address, which corresponds neither to IPv4 nor IPv6...
+   * 
+   * This is also recommended in the "Starting Guide for Writing to libfabric",
+   * which can be found here:
+   * https://www.slideshare.net/JianxinXiong/getting-started-with-libfabric
    */
 
   /* Get address of home node */
@@ -133,16 +153,24 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
     /* If we are master, create listening socket on home node */
     if (listen(sockfd, world_size)) laik_panic("Failed to listen on socket");
     for (int i = 0; i < world_size - 1; i++) {
-      struct sockaddr addr;
-      socklen_t addrlen = sizeof(addr);
+      uint16_t addrlen;
+      char *addr;
       laik_log(ll, "%d out of %d connected...", i, world_size - 1);
-      int newfd = accept(sockfd, &addr, &addrlen);
+      int newfd = accept(sockfd, NULL, NULL);
       if (newfd < 0) laik_panic("Failed to accept connection");
 
-      laik_log(ll, "Got addr of length %d:", addrlen);
-      laik_log_hexdump(ll, addrlen, &addr);
-      /* TODO: Add the address to the address vector */
+      /* TODO: can endianness be a problem here? */
+      read(newfd, &addrlen, sizeof(addrlen));
 
+      laik_log(ll, "Got addr length: %hd", addrlen);
+      addr = malloc(addrlen);
+      read(newfd, addr, addrlen);
+      laik_log(ll, "Got addr:");
+      laik_log_hexdump(ll, addrlen, addr);
+      ret = fi_av_insert(av, addr, addrlen, NULL, 0, NULL);
+      if (ret != 1) laik_panic("Failed to insert addr into AV");
+
+      free(addr);
       close(newfd);
     }
     close(sockfd);
@@ -154,6 +182,8 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
       laik_log(LAIK_LL_Error, "Failed to connect: %s", strerror(errno));
       exit(1);
     }
+    write(sockfd, &fi_addrlen, sizeof(uint16_t));
+    write(sockfd, fi_addr, fi_addrlen);
   }
 
   /* TODO: Send address vector to every non-master node
@@ -163,23 +193,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
    *       (Needed for LAIK initialization)
    */
   
-  /* Set up endpoint for RMA */
-
-  /* Open the endpoint */
-  PANIC_NZ(fi_endpoint(domain, info, &ep, NULL));
-
-  /* Bind it to an event queue and completion queue */
-  PANIC_NZ(fi_cq_open(domain, &cq_attr, &cq, NULL));
-  PANIC_NZ(fi_eq_open(fabric, &eq_attr, &eq, NULL));
-  PANIC_NZ(fi_ep_bind(ep, &cq->fid, FI_TRANSMIT|FI_RECV));
-  PANIC_NZ(fi_ep_bind(ep, &eq->fid, 0)); /* TODO: is 0 OK here */
-  PANIC_NZ(fi_enable(ep));
-
-  char addr[160];
-  size_t addrlen = 160;
-  PANIC_NZ(fi_getname(&ep->fid, addr, &addrlen));
-  laik_log(1, "Got addr of length %zu: %02hhx %02hhx %02hhx", addrlen, addr[0],
-      addr[1], addr[2]);
+  /* TODO: Set up endpoint for RMA */
 
   /* TODO: initialize LAIK */
   return NULL;
