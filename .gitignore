@@ -12,3 +12,5 @@ compile_commands.json
 /build*/
 *.so.dSYM/
 /messungen/
+*.swp
+tags
