@@ -248,6 +248,9 @@ void laik_log_inc(void);
 // log a message, similar to printf
 void laik_log(int level, const char* msg, ...) __attribute__ ((format (printf, 2, 3)));
 
+// log hexdump of data
+void laik_log_hexdump(int l, int len, void* data);
+
 // panic: terminate application
 void laik_panic(const char* msg);
 

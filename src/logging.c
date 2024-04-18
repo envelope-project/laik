@@ -394,6 +394,13 @@ void laik_log(int l, const char* msg, ...)
     log_flush();
 }
 
+void laik_log_hexdump(int l, int len, void* data) {
+  if (!laik_log_begin(l)) return;
+
+  for (int i = 0; i < len; i++) laik_log_append("%02hhx ", ((char*)data)[i]);
+  log_flush();
+}
+
 // panic: terminate application
 void laik_panic(const char* msg)
 {
