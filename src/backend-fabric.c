@@ -32,6 +32,15 @@ void fabric_finalize(Laik_Instance *inst);
  */
 bool check_local(char *host);
 
+/* TODO: Figure out what InstData is needed for */
+static struct _InstData {
+  int mylid;
+  int world_size;
+  int addrlen;
+  char *peers;
+} d;
+typedef struct _InstData InstData;
+
 static struct fi_info *info;
 static struct fid_fabric *fabric;
 static struct fid_domain *domain;
@@ -78,6 +87,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   hints->caps = FI_MSG | FI_RMA;
 
   /* Choose the first provider that supports RMA and can reach the master node
+   * TODO: How to make sure that all nodes chose the same provider?
    */
   str = getenv("LAIK_FABRIC_HOST");
   char *home_host = str ? str : "localhost";
@@ -99,7 +109,6 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   /* Set up address vector */
   PANIC_NZ(fi_fabric(info->fabric_attr, &fabric, NULL));
   PANIC_NZ(fi_domain(fabric, info, &domain, NULL));
-/* TODO: Can we use FI_SYMMETRIC? */
   av_attr.type = FI_AV_TABLE;
   av_attr.count = world_size;
   PANIC_NZ(fi_av_open(domain, &av_attr, &av, NULL));
@@ -120,6 +129,12 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   PANIC_NZ(fi_getname(&ep->fid, fi_addr, &fi_addrlen));
   laik_log(ll, "Got libfabric EP addr of length %zu:", fi_addrlen);
   laik_log_hexdump(ll, fi_addrlen, fi_addr);
+
+  /* Allocate space for list of peers
+   * This can't be done earlier because we only get the address size,
+   * which depends on protocol, when we call fi_getname() */
+  char *peers = calloc(world_size, fi_addrlen);
+  if (!peers) laik_panic("Failed to alloc memory");
 
   /* Sync node addresses over regular sockets, using a similar process as the
    * tcp2 backend, since libfabric features aren't needed here.
@@ -148,30 +163,26 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
     is_master = (bind(sockfd, res->ai_addr, res->ai_addrlen) == 0);
   }
 
+  /* Get address list */
   if (is_master) {
     laik_log(ll, "Became master!");
-    /* If we are master, create listening socket on home node */
+    d.mylid = 0;
+    /* Create listening socket on home node */
     if (listen(sockfd, world_size)) laik_panic("Failed to listen on socket");
+    /* Insert our own address into address list */
+    memcpy(peers, fi_addr, fi_addrlen);
+    /* Get addresses of all nodes */
+    int fds[world_size-1];
     for (int i = 0; i < world_size - 1; i++) {
-      uint16_t addrlen;
-      char *addr;
       laik_log(ll, "%d out of %d connected...", i, world_size - 1);
-      int newfd = accept(sockfd, NULL, NULL);
-      if (newfd < 0) laik_panic("Failed to accept connection");
-
-      /* TODO: can endianness be a problem here? */
-      read(newfd, &addrlen, sizeof(addrlen));
-
-      laik_log(ll, "Got addr length: %hd", addrlen);
-      addr = malloc(addrlen);
-      read(newfd, addr, addrlen);
-      laik_log(ll, "Got addr:");
-      laik_log_hexdump(ll, addrlen, addr);
-      ret = fi_av_insert(av, addr, addrlen, NULL, 0, NULL);
-      if (ret != 1) laik_panic("Failed to insert addr into AV");
-
-      free(addr);
-      close(newfd);
+      fds[i] = accept(sockfd, NULL, NULL);
+      read(fds[i], peers + (i+1) * fi_addrlen, fi_addrlen);
+    }
+    /* Send assigned number and address list to every non-master node */
+    for (int i = 0; i < world_size - 1; i++) {
+      write(fds[i], &i, sizeof(int));
+      write(fds[i], peers, world_size * fi_addrlen);
+      close(fds[i]);
     }
     close(sockfd);
   } else {
@@ -182,21 +193,31 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
       laik_log(LAIK_LL_Error, "Failed to connect: %s", strerror(errno));
       exit(1);
     }
-    write(sockfd, &fi_addrlen, sizeof(uint16_t));
     write(sockfd, fi_addr, fi_addrlen);
+    read(sockfd, &(d.mylid), sizeof(int));
+    read(sockfd, peers, world_size * fi_addrlen);
   }
 
-  /* TODO: Send address vector to every non-master node
-   *       (If that's necessary?)
-   *
-   *       Also send the size of the address vector?
-   *       (Needed for LAIK initialization)
-   */
+  /* Insert addresses into AV (TODO: Is this necessary?) */
+  laik_log(ll, "Got %d addresses of size %zu", world_size, fi_addrlen);
+  laik_log_hexdump(ll, world_size * fi_addrlen, peers);
+  for (int i = 0; i < world_size; i++) {
+    ret = fi_av_insert(av, peers + i * fi_addrlen, fi_addrlen, NULL, 0, NULL);
+    laik_log(ll, "fi_av_insert returned %d", ret);
+  }
   
   /* TODO: Set up endpoint for RMA */
 
-  /* TODO: initialize LAIK */
-  return NULL;
+  /* Initialize LAIK */
+  d.world_size = world_size;
+  d.addrlen = fi_addrlen;
+  d.peers = peers;
+  Laik_Instance *inst = laik_new_instance(&laik_backend, world_size, d.mylid,
+      0, 0, "", &d); /* TODO: what is location? */
+  Laik_Group *world = laik_create_group(inst, world_size);
+  inst->world = world;
+  laik_log(ll, "REACH");
+  return inst;
 }
 
 
