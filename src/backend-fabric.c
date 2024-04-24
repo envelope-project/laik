@@ -215,8 +215,9 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   Laik_Instance *inst = laik_new_instance(&laik_backend, world_size, d.mylid,
       0, 0, "", &d); /* TODO: what is location? */
   Laik_Group *world = laik_create_group(inst, world_size);
+  world->size = world_size;
+  world->myid = d.mylid;
   inst->world = world;
-  laik_log(ll, "REACH");
   return inst;
 }
 
@@ -224,16 +225,28 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
 /* TODO: Do any backend-specific actions make sense? */
 
 void fabric_prepare(Laik_ActionSeq *as) {
-  (void) as;
+  if (as->actionCount == 0) {
+    laik_aseq_calc_stats(as);
+    return;
+  }
   /* TODO:
    *   - laik_aseq_whatever() to transform action sequence
    *   - Set up RDMAs
    */
+  laik_aseq_calc_stats(as);
 }
 
 void fabric_exec(Laik_ActionSeq *as) {
-  (void) as;
-  /* TODO: switch statement with the actions */
+  laik_log_ActionSeqIfChanged(true, as, "Original sequence");
+
+  Laik_Action *a = as->action;
+  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    switch (a->type) {
+      case LAIK_AT_Nop: break;
+      default:
+        laik_panic("Unrecognized action type");
+    }
+  }
 }
 
 void fabric_cleanup(Laik_ActionSeq *as) {
