@@ -228,8 +228,9 @@ void fabric_prepare(Laik_ActionSeq *as) {
     return;
   }
 
-  /* TODO: Why does this cause a segfault? */
-//  as->backend = &laik_backend_fabric;
+  /* Mark action seq as prepared by fabric backend, so that
+   * fabric_cleanup() gets invoked for cleanup */
+  as->backend = &laik_backend_fabric;
 
   laik_log_ActionSeqIfChanged(true, as, "Original sequence");
   bool changed = laik_aseq_splitTransitionExecs(as);
@@ -270,39 +271,50 @@ void fabric_prepare(Laik_ActionSeq *as) {
 
   /* Set up RDMAs */
   Laik_Action *a = as->action;
+  Laik_TransitionContext *tc = as->context[0];
+  int elemsize = tc->data->elemsize;
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
     switch (a->type) {
       case LAIK_AT_BufRecv:
         Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
+        int reserve = aa->count * elemsize;
+        laik_log(ll, "Reserving %d * %d = %d bytes\n",
+            aa->count, elemsize, reserve);
         PANIC_NZ(fi_mr_reg(
-            domain, aa->buf, aa->count,
+            domain, aa->buf, reserve*aa->count,
             FI_RECV | FI_READ | FI_REMOTE_WRITE,
             0, 0, 0, &mregs[mnum++], NULL));
     }
-    mregs[mnum] = NULL;
   }
+  mregs[mnum] = NULL;
 
   laik_aseq_calc_stats(as);
 }
 
 void fabric_exec(Laik_ActionSeq *as) {
   Laik_Action *a = as->action;
+  Laik_TransitionContext *tc = as->context[0];
+  int elemsize = tc->data->elemsize;
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
     switch (a->type) {
       case LAIK_AT_Nop: break;
       case LAIK_AT_BufRecv: {
         Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
-        fi_read(ep, aa->buf, aa->count, NULL, aa->from_rank, 0, 0, NULL);
+        fi_read(ep, aa->buf, elemsize * aa->count, NULL, aa->from_rank,
+            0, 0, NULL);
         break;
       }
       case LAIK_AT_BufSend: {
         Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
-        laik_log(ll, "To rank: %d", aa->to_rank);
-        fi_inject_write(ep, aa->buf, aa->count, aa->to_rank, 0, 0);
+        fi_inject_write(ep, aa->buf, elemsize * aa->count, aa->to_rank, 0, 0);
         break;
       }
       default:
-        laik_panic("Unrecognized action type");
+        laik_log(LAIK_LL_Error, "Unrecognized action type");
+        laik_log_begin(LAIK_LL_Error);
+        laik_log_Action(a, as);
+        laik_log_flush("");
+        exit(1);
     }
   }
 }
@@ -310,8 +322,8 @@ void fabric_exec(Laik_ActionSeq *as) {
 void fabric_cleanup(Laik_ActionSeq *as) {
   (void) as;
   /* Clean up RDMAs */
-  for (struct fid_mr *mr = mregs[0]; mr; mr++) {
-    PANIC_NZ(fi_close((struct fid *) mr));
+  for (struct fid_mr **mr = mregs; *mr; mr++) {
+    PANIC_NZ(fi_close((struct fid *) *mr));
   }
 }
 
