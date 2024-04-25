@@ -10,6 +10,7 @@
 #include <rdma/fi_cm.h>
 #include <rdma/fi_domain.h>
 #include <rdma/fi_endpoint.h>
+#include <rdma/fi_rma.h>
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -51,8 +52,10 @@ static struct fi_eq_attr eq_attr = { 0 };
 static struct fid_av *av;
 static struct fid_cq *cq;
 static struct fid_eq *eq;
+static struct fid_mr **mregs = NULL;
+int ret;
 
-static Laik_Backend laik_backend = {
+static Laik_Backend laik_backend_fabric = {
   .name = "Libfabric Backend",
   .prepare = fabric_prepare,
   .exec = fabric_exec,
@@ -62,7 +65,6 @@ static Laik_Backend laik_backend = {
 
 Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   char *str;
-  int ret;
 
   (void) argc;
   (void) argv;
@@ -184,7 +186,6 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
       write(fds[i], peers, world_size * fi_addrlen);
       close(fds[i]);
     }
-    close(sockfd);
   } else {
     laik_log(ll, "Didn't become master!");
     laik_log(ll, "Connecting to:");
@@ -197,14 +198,13 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
     read(sockfd, &(d.mylid), sizeof(int));
     read(sockfd, peers, world_size * fi_addrlen);
   }
+  close(sockfd);
 
-  /* Insert addresses into AV (TODO: Is this necessary?) */
+  /* Insert addresses into AV */
   laik_log(ll, "Got %d addresses of size %zu", world_size, fi_addrlen);
   laik_log_hexdump(ll, world_size * fi_addrlen, peers);
-  for (int i = 0; i < world_size; i++) {
-    ret = fi_av_insert(av, peers + i * fi_addrlen, fi_addrlen, NULL, 0, NULL);
-    laik_log(ll, "fi_av_insert returned %d", ret);
-  }
+  ret = fi_av_insert(av, peers, world_size, NULL, 0, NULL);
+  if (ret != world_size) laik_panic("Failed to insert addresses into AV");
   
   /* TODO: Set up endpoint for RMA */
 
@@ -212,8 +212,8 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   d.world_size = world_size;
   d.addrlen = fi_addrlen;
   d.peers = peers;
-  Laik_Instance *inst = laik_new_instance(&laik_backend, world_size, d.mylid,
-      0, 0, "", &d); /* TODO: what is location? */
+  Laik_Instance *inst = laik_new_instance(&laik_backend_fabric, world_size,
+      d.mylid, 0, 0, "", &d); /* TODO: what is location? */
   Laik_Group *world = laik_create_group(inst, world_size);
   world->size = world_size;
   world->myid = d.mylid;
@@ -221,28 +221,86 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   return inst;
 }
 
-
 /* TODO: Do any backend-specific actions make sense? */
-
 void fabric_prepare(Laik_ActionSeq *as) {
   if (as->actionCount == 0) {
     laik_aseq_calc_stats(as);
     return;
   }
-  /* TODO:
-   *   - laik_aseq_whatever() to transform action sequence
-   *   - Set up RDMAs
-   */
+
+  /* TODO: Why does this cause a segfault? */
+//  as->backend = &laik_backend_fabric;
+
+  laik_log_ActionSeqIfChanged(true, as, "Original sequence");
+  bool changed = laik_aseq_splitTransitionExecs(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
+  changed = laik_aseq_flattenPacking(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After flattening actions");
+
+  /* TODO: does laik_aseq_replaceWithAllReduce() make sense? */
+
+  /* TODO: This is just copied from src/backend-mpi.c. Do all these
+   *       transformations also make sense for libfabric, the same order? */
+  changed = laik_aseq_combineActions(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After combining actions 1");
+  changed = laik_aseq_allocBuffer(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After buffer allocation 1");
+  changed = laik_aseq_splitReduce(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After splitting reduce actions");
+  changed = laik_aseq_allocBuffer(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After buffer allocation 2");
+  changed = laik_aseq_sort_rounds(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After sorting rounds");
+  changed = laik_aseq_combineActions(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After combining actions 2");
+  changed = laik_aseq_allocBuffer(as);
+  laik_log_ActionSeqIfChanged(changed, as, "After buffer allocation 3");
+  changed = laik_aseq_sort_2phases(as);
+  laik_log_ActionSeqIfChanged(changed, as,
+      "After sorting for deadlock avoidance");
+
+  laik_aseq_freeTempSpace(as);
+
+  /* TODO: Any more efficient way of storing memory registrations?
+   *       How much memory does this really waste? Is it better or worse than
+   *       introducing a backend-specific "register memory binding" action? */
+  mregs = realloc(mregs, (as->actionCount + 1) * sizeof(struct fid_mr*));
+  if (!mregs) laik_panic("Failed to alloc memory");
+  int mnum = 0;
+
+  /* Set up RDMAs */
+  Laik_Action *a = as->action;
+  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    switch (a->type) {
+      case LAIK_AT_BufRecv:
+        Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
+        PANIC_NZ(fi_mr_reg(
+            domain, aa->buf, aa->count,
+            FI_RECV | FI_READ | FI_REMOTE_WRITE,
+            0, 0, 0, &mregs[mnum++], NULL));
+    }
+    mregs[mnum] = NULL;
+  }
+
   laik_aseq_calc_stats(as);
 }
 
 void fabric_exec(Laik_ActionSeq *as) {
-  laik_log_ActionSeqIfChanged(true, as, "Original sequence");
-
   Laik_Action *a = as->action;
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
     switch (a->type) {
       case LAIK_AT_Nop: break;
+      case LAIK_AT_BufRecv: {
+        Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
+        fi_read(ep, aa->buf, aa->count, NULL, aa->from_rank, 0, 0, NULL);
+        break;
+      }
+      case LAIK_AT_BufSend: {
+        Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
+        laik_log(ll, "To rank: %d", aa->to_rank);
+        fi_inject_write(ep, aa->buf, aa->count, aa->to_rank, 0, 0);
+        break;
+      }
       default:
         laik_panic("Unrecognized action type");
     }
@@ -251,12 +309,21 @@ void fabric_exec(Laik_ActionSeq *as) {
 
 void fabric_cleanup(Laik_ActionSeq *as) {
   (void) as;
-  /* TODO: Clean up RDMAs */
+  /* Clean up RDMAs */
+  for (struct fid_mr *mr = mregs[0]; mr; mr++) {
+    PANIC_NZ(fi_close((struct fid *) mr));
+  }
 }
 
 void fabric_finalize(Laik_Instance *inst) {
-  (void) inst;
   /* TODO: Final cleanup */
+  (void) inst;
+
+  free(mregs);
+  fi_close((struct fid *) ep);
+  fi_close((struct fid *) domain);
+  fi_close((struct fid *) fabric);
+  fi_freeinfo(info);
 }
 
 #endif /* USE_FABRIC */
