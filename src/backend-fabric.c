@@ -38,7 +38,6 @@ static struct _InstData {
   int mylid;
   int world_size;
   int addrlen;
-  char *peers;
 } d;
 typedef struct _InstData InstData;
 
@@ -160,6 +159,9 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   bool try_master = check_local(home_host);
   bool is_master = 0;
   if (try_master) {
+    /* Avoid wait time to bind to same port */
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR,
+          &(int){1}, sizeof(int)) < 0) laik_panic("Cannot set SO_REUSEADDR");
     /* Try binding a socket to the home address */
     laik_log(ll, "Trying to become master");
     is_master = (bind(sockfd, res->ai_addr, res->ai_addrlen) == 0);
@@ -182,7 +184,8 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
     }
     /* Send assigned number and address list to every non-master node */
     for (int i = 0; i < world_size - 1; i++) {
-      write(fds[i], &i, sizeof(int));
+      int iplus = i + 1;
+      write(fds[i], &iplus, sizeof(int));
       write(fds[i], peers, world_size * fi_addrlen);
       close(fds[i]);
     }
@@ -205,13 +208,13 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   laik_log_hexdump(ll, world_size * fi_addrlen, peers);
   ret = fi_av_insert(av, peers, world_size, NULL, 0, NULL);
   if (ret != world_size) laik_panic("Failed to insert addresses into AV");
+  free(peers);
   
   /* TODO: Set up endpoint for RMA */
 
   /* Initialize LAIK */
   d.world_size = world_size;
   d.addrlen = fi_addrlen;
-  d.peers = peers;
   Laik_Instance *inst = laik_new_instance(&laik_backend_fabric, world_size,
       d.mylid, 0, 0, "", &d); /* TODO: what is location? */
   Laik_Group *world = laik_create_group(inst, world_size);
