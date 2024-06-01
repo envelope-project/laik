@@ -601,6 +601,7 @@ void ensure_conn(InstData* d, int lid)
         return;
     }
 
+    // disable nagle's algorithm for faster TCP communication
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &(int){1}, sizeof(int)) < 0) {
         laik_panic("TCP2 cannot set TCP_NODELAY");
         exit(1); // not actually needed, laik_panic never returns
@@ -1891,6 +1892,18 @@ Laik_Instance* laik_init_tcp2(int* argc, char*** argv)
             laik_panic("TCP2 cannot create listening socket");
             exit(1); // not actually needed, laik_panic never returns
         }
+
+        // this disables nagle's algorithm on our side of TCP connections for
+        // faster communication. It is enough to set NODELAY for the listening
+        // socket, as this options get inherited to all sockets created in
+        // accepted incoming connections.
+        // NODELAY is also set for sockets on the remote side in ensure_conn
+        if (setsockopt(listenfd, IPPROTO_TCP, TCP_NODELAY,
+                       &(int){1}, sizeof(int)) < 0) {
+            laik_panic("TCP2 cannot set TCP_NODELAY on listening socket");
+            exit(1); // not actually needed, laik_panic never returns
+        }
+
         if (try_master) {
             // mainly for development: avoid wait time to bind to same port
             if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR,
