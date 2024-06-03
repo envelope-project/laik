@@ -345,7 +345,7 @@ void fabric_prepare(Laik_ActionSeq *as) {
             aa->count, elemsize, reserve);
         PANIC_NZ(fi_mr_reg(
             domain, aa->buf, reserve*aa->count, FI_REMOTE_WRITE,
-            0, 0, 0, &mregs[mnum++], NULL));
+            0, aa->from_rank, 0, &mregs[mnum++], NULL));
         rmas++;
         break;
     }
@@ -386,7 +386,7 @@ void fabric_exec(Laik_ActionSeq *as) {
         /* TODO: Does the uint64_t data have any significance?
          *       Is it a problem that I just set it to 0?*/
         while ((ret = fi_writedata(ep, aa->buf, elemsize * aa->count, NULL,
-                0, aa->to_rank, 0, 0, NULL)) == -FI_EAGAIN);
+                0, aa->to_rank, 0, d.mylid, NULL)) == -FI_EAGAIN);
         if (ret)
           laik_log(LAIK_LL_Panic,
               "fi_writedata() failed: %s", fi_strerror(ret));
@@ -399,7 +399,7 @@ void fabric_exec(Laik_ActionSeq *as) {
           /* TODO: either do something with the retrieved information
            *       or replace the CQ with a counter */
           ret = fi_cq_sread(cq, cq_buf, 1, NULL, -1);
-          if (ret == -EAGAIN) continue;
+          if (ret == -FI_EAGAIN) continue;
           assert(ret > 0); /* TODO: actual error handling */
           completions += ret;
         }
