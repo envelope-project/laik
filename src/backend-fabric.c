@@ -28,11 +28,31 @@ void fabric_prepare(Laik_ActionSeq *as);
 void fabric_exec(Laik_ActionSeq *as);
 void fabric_cleanup(Laik_ActionSeq *as);
 void fabric_finalize(Laik_Instance *inst);
+bool fabric_log_action(Laik_Action *a);
 
 /* Declare the check_local() function from src/backend_tcp2.c, which we are
  * re-using because I couldn't find a better way to do it with libfabric
  */
 bool check_local(char *host);
+
+/* Backend-specific actions */
+/* The LibFabric backend uses RMAs for send and receive, which complete
+ * asynchronously. This makes it necessary to wait for the completion of the
+ * RMAs before proceeding to the next round. */
+#define LAIK_AT_FabRmaWait	(LAIK_AT_Backend + 0)
+#pragma pack(push,1)
+typedef struct {
+  Laik_Action h;
+  unsigned int count; /* How many CQ reports to wait for */
+} Laik_A_FabRmaWait;
+#pragma pack(pop)
+
+bool fabric_log_action(Laik_Action *a) {
+  if (a->type != LAIK_AT_FabRmaWait) return false;
+  Laik_A_FabRmaWait *aa = (Laik_A_FabRmaWait*) a;
+  laik_log_append("FabRmaWait: count %u", aa->count);
+  return true;
+}
 
 /* TODO: Figure out what InstData is needed for */
 static struct _InstData {
@@ -56,11 +76,12 @@ static struct fid_mr **mregs = NULL;
 int ret;
 
 static Laik_Backend laik_backend_fabric = {
-  .name = "Libfabric Backend",
-  .prepare = fabric_prepare,
-  .exec = fabric_exec,
-  .cleanup = fabric_cleanup,
-  .finalize = fabric_finalize
+  .name		= "Libfabric Backend",
+  .prepare	= fabric_prepare,
+  .exec		= fabric_exec,
+  .cleanup	= fabric_cleanup,
+  .finalize	= fabric_finalize,
+  .log_action	= fabric_log_action
 };
 
 Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
@@ -223,7 +244,21 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   return inst;
 }
 
-/* TODO: Do any backend-specific actions make sense? */
+void add_fabRmaWait(Laik_Action **next, unsigned round, unsigned count) {
+  Laik_A_FabRmaWait wait = {
+    .h = {
+      .type  = LAIK_AT_FabRmaWait,
+      .len   = sizeof(Laik_A_FabRmaWait),
+      .round = round,
+      .tid   = 0,
+      .mark  = 0
+    },
+    .count = count
+  };
+  memcpy(*next, &wait, sizeof(Laik_A_FabRmaWait));
+  *next = nextAction((*next));
+}
+
 void fabric_prepare(Laik_ActionSeq *as) {
   if (as->actionCount == 0) {
     laik_aseq_calc_stats(as);
@@ -261,7 +296,6 @@ void fabric_prepare(Laik_ActionSeq *as) {
   changed = laik_aseq_sort_2phases(as);
   laik_log_ActionSeqIfChanged(changed, as,
       "After sorting for deadlock avoidance");
-
   laik_aseq_freeTempSpace(as);
 
   /* TODO: Any more efficient way of storing memory registrations?
@@ -271,12 +305,39 @@ void fabric_prepare(Laik_ActionSeq *as) {
   if (!mregs) laik_panic("Failed to alloc memory");
   int mnum = 0;
 
-  /* Set up RDMAs */
-  Laik_Action *a = as->action;
+  /* Iterate over action sequence, and:
+   * - Register memory for RMA
+   * - Create new action sequence that adds FabRmaWait at the end of any round
+   *   that performs at least one RMA */
+
   Laik_TransitionContext *tc = as->context[0];
+  Laik_Action *a = as->action;
   int elemsize = tc->data->elemsize;
+
+  Laik_Action *newAction =
+      malloc(as->bytesUsed + as->roundCount * sizeof(Laik_A_FabRmaWait));
+  if (!newAction) laik_panic("Failed to alloc memory");
+  Laik_Action *nextNewA = newAction;
+  unsigned waitCnt = 0;
+
+  int rmas = 0;
+  int lastRound = 1;
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    /* Add FabRmaWait that waits for all RMAs of the last round to complete */
+    if (a->round != lastRound) {
+      if (rmas > 0) {
+        add_fabRmaWait(&nextNewA, lastRound, rmas);
+        waitCnt++;
+      }
+      rmas = 0;
+      lastRound = a->round;
+    }
+
+    /* Count RMAs and copy actions into newAction */
     switch (a->type) {
+      case LAIK_AT_BufSend:
+        rmas++;
+        break;
       case LAIK_AT_BufRecv:
         Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
         int reserve = aa->count * elemsize;
@@ -285,9 +346,26 @@ void fabric_prepare(Laik_ActionSeq *as) {
         PANIC_NZ(fi_mr_reg(
             domain, aa->buf, reserve*aa->count, FI_REMOTE_WRITE,
             0, 0, 0, &mregs[mnum++], NULL));
+        rmas++;
+        break;
     }
+    memcpy(nextNewA, a, a->len);
+    nextNewA = nextAction(nextNewA);
   }
+  /* Add a FabRmaWait after the final round, too */
+  add_fabRmaWait(&nextNewA, lastRound, rmas);
+  waitCnt++;
+
+  /* Terminate memory registration list */
   mregs[mnum] = NULL;
+
+  /* Replace old action sequence with new and update AS information */
+  free(as->action);
+  as->action       = newAction;
+  as->actionCount += waitCnt;
+  as->bytesUsed   += waitCnt * sizeof(Laik_A_FabRmaWait);
+
+  laik_log_ActionSeqIfChanged(true, as, "After adding FabRmaWait");
 
   laik_aseq_calc_stats(as);
 }
@@ -301,8 +379,6 @@ void fabric_exec(Laik_ActionSeq *as) {
     switch (a->type) {
       case LAIK_AT_Nop: break;
       case LAIK_AT_BufRecv: {
-        ret = fi_cq_sread(cq, cq_buf, 1, NULL, -1);
-        assert(ret == 1);
         break;
       }
       case LAIK_AT_BufSend: {
@@ -313,9 +389,20 @@ void fabric_exec(Laik_ActionSeq *as) {
                 0, aa->to_rank, 0, 0, NULL)) == -FI_EAGAIN);
         if (ret)
           laik_log(LAIK_LL_Panic,
-              "fi_inject_write() failed: %s", fi_strerror(ret));
-        ret = fi_cq_sread(cq, cq_buf, 1, NULL, -1);
-        assert(ret == 1);
+              "fi_writedata() failed: %s", fi_strerror(ret));
+        break;
+      }
+      case LAIK_AT_FabRmaWait: {
+        Laik_A_FabRmaWait *aa = (Laik_A_FabRmaWait*) a;
+        unsigned completions = 0;
+        while (completions < aa->count) {
+          /* TODO: either do something with the retrieved information
+           *       or replace the CQ with a counter */
+          ret = fi_cq_sread(cq, cq_buf, 1, NULL, -1);
+          if (ret == -EAGAIN) continue;
+          assert(ret > 0); /* TODO: actual error handling */
+          completions += ret;
+        }
         break;
       }
       case LAIK_AT_RBufLocalReduce: {
