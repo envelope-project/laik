@@ -2,6 +2,7 @@
 #include "laik-internal.h"
 #include "laik-backend-fabric.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -46,11 +47,11 @@ static struct fid_fabric *fabric;
 static struct fid_domain *domain;
 static struct fid_ep *ep;
 static struct fi_av_attr av_attr = { 0 };
-static struct fi_cq_attr cq_attr = { 0 };
-static struct fi_eq_attr eq_attr = { 0 };
+static struct fi_cq_attr cq_attr = { .wait_obj = FI_WAIT_UNSPEC };
+/* static struct fi_eq_attr eq_attr = { 0 }; */
 static struct fid_av *av;
 static struct fid_cq *cq;
-static struct fid_eq *eq;
+/* static struct fid_eq *eq; */
 static struct fid_mr **mregs = NULL;
 int ret;
 
@@ -99,7 +100,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   str = getenv("LAIK_SIZE");
   int world_size = str ? atoi(str) : 1;
   if (world_size == 0) world_size = 1;
-  ret = fi_getinfo(FI_VERSION(1,21), home_host, home_port_str, 0,
+  ret = fi_getinfo(FI_VERSION(1,21), home_host, NULL, 0,
       hints, &info);
   if (ret || !info) laik_panic("No suitable fabric provider found!");
   laik_log(ll, "Selected fabric \"%s\", domain \"%s\"",
@@ -117,10 +118,13 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   /* Open the endpoint, bind it to an event queue and a completion queue */
   PANIC_NZ(fi_endpoint(domain, info, &ep, NULL));
   PANIC_NZ(fi_cq_open(domain, &cq_attr, &cq, NULL));
-  PANIC_NZ(fi_eq_open(fabric, &eq_attr, &eq, NULL));
   PANIC_NZ(fi_ep_bind(ep, &av->fid, 0));
   PANIC_NZ(fi_ep_bind(ep, &cq->fid, FI_TRANSMIT|FI_RECV));
+#if 0
+  /* TODO: do we need an event queue for anything? */
+  PANIC_NZ(fi_eq_open(fabric, &eq_attr, &eq, NULL));
   PANIC_NZ(fi_ep_bind(ep, &eq->fid, 0)); /* TODO: is 0 OK here? */
+#endif
   PANIC_NZ(fi_enable(ep));
 
   /* Get the address of the endpoint */
@@ -203,14 +207,9 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   }
   close(sockfd);
 
-  /* Insert addresses into AV */
-  laik_log(ll, "Got %d addresses of size %zu", world_size, fi_addrlen);
-  laik_log_hexdump(ll, world_size * fi_addrlen, peers);
   ret = fi_av_insert(av, peers, world_size, NULL, 0, NULL);
   if (ret != world_size) laik_panic("Failed to insert addresses into AV");
   free(peers);
-  
-  /* TODO: Set up endpoint for RMA */
 
   /* Initialize LAIK */
   d.world_size = world_size;
@@ -284,8 +283,7 @@ void fabric_prepare(Laik_ActionSeq *as) {
         laik_log(ll, "Reserving %d * %d = %d bytes\n",
             aa->count, elemsize, reserve);
         PANIC_NZ(fi_mr_reg(
-            domain, aa->buf, reserve*aa->count,
-            FI_RECV | FI_READ | FI_REMOTE_WRITE,
+            domain, aa->buf, reserve*aa->count, FI_REMOTE_WRITE,
             0, 0, 0, &mregs[mnum++], NULL));
     }
   }
@@ -298,18 +296,34 @@ void fabric_exec(Laik_ActionSeq *as) {
   Laik_Action *a = as->action;
   Laik_TransitionContext *tc = as->context[0];
   int elemsize = tc->data->elemsize;
+  char cq_buf[128]; /* TODO: what is minimum required size? */
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
     switch (a->type) {
       case LAIK_AT_Nop: break;
       case LAIK_AT_BufRecv: {
-        Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
-        fi_read(ep, aa->buf, elemsize * aa->count, NULL, aa->from_rank,
-            0, 0, NULL);
+        ret = fi_cq_sread(cq, cq_buf, 1, NULL, -1);
+        assert(ret == 1);
         break;
       }
       case LAIK_AT_BufSend: {
         Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
-        fi_inject_write(ep, aa->buf, elemsize * aa->count, aa->to_rank, 0, 0);
+        /* TODO: Does the uint64_t data have any significance?
+         *       Is it a problem that I just set it to 0?*/
+        while ((ret = fi_writedata(ep, aa->buf, elemsize * aa->count, NULL,
+                0, aa->to_rank, 0, 0, NULL)) == -FI_EAGAIN);
+        if (ret)
+          laik_log(LAIK_LL_Panic,
+              "fi_inject_write() failed: %s", fi_strerror(ret));
+        ret = fi_cq_sread(cq, cq_buf, 1, NULL, -1);
+        assert(ret == 1);
+        break;
+      }
+      case LAIK_AT_RBufLocalReduce: {
+        Laik_BackendAction *ba = (Laik_BackendAction*) a;
+        assert(ba->bufID < ASEQ_BUFFER_MAX);
+        assert(ba->dtype->reduce != 0);
+        (ba->dtype->reduce)(ba->toBuf, ba->toBuf,
+            as->buf[ba->bufID] + ba->offset, ba->count, ba->redOp);
         break;
       }
       default:
