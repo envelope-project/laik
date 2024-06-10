@@ -39,18 +39,48 @@ bool check_local(char *host);
 /* The LibFabric backend uses RMAs for send and receive, which complete
  * asynchronously. This makes it necessary to wait for the completion of the
  * RMAs before proceeding to the next round. */
-#define LAIK_AT_FabRmaWait	(LAIK_AT_Backend + 0)
+#define LAIK_AT_FabAsyncRecv	(LAIK_AT_Backend + 0)
+#define LAIK_AT_FabRecvWait	(LAIK_AT_Backend + 1)
+#define LAIK_AT_FabAsyncSend	(LAIK_AT_Backend + 2)
+#define LAIK_AT_FabSendWait	(LAIK_AT_Backend + 3)
 #pragma pack(push,1)
+typedef Laik_A_BufRecv Laik_A_FabAsyncRecv;
 typedef struct {
   Laik_Action h;
   unsigned int count; /* How many CQ reports to wait for */
-} Laik_A_FabRmaWait;
+} Laik_A_FabRecvWait;
+typedef Laik_A_BufSend Laik_A_FabAsyncSend;
+typedef Laik_A_FabRecvWait Laik_A_FabSendWait;
 #pragma pack(pop)
 
 bool fabric_log_action(Laik_Action *a) {
-  if (a->type != LAIK_AT_FabRmaWait) return false;
-  Laik_A_FabRmaWait *aa = (Laik_A_FabRmaWait*) a;
-  laik_log_append("FabRmaWait: count %u", aa->count);
+  switch (a->type) {
+    case LAIK_AT_FabRecvWait: {
+      Laik_A_FabRecvWait *aa = (Laik_A_FabRecvWait*) a;
+      laik_log_append("FabRecvWait: count %u", aa->count);
+      break;
+    }
+    case LAIK_AT_FabSendWait: {
+      Laik_A_FabSendWait *aa = (Laik_A_FabSendWait*) a;
+      laik_log_append("FabSendWait: count %u", aa->count);
+      break;
+    }
+    case LAIK_AT_FabAsyncSend: {
+      Laik_A_FabAsyncSend *aa = (Laik_A_FabAsyncSend*) a;
+      laik_log_append("FabAsyncSend: from %p, count %d ==> T%d",
+                      aa->buf, aa->count, aa->to_rank);
+      break;
+    }
+    case LAIK_AT_FabAsyncRecv: {
+      Laik_A_FabAsyncRecv *aa = (Laik_A_FabAsyncRecv*) a;
+      laik_log_append("FabAsyncRecv: T%d ==> to %p, count %d",
+                      aa->from_rank, aa->buf, aa->count);
+      break;
+    }
+    default: {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -67,12 +97,20 @@ static struct fid_fabric *fabric;
 static struct fid_domain *domain;
 static struct fid_ep *ep;
 static struct fi_av_attr av_attr = { 0 };
-static struct fi_cq_attr cq_attr = { .wait_obj = FI_WAIT_UNSPEC };
+static struct fi_cq_attr cq_attr = {
+  .wait_obj	= FI_WAIT_UNSPEC,
+/* Format MUST be FI_CQ_FORMAT_DATA or a superset of it, so that remote CQ
+ * data is actually awaited. That is described here:
+ * https://github.com/ofiwg/libfabric/discussions/9412#discussioncomment-7245799
+ */
+  .format	= FI_CQ_FORMAT_DATA
+};
 /* static struct fi_eq_attr eq_attr = { 0 }; */
 static struct fid_av *av;
-static struct fid_cq *cq;
+static struct fid_cq *cqr, *cqt; /* Receive and transmit queues */
 /* static struct fid_eq *eq; */
 static struct fid_mr **mregs = NULL;
+int isAsync = 1;
 int ret;
 
 static Laik_Backend laik_backend_fabric = {
@@ -109,6 +147,11 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   hints->ep_attr->type = FI_EP_RDM;
   hints->caps = FI_MSG | FI_RMA;
 
+  /* Run-time behaviour depending on environment variables */
+  str = getenv("LAIK_FABRIC_SYNC");
+  if (str) isAsync = !atoi(str);
+  laik_log(ll, "RMA mode: %csync", isAsync ? 'a' : ' ');
+
   /* Choose the first provider that supports RMA and can reach the master node
    * TODO: How to make sure that all nodes chose the same provider?
    */
@@ -138,9 +181,11 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
 
   /* Open the endpoint, bind it to an event queue and a completion queue */
   PANIC_NZ(fi_endpoint(domain, info, &ep, NULL));
-  PANIC_NZ(fi_cq_open(domain, &cq_attr, &cq, NULL));
+  PANIC_NZ(fi_cq_open(domain, &cq_attr, &cqr, NULL));
+  PANIC_NZ(fi_cq_open(domain, &cq_attr, &cqt, NULL));
   PANIC_NZ(fi_ep_bind(ep, &av->fid, 0));
-  PANIC_NZ(fi_ep_bind(ep, &cq->fid, FI_TRANSMIT|FI_RECV));
+  PANIC_NZ(fi_ep_bind(ep, &cqr->fid, FI_RECV));
+  PANIC_NZ(fi_ep_bind(ep, &cqt->fid, FI_TRANSMIT));
 #if 0
   /* TODO: do we need an event queue for anything? */
   PANIC_NZ(fi_eq_open(fabric, &eq_attr, &eq, NULL));
@@ -244,20 +289,146 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   return inst;
 }
 
-void add_fabRmaWait(Laik_Action **next, unsigned round, unsigned count) {
-  Laik_A_FabRmaWait wait = {
+void add_fabRecvWait(Laik_Action **next, unsigned round, unsigned count) {
+  Laik_A_FabRecvWait wait = {
     .h = {
-      .type  = LAIK_AT_FabRmaWait,
-      .len   = sizeof(Laik_A_FabRmaWait),
+      .type  = LAIK_AT_FabRecvWait,
+      .len   = sizeof(Laik_A_FabRecvWait),
       .round = round,
       .tid   = 0,
       .mark  = 0
     },
     .count = count
   };
-  memcpy(*next, &wait, sizeof(Laik_A_FabRmaWait));
+  memcpy(*next, &wait, sizeof(Laik_A_FabRecvWait));
   *next = nextAction((*next));
 }
+
+void add_fabSendWait(Laik_Action **next, unsigned round, unsigned count) {
+  Laik_A_FabSendWait wait = {
+    .h = {
+      .type  = LAIK_AT_FabSendWait,
+      .len   = sizeof(Laik_A_FabSendWait),
+      .round = round,
+      .tid   = 0,
+      .mark  = 0
+    },
+    .count = count
+  };
+  memcpy(*next, &wait, sizeof(Laik_A_FabSendWait));
+  *next = nextAction((*next));
+}
+
+/* Registers memory buffers to libfabric, so that they can be accessed by RMA */
+/* TODO: consider asynchronous instead of the default synchronous completion
+ *       of memory registerations */
+void fabric_aseq_RegisterMemory(Laik_ActionSeq *as) {
+  /* TODO: Any more efficient way of storing memory registrations?
+   *       How much memory does this really waste? Is it better or worse than
+   *       introducing a backend-specific "register memory binding" action? */
+  mregs = realloc(mregs, (as->actionCount + 1) * sizeof(struct fid_mr*));
+  if (!mregs) laik_panic("Failed to alloc memory");
+
+  Laik_TransitionContext *tc = as->context[0];
+  int mnum = 0;
+  int elemsize = tc->data->elemsize;
+  Laik_Action *a = as->action;
+  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    if (a->type == LAIK_AT_BufRecv) {
+      Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
+      int reserve = aa->count * elemsize;
+//      printf("REG  %d %p <== %d\n", d.mylid, aa->buf, aa->from_rank);
+      laik_log(ll, "Reserving %d * %d = %d bytes\n",
+          aa->count, elemsize, reserve);
+      PANIC_NZ(fi_mr_reg(
+          domain, aa->buf, reserve*aa->count, FI_REMOTE_WRITE,
+          0, aa->from_rank, 0, &mregs[mnum++], NULL));
+    }
+  }
+  mregs[mnum] = NULL;
+}
+
+/* Creates a new sequence that replaces BufSend and BufRecv with FabAsyncSend
+ * and FabAsyncRecv, and adds a FabRmaWait at the end of any round that performs
+ * at least one RMA */
+void fabric_aseq_SplitAsyncActions(Laik_ActionSeq *as) {
+  Laik_Action *newAction = malloc(as->bytesUsed
+                                + as->roundCount * sizeof(Laik_A_FabRecvWait)
+                                + sizeof(Laik_A_FabSendWait));
+  if (!newAction) laik_panic("Failed to alloc memory");
+  Laik_Action *nextNewA = newAction;
+
+  int sends = 0, recvs = 0;
+  int lastRound = 1;
+  unsigned waitCnt = 0;
+
+  Laik_TransitionContext *tc = as->context[0];
+  Laik_Action *a = as->action;
+  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    /* Add FabRmaWait that waits for all RMAs of the last round to complete */
+    if (a->round != lastRound) {
+      if (recvs > 0) {
+        add_fabRecvWait(&nextNewA, lastRound, recvs);
+        waitCnt++;
+      }
+      recvs = 0;
+      lastRound = a->round;
+    }
+
+    /* Count RMAs and copy actions into newAction */
+    switch (a->type) {
+      case LAIK_AT_BufSend:
+        a->type = LAIK_AT_FabAsyncSend;
+        sends++;
+        break;
+      case LAIK_AT_BufRecv:
+        a->type = LAIK_AT_FabAsyncRecv;
+        recvs++;
+        break;
+    }
+    memcpy(nextNewA, a, a->len);
+    nextNewA = nextAction(nextNewA);
+  }
+  /* Add a FabRmaWait after the final round, too */
+  if (recvs > 0) {
+    add_fabRecvWait(&nextNewA, lastRound, recvs);
+    waitCnt++;
+  }
+
+  /* At the end of the action sequence, ensure that all the sends completed */
+  add_fabSendWait(&nextNewA, lastRound, sends);
+
+  /* Replace old action sequence with new and update AS information */
+  free(as->action);
+  as->action       = newAction;
+  as->actionCount += waitCnt + 1;
+  as->bytesUsed   += waitCnt * sizeof(Laik_A_FabRecvWait)
+                  + sizeof(Laik_A_FabSendWait);
+}
+
+/* Makes the action sequence asynchronous:
+ * - BufSend and BufRecv that are not at the end of a round get replaced by
+ *   FabAsyncSend and FabAsyncRecv
+ * - BufSend and BufRecv that are at the end of a round stay there, to ensure
+ *   synchronization and ordering
+ *
+ * TODO: This seems not possible, because the last send of one node may not
+ * 	 correspond to the last receive of another node. Example:
+ *	Node 1		Node 2		Node 3
+ *	BufSend -> 2	BufSend -> 0	BufRecv <- 1
+ *	BusRecv <- 1	BufSend -> 2	BufRecv <- 0
+ * TODO: Are there any optimizations that make this possible? Some of them
+ *       seem to affect the order of operations.
+ */
+#if 0
+void fabric_aseq_MakeAsync(Laik_ActionSeq *as) {
+  Laik_Action *lastSend
+  Laik_Action *a;
+  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    /* Add FabRmaWait that waits for all RMAs of the last round to complete */
+  }
+}
+#endif
 
 void fabric_prepare(Laik_ActionSeq *as) {
   if (as->actionCount == 0) {
@@ -298,74 +469,11 @@ void fabric_prepare(Laik_ActionSeq *as) {
       "After sorting for deadlock avoidance");
   laik_aseq_freeTempSpace(as);
 
-  /* TODO: Any more efficient way of storing memory registrations?
-   *       How much memory does this really waste? Is it better or worse than
-   *       introducing a backend-specific "register memory binding" action? */
-  mregs = realloc(mregs, (as->actionCount + 1) * sizeof(struct fid_mr*));
-  if (!mregs) laik_panic("Failed to alloc memory");
-  int mnum = 0;
-
-  /* Iterate over action sequence, and:
-   * - Register memory for RMA
-   * - Create new action sequence that adds FabRmaWait at the end of any round
-   *   that performs at least one RMA */
-
-  Laik_TransitionContext *tc = as->context[0];
-  Laik_Action *a = as->action;
-  int elemsize = tc->data->elemsize;
-
-  Laik_Action *newAction =
-      malloc(as->bytesUsed + as->roundCount * sizeof(Laik_A_FabRmaWait));
-  if (!newAction) laik_panic("Failed to alloc memory");
-  Laik_Action *nextNewA = newAction;
-  unsigned waitCnt = 0;
-
-  int rmas = 0;
-  int lastRound = 1;
-  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
-    /* Add FabRmaWait that waits for all RMAs of the last round to complete */
-    if (a->round != lastRound) {
-      if (rmas > 0) {
-        add_fabRmaWait(&nextNewA, lastRound, rmas);
-        waitCnt++;
-      }
-      rmas = 0;
-      lastRound = a->round;
-    }
-
-    /* Count RMAs and copy actions into newAction */
-    switch (a->type) {
-      case LAIK_AT_BufSend:
-        rmas++;
-        break;
-      case LAIK_AT_BufRecv:
-        Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
-        int reserve = aa->count * elemsize;
-        laik_log(ll, "Reserving %d * %d = %d bytes\n",
-            aa->count, elemsize, reserve);
-        PANIC_NZ(fi_mr_reg(
-            domain, aa->buf, reserve*aa->count, FI_REMOTE_WRITE,
-            0, aa->from_rank, 0, &mregs[mnum++], NULL));
-        rmas++;
-        break;
-    }
-    memcpy(nextNewA, a, a->len);
-    nextNewA = nextAction(nextNewA);
+  fabric_aseq_RegisterMemory(as);
+  if (isAsync) {
+    fabric_aseq_SplitAsyncActions(as);
+    laik_log_ActionSeqIfChanged(true, as, "After splitting async actions");
   }
-  /* Add a FabRmaWait after the final round, too */
-  add_fabRmaWait(&nextNewA, lastRound, rmas);
-  waitCnt++;
-
-  /* Terminate memory registration list */
-  mregs[mnum] = NULL;
-
-  /* Replace old action sequence with new and update AS information */
-  free(as->action);
-  as->action       = newAction;
-  as->actionCount += waitCnt;
-  as->bytesUsed   += waitCnt * sizeof(Laik_A_FabRmaWait);
-
-  laik_log_ActionSeqIfChanged(true, as, "After adding FabRmaWait");
 
   laik_aseq_calc_stats(as);
 }
@@ -374,35 +482,135 @@ void fabric_exec(Laik_ActionSeq *as) {
   Laik_Action *a = as->action;
   Laik_TransitionContext *tc = as->context[0];
   int elemsize = tc->data->elemsize;
-  char cq_buf[128]; /* TODO: what is minimum required size? */
+  struct fi_cq_data_entry cq_buf;
+  const int cring_size = 8;
+  unsigned cring[8] = { 0 };
+  int cring_idx = 0;
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
     switch (a->type) {
       case LAIK_AT_Nop: break;
-      case LAIK_AT_BufRecv: {
+      case LAIK_AT_FabAsyncRecv: {
         break;
       }
-      case LAIK_AT_BufSend: {
+      case LAIK_AT_FabAsyncSend: {
         Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
-        /* TODO: Does the uint64_t data have any significance?
-         *       Is it a problem that I just set it to 0?*/
         while ((ret = fi_writedata(ep, aa->buf, elemsize * aa->count, NULL,
-                0, aa->to_rank, 0, d.mylid, NULL)) == -FI_EAGAIN);
+                a->round, aa->to_rank, 0, d.mylid, NULL)) == -FI_EAGAIN);
         if (ret)
           laik_log(LAIK_LL_Panic,
               "fi_writedata() failed: %s", fi_strerror(ret));
         break;
       }
-      case LAIK_AT_FabRmaWait: {
-        Laik_A_FabRmaWait *aa = (Laik_A_FabRmaWait*) a;
-        unsigned completions = 0;
+      case LAIK_AT_FabRecvWait: {
+        Laik_A_FabRecvWait *aa = (Laik_A_FabRecvWait*) a;
+        printf("Waiting for %d recv completions\n", aa->count);
+        unsigned completions = cring[cring_idx];
+        cring_idx = (cring_idx + 1) % cring_size;
         while (completions < aa->count) {
-          /* TODO: either do something with the retrieved information
-           *       or replace the CQ with a counter */
-          ret = fi_cq_sread(cq, cq_buf, 1, NULL, -1);
+          ret = fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1);
           if (ret == -FI_EAGAIN) continue;
           assert(ret > 0); /* TODO: actual error handling */
-          completions += ret;
+          printf("Got completion for round: %d\n", cq_buf.data);
+          if (cq_buf.data == a->round) {
+            completions++;
+          } else {
+            int off = cq_buf.data - a->round - 1;
+            assert(off < cring_size);
+            cring[(cring_idx + off) % cring_size]++;
+          }
         }
+        break;
+      }
+      case LAIK_AT_FabSendWait: {
+        Laik_A_FabSendWait *aa = (Laik_A_FabSendWait*) a;
+        printf("Waiting for %d send completions\n", aa->count);
+        unsigned completions = 0;
+        while (completions < aa->count) {
+          ret = fi_cq_sread(cqt, (char*) &cq_buf, 1, NULL, -1);
+          if (ret == -FI_EAGAIN) continue;
+          assert(ret > 0);
+          /* TODO: either do something with the retrieved information
+           *       or replace the CQ with a counter */
+          completions++;
+        }
+        break;
+      }
+      /* BufSend and BufRecv only appear if isAsync == 0 */
+//#define PFDBG 1
+#ifdef PFDBG
+#define D(a) a
+#else
+#define D(a) ;
+#endif
+      case LAIK_AT_BufRecv: {
+        Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
+        D(printf("RECV %d %p <== %d\n", d.mylid, aa->buf, aa->from_rank));
+        while ((ret = fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1))
+                                                                 == -FI_EAGAIN);
+        assert(ret == 1);
+        D(printf("CRCV %d %p <== %d\n", d.mylid, aa->buf, aa->from_rank));
+        break;
+      }
+      case LAIK_AT_BufSend: {
+        Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
+        D(printf("SEND %d %p ==> %d\n", d.mylid, aa->buf, aa->to_rank));
+/* ***********TEST************* */
+        const struct iovec msg_iov = {
+          .iov_base = aa->buf,
+          .iov_len = elemsize * aa->count
+        };
+        struct fi_rma_iov rma_iov = {
+          .addr	= 0,
+          .len	= elemsize * aa->count,
+          .key	= d.mylid
+        };
+        struct fi_msg_rma msg = {
+          .msg_iov	 = &msg_iov,
+          .desc		 = NULL,
+          .iov_count	 = 1,
+          .addr		 = aa->to_rank,
+          .rma_iov	 = &rma_iov,
+          .rma_iov_count = 1,
+          .context	 = NULL,
+          .data		 = 0
+        };
+        while ((ret = fi_writemsg(ep, &msg, FI_DELIVERY_COMPLETE | FI_FENCE
+                                            | FI_REMOTE_CQ_DATA))
+               == -FI_EAGAIN);
+/* ***********TEST************* */
+#if 0
+        while ((ret = fi_writedata(ep, aa->buf, elemsize * aa->count, NULL,
+                0, aa->to_rank, 0, d.mylid, NULL)) == -FI_EAGAIN);
+#endif
+        if (ret)
+          laik_log(LAIK_LL_Panic,
+              "fi_writedata() failed: %s", fi_strerror(ret));
+retry:
+        while ((ret = fi_cq_sread(cqt, (char*) &cq_buf, 1, NULL, -1))
+                                                                 == -FI_EAGAIN);
+        if (ret < 0) {
+          if (ret != -FI_EAVAIL)
+            laik_log(LAIK_LL_Panic, "fi_cq_sread() failed: %s",
+                     fi_strerror(ret));
+          struct fi_cq_err_entry err;
+          if (fi_cq_readerr(cqt, &err, 0) != 1)
+            laik_panic("Failed to retrieve error information");
+
+#if 0
+          if (err.prov_errno == FI_EINPROGRESS) {
+            laik_log(LAIK_LL_Error, "%d: Operation now in progress", d.mylid);
+            printf("Retrying: SEND %d %p ==> %d\n", d.mylid, aa->buf, aa->to_rank);
+
+            usleep(500000);
+            goto retry;
+          }
+#endif
+
+          laik_log(LAIK_LL_Panic, "CQ reported error: %s",
+              fi_cq_strerror(cqt, err.prov_errno, err.err_data, NULL, 0));
+        }
+        assert(ret == 1);
+        D(printf("CSND %d %p ==> %d\n", d.mylid, aa->buf, aa->to_rank));
         break;
       }
       case LAIK_AT_RBufLocalReduce: {
