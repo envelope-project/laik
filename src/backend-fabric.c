@@ -105,12 +105,11 @@ static struct fi_cq_attr cq_attr = {
  */
   .format	= FI_CQ_FORMAT_DATA
 };
-/* static struct fi_eq_attr eq_attr = { 0 }; */
 static struct fid_av *av;
 static struct fid_cq *cqr, *cqt; /* Receive and transmit queues */
-/* static struct fid_eq *eq; */
 static struct fid_mr **mregs = NULL;
-int isAsync = 1;
+static char *acks;
+static int isAsync = 1;
 int ret;
 
 static Laik_Backend laik_backend_fabric = {
@@ -278,6 +277,8 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   free(peers);
 
   /* Initialize LAIK */
+  acks = calloc(world_size, 1);
+  if (!acks) laik_panic("Failed to allocate memory");
   d.world_size = world_size;
   d.addrlen = fi_addrlen;
   Laik_Instance *inst = laik_new_instance(&laik_backend_fabric, world_size,
@@ -430,10 +431,33 @@ void fabric_aseq_MakeAsync(Laik_ActionSeq *as) {
 }
 #endif
 
+void ack_rma(int idx) {
+  /* TODO: handle case where we already received a message from the
+   *       specified node */
+  assert(acks[idx] == 0);
+  acks[idx]++;
+}
+
+void await_completions(struct fid_cq *cq, int num) {
+  struct fi_cq_data_entry cq_buf;
+//  printf("%ld: Awaiting %d completions on %p\n", d.mylid, num, cq);
+  while (num > 0) {
+    while ((ret = fi_cq_sread(cq, (char*) &cq_buf, 1, NULL, -1))
+           == -FI_EAGAIN);
+    assert(ret == 1);
+    if (cq_buf.flags & FI_REMOTE_CQ_DATA) {
+      ack_rma(cq_buf.data-1);
+      continue;
+    }
+    num--;
+  }
+//  printf("Awaited %d completions on %p\n", num, cq);
+}
+
 void fabric_prepare(Laik_ActionSeq *as) {
   if (as->actionCount == 0) {
     laik_aseq_calc_stats(as);
-    return;
+    goto join;
   }
 
   /* Mark action seq as prepared by fabric backend, so that
@@ -476,6 +500,67 @@ void fabric_prepare(Laik_ActionSeq *as) {
   }
 
   laik_aseq_calc_stats(as);
+
+//#define PFDBG 1
+#ifdef PFDBG
+#define D(a) a
+#else
+#define D(a) ;
+#endif
+
+join:
+  /* Join-point */
+  /* TODO: exchange new and removed nodes */
+  /* TODO: proper error handling */
+  uint64_t tmp = 0;
+  D(printf("%d: START JOIN %d\n", d.mylid, as->id));
+  if (d.mylid == 0) {
+    for (int i = 1; i < d.world_size; i++) {
+      while ((ret = fi_recv(ep, &tmp, 4, NULL, i, NULL)) == -FI_EAGAIN);
+      assert(ret >= 0);
+    }
+    await_completions(cqr, d.world_size - 1);
+    for (int i = 1; i < d.world_size; i++) {
+      while ((ret = fi_send(ep, &tmp, 4, NULL, i, NULL)) == -FI_EAGAIN);
+      assert(ret >= 0);
+    }
+    await_completions(cqt, d.world_size - 1);
+  } else {
+    while ((ret = fi_send(ep, &tmp, 4, NULL, 0, NULL)) == -FI_EAGAIN);
+    assert(ret >= 0);
+    await_completions(cqt, 1);
+    while ((ret = fi_recv(ep, &tmp, 4, NULL, 0, NULL)) == -FI_EAGAIN);
+    assert(ret >= 0);
+    await_completions(cqr, 1);
+  }
+
+  /* TODO: update world size and AV after getting new node list */
+  free(acks);
+  acks = calloc(d.world_size, 1);
+  if (!acks) laik_panic("Failed to allocate memory");
+
+  if (d.mylid == 0) {
+    for (int i = 1; i < d.world_size; i++) {
+      while ((ret = fi_recv(ep, &tmp, 4, NULL, i, NULL)) == -FI_EAGAIN);
+      assert(ret >= 0);
+    }
+    await_completions(cqr, d.world_size - 1);
+    for (int i = 1; i < d.world_size; i++) {
+      while ((ret = fi_send(ep, &tmp, 4, NULL, i, NULL)) == -FI_EAGAIN);
+      assert(ret >= 0);
+    }
+    await_completions(cqt, d.world_size - 1);
+  } else {
+    while ((ret = fi_send(ep, &tmp, 4, NULL, 0, NULL)) == -FI_EAGAIN);
+    assert(ret >= 0);
+    await_completions(cqt, 1);
+    while ((ret = fi_recv(ep, &tmp, 4, NULL, 0, NULL)) == -FI_EAGAIN);
+    assert(ret >= 0);
+    await_completions(cqr, 1);
+  }
+
+  D(printf("%d: END   JOIN %d\n", d.mylid, as->id));
+
 }
 
 void fabric_exec(Laik_ActionSeq *as) {
@@ -483,25 +568,49 @@ void fabric_exec(Laik_ActionSeq *as) {
   Laik_TransitionContext *tc = as->context[0];
   int elemsize = tc->data->elemsize;
   struct fi_cq_data_entry cq_buf;
-  const int cring_size = 8;
-  unsigned cring[8] = { 0 };
-  int cring_idx = 0;
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
     switch (a->type) {
       case LAIK_AT_Nop: break;
       case LAIK_AT_FabAsyncRecv: {
+        Laik_A_FabAsyncRecv *aa = (Laik_A_FabAsyncRecv*) a;
+        D(printf("%d: Waiting for recv from %d\n", d.mylid, aa->from_rank));
+        if (acks[aa->from_rank]) {
+          D(printf("%d: Got %d from cache!\n", d.mylid, aa->from_rank));
+          /* Received by previous fi_cq_sread(), clear entry and be done */
+          acks[aa->from_rank]--;
+          break;
+        }
+        while (1) {
+          ret = fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1);
+          if (ret == -FI_EAGAIN) continue;
+          assert(ret > 0); /* TODO: actual error handling */
+#if 0
+          if (cq_buf.data == 0) {
+            printf("%d: Completion flags: %llx\n", d.mylid, cq_buf.flags);
+            printf("%d: FI_RECV | FI_MSG: %llx\n", d.mylid, FI_RECV | FI_MSG);
+            continue;
+          }
+#endif
+          assert(cq_buf.data > 0);
+          cq_buf.data--;
+          D(printf("%d: Waiting for %d, got %d\n", d.mylid, aa->from_rank, cq_buf.data));
+          if (cq_buf.data == ((unsigned)aa->from_rank)) break;
+          else ack_rma(cq_buf.data);
+        }
         break;
       }
       case LAIK_AT_FabAsyncSend: {
         Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
+        D(printf("%d: Sending to %d\n", d.mylid, aa->to_rank));
         while ((ret = fi_writedata(ep, aa->buf, elemsize * aa->count, NULL,
-                a->round, aa->to_rank, 0, d.mylid, NULL)) == -FI_EAGAIN);
+                d.mylid+1, aa->to_rank, 0, d.mylid, NULL)) == -FI_EAGAIN);
         if (ret)
           laik_log(LAIK_LL_Panic,
               "fi_writedata() failed: %s", fi_strerror(ret));
         break;
       }
       case LAIK_AT_FabRecvWait: {
+#if 0
         Laik_A_FabRecvWait *aa = (Laik_A_FabRecvWait*) a;
         printf("Waiting for %d recv completions\n", aa->count);
         unsigned completions = cring[cring_idx];
@@ -519,11 +628,12 @@ void fabric_exec(Laik_ActionSeq *as) {
             cring[(cring_idx + off) % cring_size]++;
           }
         }
+#endif
         break;
       }
       case LAIK_AT_FabSendWait: {
         Laik_A_FabSendWait *aa = (Laik_A_FabSendWait*) a;
-        printf("Waiting for %d send completions\n", aa->count);
+        D(printf("%d: Waiting for %d send completions\n", d.mylid, aa->count));
         unsigned completions = 0;
         while (completions < aa->count) {
           ret = fi_cq_sread(cqt, (char*) &cq_buf, 1, NULL, -1);
@@ -533,15 +643,11 @@ void fabric_exec(Laik_ActionSeq *as) {
            *       or replace the CQ with a counter */
           completions++;
         }
+        D(printf("%d: Sending done\n", d.mylid));
         break;
       }
       /* BufSend and BufRecv only appear if isAsync == 0 */
-//#define PFDBG 1
-#ifdef PFDBG
-#define D(a) a
-#else
-#define D(a) ;
-#endif
+#if 0
       case LAIK_AT_BufRecv: {
         Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
         D(printf("RECV %d %p <== %d\n", d.mylid, aa->buf, aa->from_rank));
@@ -613,6 +719,7 @@ retry:
         D(printf("CSND %d %p ==> %d\n", d.mylid, aa->buf, aa->to_rank));
         break;
       }
+#endif
       case LAIK_AT_RBufLocalReduce: {
         Laik_BackendAction *ba = (Laik_BackendAction*) a;
         assert(ba->bufID < ASEQ_BUFFER_MAX);
