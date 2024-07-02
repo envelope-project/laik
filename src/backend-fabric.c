@@ -24,6 +24,14 @@
     fi_strerror(ret));
 const int ll = LAIK_LL_Debug;
 
+/* Define this to enable a lot of additional output for printf-debugging */
+#define PFDBG 1
+#ifdef PFDBG
+#define D(a) a
+#else
+#define D(a) ;
+#endif
+
 void fabric_prepare(Laik_ActionSeq *as);
 void fabric_exec(Laik_ActionSeq *as);
 void fabric_cleanup(Laik_ActionSeq *as);
@@ -34,6 +42,10 @@ bool fabric_log_action(Laik_Action *a);
  * re-using because I couldn't find a better way to do it with libfabric
  */
 bool check_local(char *host);
+void ack_rma(int idx);
+void await_completions(struct fid_cq *cq, int num);
+uint64_t make_key(int rnode, int snode, uint8_t seq);
+void barrier(void);
 
 /* Backend-specific actions */
 /* The LibFabric backend uses RMAs for send and receive, which complete
@@ -112,6 +124,18 @@ static char *acks;
 static int isAsync = 1;
 int ret;
 
+/* Note: The order of invocation is not always prepare -> exec -> cleanup.
+ *       It's also possible to prepare multiple aseqs and later execute them
+ *       and clean them up.
+ *       mnum must be static so the memory registrations of one prepare
+ *       do not overwrite those of the previous prepare if there was no
+ *       cleanup in between.
+ *       It must be visible outside of RegisterMemory so that cleanup
+ *       can reset it when it is invoked.
+ * TODO: Making this global is not a good style... Any better way?
+ */
+static int mnum = 0;
+
 static Laik_Backend laik_backend_fabric = {
   .name		= "Libfabric Backend",
   .prepare	= fabric_prepare,
@@ -185,11 +209,6 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   PANIC_NZ(fi_ep_bind(ep, &av->fid, 0));
   PANIC_NZ(fi_ep_bind(ep, &cqr->fid, FI_RECV));
   PANIC_NZ(fi_ep_bind(ep, &cqt->fid, FI_TRANSMIT));
-#if 0
-  /* TODO: do we need an event queue for anything? */
-  PANIC_NZ(fi_eq_open(fabric, &eq_attr, &eq, NULL));
-  PANIC_NZ(fi_ep_bind(ep, &eq->fid, 0)); /* TODO: is 0 OK here? */
-#endif
   PANIC_NZ(fi_enable(ep));
 
   /* Get the address of the endpoint */
@@ -327,23 +346,28 @@ void fabric_aseq_RegisterMemory(Laik_ActionSeq *as) {
   /* TODO: Any more efficient way of storing memory registrations?
    *       How much memory does this really waste? Is it better or worse than
    *       introducing a backend-specific "register memory binding" action? */
-  mregs = realloc(mregs, (as->actionCount + 1) * sizeof(struct fid_mr*));
+  uint8_t regcount[d.world_size];
+  memset(regcount, 0, d.world_size);
+  mregs = realloc(mregs,
+      (mnum + as->actionCount + 1) * sizeof(struct fid_mr*));
   if (!mregs) laik_panic("Failed to alloc memory");
 
   Laik_TransitionContext *tc = as->context[0];
-  int mnum = 0;
+
   int elemsize = tc->data->elemsize;
   Laik_Action *a = as->action;
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
-    if (a->type == LAIK_AT_BufRecv) {
+    if (a->type == LAIK_AT_BufRecv || a->type == LAIK_AT_FabAsyncRecv) {
       Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
       int reserve = aa->count * elemsize;
-//      printf("REG  %d %p <== %d\n", d.mylid, aa->buf, aa->from_rank);
+      uint64_t key = make_key(as->id, aa->from_rank,
+                              regcount[aa->from_rank]++);
+      D(printf("%d: REG  %p <== %lx\n", d.mylid, aa->buf, key));
       laik_log(ll, "Reserving %d * %d = %d bytes\n",
           aa->count, elemsize, reserve);
       PANIC_NZ(fi_mr_reg(
           domain, aa->buf, reserve*aa->count, FI_REMOTE_WRITE,
-          0, aa->from_rank, 0, &mregs[mnum++], NULL));
+          0, key, 0, &mregs[mnum++], NULL));
     }
   }
   mregs[mnum] = NULL;
@@ -407,30 +431,6 @@ void fabric_aseq_SplitAsyncActions(Laik_ActionSeq *as) {
                   + sizeof(Laik_A_FabSendWait);
 }
 
-/* Makes the action sequence asynchronous:
- * - BufSend and BufRecv that are not at the end of a round get replaced by
- *   FabAsyncSend and FabAsyncRecv
- * - BufSend and BufRecv that are at the end of a round stay there, to ensure
- *   synchronization and ordering
- *
- * TODO: This seems not possible, because the last send of one node may not
- * 	 correspond to the last receive of another node. Example:
- *	Node 1		Node 2		Node 3
- *	BufSend -> 2	BufSend -> 0	BufRecv <- 1
- *	BusRecv <- 1	BufSend -> 2	BufRecv <- 0
- * TODO: Are there any optimizations that make this possible? Some of them
- *       seem to affect the order of operations.
- */
-#if 0
-void fabric_aseq_MakeAsync(Laik_ActionSeq *as) {
-  Laik_Action *lastSend
-  Laik_Action *a;
-  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
-    /* Add FabRmaWait that waits for all RMAs of the last round to complete */
-  }
-}
-#endif
-
 void ack_rma(int idx) {
   /* TODO: handle case where we already received a message from the
    *       specified node */
@@ -452,6 +452,37 @@ void await_completions(struct fid_cq *cq, int num) {
     num--;
   }
 //  printf("Awaited %d completions on %p\n", num, cq);
+}
+
+uint64_t make_key(int id, int send_node, uint8_t seq) {
+  return (((uint64_t) id) << 40) + (((uint64_t) send_node) << 8) + seq;
+}
+
+unsigned get_aseq(struct fid_mr *mr) {
+  return (fi_mr_key(mr) >> 40);
+}
+
+void barrier(void) {
+  uint8_t tmp;
+  if (d.mylid == 0) {
+    for (int i = 1; i < d.world_size; i++) {
+      while ((ret = fi_recv(ep, &tmp, 1, NULL, i, NULL)) == -FI_EAGAIN);
+      assert(ret >= 0);
+    }
+    await_completions(cqr, d.world_size - 1);
+    for (int i = 1; i < d.world_size; i++) {
+      while ((ret = fi_send(ep, &tmp, 1, NULL, i, NULL)) == -FI_EAGAIN);
+      assert(ret >= 0);
+    }
+    await_completions(cqt, d.world_size - 1);
+  } else {
+    while ((ret = fi_send(ep, &tmp, 1, NULL, 0, NULL)) == -FI_EAGAIN);
+    assert(ret >= 0);
+    await_completions(cqt, 1);
+    while ((ret = fi_recv(ep, &tmp, 1, NULL, 0, NULL)) == -FI_EAGAIN);
+    assert(ret >= 0);
+    await_completions(cqr, 1);
+  }
 }
 
 void fabric_prepare(Laik_ActionSeq *as) {
@@ -493,20 +524,12 @@ void fabric_prepare(Laik_ActionSeq *as) {
       "After sorting for deadlock avoidance");
   laik_aseq_freeTempSpace(as);
 
-  fabric_aseq_RegisterMemory(as);
   if (isAsync) {
     fabric_aseq_SplitAsyncActions(as);
     laik_log_ActionSeqIfChanged(true, as, "After splitting async actions");
   }
 
   laik_aseq_calc_stats(as);
-
-//#define PFDBG 1
-#ifdef PFDBG
-#define D(a) a
-#else
-#define D(a) ;
-#endif
 
 join:
   /* Join-point */
@@ -535,40 +558,30 @@ join:
   }
 
   /* TODO: update world size and AV after getting new node list */
+  fabric_aseq_RegisterMemory(as);
   free(acks);
   acks = calloc(d.world_size, 1);
   if (!acks) laik_panic("Failed to allocate memory");
 
-  if (d.mylid == 0) {
-    for (int i = 1; i < d.world_size; i++) {
-      while ((ret = fi_recv(ep, &tmp, 4, NULL, i, NULL)) == -FI_EAGAIN);
-      assert(ret >= 0);
-    }
-    await_completions(cqr, d.world_size - 1);
-    for (int i = 1; i < d.world_size; i++) {
-      while ((ret = fi_send(ep, &tmp, 4, NULL, i, NULL)) == -FI_EAGAIN);
-      assert(ret >= 0);
-    }
-    await_completions(cqt, d.world_size - 1);
-  } else {
-    while ((ret = fi_send(ep, &tmp, 4, NULL, 0, NULL)) == -FI_EAGAIN);
-    assert(ret >= 0);
-    await_completions(cqt, 1);
-    while ((ret = fi_recv(ep, &tmp, 4, NULL, 0, NULL)) == -FI_EAGAIN);
-    assert(ret >= 0);
-    await_completions(cqr, 1);
-  }
+  barrier();
 
   D(printf("%d: END   JOIN %d\n", d.mylid, as->id));
 
 }
 
 void fabric_exec(Laik_ActionSeq *as) {
+  D(printf("%d: EXEC %d\n", d.mylid, as->id));
   Laik_Action *a = as->action;
   Laik_TransitionContext *tc = as->context[0];
+  Laik_MappingList* fromList = tc->fromList;
+  Laik_MappingList* toList = tc->toList;
+
   int elemsize = tc->data->elemsize;
   struct fi_cq_data_entry cq_buf;
+  uint8_t msgcount[d.world_size];
+  memset(msgcount, 0, d.world_size);
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    Laik_BackendAction *ba = (Laik_BackendAction*) a;
     switch (a->type) {
       case LAIK_AT_Nop: break;
       case LAIK_AT_FabAsyncRecv: {
@@ -584,16 +597,10 @@ void fabric_exec(Laik_ActionSeq *as) {
           ret = fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1);
           if (ret == -FI_EAGAIN) continue;
           assert(ret > 0); /* TODO: actual error handling */
-#if 0
-          if (cq_buf.data == 0) {
-            printf("%d: Completion flags: %llx\n", d.mylid, cq_buf.flags);
-            printf("%d: FI_RECV | FI_MSG: %llx\n", d.mylid, FI_RECV | FI_MSG);
-            continue;
-          }
-#endif
           assert(cq_buf.data > 0);
           cq_buf.data--;
-          D(printf("%d: Waiting for %d, got %d\n", d.mylid, aa->from_rank, cq_buf.data));
+          D(printf("%d: Waiting for %d, got %ld\n",
+                d.mylid, aa->from_rank, cq_buf.data));
           if (cq_buf.data == ((unsigned)aa->from_rank)) break;
           else ack_rma(cq_buf.data);
         }
@@ -601,34 +608,18 @@ void fabric_exec(Laik_ActionSeq *as) {
       }
       case LAIK_AT_FabAsyncSend: {
         Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
-        D(printf("%d: Sending to %d\n", d.mylid, aa->to_rank));
+        uint64_t key = make_key(as->id, d.mylid, msgcount[aa->to_rank]++);
+        D(printf("%d: SEND ==> %d (%lx)\n", d.mylid, aa->to_rank, key));
         while ((ret = fi_writedata(ep, aa->buf, elemsize * aa->count, NULL,
-                d.mylid+1, aa->to_rank, 0, d.mylid, NULL)) == -FI_EAGAIN);
+                d.mylid+1, aa->to_rank, 0, key, NULL))
+               == -FI_EAGAIN);
         if (ret)
           laik_log(LAIK_LL_Panic,
               "fi_writedata() failed: %s", fi_strerror(ret));
         break;
       }
       case LAIK_AT_FabRecvWait: {
-#if 0
-        Laik_A_FabRecvWait *aa = (Laik_A_FabRecvWait*) a;
-        printf("Waiting for %d recv completions\n", aa->count);
-        unsigned completions = cring[cring_idx];
-        cring_idx = (cring_idx + 1) % cring_size;
-        while (completions < aa->count) {
-          ret = fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1);
-          if (ret == -FI_EAGAIN) continue;
-          assert(ret > 0); /* TODO: actual error handling */
-          printf("Got completion for round: %d\n", cq_buf.data);
-          if (cq_buf.data == a->round) {
-            completions++;
-          } else {
-            int off = cq_buf.data - a->round - 1;
-            assert(off < cring_size);
-            cring[(cring_idx + off) % cring_size]++;
-          }
-        }
-#endif
+        /* TODO: Is there any kind of ordering where this makes sense? */
         break;
       }
       case LAIK_AT_FabSendWait: {
@@ -721,11 +712,32 @@ retry:
       }
 #endif
       case LAIK_AT_RBufLocalReduce: {
-        Laik_BackendAction *ba = (Laik_BackendAction*) a;
         assert(ba->bufID < ASEQ_BUFFER_MAX);
         assert(ba->dtype->reduce != 0);
         (ba->dtype->reduce)(ba->toBuf, ba->toBuf,
             as->buf[ba->bufID] + ba->offset, ba->count, ba->redOp);
+        break;
+      }
+      case LAIK_AT_PackToBuf: {
+        laik_exec_pack(ba, ba->map);
+        break;
+      }
+      case LAIK_AT_MapPackToBuf: {
+        assert(ba->fromMapNo < fromList->count);
+        Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
+        assert(fromMap->base != 0);
+        laik_exec_pack(ba, fromMap);
+        break;
+      }
+      case LAIK_AT_UnpackFromBuf: {
+        laik_exec_unpack(ba, ba->map);
+        break;
+      }
+      case LAIK_AT_MapUnpackFromBuf: {
+        assert(ba->toMapNo < toList->count);
+        Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
+        assert(toMap->base);
+        laik_exec_unpack(ba, toMap);
         break;
       }
       default:
@@ -740,16 +752,33 @@ retry:
 
 void fabric_cleanup(Laik_ActionSeq *as) {
   (void) as;
-  /* Clean up RDMAs */
-  for (struct fid_mr **mr = mregs; *mr; mr++) {
+
+  /* Make sure that no node enters cleanup while the others are still executing
+   * the action sequence and might need to use its registered memory */
+  barrier();
+
+  D(printf("%d: CLEANUP %d\n", d.mylid, as->id));
+
+  /* Clean up memory registrations for current aseq */
+  /* Memory registrations are sorted by aseq ID in ascending order */
+  struct fid_mr **mr = mregs;
+  struct fid_mr **mr2;
+  for (; *mr && get_aseq(*mr) < (unsigned) as->id; mr++);
+  for (mr2 = mr; *mr && get_aseq(*mr2) == (unsigned) as->id; mr++) {
     PANIC_NZ(fi_close((struct fid *) *mr));
   }
+  mnum -= (mr2 - mr);
+  if (mr2 - mr > 0 && *mr2) {
+    while (*mr2) *(mr++) = *(mr2++);
+  }
+  *(mr+1) = NULL;
 }
 
 void fabric_finalize(Laik_Instance *inst) {
   /* TODO: Final cleanup */
   (void) inst;
 
+  free(acks);
   free(mregs);
   fi_close((struct fid *) ep);
   fi_close((struct fid *) domain);
