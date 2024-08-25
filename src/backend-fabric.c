@@ -722,17 +722,29 @@ retry:
         break;
       }
 #endif
-      case LAIK_AT_RBufLocalReduce: {
-        assert(ba->bufID < ASEQ_BUFFER_MAX);
-        assert(ba->dtype->reduce != 0);
-        (ba->dtype->reduce)(ba->toBuf, ba->toBuf,
-            as->buf[ba->bufID] + ba->offset, ba->count, ba->redOp);
+/* TODO, possibly?
+ * Reduce,
+ * GroupReduce,
+ * RecvAndUnpack,
+ * MapRecvAndUnpack,
+ * PackAndSend,
+ * MapPackAndSend
+ */
+      case LAIK_AT_CopyFromBuf:
+        for (unsigned int i = 0; i < ba->count; i++)
+          memcpy(ba->ce[i].ptr,
+                 ba->fromBuf + ba->ce[i].offset,
+                 ba->ce[i].bytes);
         break;
-      }
-      case LAIK_AT_PackToBuf: {
+      case LAIK_AT_CopyToBuf:
+        for (unsigned int i = 0; i < ba->count; i++)
+          memcpy(ba->toBuf + ba->ce[i].offset,
+                 ba->ce[i].ptr,
+                 ba->ce[i].bytes);
+        break;
+      case LAIK_AT_PackToBuf:
         laik_exec_pack(ba, ba->map);
         break;
-      }
       case LAIK_AT_MapPackToBuf: {
         assert(ba->fromMapNo < fromList->count);
         Laik_Mapping* fromMap = &(fromList->map[ba->fromMapNo]);
@@ -740,10 +752,9 @@ retry:
         laik_exec_pack(ba, fromMap);
         break;
       }
-      case LAIK_AT_UnpackFromBuf: {
+      case LAIK_AT_UnpackFromBuf:
         laik_exec_unpack(ba, ba->map);
         break;
-      }
       case LAIK_AT_MapUnpackFromBuf: {
         assert(ba->toMapNo < toList->count);
         Laik_Mapping* toMap = &(toList->map[ba->toMapNo]);
@@ -751,6 +762,19 @@ retry:
         laik_exec_unpack(ba, toMap);
         break;
       }
+      case LAIK_AT_RBufLocalReduce:
+        assert(ba->bufID < ASEQ_BUFFER_MAX);
+        assert(ba->dtype->reduce != 0);
+        (ba->dtype->reduce)(ba->toBuf, ba->toBuf,
+            as->buf[ba->bufID] + ba->offset, ba->count, ba->redOp);
+        break;
+      case LAIK_AT_RBufCopy:
+        assert(ba->bufID < ASEQ_BUFFER_MAX);
+        memcpy(ba->toBuf, as->buf[ba->bufID] + ba->offset, ba->count * elemsize);
+        break;
+      case LAIK_AT_BufCopy:
+        memcpy(ba->toBuf, ba->fromBuf, ba->count * elemsize);
+        break;
       default:
         laik_log(LAIK_LL_Error, "Unrecognized action type");
         laik_log_begin(LAIK_LL_Error);
