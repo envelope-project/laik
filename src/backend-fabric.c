@@ -25,7 +25,7 @@
 const int ll = LAIK_LL_Debug;
 
 /* Define this to enable a lot of additional output for printf-debugging */
-#define PFDBG 1
+/*#define PFDBG 1*/
 #ifdef PFDBG
 #define D(a) a
 #else
@@ -339,6 +339,15 @@ void add_fabSendWait(Laik_Action **next, unsigned round, unsigned count) {
   *next = nextAction((*next));
 }
 
+void print_mregs(char *str) {
+  /* If printf debugging isn't enabled, do nothing */
+#ifdef PFDBG
+  printf("%d: %s:\n", d.mylid, str);
+  for (struct fid_mr **m = mregs; *m; m++)
+    printf("%d: %p (%lx)\n", d.mylid, *m, fi_mr_key(*m));
+#endif
+}
+
 /* Registers memory buffers to libfabric, so that they can be accessed by RMA */
 /* TODO: consider asynchronous instead of the default synchronous completion
  *       of memory registerations */
@@ -371,6 +380,8 @@ void fabric_aseq_RegisterMemory(Laik_ActionSeq *as) {
     }
   }
   mregs[mnum] = NULL;
+
+  print_mregs("MREGS IS NOW");
 }
 
 /* Creates a new sequence that replaces BufSend and BufRecv with FabAsyncSend
@@ -752,6 +763,7 @@ retry:
 
 void fabric_cleanup(Laik_ActionSeq *as) {
   (void) as;
+  int nclosed;
 
   /* Make sure that no node enters cleanup while the others are still executing
    * the action sequence and might need to use its registered memory */
@@ -759,19 +771,29 @@ void fabric_cleanup(Laik_ActionSeq *as) {
 
   D(printf("%d: CLEANUP %d\n", d.mylid, as->id));
 
+  print_mregs("MREGS BEFORE CLEANUP");
+
   /* Clean up memory registrations for current aseq */
   /* Memory registrations are sorted by aseq ID in ascending order */
-  struct fid_mr **mr = mregs;
-  struct fid_mr **mr2;
-  for (; *mr && get_aseq(*mr) < (unsigned) as->id; mr++);
-  for (mr2 = mr; *mr && get_aseq(*mr2) == (unsigned) as->id; mr++) {
-    PANIC_NZ(fi_close((struct fid *) *mr));
+  struct fid_mr **mr_first = mregs;
+  struct fid_mr **mr_last;
+  for (; *mr_first && get_aseq(*mr_first) < (unsigned) as->id; mr_first++);
+  for (mr_last = mr_first;
+       *mr_last && get_aseq(*mr_last) == (unsigned) as->id;
+       mr_last++) {
+    PANIC_NZ(fi_close((struct fid *) *mr_last));
   }
-  mnum -= (mr2 - mr);
-  if (mr2 - mr > 0 && *mr2) {
-    while (*mr2) *(mr++) = *(mr2++);
+  nclosed = mr_last - mr_first;
+  mnum -= nclosed;
+  if (nclosed > 0) {
+    /* Move all later memory registrations into the empty space left by the
+     * closed memory registrations */
+    do {
+      *(mr_first++) = *mr_last;
+    } while (*(mr_last++));
   }
-  *(mr+1) = NULL;
+
+  print_mregs("MREGS AFTER CLEANUP");
 }
 
 void fabric_finalize(Laik_Instance *inst) {
