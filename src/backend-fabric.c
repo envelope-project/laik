@@ -22,7 +22,15 @@
 #define HOME_PORT 7777
 #define PANIC_NZ(a) if ((ret = a)) laik_log(LAIK_LL_Panic, #a " failed: %s", \
     fi_strerror(ret));
+#define RETRY(a) \
+  while ((ret = a) == -FI_EAGAIN); \
+  if (ret) laik_log(LAIK_LL_Panic, #a " failed: %s", fi_strerror(ret));
+#define RETRYCQ(a, cq) \
+  while ((ret = a) == -FI_EAGAIN); \
+  if (ret < 0) handle_cq_error(#a, cq);
+
 const int ll = LAIK_LL_Debug;
+const char *allocfail = "Failed to allocate memory";
 
 /* Define this to enable a lot of additional output for printf-debugging */
 /*#define PFDBG 1*/
@@ -42,6 +50,7 @@ bool fabric_log_action(Laik_Action *a);
  * re-using because I couldn't find a better way to do it with libfabric
  */
 bool check_local(char *host);
+void handle_cq_error(char *op, struct fid_cq *cq);
 void ack_rma(int idx);
 void await_completions(struct fid_cq *cq, int num);
 uint64_t make_key(int rnode, int snode, uint8_t seq);
@@ -104,6 +113,7 @@ static struct _InstData {
 } d;
 typedef struct _InstData InstData;
 
+/* Global variables for libfabric */
 static struct fi_info *info;
 static struct fid_fabric *fabric;
 static struct fid_domain *domain;
@@ -119,8 +129,29 @@ static struct fi_cq_attr cq_attr = {
 };
 static struct fid_av *av;
 static struct fid_cq *cqr, *cqt; /* Receive and transmit queues */
+
+/* Global variables for program logic */
+
+/* fid_mr pointers must be stored for later cleanup */
 static struct fid_mr **mregs = NULL;
+/* Acknowledgements of received RMAs that aren't the one that's currently
+ * being awaited. */
 static char *acks;
+
+/* Was related to address exchange */
+#if 0
+/* Addresses of the receive buffers of other nodes in each action sequence.
+ * The sender needs this for sending the correct message data (an uint64_t),
+ * which the receiver will use to check whether this is the message it is
+ * expecting or not. */
+struct bufAddr {
+  uint64_t *addrlist; /* pointer that will get free()-d */
+  uint64_t **addrs;   /* pointers to beginning of addrlist for each node ID */
+};
+static struct bufAddr *bufAddrs = NULL;
+static size_t bufAddrsLen = 0; /* will be allocated during first prepare() */
+#endif
+
 static int isAsync = 1;
 int ret;
 
@@ -223,7 +254,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
    * This can't be done earlier because we only get the address size,
    * which depends on protocol, when we call fi_getname() */
   char *peers = calloc(world_size, fi_addrlen);
-  if (!peers) laik_panic("Failed to alloc memory");
+  if (!peers) laik_panic(allocfail);
 
   /* Sync node addresses over regular sockets, using a similar process as the
    * tcp2 backend, since libfabric features aren't needed here.
@@ -297,7 +328,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
 
   /* Initialize LAIK */
   acks = calloc(world_size, 1);
-  if (!acks) laik_panic("Failed to allocate memory");
+  if (!acks) laik_panic(allocfail);
   d.world_size = world_size;
   d.addrlen = fi_addrlen;
   Laik_Instance *inst = laik_new_instance(&laik_backend_fabric, world_size,
@@ -348,6 +379,18 @@ void print_mregs(char *str) {
 #endif
 }
 
+void handle_cq_error(char *op, struct fid_cq *cq) {
+  struct fi_cq_err_entry err;
+  if (ret != -FI_EAVAIL)
+    laik_log(LAIK_LL_Panic, "%s failed: %s", op, fi_strerror(ret));
+  if (fi_cq_readerr(cq, &err, 0) != 1)
+    laik_log(LAIK_LL_Panic,
+             "%s failed:\nCQ error, but failed to retrieve error information",
+             op);
+  laik_log(LAIK_LL_Panic, "%s failed: CQ reported error: %s",
+           op, fi_cq_strerror(cq, err.prov_errno, err.err_data, NULL, 0));
+}
+
 /* Registers memory buffers to libfabric, so that they can be accessed by RMA */
 /* TODO: consider asynchronous instead of the default synchronous completion
  *       of memory registerations */
@@ -359,7 +402,7 @@ void fabric_aseq_RegisterMemory(Laik_ActionSeq *as) {
   memset(regcount, 0, d.world_size);
   mregs = realloc(mregs,
       (mnum + as->actionCount + 1) * sizeof(struct fid_mr*));
-  if (!mregs) laik_panic("Failed to alloc memory");
+  if (!mregs) laik_panic(allocfail);
 
   Laik_TransitionContext *tc = as->context[0];
 
@@ -384,6 +427,126 @@ void fabric_aseq_RegisterMemory(Laik_ActionSeq *as) {
   print_mregs("MREGS IS NOW");
 }
 
+/* Currently unused and doesn't work */
+void fabric_aseq_ExchgMemoryRegs(Laik_ActionSeq *as) {
+  /* TODO (measure): Does this use too much memory?
+   *                 These are temporary arrays, but can become very big. */
+  const size_t lMax = as->actionCount;
+  uint64_t *otherRegs, *myRegs;
+  size_t counts[d.world_size];
+  myRegs = calloc(d.world_size * lMax, sizeof(uint64_t));
+  otherRegs = calloc(d.world_size * lMax, sizeof(uint64_t));
+  memset(counts, 0, d.world_size * sizeof(size_t));
+  if (!myRegs || !otherRegs) laik_panic(allocfail);
+
+  /* Gather arrays of this node's own memory regs */
+  Laik_Action *a = as->action;
+  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    if (a->type == LAIK_AT_BufRecv || a->type == LAIK_AT_FabAsyncRecv) {
+      Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
+      int rank = aa->from_rank;
+      myRegs[rank * lMax + counts[rank]++] = (uint64_t) aa->buf;
+//      myRegs[rank][counts[rank]++] = (uint64_t) aa->buf;
+      printf("%d: rank %d cnt %d\n", d.mylid, rank, counts[rank]);
+    }
+  }
+
+  /* Post buffers for receives */
+  for (int i = 0; i < d.world_size; i++) {
+    if (i == d.mylid) continue;
+    printf("%d: Recv %d bytes\n", d.mylid, lMax);
+    RETRY(fi_recv(ep, &otherRegs[i * lMax], lMax * sizeof(uint64_t),
+                  NULL, 0, NULL));
+  }
+
+  /* Send the array for each sender node to that node */
+  /* Note: Using RMA here would require to first exchange the addresses of the
+   *       otherRegs buffers on each node. That would be as many exchanges as
+   *       just sending the registrations directly, so probably not worth it.
+   */
+  for (int i = 0; i < d.world_size; i++) {
+    if (i == d.mylid) continue;
+    printf("%d: Send %d bytes\n", d.mylid, counts[i] * sizeof(uint64_t));
+    /*
+    RETRY(fi_senddata(ep, myRegs[i], counts[i] * sizeof(uint64_t), NULL,
+          i, i, NULL));
+    */
+    RETRY(fi_injectdata(ep, &myRegs[i * lMax], counts[i] * sizeof(uint64_t),
+                        d.mylid, i));
+    printf("%d: sent data:\n", d.mylid);
+    for (int j = 0; j < counts[i]; j++)
+      printf("%d: myRegs[%d][%d]: %p\n", d.mylid, i, j, myRegs[i * lMax + j]);
+  }
+
+  /* This structure is less wasteful of memory than myRegs, because
+   * all recv addresses (there are at most as->actionCount of them, since
+   * each BufRecv by another node from this node requires a matching
+   * BufSend by this node) are stored in one list, rather than a 2D array
+   * that allocates space for a lot of unused addresses.
+   */
+  uint64_t *addrlist = malloc(as->actionCount * sizeof(uint64_t));
+  printf("%d: allocated addrlist %zu bytes\n",
+      d.mylid, as->actionCount * sizeof(uint64_t));
+  if (bufAddrsLen <= (unsigned) as->id) {
+    bufAddrs = realloc(bufAddrs, (bufAddrsLen+1000) * sizeof(struct bufAddr));
+    if (!bufAddrs) laik_panic("Malloc failed");
+    bufAddrsLen += 1000;
+  }
+  bufAddrs[as->id].addrlist = addrlist;
+  bufAddrs[as->id].addrs = malloc(d.world_size * sizeof(uint64_t*));
+  if (!addrlist || !bufAddrs[as->id].addrs) laik_panic(allocfail);
+
+  struct fi_cq_data_entry cq_buf;
+  uint64_t *p = addrlist;
+  for (int i = 0; i < d.world_size; i++) {
+    int rank;
+    if (i == d.mylid) continue;
+    RETRYCQ(fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1), cqr);
+    if (cq_buf.len == 0) continue;
+    rank = cq_buf.data;
+    printf("%d: received data:\n", d.mylid);
+    for (int j = 0; j < cq_buf.len / sizeof(uint64_t); j++) {
+      printf("%d: otherRegs[%d][%d]: %p\n", d.mylid, rank, j,
+             otherRegs[rank * lMax + j]);
+    }
+    memcpy(p, &otherRegs[rank * lMax], cq_buf.len);
+    printf("%d: copied %d bytes from %d to %p\n", d.mylid,
+        cq_buf.len, rank, p);
+    bufAddrs[as->id].addrs[rank] = p;
+    if (cq_buf.len % sizeof(uint64_t) != 0) {
+      printf("%d: MISALIGNED %d\n", d.mylid, cq_buf.len);
+      assert(0);
+    } /* alignment */
+    p = (uint64_t*) (((char*) p) + cq_buf.len);
+  }
+
+  free(myRegs);
+  free(otherRegs);
+
+#if 0
+  struct fi_cq_data_entry cq_buf;
+  uint64_t *p = addrlist;
+  for (int i = 0; i < d.world_size; i++) {
+    if (i == d.mylid) continue;
+    printf("%d: offset %zu\n", d.mylid, p - addrlist);
+    RETRY(fi_recv(ep, p, lMax, NULL, 0, NULL));
+    RETRYCQ(fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1), cqr);
+    bufAddrs[as->id].addrs[cq_buf.data] = p;
+    p += cq_buf.len;
+  }
+#endif
+
+#ifdef PFDBG
+  int cnt = p - addrlist;
+  printf("%d: Got %d exchanged addresses:\n", d.mylid, cnt);
+  for (int i = 0; i < cnt; i++) {
+    printf("%d: (reading from %p)\n", d.mylid, bufAddrs[as->id].addrlist + i);
+    printf("%d: %p\n", d.mylid, bufAddrs[as->id].addrlist[i]);
+  }
+#endif
+  printf("------- AS %d\n", as->id);
+}
+
 /* Creates a new sequence that replaces BufSend and BufRecv with FabAsyncSend
  * and FabAsyncRecv, and adds a FabRmaWait at the end of any round that performs
  * at least one RMA */
@@ -391,7 +554,7 @@ void fabric_aseq_SplitAsyncActions(Laik_ActionSeq *as) {
   Laik_Action *newAction = malloc(as->bytesUsed
                                 + as->roundCount * sizeof(Laik_A_FabRecvWait)
                                 + sizeof(Laik_A_FabSendWait));
-  if (!newAction) laik_panic("Failed to alloc memory");
+  if (!newAction) laik_panic(allocfail);
   Laik_Action *nextNewA = newAction;
 
   int sends = 0, recvs = 0;
@@ -444,7 +607,11 @@ void fabric_aseq_SplitAsyncActions(Laik_ActionSeq *as) {
 
 void ack_rma(int idx) {
   /* TODO: handle case where we already received a message from the
-   *       specified node */
+   *       specified node
+   *
+   * TODO: look up if libfabric can guarantee any ordering for messages
+   *       sent between the same two nodes
+   */
   assert(acks[idx] == 0);
   acks[idx]++;
 }
@@ -570,9 +737,10 @@ join:
 
   /* TODO: update world size and AV after getting new node list */
   fabric_aseq_RegisterMemory(as);
+//  fabric_aseq_ExchgMemoryRegs(as);
   free(acks);
   acks = calloc(d.world_size, 1);
-  if (!acks) laik_panic("Failed to allocate memory");
+  if (!acks) laik_panic(allocfail);
 
   barrier();
 
