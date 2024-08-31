@@ -29,16 +29,20 @@
   while ((ret = a) == -FI_EAGAIN); \
   if (ret < 0) handle_cq_error(#a, cq);
 
-const int ll = LAIK_LL_Debug;
-const char *allocfail = "Failed to allocate memory";
-
 /* Define this to enable a lot of additional output for printf-debugging */
-/*#define PFDBG 1*/
+#define PFDBG 1
 #ifdef PFDBG
 #define D(a) a
 #else
 #define D(a) ;
 #endif
+
+const int ll = LAIK_LL_Debug;
+const char *allocfail = "Failed to allocate memory";
+
+/* Empty marker must be -1 instead of 0, because 0 is a valid key for a message
+ * sent in the AS with ID 0 from node 0 to any other node. (make_key(0,0,0)) */
+const uint64_t ack_empty = (uint64_t) -1;
 
 void fabric_prepare(Laik_ActionSeq *as);
 void fabric_exec(Laik_ActionSeq *as);
@@ -51,9 +55,10 @@ bool fabric_log_action(Laik_Action *a);
  */
 bool check_local(char *host);
 void handle_cq_error(char *op, struct fid_cq *cq);
-void ack_rma(int idx);
+void ack_rma(uint64_t key);
 void await_completions(struct fid_cq *cq, int num);
 uint64_t make_key(int rnode, int snode, uint8_t seq);
+int get_sender(uint64_t key);
 void barrier(void);
 
 /* Backend-specific actions */
@@ -134,9 +139,15 @@ static struct fid_cq *cqr, *cqt; /* Receive and transmit queues */
 
 /* fid_mr pointers must be stored for later cleanup */
 static struct fid_mr **mregs = NULL;
+
 /* Acknowledgements of received RMAs that aren't the one that's currently
  * being awaited. */
-static char *acks;
+struct acks {
+  uint64_t *keys;
+  int size;
+  int full;
+};
+static struct acks *acks;
 
 /* Was related to address exchange */
 #if 0
@@ -327,7 +338,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   free(peers);
 
   /* Initialize LAIK */
-  acks = calloc(world_size, 1);
+  acks = calloc(d.world_size, sizeof(struct acks));
   if (!acks) laik_panic(allocfail);
   d.world_size = world_size;
   d.addrlen = fi_addrlen;
@@ -337,6 +348,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   world->size = world_size;
   world->myid = d.mylid;
   inst->world = world;
+
   return inst;
 }
 
@@ -428,6 +440,7 @@ void fabric_aseq_RegisterMemory(Laik_ActionSeq *as) {
 }
 
 /* Currently unused and doesn't work */
+#if 0
 void fabric_aseq_ExchgMemoryRegs(Laik_ActionSeq *as) {
   /* TODO (measure): Does this use too much memory?
    *                 These are temporary arrays, but can become very big. */
@@ -546,6 +559,7 @@ void fabric_aseq_ExchgMemoryRegs(Laik_ActionSeq *as) {
 #endif
   printf("------- AS %d\n", as->id);
 }
+#endif
 
 /* Creates a new sequence that replaces BufSend and BufRecv with FabAsyncSend
  * and FabAsyncRecv, and adds a FabRmaWait at the end of any round that performs
@@ -605,15 +619,45 @@ void fabric_aseq_SplitAsyncActions(Laik_ActionSeq *as) {
                   + sizeof(Laik_A_FabSendWait);
 }
 
-void ack_rma(int idx) {
-  /* TODO: handle case where we already received a message from the
-   *       specified node
-   *
-   * TODO: look up if libfabric can guarantee any ordering for messages
-   *       sent between the same two nodes
-   */
-  assert(acks[idx] == 0);
-  acks[idx]++;
+/* TODO: specify FI_ORDER_WAW in the TX context to guarantee correct ordering
+ *       between two messages to the same address between the same nodes */
+void ack_rma(uint64_t key) {
+  int from = get_sender(key);
+  D(printf("%d: ACK %lx from %d\n", key, from));
+  /* We hope that this won't happen too often, since there is currently
+   * no program logic that shrinks this array back, so there's a permanent
+   * impact on performance because get_ack() has to search a larger array */
+  if (acks[from].full == acks[from].size) {
+    D(printf("%d: Resizing acks from %d\n", d.mylid, from));
+    acks[from].keys = realloc(acks[from].keys,
+                              (10 + acks[from].size) * sizeof(uint64_t));
+    if (!acks[from].keys) laik_panic(allocfail);
+    memset(acks[from].keys + acks[from].size, ack_empty, 10);
+    acks[from].size += 10;
+  }
+  for (int i = 0; i < acks[from].size; i++) {
+    if (acks[from].keys[i] == ack_empty) {
+      acks[from].keys[i] = key;
+      acks[from].full++;
+      return;
+    }
+  }
+  /* This should not be reached */
+  assert(0);
+}
+
+/* Returns whether an ack for that message was found.
+ * If it was found, this function also clears it. */
+int pop_ack(int from, uint64_t key) {
+  if (acks[from].full == 0) return 0;
+  for (int i = 0; i < acks[from].size; i++) {
+    if (acks[from].keys[i] == key) {
+      acks[from].keys[i] = ack_empty;
+      acks[from].full--;
+      return 1;
+    }
+  }
+  return 0;
 }
 
 void await_completions(struct fid_cq *cq, int num) {
@@ -634,6 +678,10 @@ void await_completions(struct fid_cq *cq, int num) {
 
 uint64_t make_key(int id, int send_node, uint8_t seq) {
   return (((uint64_t) id) << 40) + (((uint64_t) send_node) << 8) + seq;
+}
+
+int get_sender(uint64_t key) {
+  return (key & 0xFFFF0) >> 8;
 }
 
 unsigned get_aseq(struct fid_mr *mr) {
@@ -737,10 +785,6 @@ join:
 
   /* TODO: update world size and AV after getting new node list */
   fabric_aseq_RegisterMemory(as);
-//  fabric_aseq_ExchgMemoryRegs(as);
-  free(acks);
-  acks = calloc(d.world_size, 1);
-  if (!acks) laik_panic(allocfail);
 
   barrier();
 
@@ -757,44 +801,44 @@ void fabric_exec(Laik_ActionSeq *as) {
 
   int elemsize = tc->data->elemsize;
   struct fi_cq_data_entry cq_buf;
-  uint8_t msgcount[d.world_size];
-  memset(msgcount, 0, d.world_size);
+  uint8_t sndcount[d.world_size], rcvcount[d.world_size];
+  memset(sndcount, 0, d.world_size);
+  memset(rcvcount, 0, d.world_size);
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
     Laik_BackendAction *ba = (Laik_BackendAction*) a;
     switch (a->type) {
       case LAIK_AT_Nop: break;
       case LAIK_AT_FabAsyncRecv: {
         Laik_A_FabAsyncRecv *aa = (Laik_A_FabAsyncRecv*) a;
-        D(printf("%d: Waiting for recv from %d\n", d.mylid, aa->from_rank));
-        if (acks[aa->from_rank]) {
-          D(printf("%d: Got %d from cache!\n", d.mylid, aa->from_rank));
-          /* Received by previous fi_cq_sread(), clear entry and be done */
-          acks[aa->from_rank]--;
+        uint64_t key = make_key(as->id, aa->from_rank, rcvcount[aa->from_rank]);
+        D(printf("%d: Waiting for recv from %d (key %lx)\n",
+              d.mylid, aa->from_rank, key));
+        if (pop_ack(aa->from_rank, key)) {
+          /* Data that we're waiting for has already been received */
+          D(printf("%d: %lu already ack'd!\n", d.mylid, key));
           break;
         }
-        while (1) {
-          ret = fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1);
-          if (ret == -FI_EAGAIN) continue;
-          assert(ret > 0); /* TODO: actual error handling */
-          assert(cq_buf.data > 0);
-          cq_buf.data--;
-          D(printf("%d: Waiting for %d, got %ld\n",
-                d.mylid, aa->from_rank, cq_buf.data));
-          if (cq_buf.data == ((unsigned)aa->from_rank)) break;
+        while (1) { /* Data not received yet, await new completion reports */
+          RETRYCQ(fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1), cqr);
+          D(printf("%d: Waiting for %lx from %d, got %lx from %d\n", d.mylid,
+                key, aa->from_rank, cq_buf.data, get_sender(cq_buf.data)));
+          if (cq_buf.data == key) break;
           else ack_rma(cq_buf.data);
         }
+        rcvcount[aa->from_rank]++;
         break;
       }
       case LAIK_AT_FabAsyncSend: {
         Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
-        uint64_t key = make_key(as->id, d.mylid, msgcount[aa->to_rank]++);
+        uint64_t key = make_key(as->id, d.mylid, sndcount[aa->to_rank]++);
         D(printf("%d: SEND ==> %d (%lx)\n", d.mylid, aa->to_rank, key));
         while ((ret = fi_writedata(ep, aa->buf, elemsize * aa->count, NULL,
-                d.mylid+1, aa->to_rank, 0, key, NULL))
+                key, aa->to_rank, 0, key, NULL))
                == -FI_EAGAIN);
         if (ret)
           laik_log(LAIK_LL_Panic,
               "fi_writedata() failed: %s", fi_strerror(ret));
+        D(printf("%d: reach\n", d.mylid));
         break;
       }
       case LAIK_AT_FabRecvWait: {
