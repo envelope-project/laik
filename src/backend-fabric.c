@@ -30,7 +30,7 @@
   if (ret < 0) handle_cq_error(#a, cq);
 
 /* Define this to enable a lot of additional output for printf-debugging */
-#define PFDBG 1
+/*#define PFDBG 1*/
 #ifdef PFDBG
 #define D(a) a
 #else
@@ -816,16 +816,17 @@ void fabric_exec(Laik_ActionSeq *as) {
               d.mylid, aa->from_rank, key));
         if (pop_ack(aa->from_rank, key)) {
           /* Data that we're waiting for has already been received */
-          D(printf("%d: %lu already ack'd!\n", d.mylid, key));
-          break;
+          D(printf("%d: %lx already ack'd!\n", d.mylid, key));
+          goto recv_done;
         }
         while (1) { /* Data not received yet, await new completion reports */
           RETRYCQ(fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1), cqr);
           D(printf("%d: Waiting for %lx from %d, got %lx from %d\n", d.mylid,
                 key, aa->from_rank, cq_buf.data, get_sender(cq_buf.data)));
-          if (cq_buf.data == key) break;
+          if (cq_buf.data == key) goto recv_done;
           else ack_rma(cq_buf.data);
         }
+recv_done:
         rcvcount[aa->from_rank]++;
         break;
       }
@@ -1039,6 +1040,9 @@ void fabric_finalize(Laik_Instance *inst) {
   free(acks);
   free(mregs);
   fi_close((struct fid *) ep);
+  fi_close((struct fid *) av);
+  fi_close((struct fid *) cqr);
+  fi_close((struct fid *) cqt);
   fi_close((struct fid *) domain);
   fi_close((struct fid *) fabric);
   fi_freeinfo(info);
