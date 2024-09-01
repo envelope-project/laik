@@ -338,8 +338,6 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   free(peers);
 
   /* Initialize LAIK */
-  acks = calloc(d.world_size, sizeof(struct acks));
-  if (!acks) laik_panic(allocfail);
   d.world_size = world_size;
   d.addrlen = fi_addrlen;
   Laik_Instance *inst = laik_new_instance(&laik_backend_fabric, world_size,
@@ -348,6 +346,9 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   world->size = world_size;
   world->myid = d.mylid;
   inst->world = world;
+
+  acks = calloc(d.world_size, sizeof(struct acks));
+  if (!acks) laik_panic(allocfail);
 
   return inst;
 }
@@ -623,7 +624,7 @@ void fabric_aseq_SplitAsyncActions(Laik_ActionSeq *as) {
  *       between two messages to the same address between the same nodes */
 void ack_rma(uint64_t key) {
   int from = get_sender(key);
-  D(printf("%d: ACK %lx from %d\n", key, from));
+  D(printf("%d: ACK %lx from %d\n", d.mylid, key, from));
   /* We hope that this won't happen too often, since there is currently
    * no program logic that shrinks this array back, so there's a permanent
    * impact on performance because get_ack() has to search a larger array */
@@ -632,7 +633,7 @@ void ack_rma(uint64_t key) {
     acks[from].keys = realloc(acks[from].keys,
                               (10 + acks[from].size) * sizeof(uint64_t));
     if (!acks[from].keys) laik_panic(allocfail);
-    memset(acks[from].keys + acks[from].size, ack_empty, 10);
+    memset(acks[from].keys + acks[from].size, ack_empty, 10 * sizeof(uint64_t));
     acks[from].size += 10;
   }
   for (int i = 0; i < acks[from].size; i++) {
@@ -668,7 +669,7 @@ void await_completions(struct fid_cq *cq, int num) {
            == -FI_EAGAIN);
     assert(ret == 1);
     if (cq_buf.flags & FI_REMOTE_CQ_DATA) {
-      ack_rma(cq_buf.data-1);
+      ack_rma(cq_buf.data);
       continue;
     }
     num--;
@@ -838,7 +839,6 @@ void fabric_exec(Laik_ActionSeq *as) {
         if (ret)
           laik_log(LAIK_LL_Panic,
               "fi_writedata() failed: %s", fi_strerror(ret));
-        D(printf("%d: reach\n", d.mylid));
         break;
       }
       case LAIK_AT_FabRecvWait: {
