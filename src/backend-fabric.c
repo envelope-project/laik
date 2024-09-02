@@ -718,6 +718,7 @@ void barrier(void) {
 }
 
 void fabric_prepare(Laik_ActionSeq *as) {
+  uint64_t tmp = 0;
   if (as->actionCount == 0) {
     laik_aseq_calc_stats(as);
     goto join;
@@ -767,7 +768,6 @@ join:
   /* Join-point */
   /* TODO: exchange new and removed nodes */
   /* TODO: proper error handling */
-  uint64_t tmp = 0;
   D(printf("%d: START JOIN %d\n", d.mylid, as->id));
   if (d.mylid == 0) {
     for (int i = 1; i < d.world_size; i++) {
