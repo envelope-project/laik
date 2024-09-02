@@ -302,7 +302,9 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
     laik_log(ll, "Became master!");
     d.mylid = 0;
     /* Create listening socket on home node */
-    if (listen(sockfd, world_size)) laik_panic("Failed to listen on socket");
+    if (listen(sockfd, world_size))
+      laik_log(LAIK_LL_Panic, "Failed to listen on socket: %s",
+               strerror(errno));
     /* Insert our own address into address list */
     memcpy(peers, fi_addr, fi_addrlen);
     /* Get addresses of all nodes */
@@ -310,6 +312,9 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
     for (int i = 0; i < world_size - 1; i++) {
       laik_log(ll, "%d out of %d connected...", i, world_size - 1);
       fds[i] = accept(sockfd, NULL, NULL);
+      if (fds[i] < 0)
+        laik_log(LAIK_LL_Panic, "Failed to accept connection: %s",
+                 strerror(errno));
       read(fds[i], peers + (i+1) * fi_addrlen, fi_addrlen);
     }
     /* Send assigned number and address list to every non-master node */
