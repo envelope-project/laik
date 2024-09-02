@@ -211,6 +211,11 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   /* TODO: Are these attributes OK? Do we really need FI_MSG? */
   hints->ep_attr->type = FI_EP_RDM;
   hints->caps = FI_MSG | FI_RMA;
+  str = getenv("LAIK_FABRIC_PROV");
+  if (str) {
+    free(hints->fabric_attr->prov_name);
+    hints->fabric_attr->prov_name = strdup(str);
+  }
 
   /* Run-time behaviour depending on environment variables */
   str = getenv("LAIK_FABRIC_SYNC");
