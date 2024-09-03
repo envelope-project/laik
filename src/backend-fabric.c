@@ -62,30 +62,20 @@ int get_sender(uint64_t key);
 void barrier(void);
 
 /* Backend-specific actions */
-/* The LibFabric backend uses RMAs for send and receive, which complete
- * asynchronously. This makes it necessary to wait for the completion of the
- * RMAs before proceeding to the next round. */
-#define LAIK_AT_FabAsyncRecv	(LAIK_AT_Backend + 0)
-#define LAIK_AT_FabRecvWait	(LAIK_AT_Backend + 1)
-#define LAIK_AT_FabAsyncSend	(LAIK_AT_Backend + 2)
-#define LAIK_AT_FabSendWait	(LAIK_AT_Backend + 3)
+#define LAIK_AT_FabRecv		(LAIK_AT_Backend + 0)
+#define LAIK_AT_FabAsyncSend	(LAIK_AT_Backend + 1)
+#define LAIK_AT_FabSendWait	(LAIK_AT_Backend + 2)
 #pragma pack(push,1)
-typedef Laik_A_BufRecv Laik_A_FabAsyncRecv;
+typedef Laik_A_BufRecv Laik_A_FabRecv;
+typedef Laik_A_BufSend Laik_A_FabAsyncSend;
 typedef struct {
   Laik_Action h;
   unsigned int count; /* How many CQ reports to wait for */
-} Laik_A_FabRecvWait;
-typedef Laik_A_BufSend Laik_A_FabAsyncSend;
-typedef Laik_A_FabRecvWait Laik_A_FabSendWait;
+} Laik_A_FabSendWait;
 #pragma pack(pop)
 
 bool fabric_log_action(Laik_Action *a) {
   switch (a->type) {
-    case LAIK_AT_FabRecvWait: {
-      Laik_A_FabRecvWait *aa = (Laik_A_FabRecvWait*) a;
-      laik_log_append("FabRecvWait: count %u", aa->count);
-      break;
-    }
     case LAIK_AT_FabSendWait: {
       Laik_A_FabSendWait *aa = (Laik_A_FabSendWait*) a;
       laik_log_append("FabSendWait: count %u", aa->count);
@@ -97,9 +87,9 @@ bool fabric_log_action(Laik_Action *a) {
                       aa->buf, aa->count, aa->to_rank);
       break;
     }
-    case LAIK_AT_FabAsyncRecv: {
-      Laik_A_FabAsyncRecv *aa = (Laik_A_FabAsyncRecv*) a;
-      laik_log_append("FabAsyncRecv: T%d ==> to %p, count %d",
+    case LAIK_AT_FabRecv: {
+      Laik_A_FabRecv *aa = (Laik_A_FabRecv*) a;
+      laik_log_append("FabRecv: T%d ==> to %p, count %d",
                       aa->from_rank, aa->buf, aa->count);
       break;
     }
@@ -363,21 +353,6 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   return inst;
 }
 
-void add_fabRecvWait(Laik_Action **next, unsigned round, unsigned count) {
-  Laik_A_FabRecvWait wait = {
-    .h = {
-      .type  = LAIK_AT_FabRecvWait,
-      .len   = sizeof(Laik_A_FabRecvWait),
-      .round = round,
-      .tid   = 0,
-      .mark  = 0
-    },
-    .count = count
-  };
-  memcpy(*next, &wait, sizeof(Laik_A_FabRecvWait));
-  *next = nextAction((*next));
-}
-
 void add_fabSendWait(Laik_Action **next, unsigned round, unsigned count) {
   Laik_A_FabSendWait wait = {
     .h = {
@@ -432,7 +407,7 @@ void fabric_aseq_RegisterMemory(Laik_ActionSeq *as) {
   int elemsize = tc->data->elemsize;
   Laik_Action *a = as->action;
   for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
-    if (a->type == LAIK_AT_BufRecv || a->type == LAIK_AT_FabAsyncRecv) {
+    if (a->type == LAIK_AT_BufRecv || a->type == LAIK_AT_FabRecv) {
       Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
       int reserve = aa->count * elemsize;
       uint64_t key = make_key(as->id, aa->from_rank,
@@ -572,62 +547,38 @@ void fabric_aseq_ExchgMemoryRegs(Laik_ActionSeq *as) {
 }
 #endif
 
-/* Creates a new sequence that replaces BufSend and BufRecv with FabAsyncSend
- * and FabAsyncRecv, and adds a FabRmaWait at the end of any round that performs
- * at least one RMA */
+/* Splits up actions using a similar approach as the MPI backend:
+ *   - BufRecv actions stay in place and complete "synchronously" (or rather,
+ *     are awaited immediately)
+ *   - BufSend are initiated in place, but awaited at the end of the AS
+ * Unlike MPI, we don't need to post a receive buffer at the beginning, as
+ * the memory was already registered during prepare().
+ */
 void fabric_aseq_SplitAsyncActions(Laik_ActionSeq *as) {
-  Laik_Action *newAction = malloc(as->bytesUsed
-                                + as->roundCount * sizeof(Laik_A_FabRecvWait)
-                                + sizeof(Laik_A_FabSendWait));
-  if (!newAction) laik_panic(allocfail);
-  Laik_Action *nextNewA = newAction;
+  Laik_Action *a;
+  int sends = 0;
+  int maxround = 0;
 
-  int sends = 0, recvs = 0;
-  int lastRound = 1;
-  unsigned waitCnt = 0;
+  as->action = realloc(as->action, as->bytesUsed
+                                   + sizeof(Laik_A_FabSendWait));
+  if (!as->action) laik_panic(allocfail);
 
-  Laik_TransitionContext *tc = as->context[0];
-  Laik_Action *a = as->action;
-  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
-    /* Add FabRmaWait that waits for all RMAs of the last round to complete */
-    if (a->round != lastRound) {
-      if (recvs > 0) {
-        add_fabRecvWait(&nextNewA, lastRound, recvs);
-        waitCnt++;
-      }
-      recvs = 0;
-      lastRound = a->round;
-    }
-
-    /* Count RMAs and copy actions into newAction */
+  a = as->action;
+  for (int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+    if (a->round > maxround) maxround = a->round;
     switch (a->type) {
       case LAIK_AT_BufSend:
         a->type = LAIK_AT_FabAsyncSend;
         sends++;
         break;
       case LAIK_AT_BufRecv:
-        a->type = LAIK_AT_FabAsyncRecv;
-        recvs++;
+        a->type = LAIK_AT_FabRecv;
         break;
     }
-    memcpy(nextNewA, a, a->len);
-    nextNewA = nextAction(nextNewA);
   }
-  /* Add a FabRmaWait after the final round, too */
-  if (recvs > 0) {
-    add_fabRecvWait(&nextNewA, lastRound, recvs);
-    waitCnt++;
-  }
-
-  /* At the end of the action sequence, ensure that all the sends completed */
-  add_fabSendWait(&nextNewA, lastRound, sends);
-
-  /* Replace old action sequence with new and update AS information */
-  free(as->action);
-  as->action       = newAction;
-  as->actionCount += waitCnt + 1;
-  as->bytesUsed   += waitCnt * sizeof(Laik_A_FabRecvWait)
-                  + sizeof(Laik_A_FabSendWait);
+  add_fabSendWait(&a, maxround+1, sends);
+  as->actionCount++;
+  as->bytesUsed += sizeof(Laik_A_FabSendWait);
 }
 
 /* TODO: specify FI_ORDER_WAW in the TX context to guarantee correct ordering
@@ -826,8 +777,8 @@ void fabric_exec(Laik_ActionSeq *as) {
     Laik_BackendAction *ba = (Laik_BackendAction*) a;
     switch (a->type) {
       case LAIK_AT_Nop: break;
-      case LAIK_AT_FabAsyncRecv: {
-        Laik_A_FabAsyncRecv *aa = (Laik_A_FabAsyncRecv*) a;
+      case LAIK_AT_FabRecv: {
+        Laik_A_FabRecv *aa = (Laik_A_FabRecv*) a;
         uint64_t key = make_key(as->id, aa->from_rank, rcvcount[aa->from_rank]);
         D(printf("%d: Waiting for recv from %d (key %lx)\n",
               d.mylid, aa->from_rank, key));
@@ -857,10 +808,6 @@ recv_done:
         if (ret)
           laik_log(LAIK_LL_Panic,
               "fi_writedata() failed: %s", fi_strerror(ret));
-        break;
-      }
-      case LAIK_AT_FabRecvWait: {
-        /* TODO: Is there any kind of ordering where this makes sense? */
         break;
       }
       case LAIK_AT_FabSendWait: {
