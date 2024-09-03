@@ -234,7 +234,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   str = getenv("LAIK_SIZE");
   int world_size = str ? atoi(str) : 1;
   if (world_size == 0) world_size = 1;
-  ret = fi_getinfo(FI_VERSION(1,21), home_host, NULL, 0,
+  ret = fi_getinfo(FI_VERSION(1,21), NULL, NULL, 0,
       hints, &info);
   if (ret || !info) laik_panic("No suitable fabric provider found!");
   laik_log(ll, "Selected fabric \"%s\", domain \"%s\"",
@@ -797,6 +797,13 @@ join:
   /* TODO: update world size and AV after getting new node list */
   fabric_aseq_RegisterMemory(as);
 
+  /* Ensures that all memory bindings are registered before any data gets
+   * exchanged. If this is not ensured, apparently messages sent before
+   * the memory is registered simply do not arrive (or at least do not generate
+   * a completion queue entry).
+   *
+   * TODO: find whether libfabric documentation has anything to say about this
+   */
   barrier();
 
   D(printf("%d: END   JOIN %d\n", d.mylid, as->id));
@@ -871,80 +878,6 @@ recv_done:
         D(printf("%d: Sending done\n", d.mylid));
         break;
       }
-      /* BufSend and BufRecv only appear if isAsync == 0 */
-#if 0
-      case LAIK_AT_BufRecv: {
-        Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
-        D(printf("RECV %d %p <== %d\n", d.mylid, aa->buf, aa->from_rank));
-        while ((ret = fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1))
-                                                                 == -FI_EAGAIN);
-        assert(ret == 1);
-        D(printf("CRCV %d %p <== %d\n", d.mylid, aa->buf, aa->from_rank));
-        break;
-      }
-      case LAIK_AT_BufSend: {
-        Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
-        D(printf("SEND %d %p ==> %d\n", d.mylid, aa->buf, aa->to_rank));
-/* ***********TEST************* */
-        const struct iovec msg_iov = {
-          .iov_base = aa->buf,
-          .iov_len = elemsize * aa->count
-        };
-        struct fi_rma_iov rma_iov = {
-          .addr	= 0,
-          .len	= elemsize * aa->count,
-          .key	= d.mylid
-        };
-        struct fi_msg_rma msg = {
-          .msg_iov	 = &msg_iov,
-          .desc		 = NULL,
-          .iov_count	 = 1,
-          .addr		 = aa->to_rank,
-          .rma_iov	 = &rma_iov,
-          .rma_iov_count = 1,
-          .context	 = NULL,
-          .data		 = 0
-        };
-        while ((ret = fi_writemsg(ep, &msg, FI_DELIVERY_COMPLETE | FI_FENCE
-                                            | FI_REMOTE_CQ_DATA))
-               == -FI_EAGAIN);
-/* ***********TEST************* */
-#if 0
-        while ((ret = fi_writedata(ep, aa->buf, elemsize * aa->count, NULL,
-                0, aa->to_rank, 0, d.mylid, NULL)) == -FI_EAGAIN);
-#endif
-        if (ret)
-          laik_log(LAIK_LL_Panic,
-              "fi_writedata() failed: %s", fi_strerror(ret));
-retry:
-        while ((ret = fi_cq_sread(cqt, (char*) &cq_buf, 1, NULL, -1))
-                                                                 == -FI_EAGAIN);
-        if (ret < 0) {
-          if (ret != -FI_EAVAIL)
-            laik_log(LAIK_LL_Panic, "fi_cq_sread() failed: %s",
-                     fi_strerror(ret));
-          struct fi_cq_err_entry err;
-          if (fi_cq_readerr(cqt, &err, 0) != 1)
-            laik_panic("Failed to retrieve error information");
-
-#if 0
-          if (err.prov_errno == FI_EINPROGRESS) {
-            laik_log(LAIK_LL_Error, "%d: Operation now in progress", d.mylid);
-            printf("Retrying: SEND %d %p ==> %d\n", d.mylid, aa->buf, aa->to_rank);
-
-            usleep(500000);
-            goto retry;
-          }
-#endif
-
-          laik_log(LAIK_LL_Panic, "CQ reported error: %s",
-              fi_cq_strerror(cqt, err.prov_errno, err.err_data, NULL, 0));
-        }
-        assert(ret == 1);
-        D(printf("CSND %d %p ==> %d\n", d.mylid, aa->buf, aa->to_rank));
-        break;
-      }
-#endif
 /* TODO, possibly?
  * Reduce,
  * GroupReduce,
