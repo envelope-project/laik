@@ -3,11 +3,13 @@
 trap 'jobs -p | xargs -r kill' SIGINT SIGTERM
 
 procs=1
+spares=0
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -h) echo "Usage: $0 [-n <procs>] [-p <provider>]"; exit 1 ;;
         -n) procs="$2"; shift ;;
         -p) prov="$2"; shift ;;
+        -s) spares="$2"; shift ;;
         -*) echo "Unknown parameter passed: $1"; exit 1 ;;
         *) break;;
     esac
@@ -22,7 +24,8 @@ fi
 export LAIK_BACKEND=fabric
 export LAIK_SIZE=$procs
 export LAIK_FABRIC_PROV=$prov
-for (( i=1; i<=$procs; i++ )); do
+total=$((procs + spares))
+for (( i=1; i<=$total; i++ )); do
     # echo Running $@
     $@ &
 done

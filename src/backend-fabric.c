@@ -30,7 +30,7 @@
   if (ret < 0) handle_cq_error(#a, cq);
 
 /* Define this to enable a lot of additional output for printf-debugging */
-/*#define PFDBG 1*/
+//#define PFDBG 1
 #ifdef PFDBG
 #define D(a) a
 #else
@@ -49,11 +49,20 @@ void fabric_exec(Laik_ActionSeq *as);
 void fabric_cleanup(Laik_ActionSeq *as);
 void fabric_finalize(Laik_Instance *inst);
 bool fabric_log_action(Laik_Action *a);
+Laik_Group* fabric_resize(Laik_ResizeRequests *reqs);
 
 /* Declare the check_local() function from src/backend_tcp2.c, which we are
  * re-using because I couldn't find a better way to do it with libfabric
  */
 bool check_local(char *host);
+/* TODO: If this is indeed needed for resize functionality,
+ *       remove "static" from the declaration in src/action.c, line 28.
+ *
+ *       Though it appears that new nodes start executing from the beginning
+ *       regardless of ASeq ID, so just sending newly-joined nodes the
+ *       current ASeq Id doesn't help, some other approach is needed.
+ */
+//extern int aseq_id;
 void handle_cq_error(char *op, struct fid_cq *cq);
 void ack_rma(uint64_t key);
 void await_completions(struct fid_cq *cq, int num);
@@ -107,6 +116,7 @@ static struct _InstData {
   int addrlen;
 } d;
 typedef struct _InstData InstData;
+Laik_Instance *inst;
 
 /* Global variables for libfabric */
 static struct fi_info *info;
@@ -139,21 +149,16 @@ struct acks {
 };
 static struct acks *acks;
 
-/* Was related to address exchange */
-#if 0
-/* Addresses of the receive buffers of other nodes in each action sequence.
- * The sender needs this for sending the correct message data (an uint64_t),
- * which the receiver will use to check whether this is the message it is
- * expecting or not. */
-struct bufAddr {
-  uint64_t *addrlist; /* pointer that will get free()-d */
-  uint64_t **addrs;   /* pointers to beginning of addrlist for each node ID */
-};
-static struct bufAddr *bufAddrs = NULL;
-static size_t bufAddrsLen = 0; /* will be allocated during first prepare() */
-#endif
-
+/* TODO: "synchronous mode" is currently broken. Not sure if that's a meaningful
+ * concept at all, as libfabric is inherently asynchronous. I suppose it could
+ * do something with instruction ordering, though. Needs thinking about it.*/
 static int isAsync = 1;
+
+/* Need to be global because they're used both by init() and by resize() */
+static int sockfd;
+static int  *fds;
+static char *peers;
+
 int ret;
 
 /* Note: The order of invocation is not always prepare -> exec -> cleanup.
@@ -174,7 +179,8 @@ static Laik_Backend laik_backend_fabric = {
   .exec		= fabric_exec,
   .cleanup	= fabric_cleanup,
   .finalize	= fabric_finalize,
-  .log_action	= fabric_log_action
+  .log_action	= fabric_log_action,
+//  .resize	= fabric_resize
 };
 
 Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
@@ -256,12 +262,6 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   laik_log(ll, "Got libfabric EP addr of length %zu:", fi_addrlen);
   laik_log_hexdump(ll, fi_addrlen, fi_addr);
 
-  /* Allocate space for list of peers
-   * This can't be done earlier because we only get the address size,
-   * which depends on protocol, when we call fi_getname() */
-  char *peers = calloc(world_size, fi_addrlen);
-  if (!peers) laik_panic(allocfail);
-
   /* Sync node addresses over regular sockets, using a similar process as the
    * tcp2 backend, since libfabric features aren't needed here.
    * 
@@ -277,7 +277,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   getaddrinfo(home_host, home_port_str, &sock_hints, &res);
   
   /* Regardless of whether we become master, we need a socket */
-  int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+  sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
   if (sockfd < 0) laik_panic("Failed to create socket");
 
   /* If home host is localhost, try to become master */
@@ -301,9 +301,11 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
       laik_log(LAIK_LL_Panic, "Failed to listen on socket: %s",
                strerror(errno));
     /* Insert our own address into address list */
+    peers = calloc(world_size, fi_addrlen);
+    if (!peers) laik_panic(allocfail);
     memcpy(peers, fi_addr, fi_addrlen);
     /* Get addresses of all nodes */
-    int fds[world_size-1];
+    fds = malloc(world_size - 1);
     for (int i = 0; i < world_size - 1; i++) {
       laik_log(ll, "%d out of %d connected...", i, world_size - 1);
       fds[i] = accept(sockfd, NULL, NULL);
@@ -315,9 +317,10 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
     /* Send assigned number and address list to every non-master node */
     for (int i = 0; i < world_size - 1; i++) {
       int iplus = i + 1;
-      write(fds[i], &iplus, sizeof(int));
-      write(fds[i], peers, world_size * fi_addrlen);
-      close(fds[i]);
+      write(fds[i], &iplus, sizeof(int)); /* Assigned ID of that node */
+//      write(fds[i], &aseq_id, sizeof(int)); /* ASeq ID */
+      write(fds[i], &world_size, sizeof(int)); /* World size */
+      write(fds[i], peers, world_size * fi_addrlen); /* Address list */
     }
   } else {
     laik_log(ll, "Didn't become master!");
@@ -328,19 +331,28 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
       exit(1);
     }
     write(sockfd, fi_addr, fi_addrlen);
-    read(sockfd, &(d.mylid), sizeof(int));
-    read(sockfd, peers, world_size * fi_addrlen);
+    read(sockfd, &(d.mylid), sizeof(int)); /* Assigned node ID */
+    /* Nodes that join during a resize must still have same ASeq IDs
+     * as original nodes because the memory registration keys are based
+     * on the ASeq IDs */
+//    read(sockfd, &aseq_id, sizeof(int)); /* ASeq ID */
+    /* To allow for nodes to join during a resize, non-master nodes
+     * must receive world_size from master node, instead of relying on
+     * the LAIK_SIZE environment variable */
+    read(sockfd, &world_size, sizeof(int)); /* World size */
+    peers = calloc(world_size, fi_addrlen);
+    if (!peers) laik_panic(allocfail);
+    read(sockfd, peers, world_size * fi_addrlen); /* Address list */
   }
-  close(sockfd);
 
   ret = fi_av_insert(av, peers, world_size, NULL, 0, NULL);
   if (ret != world_size) laik_panic("Failed to insert addresses into AV");
-  free(peers);
+  if (!is_master) free(peers);
 
   /* Initialize LAIK */
   d.world_size = world_size;
   d.addrlen = fi_addrlen;
-  Laik_Instance *inst = laik_new_instance(&laik_backend_fabric, world_size,
+  inst = laik_new_instance(&laik_backend_fabric, world_size,
       d.mylid, 0, 0, "", &d); /* TODO: what is location? */
   Laik_Group *world = laik_create_group(inst, world_size);
   world->size = world_size;
@@ -442,7 +454,7 @@ void fabric_aseq_SplitAsyncActions(Laik_ActionSeq *as) {
   if (!as->action) laik_panic(allocfail);
 
   a = as->action;
-  for (int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+  for (unsigned i = 0; i < as->actionCount; i++, a = nextAction(a)) {
     if (a->round > maxround) maxround = a->round;
     switch (a->type) {
       case LAIK_AT_BufSend:
@@ -805,6 +817,12 @@ void fabric_finalize(Laik_Instance *inst) {
   /* TODO: Final cleanup */
   (void) inst;
 
+  if (d.mylid == 0) {
+    for (int i = 0; i < d.world_size; i++) close(fds[i]);
+    free(fds);
+    close(sockfd);
+    free(peers);
+  }
   free(acks);
   free(mregs);
   fi_close((struct fid *) ep);
@@ -816,4 +834,124 @@ void fabric_finalize(Laik_Instance *inst) {
   fi_freeinfo(info);
 }
 
+#if 0
+Laik_Group *fabric_resize(Laik_ResizeRequests *reqs) {
+  /* TODO: Where do reqs come from? What to do with them? */
+  (void) reqs;
+
+  int new = 0;
+
+  /* Master node: check sockfd for new join requests */
+  char *buf;
+  if (d.mylid == 0) {
+    struct pollfd pfd = {
+      .fd = sockfd,
+      .events = POLLIN,
+      .revents = 0
+    };
+
+    /* TODO: Should we wait for any amount of time, or is it OK to just return
+     *       immediately if no requests are incoming here? */
+    /* Accept all new connections (and count how many there are) */
+    while ((ret = poll(&pfd, 1, 0))) {
+      if (ret < 0) laik_panic(strerror(errno));
+
+      /* old size was d.world_size - 1 */
+      fds = realloc(fds, (d.world_size+new)*sizeof(int));
+      if (!fds) laik_panic(allocfail);
+
+      fds[d.world_size+new] = accept(sockfd, NULL, NULL);
+      if (ret < 0) laik_panic(strerror(errno));
+      new++;
+    }
+
+    /* Gather their addresses */
+    peers = realloc(peers, (d.world_size + new) * d.addrlen);
+    if (!peers) laik_panic(allocfail);
+    buf = peers + d.world_size * d.addrlen;
+    for (int i = 0; i < new; i++) {
+      read(fds[d.world_size+i], buf + i * d.addrlen, d.addrlen);
+    }
+
+    /* Send gathered addresses to existing nodes */
+    for (int i = 0; i < d.world_size - 1; i++) {
+      write(fds[i], &new, sizeof(int));
+      if (new > 0) write(fds[i], buf, new * d.addrlen);
+    }
+
+    /* Send all addresses to new nodes */
+    int newsize = d.world_size + new;
+    for (int i = d.world_size; i < newsize; i++) {
+      printf("Sending to: %d\n", i);
+      write(fds[i], &i, sizeof(int)); /* Node ID */
+      write(fds[i], &aseq_id, sizeof(int)); /* ASeq ID */
+      write(fds[i], &newsize, sizeof(int)); /* New world size */
+      write(fds[i], peers, newsize * d.addrlen); /* New world */
+    }
+  } else {
+    ret = read(sockfd, &new, sizeof(int));
+    if (ret < 0) laik_panic(strerror(errno));
+    assert(ret == sizeof(int));
+
+    /* Receive new addresses */
+    if (new > 0) {
+      buf = malloc(new * d.addrlen);
+      if (!buf) laik_panic(allocfail);
+      ret = read(sockfd, buf, new * d.addrlen);
+      if (ret < 0) laik_panic(strerror(errno));
+      assert((unsigned)ret == new * d.addrlen);
+    }
+  }
+
+  /* If return value is NULL, laik_allow_world_resize() should leave
+   * everything unchanged */
+  if (new == 0) return NULL;
+
+  /* Insert new addresses into AV */
+  ret = fi_av_insert(av, buf, new, NULL, 0, NULL);
+  printf("%d: reach2 (ret %d)\n", d.mylid, ret);
+  assert(ret == new);
+  if (d.mylid != 0) free(buf);
+
+  /* Realloc size-dependent buffers */
+  int newsize = d.world_size + new;
+  acks = realloc(acks, newsize*sizeof(struct acks));
+  if (!acks) laik_panic(allocfail);
+
+#if 0
+  /* Create new group as child of old group */
+  /* TODO: LAIK seems to count both the old and the new group if we do this,
+   *       which means for e.g. ./launcher -n 2 -s 2 it thinks there are 6 nodes
+   *       (2 in the old group, 4 in the new). */
+  Laik_Group *w = inst->world;
+  Laik_Group *g = laik_create_group(inst, newsize);
+  g->parent = w;
+  g->size = newsize;
+  inst->locations = newsize;
+  g->myid = d.mylid;
+  for (int i = 0; i < d.world_size; i++) {
+    g->locationid[i] = i;
+    g->toParent[i] = i;
+    g->fromParent[i] = i;
+  }
+  for (int i = d.world_size; i < newsize; i++) {
+    g->locationid[i] = i;
+    g->toParent[i] = -1;
+  }
+#endif
+
+  /* Create child group with only the newly-joined nodes */
+  Laik_Group *w = inst->world;
+  Laik_Group *g = laik_create_group(inst, new);
+  g->parent = w;
+  g->size = new;
+  inst->locations = new;
+  for (int i = 0; i < new; i++) {
+    g->locationid[i] = d.mylid+i;
+    g->toParent[i] = -1;
+  }
+  d.world_size = newsize;
+  return g;
+}
+#endif
 #endif /* USE_FABRIC */
