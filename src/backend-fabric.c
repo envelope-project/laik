@@ -149,10 +149,21 @@ struct acks {
 };
 static struct acks *acks;
 
-/* TODO: "synchronous mode" is currently broken. Not sure if that's a meaningful
- * concept at all, as libfabric is inherently asynchronous. I suppose it could
- * do something with instruction ordering, though. Needs thinking about it.*/
-static int isAsync = 1;
+/* Things to evaluate:
+ * - normal: RMA writes
+ * - sendrecv: fi_send() and fi_recv() instead of RMA, for comparison
+ *             Currently broken, see comment above BufRecv in exec()
+ * - writev: fi_writev() for sending multiple buffers to the same node
+ *           with just one call
+ *           TODO: implement this
+ * - recvlist: one FabRecvlist action that awaits all the receives of a round
+ *             in any order, rather than awaiting them sequentially
+ *             (But: is the sequential really such a problem? If all other
+ *             recvs arrived earlier, it should be quick to find them in
+ *             the acks)
+ */
+enum exec_mode { NORMAL, SENDRECV, WRITEV };
+static enum exec_mode emode = NORMAL;
 
 /* Need to be global because they're used both by init() and by resize() */
 static int sockfd;
@@ -214,9 +225,17 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
   }
 
   /* Run-time behaviour depending on environment variables */
-  str = getenv("LAIK_FABRIC_SYNC");
-  if (str) isAsync = !atoi(str);
-  laik_log(ll, "RMA mode: %csync", isAsync ? 'a' : ' ');
+  str = getenv("LAIK_FABRIC_MODE");
+  if (str) {
+    if (strcmp(str, "normal") == 0)		emode = NORMAL;
+    else if (strcmp(str, "sendrecv") == 0)	emode = SENDRECV;
+    else if (strcmp(str, "writev") == 0)	emode = WRITEV;
+    else {
+      fprintf(stderr, "Not a valid mode: %s\n", str);
+      exit(1);
+    }
+  }
+  laik_log(ll, "Libfabric backend execution mode: %s", str ? str : "normal");
 
   /* Choose the first provider that supports RMA and can reach the master node
    * TODO: How to make sure that all nodes chose the same provider?
@@ -542,6 +561,7 @@ unsigned get_aseq(struct fid_mr *mr) {
 
 void barrier(void) {
   uint8_t tmp;
+  if (emode == SENDRECV) return; /* SENDRECV mode doesn't need barriers */
   if (d.mylid == 0) {
     for (int i = 1; i < d.world_size; i++) {
       while ((ret = fi_recv(ep, &tmp, 1, NULL, i, NULL)) == -FI_EAGAIN);
@@ -603,9 +623,16 @@ void fabric_prepare(Laik_ActionSeq *as) {
       "After sorting for deadlock avoidance");
   laik_aseq_freeTempSpace(as);
 
-  if (isAsync) {
-    fabric_aseq_SplitAsyncActions(as);
-    laik_log_ActionSeqIfChanged(true, as, "After splitting async actions");
+  switch (emode) {
+    case NORMAL:
+      fabric_aseq_SplitAsyncActions(as);
+      laik_log_ActionSeqIfChanged(true, as, "After splitting async actions");
+      break;
+    case SENDRECV:
+      /* Leave actions as BufSend / BufRecv */
+      break;
+    default:
+      assert(0); /* TODO: WRITEV */
   }
 
   laik_aseq_calc_stats(as);
@@ -713,6 +740,37 @@ recv_done:
           completions++;
         }
         D(printf("%d: Sending done\n", d.mylid));
+        break;
+      }
+      /* SendRecv mode for comparison
+       *
+       * Note: doesn't work! Neither TCP nor Verbs provider in libfabric have
+       *       directional receive, so when fi_recv() is called, the data from
+       *       the wrong node may get written to the buffer.
+       *
+       *       It *would* be possible to copy data to the correct buffer
+       *       (finding which buffer is the correct one may be complicated)
+       *       and use an acknowledgement system similar to the one for
+       *       FabRecv, but that would be a lot of programming effort for
+       *       something that is expected to be slower than RDMA. */
+      case LAIK_AT_BufRecv: {
+        Laik_A_BufRecv *aa = (Laik_A_BufRecv*) a;
+        RETRY(fi_recv(ep, aa->buf, elemsize * aa->count,
+                      NULL, aa->from_rank, NULL));
+        RETRYCQ(fi_cq_sread(cqr, (char*) &cq_buf, 1, NULL, -1), cqr);
+        assert(cq_buf.flags & FI_RECV);
+        if (cq_buf.data != aa->from_rank) {
+          fprintf(stderr, "%d: Expected %d but got %lu\n", d.mylid,
+              aa->from_rank, cq_buf.data);
+          exit(1);
+        }
+        break;
+      }
+      case LAIK_AT_BufSend: {
+        Laik_A_BufSend *aa = (Laik_A_BufSend*) a;
+        RETRY(fi_send(ep, aa->buf, elemsize * aa->count,
+                          NULL, aa->to_rank, NULL));
+        RETRYCQ(fi_cq_sread(cqt, (char*) &cq_buf, 1, NULL, -1), cqt);
         break;
       }
 /* TODO, possibly?
