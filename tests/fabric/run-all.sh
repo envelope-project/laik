@@ -4,17 +4,14 @@ for sh in ../common/test*.sh; do
   echo -n "$bn "
 # Skipped tests:
 #
-# test-kvstest and test-spaces fail because fabric_sync(),
-# which would be needed for KVS, is not implemented yet.
+# These depend on fabric_sync():
+#   test-kvstest
+#   test-location
+#   test-spaces
+# which would be needed for KVS and is not implemented yet.
 #
-# test-location-4.sh fails at test/src/locationtest.c, line 18.
-# assertion laik_group_locationid(g0, i) == i fails.
-# The comment in src/core.c above laik_group_locationid() says
-# "locations in KVS", so it might be related to the previous failure?
-#
-# test-spmv2-shrink fails in laik_rangelist_migrate(), at:
-#   assert((new_id >= 0) && (new_id < (int) new_count));
-# This might be related to groups not working.
+# test-spmv2-shrink gets stuck indefinitely. It might be related to
+# fabric_resize() not supporting shrinking yet.
 #
   case $bn in
   test-kvstest*|test-spaces*|test-location*|test-spmv2-shrink-*)
@@ -27,6 +24,4 @@ for sh in ../common/test*.sh; do
   0) echo PASS ;;
   *) echo FAIL; exit 1 ;;
   esac
-#
-#  sleep 1
 done

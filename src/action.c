@@ -25,7 +25,7 @@
 #include <string.h>
 #include <stdio.h>
 
-static int aseq_id = 0;
+int aseq_id = 0;
 
 // create a new action sequence object, usable for the given LAIK instance
 Laik_ActionSeq* laik_aseq_new(Laik_Instance *inst)
