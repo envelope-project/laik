@@ -320,7 +320,7 @@ Laik_Instance *laik_init_fabric(int *argc, char ***argv) {
     if (!peers) laik_panic(allocfail);
     memcpy(peers, fi_addr, fi_addrlen);
     /* Get addresses of all nodes */
-    fds = malloc(world_size - 1);
+    fds = malloc((world_size - 1) * sizeof(int));
     for (int i = 0; i < world_size - 1; i++) {
       laik_log(ll, "%d out of %d connected...", i, world_size - 1);
       fds[i] = accept(sockfd, NULL, NULL);
@@ -562,7 +562,7 @@ unsigned get_aseq(struct fid_mr *mr) {
 }
 
 void barrier(void) {
-  uint8_t tmp;
+  uint8_t tmp = 0;
   if (emode == SENDRECV) return; /* SENDRECV mode doesn't need barriers */
   if (d.mylid == 0) {
     for (int i = 1; i < d.world_size; i++) {
@@ -875,7 +875,7 @@ void fabric_finalize(Laik_Instance *inst) {
   (void) inst;
 
   if (d.mylid == 0) {
-    for (int i = 0; i < d.world_size; i++) close(fds[i]);
+    for (int i = 0; i < d.world_size - 1; i++) close(fds[i]);
     free(fds);
     close(sockfd);
     free(peers);
