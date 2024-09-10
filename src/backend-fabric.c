@@ -419,7 +419,7 @@ void handle_cq_error(char *op, struct fid_cq *cq) {
              "%s failed:\nCQ error, but failed to retrieve error information",
              op);
   laik_log(LAIK_LL_Panic, "%s failed: CQ reported error: %s",
-           op, fi_cq_strerror(cq, err.prov_errno, err.err_data, NULL, 0));
+           op, fi_strerror(err.err));
 }
 
 /* Registers memory buffers to libfabric, so that they can be accessed by RMA */
@@ -734,11 +734,8 @@ recv_done:
         D(printf("%d: Waiting for %d send completions\n", d.mylid, aa->count));
         unsigned completions = 0;
         while (completions < aa->count) {
-          ret = fi_cq_sread(cqt, (char*) &cq_buf, 1, NULL, -1);
-          if (ret == -FI_EAGAIN) continue;
-          assert(ret > 0);
-          /* TODO: either do something with the retrieved information
-           *       or replace the CQ with a counter */
+          RETRYCQ(fi_cq_sread(cqt, (char*) &cq_buf, 1, NULL, -1), cqt);
+          /* TODO: can transmit queue be replaced with a counter? */
           completions++;
         }
         D(printf("%d: Sending done\n", d.mylid));
