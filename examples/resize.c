@@ -25,19 +25,22 @@
 #include <unistd.h>
 
 const char* usage = "\
-Usage: %s [-t] <maxiter>\n\
--t: measure and print how long each resize took\n";
+Usage: %s [-t] [-s <seconds>] <maxiter>\n\
+-t: measure and print how long each resize took\n\
+-s: how long to sleep before each resize\n";
 
 int main(int argc, char* argv[])
 {
     int max = 0;
     int timings = 0;
+    int sleep_sec = 1;
 
-    // Option to measure how long the resize took
-    if (argc > 1 && argv[1][0] == '-') {
+    const char *progname = argv[0];
+    while (argc > 1 && argv[1][0] == '-') {
         switch (argv[1][1]) {
+            case 's': sleep_sec = atoi(argv[2]); argc--; argv++; break;
             case 't': timings = 1; break;
-            case 'h': printf(usage, argv[0]); return 0;
+            case 'h': printf(usage, progname); return 0;
             default:
               fprintf(stderr, "Unrecognized option -%c\n", argv[1][1]);
               return 1;
@@ -61,7 +64,7 @@ int main(int argc, char* argv[])
         laik_release_group(world);
         if (phase >= max) break;
 
-        sleep(1);
+        sleep(sleep_sec);
         phase++;
 
         // allow resize of world and get new world
