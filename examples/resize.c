@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
 
         if (laik_myid(world) < 0) break;
         if (timings) printf("%d: resize took %f msec\n",
-                            laik_myid(world), end_time - start_time);
+                            laik_myid(world), (end_time - start_time) * 1000);
     }
 
     laik_finalize(inst);
