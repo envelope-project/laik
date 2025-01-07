@@ -17,6 +17,12 @@ SRCS += $(wildcard $(SDIR)src/backends/tcp/*.c)
 IFLAGS += $(TCP_INC)
 LDLIBS += $(TCP_LIBS)
 endif
+ifdef USE_UCP
+SRCS += $(wildcard $(SDIR)src/backends/ucp/*.c)
+IFLAGS += $(UCP_INC)
+LDLIBS += $(UCP_LIBS)
+endif
+
 HEADERS = $(wildcard $(SDIR)include/*.h $(SDIR)include/laik/*.h)
 OBJS = $(SRCS:$(SDIR)%.c=%.o)
 

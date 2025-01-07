@@ -21,6 +21,7 @@
 #include <laik-backend-single.h>
 #include <laik-backend-tcp.h>
 #include <laik-backend-tcp2.h>
+#include <laik-backend-ucp.h>
 
 // for string.h to declare strdup
 #define __STDC_WANT_LIB_EXT2__ 1
@@ -65,6 +66,14 @@ Laik_Instance* laik_init(int* argc, char*** argv)
     }
 #endif
 
+#ifdef USE_UCP
+    if (inst == 0) {
+        if ((override == 0) || (strcmp(override, "ucp") == 0)) {
+            inst = laik_init_ucp(argc, argv);
+        }
+    }
+#endif
+
     if (inst == 0) {
         // fall-back to "single" backend as default if MPI is not available, or
         // if "single" backend is explicitly requested
@@ -98,6 +107,9 @@ Laik_Instance* laik_init(int* argc, char*** argv)
 #endif
 #ifdef USE_TCP2
                  "tcp2 "
+#endif
+#ifdef USE_UCP
+                 "ucp "
 #endif
 #ifdef USE_TCP
                  "tcp "
