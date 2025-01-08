@@ -26,40 +26,21 @@
 #include <pthread.h>
 #include <ucp/api/ucp.h>
 
+#include "tcp.h"
+#include "backend-ucp-types.h"
+
 //*********************************************************************************
-#define HOME_PORT_STR "7777"
-#define HOME_PORT 7777
 
 // Used for calculating the message tags for send and recv
 #define TAG_SOURCE_SHIFT 32
 #define TAG_DEST_SHIFT 0
 
-static int socket_fd;
-// only used in main process
-static int *fds;
 
 static ucs_status_t ep_status = UCS_OK;
 
 //*********************************************************************************
 struct _InstData;
 struct _Peer;
-
-typedef struct _Peer
-{
-    size_t addrlen;
-    ucp_address_t *address;
-} Peer;
-
-typedef struct _InstData
-{
-    char host[64];      // my hostname
-    char location[128]; // my location
-    int mylid;
-    int world_size;
-    size_t addrlen;
-    ucp_address_t *address;
-    Peer *peer;
-} InstData;
 
 struct ucx_context
 {
@@ -76,7 +57,6 @@ static Laik_Instance *instance = 0;
 static InstData *d;
 
 // forward decls, types/structs , global variables
-bool check_local(char *host);
 
 static void laik_ucp_prepare(Laik_ActionSeq *);
 static void laik_ucp_cleanup(Laik_ActionSeq *);
@@ -121,10 +101,14 @@ void initialize_instance_data(char *location, char *home_host, int world_size)
         exit(1);
     }
 
+    d->world_size = world_size;
+    d->epoch = 0;
+    d->phase = 0;
     d->mylid = -1;
+    d->addrlen = 0;
+
     strcpy(d->location, location);
     strcpy(d->host, home_host);
-    d->world_size = world_size;
 }
 
 //*********************************************************************************
@@ -292,11 +276,6 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 
     // TODO: field_mask is used for optimizations
 
-    size_t local_addr_len = 0;
-    ucp_address_t *local_addr = NULL;
-    size_t peer_addr_len = 0;
-    // ucp_address_t *peer_addr = NULL;
-
     // UCP temporary vars
     ucp_params_t ucp_params;
     ucp_worker_attr_t worker_attr;
@@ -351,173 +330,19 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
         laik_panic("Could not query worker!\n");
     }
 
-    local_addr_len = worker_attr.address_length;
-    local_addr = worker_attr.address;
-    d->addrlen = local_addr_len;
+    // local ucp address information
+    d->addrlen = worker_attr.address_length;
+    d->address = worker_attr.address;
 
     laik_log(1, "Created worker with address length of %lu\n", worker_attr.address_length);
-    // laik_log_hexdump(1, local_addr_len, local_addr);
 
-    //
-    // create listening socket and determine who is master
-    //
+    initialize_setup_connection(home_host, home_port, d);
 
-    // create socket to listen for incoming TCP connections
-    //  if <home_host> is not set, try to aquire local port <home_port>
-    // we may need to try creating the listening socket twice
-    struct sockaddr_in sin;
-    socket_fd = -1;
-    // if home host is localhost, try to become master
-    bool try_master = check_local(home_host);
-    struct addrinfo sock_hints = {0}, *res;
-    // get address of home node
-    sock_hints.ai_family = AF_INET;
-    sock_hints.ai_socktype = SOCK_STREAM;
-    getaddrinfo(home_host, HOME_PORT_STR, &sock_hints, &res);
-
-    socket_fd = socket(PF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0)
-    {
-        laik_panic("UCP cannot create listening socket");
-    }
-
-    if (try_master)
-    {
-        // mainly for development: avoid wait time to bind to same port
-        if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR,
-                       &(int){1}, sizeof(int)) < 0)
-        {
-            laik_panic("UCP cannot set SO_REUSEADDR");
-        }
-
-        sin.sin_family = AF_INET;
-        sin.sin_addr.s_addr = htonl(INADDR_ANY);
-        sin.sin_port = htons(home_port);
-        // bind() is a race condition, listening after the bind will only work on one process though
-        if (bind(socket_fd, (struct sockaddr *)&sin, sizeof(sin)) == 0)
-        {
-            // listen on successfully bound socket
-            // if this fails, another process started listening first
-            // and we need to open another socket, as we cannot unbind
-            /// TODO: how many processes should be queued?
-            if (listen(socket_fd, 5) < 0)
-            {
-                close(socket_fd);
-                laik_log(1, "Another process is already master, opening new socket\n");
-            }
-            else
-            {
-                // we successfully became master: my LID is 0
-                d->mylid = 0;
-            }
-        }
-    }
-
-    // now we know if we are master: init peer with id 0
-    bool is_master = (d->mylid == 0);
-
-    int phase = 0;
-    int epoch = 0;
-    if (is_master)
-    {
-        laik_log(1, "I am master!\n");
-
-        // add LID tag to my location
-        // copy my data also to d->peer[0]
-        d->peer = (Peer *)calloc(d->world_size, sizeof(Peer));
-        if (d->peer == NULL)
-        {
-            laik_panic("Could not malloc heap for peers\n");
-        }
-
-        d->peer[0].address = local_addr;
-        d->peer[0].addrlen = local_addr_len;
-
-        fds = (int *)calloc(world_size, sizeof(int));
-        if (fds == NULL)
-        {
-            laik_panic("Could not malloc heap for fds\n");
-        }
-        for (int i = 1; i < world_size; i++)
-        {
-            fds[i] = accept(socket_fd, NULL, NULL);
-            laik_log(1, "%d out of %d is connecting...\n", i, world_size - 1);
-            if (fds[i] < 0)
-                laik_log(LAIK_LL_Panic, "Failed to accept connection: %s\n",
-                         strerror(errno));
-            // the length of the ucx worker addresses does not have to be the same across the nodes
-            laik_log(1, "Master accpeted initial Rank [%d]\n", i);
-            read(fds[i], &peer_addr_len, sizeof(peer_addr_len));
-            d->peer[i].addrlen = peer_addr_len;
-            d->peer[i].address = (ucp_address_t *)malloc(peer_addr_len);
-            if (d->peer[i].address == NULL)
-            {
-                laik_panic("Could not allocate heap for peer address\n");
-            }
-            read(fds[i], d->peer[i].address, peer_addr_len);
-        }
-        // send assigned number and address list to every non-master node
-        for (int i = 1; i < world_size; i++)
-        {
-            write(fds[i], &i, sizeof(int));
-            write(fds[i], &world_size, sizeof(int));
-            write(fds[i], &phase, sizeof(int));
-            write(fds[i], &epoch, sizeof(int));
-            for (int k = 0; k < world_size; k++)
-            {
-                write(fds[i], &(d->peer[k].addrlen), sizeof(size_t));
-                write(fds[i], d->peer[k].address, d->peer[k].addrlen);
-            }
-        }
-    }
-    else
-    {
-        socket_fd = socket(PF_INET, SOCK_STREAM, 0);
-        if (socket_fd < 0)
-        {
-            laik_panic("UCP cannot create listening socket");
-        }
-
-        if (connect(socket_fd, res->ai_addr, res->ai_addrlen) != 0)
-        {
-            laik_log(LAIK_LL_Error, "Could not connect to socket: %s\n", strerror(errno));
-            exit(1);
-        }
-
-        write(socket_fd, &local_addr_len, sizeof(size_t));
-        write(socket_fd, local_addr, local_addr_len);
-        read(socket_fd, &(d->mylid), sizeof(int));
-        read(socket_fd, &(d->world_size), sizeof(int));
-        read(socket_fd, &phase, sizeof(int));
-        read(socket_fd, &epoch, sizeof(int));
-
-        d->peer = (Peer *)malloc(d->world_size * sizeof(Peer));
-        if (d->peer == NULL)
-        {
-            laik_panic("Could not malloc heap for non master\n");
-        }
-
-        for (int i = 0; i < d->world_size; i++)
-        {
-            read(socket_fd, &peer_addr_len, sizeof(size_t));
-            d->peer[i].addrlen = peer_addr_len;
-            d->peer[i].address = (ucp_address_t *)malloc(peer_addr_len);
-            if (d->peer[i].address == NULL)
-            {
-                laik_panic("Could not allocate heap for peer address\n");
-            }
-            read(socket_fd, d->peer[i].address, peer_addr_len);
-        }
-        if (d->mylid < 0)
-        {
-            laik_log(LAIK_LL_Error, "In non master happened something bad id: %d world size %d phase %d and epoch %d\n Last state of errno %s", d->mylid, d->world_size, phase, epoch, strerror(errno));
-        }
-    }
     assert(d->mylid >= 0);
     initialize_endpoints();
 
     instance = laik_new_instance(&laik_backend_ucp, d->world_size, d->mylid,
-                                 epoch, phase, d->location, d);
+                                 d->epoch, d->phase, d->location, d);
     Laik_Group *group = laik_create_group(instance, d->world_size);
     group->size = d->world_size;
     group->myid = d->mylid;
@@ -528,7 +353,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
     }
     instance->world = group;
 
-    if (phase)
+    if (d->phase)
     {
         int old_world_size = d->world_size;
         read(socket_fd, &(d->world_size), sizeof(int));
@@ -799,7 +624,7 @@ void barrier()
         laik_ucp_buf_recv(0, buf, sizeof(buf));
     }
 
-    laik_log(1, "============================================ Rank [%d] reached the barrier ============================================\n", d->mylid);
+    laik_log(1, "============================================ Rank [%d] leaves the barrier ============================================\n", d->mylid);
 }
 
 //*********************************************************************************
@@ -945,18 +770,19 @@ static void laik_ucp_finalize(Laik_Instance *inst)
 
     if (d->mylid == 0)
     {
-        for (int i = 0; i < d->world_size; i++)
+        for (int i = 1; i < d->world_size; i++)
         {
-            close(fds[i]);
+            //close(fds[i]);
             free(d->peer[i].address);
         }
         free(fds);
     }
 
     free(d->peer);
-    free(d->address);
 
     close_endpoints();
+
+    //also frees d->address
     ucp_worker_destroy(ucp_worker);
 
     laik_log(1, "Rank [%d] is exiting\n", d->mylid);
