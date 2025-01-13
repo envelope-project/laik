@@ -13,9 +13,8 @@
 #define HOME_PORT 7777
 
 //*********************************************************************************
-static int socket_fd;
-// only used in main process
-static int *fds;
-
-//*********************************************************************************
 void initialize_setup_connection(char *home_host, const int home_port, InstData *d);
+
+size_t add_new_peers(InstData *d, Laik_Instance *instance);
+
+size_t initialize_new_peers(InstData *d);

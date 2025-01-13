@@ -35,7 +35,6 @@
 #define TAG_SOURCE_SHIFT 32
 #define TAG_DEST_SHIFT 0
 
-
 static ucs_status_t ep_status = UCS_OK;
 
 //*********************************************************************************
@@ -353,33 +352,16 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
     }
     instance->world = group;
 
+    // Only new processes during a resize have a phase > 0
     if (d->phase)
     {
-        int old_world_size = d->world_size;
-        read(socket_fd, &(d->world_size), sizeof(int));
-        laik_log(1, "Rank [%d] received new world size [%d] during init, old world size is [%d]. Product is %lu\n", d->mylid, d->world_size, old_world_size, d->world_size * sizeof(Peer));
+        int number_new_connections;
 
-        d->peer = (Peer *)realloc(d->peer, d->world_size * sizeof(Peer));
+        number_new_connections = initialize_new_peers(d);
 
-        if (d->peer == NULL)
-        {
-            laik_panic("Not enough memory for peers\n");
-        }
+        update_endpoints(number_new_connections);
 
-        for (int i = old_world_size; i < d->world_size; i++)
-        {
-            read(socket_fd, &(d->peer[i].addrlen), sizeof(size_t));
-            d->peer[i].address = (ucp_address_t *)malloc(d->peer[i].addrlen);
-            if (d->peer[i].address == NULL)
-            {
-                laik_panic("Not enough memory for peer address\n");
-            }
-            read(socket_fd, d->peer[i].address, d->peer[i].addrlen);
-        }
-
-        update_endpoints(d->world_size - old_world_size);
-
-        Laik_Group *new_group = create_new_laik_group(old_world_size);
+        Laik_Group *new_group = create_new_laik_group(d->world_size - number_new_connections);
         laik_set_world(instance, new_group);
     }
 
@@ -766,23 +748,23 @@ static void laik_ucp_finalize(Laik_Instance *inst)
     laik_log(1, "Rank [%d] is preparing to exit\n", d->mylid);
     assert(inst == instance);
 
-    close(socket_fd);
+    /* close(socket_fd);
 
     if (d->mylid == 0)
     {
         for (int i = 1; i < d->world_size; i++)
         {
-            //close(fds[i]);
+            // close(fds[i]);
             free(d->peer[i].address);
         }
         free(fds);
-    }
+    } */
 
     free(d->peer);
 
     close_endpoints();
 
-    //also frees d->address
+    // also frees d->address
     ucp_worker_destroy(ucp_worker);
 
     laik_log(1, "Rank [%d] is exiting\n", d->mylid);
@@ -801,151 +783,12 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
     /// TODO: DO i really need a barrier here? socket interaction should be an implicit barrier
     // For now helpful while debugging
     barrier();
+    size_t number_new_connections = add_new_peers(d, instance);
 
-    if (d->mylid == 0)
+    if (number_new_connections)
     {
-        // master
-        struct pollfd pfd = {
-            .fd = socket_fd,
-            .events = POLLIN,
-            .revents = 0};
-
-        int old_world_size = d->world_size;
-
-        int result = -1;
-        while (((result = poll(&pfd, 1, 0)) > 0) && (pfd.revents == POLLIN))
-        {
-            fds = realloc(fds, (d->world_size + 1) * sizeof(int));
-            if (fds == NULL)
-            {
-                laik_panic("Not enough memory for fds\n");
-            }
-            fds[d->world_size] = accept(socket_fd, NULL, NULL);
-
-            if (fds[d->world_size] < 0)
-            {
-                laik_log(LAIK_LL_Error, "Server could not accept new connection. %s\n", strerror(errno));
-            }
-
-            d->world_size++;
-
-            laik_log(1, "Master accepted new connection. World size increased to %d\n", d->world_size);
-        }
-        if (result < 0)
-        {
-            laik_panic("Master encountered error while polling new connections\n");
-        }
-
-        int number_new_connections = d->world_size - old_world_size;
-        assert(number_new_connections >= 0);
-
-        for (int i = 1; i < old_world_size; i++)
-        {
-            write(fds[i], &number_new_connections, sizeof(int));
-        }
-
-        // If NULL is returned, laik will continue without applying changes
-        if (number_new_connections == 0)
-        {
-            laik_log(1, "Nothing has to be done in resize!\n");
-            return NULL;
-        }
-
-        d->peer = (Peer *)realloc(d->peer, d->world_size * sizeof(Peer));
-        if (d->peer == NULL)
-        {
-            laik_panic("Not enough memory for peers\n");
-        }
-
-        for (int i = old_world_size; i < d->world_size; i++)
-        {
-            read(fds[i], &(d->peer[i].addrlen), sizeof(size_t));
-            d->peer[i].address = (ucp_address_t *)malloc(d->peer[i].addrlen);
-
-            if (d->peer[i].address == NULL)
-            {
-                laik_panic("Not enough memory for peer address\n");
-            }
-
-            read(fds[i], d->peer[i].address, d->peer[i].addrlen);
-
-            laik_log(1, "Received new address with length %lu!\n", d->peer[i].addrlen);
-        }
-
-        int epoch = laik_epoch(instance);
-        int phase = laik_phase(instance);
-
-        for (int i = old_world_size; i < d->world_size; i++)
-        {
-            laik_log(1, "Sending information to newcomer Rank [%d]\n", i);
-            write(fds[i], &i, sizeof(int));
-            write(fds[i], &(old_world_size), sizeof(int));
-            write(fds[i], &phase, sizeof(int));
-            write(fds[i], &epoch, sizeof(int));
-
-            for (int k = 0; k < old_world_size; k++)
-            {
-                write(fds[i], &(d->peer[k].addrlen), sizeof(size_t));
-                write(fds[i], d->peer[k].address, d->peer[k].addrlen);
-                /* laik_log_begin(1);
-                laik_log_hexdump(1, d->peer[k].addrlen, d->peer[k].address);
-                laik_log_flush(""); */
-            }
-
-            write(fds[i], &(d->world_size), sizeof(int));
-            for (int k = old_world_size; k < d->world_size; k++)
-            {
-                write(fds[i], &(d->peer[k].addrlen), sizeof(size_t));
-                write(fds[i], d->peer[k].address, d->peer[k].addrlen);
-            }
-        }
-
-        for (int i = 1; i < old_world_size; i++)
-        {
-            for (int k = old_world_size; k < d->world_size; k++)
-            {
-                write(fds[i], &(d->peer[k].addrlen), sizeof(size_t));
-                write(fds[i], d->peer[k].address, d->peer[k].addrlen);
-            }
-        }
-
         update_endpoints(number_new_connections);
-
-        return create_new_laik_group(old_world_size);
-    }
-    else
-    {
-        // non-master
-        int number_new_connections = 0;
-        read(socket_fd, &number_new_connections, sizeof(int));
-
-        laik_log(1, "Rank [%d] received %d new connections\n", d->mylid, number_new_connections);
-
-        if (number_new_connections > 0)
-        {
-            int old_world_size = d->world_size;
-            d->world_size = old_world_size + number_new_connections;
-            laik_log(1, "Rank [%d] received new world size [%d] from master\n", d->mylid, d->world_size);
-            d->peer = (Peer *)realloc(d->peer, (d->world_size) * sizeof(Peer));
-            if (d->peer == NULL)
-            {
-                laik_panic("Not enough memory for peers\n");
-            }
-
-            for (int i = old_world_size; i < d->world_size; i++)
-            {
-                read(socket_fd, &(d->peer[i].addrlen), sizeof(size_t));
-                d->peer[i].address = (ucp_address_t *)malloc(d->peer[i].addrlen);
-                if (d->peer[i].address == NULL)
-                {
-                    laik_panic("Not enough memory for peer address\n");
-                }
-                read(socket_fd, d->peer[i].address, d->peer[i].addrlen);
-            }
-
-            update_endpoints(number_new_connections);
-            return create_new_laik_group(old_world_size);
-        }
+        return create_new_laik_group(d->world_size - number_new_connections);
     }
 
     return NULL;
