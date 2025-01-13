@@ -13,8 +13,20 @@
 #define HOME_PORT 7777
 
 //*********************************************************************************
+/*
+    Master is determined and initial peer addresses are broadcasted, enabling ucp connections for further communication
+*/
 void initialize_setup_connection(char *home_host, const int home_port, InstData *d);
 
+//*********************************************************************************
+/*
+    Master polls new connections and broadcasts newcomer addresses
+*/
 size_t add_new_peers(InstData *d, Laik_Instance *instance);
 
+//*********************************************************************************
+/*
+    This function is called if the current process is started during a resize event
+    The process receives the newcomer addresses here
+*/
 size_t initialize_new_peers(InstData *d);

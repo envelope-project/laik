@@ -200,6 +200,7 @@ size_t initialize_new_peers(InstData *d)
 {
     int old_world_size = d->world_size;
     read(socket_fd, &(d->world_size), sizeof(int));
+
     laik_log(1, "Rank [%d] received new world size [%d] during init, old world size is [%d]. Product is %lu\n", d->mylid, d->world_size, old_world_size, d->world_size * sizeof(Peer));
 
     d->peer = (Peer *)realloc(d->peer, d->world_size * sizeof(Peer));
@@ -226,7 +227,6 @@ size_t initialize_new_peers(InstData *d)
 //*********************************************************************************
 size_t add_new_peers_master(InstData *d, Laik_Instance *instance)
 {
-    // master
     struct pollfd pfd = {
         .fd = socket_fd,
         .events = POLLIN,
@@ -266,7 +266,6 @@ size_t add_new_peers_master(InstData *d, Laik_Instance *instance)
         write(fds[i], &number_new_connections, sizeof(int));
     }
 
-    // If NULL is returned, laik will continue without applying changes
     if (number_new_connections == 0)
     {
         laik_log(1, "Nothing has to be done in resize!\n");
@@ -299,21 +298,21 @@ size_t add_new_peers_master(InstData *d, Laik_Instance *instance)
 
     for (int i = old_world_size; i < d->world_size; i++)
     {
+        // broadcast inst data to newcomers
         laik_log(1, "Sending information to newcomer Rank [%d]\n", i);
         write(fds[i], &i, sizeof(int));
         write(fds[i], &(old_world_size), sizeof(int));
         write(fds[i], &phase, sizeof(int));
         write(fds[i], &epoch, sizeof(int));
 
+        // broadcast old rank addresses to newcomers
         for (int k = 0; k < old_world_size; k++)
         {
             write(fds[i], &(d->peer[k].addrlen), sizeof(size_t));
             write(fds[i], d->peer[k].address, d->peer[k].addrlen);
-            /* laik_log_begin(1);
-            laik_log_hexdump(1, d->peer[k].addrlen, d->peer[k].address);
-            laik_log_flush(""); */
         }
 
+        // broadcast new world size and newcomer addresses to newcomers
         write(fds[i], &(d->world_size), sizeof(int));
         for (int k = old_world_size; k < d->world_size; k++)
         {
@@ -339,7 +338,6 @@ size_t add_new_peers_non_master(InstData *d, Laik_Instance *instance)
 {
     (void)instance;
 
-    // non-master
     int number_new_connections = 0;
     read(socket_fd, &number_new_connections, sizeof(int));
 

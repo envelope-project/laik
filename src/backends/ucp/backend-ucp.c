@@ -344,7 +344,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
                                  d->epoch, d->phase, d->location, d);
     Laik_Group *group = laik_create_group(instance, d->world_size);
     group->size = d->world_size;
-    group->myid = d->mylid;
+    group->myid = (d->phase == 0) ? d->mylid : -1;
 
     for (int i = 0; i < d->world_size; i++)
     {
@@ -362,6 +362,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
         update_endpoints(number_new_connections);
 
         Laik_Group *new_group = create_new_laik_group(d->world_size - number_new_connections);
+
         laik_set_world(instance, new_group);
     }
 
@@ -606,7 +607,7 @@ void barrier()
         laik_ucp_buf_recv(0, buf, sizeof(buf));
     }
 
-    laik_log(1, "============================================ Rank [%d] leaves the barrier ============================================\n", d->mylid);
+    laik_log(2, "============================================ Rank [%d] leaves the barrier ============================================\n", d->mylid);
 }
 
 //*********************************************************************************
@@ -781,7 +782,7 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
     assert(instance->world && (instance->world->parent == 0));
 
     /// TODO: DO i really need a barrier here? socket interaction should be an implicit barrier
-    // For now helpful while debugging
+    // for now helpful while debugging
     barrier();
     size_t number_new_connections = add_new_peers(d, instance);
 
