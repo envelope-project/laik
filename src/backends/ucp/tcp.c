@@ -64,7 +64,7 @@ static inline void receive_instance_data(InstData *d, int fd)
 }
 
 //*********************************************************************************
-void initialize_setup_connection(char *home_host, const int home_port, InstData *d)
+void tcp_initialize_setup_connection(char *home_host, const int home_port, InstData *d)
 { //
     // create listening socket and determine who is master
     //
@@ -196,7 +196,7 @@ void initialize_setup_connection(char *home_host, const int home_port, InstData 
 }
 
 //*********************************************************************************
-size_t initialize_new_peers(InstData *d)
+size_t tcp_initialize_new_peers(InstData *d)
 {
     int old_world_size = d->world_size;
     read(socket_fd, &(d->world_size), sizeof(int));
@@ -370,7 +370,7 @@ size_t add_new_peers_non_master(InstData *d, Laik_Instance *instance)
 }
 
 //*********************************************************************************
-size_t add_new_peers(InstData *d, Laik_Instance *instance)
+size_t tcp_add_new_peers(InstData *d, Laik_Instance *instance)
 {
     size_t number_new_connections;
     if (d->mylid == 0)
@@ -382,6 +382,15 @@ size_t add_new_peers(InstData *d, Laik_Instance *instance)
         number_new_connections = add_new_peers_non_master(d, instance);
     }
     return number_new_connections;
+}
+
+//*********************************************************************************
+size_t tcp_remove_peer(InstData *d, Laik_Instance *instance)
+{
+    (void)d;
+    (void)instance;
+
+    return 0;
 }
 
 //*********************************************************************************

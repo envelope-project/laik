@@ -15,18 +15,11 @@
 #include <string.h>
 #include <errno.h>
 
-#include <signal.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <poll.h>
-
 #include <pthread.h>
 #include <ucp/api/ucp.h>
 
 #include "tcp.h"
+#include "command_parser.h"
 #include "backend-ucp-types.h"
 
 //*********************************************************************************
@@ -45,6 +38,8 @@ struct ucx_context
 {
     int completed;
 };
+
+static const char *UCX_MESSAGE_STRING = "UCX DATA MESSAGE";
 
 static ucp_context_h ucp_context;
 static ucp_worker_h ucp_worker;
@@ -219,7 +214,7 @@ Laik_Group *create_new_laik_group(int old_world_size)
     return group;
 }
 
-// TODO: Create more subfunctions
+/// TODO: Create more subfunctions
 //*********************************************************************************
 Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 {
@@ -230,11 +225,6 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 
     if (instance)
         return instance;
-
-    // this is required to not get spurious SIGPIPE signals
-    // from opened sockets, e.g. if other side closes connection
-    // TODO: LAIK as library should not touch global signal handlers...
-    signal(SIGPIPE, SIG_IGN);
 
     // my location string: "<hostname>:<pid>" (may be extended by master)
     char hostname[64];
@@ -335,7 +325,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 
     laik_log(1, "Created worker with address length of %lu\n", worker_attr.address_length);
 
-    initialize_setup_connection(home_host, home_port, d);
+    tcp_initialize_setup_connection(home_host, home_port, d);
 
     assert(d->mylid >= 0);
     initialize_endpoints();
@@ -357,7 +347,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
     {
         int number_new_connections;
 
-        number_new_connections = initialize_new_peers(d);
+        number_new_connections = tcp_initialize_new_peers(d);
 
         update_endpoints(number_new_connections);
 
@@ -435,8 +425,6 @@ static void laik_ucp_cleanup(Laik_ActionSeq *as)
 
     assert(as->backend == &laik_backend_ucp);
 }
-
-static const char *UCX_MESSAGE_STRING = "UCX DATA MESSAGE";
 
 //*********************************************************************************
 static ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *request,
@@ -784,7 +772,23 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
     /// TODO: DO i really need a barrier here? socket interaction should be an implicit barrier
     // for now helpful while debugging
     barrier();
-    size_t number_new_connections = add_new_peers(d, instance);
+
+    /// TODO: Implement command usage in tcp
+    ResizeCommand *resize_commands = parse_resize_commands();
+
+    if (resize_commands != NULL)
+    {
+        for (size_t i = 0; i < resize_commands->number_to_remove; ++i)
+        {
+            // remove peer can be performed using ucp
+            // size_t rank = resize_commands->ranks_to_remove[i]
+        }
+    }
+
+    // ucp cannot establish connections on its own
+    size_t number_new_connections = tcp_add_new_peers(d, instance);
+
+    free(resize_commands);
 
     if (number_new_connections)
     {
