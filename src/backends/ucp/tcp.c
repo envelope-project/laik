@@ -23,22 +23,22 @@ static int *fds;
 bool check_local(char *host);
 
 //*********************************************************************************
-static inline void send_ucx_address(InstData *d, int fd, int to_lid)
+static inline void send_ucx_address(InstData *d, int to_fd, int lid)
 {
-    write(fd, &(d->peer[to_lid].addrlen), sizeof(size_t));
-    write(fd, d->peer[to_lid].address, d->peer[to_lid].addrlen);
+    write(to_fd, &(d->peer[lid].addrlen), sizeof(size_t));
+    write(to_fd, d->peer[lid].address, d->peer[lid].addrlen);
 }
 
 //*********************************************************************************
-static inline void receive_ucx_address(InstData *d, int fd, int from_lid)
+static inline void receive_ucx_address(InstData *d, int from_fd, int lid)
 {
-    read(fd, &d->peer[from_lid].addrlen, sizeof(d->peer[from_lid].addrlen));
-    d->peer[from_lid].address = (ucp_address_t *)malloc(d->peer[from_lid].addrlen);
-    if (d->peer[from_lid].address == NULL)
+    read(from_fd, &d->peer[lid].addrlen, sizeof(d->peer[lid].addrlen));
+    d->peer[lid].address = (ucp_address_t *)malloc(d->peer[lid].addrlen);
+    if (d->peer[lid].address == NULL)
     {
         laik_panic("Could not allocate to receive peer ucx address\n");
     }
-    read(fd, d->peer[from_lid].address, d->peer[from_lid].addrlen);
+    read(from_fd, d->peer[lid].address, d->peer[lid].addrlen);
 }
 
 //*********************************************************************************
