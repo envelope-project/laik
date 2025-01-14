@@ -19,8 +19,27 @@ static int socket_fd;
 static int *fds;
 
 //*********************************************************************************
-// forward declaration
+// forward declaration from tcp2
 bool check_local(char *host);
+
+//*********************************************************************************
+static inline void send_ucx_address(InstData *d, int fd, int to_lid)
+{
+    write(fd, &(d->peer[to_lid].addrlen), sizeof(size_t));
+    write(fd, d->peer[to_lid].address, d->peer[to_lid].addrlen);
+}
+
+//*********************************************************************************
+static inline void receive_ucx_address(InstData *d, int fd, int from_lid)
+{
+    read(fd, &d->peer[from_lid].addrlen, sizeof(d->peer[from_lid].addrlen));
+    d->peer[from_lid].address = (ucp_address_t *)malloc(d->peer[from_lid].addrlen);
+    if (d->peer[from_lid].address == NULL)
+    {
+        laik_panic("Could not allocate to receive peer ucx address\n");
+    }
+    read(fd, d->peer[from_lid].address, d->peer[from_lid].addrlen);
+}
 
 //*********************************************************************************
 static inline void send_instance_data(InstData *d, int fd, int lid)
@@ -30,10 +49,9 @@ static inline void send_instance_data(InstData *d, int fd, int lid)
     write(fd, &d->phase, sizeof(int));
     write(fd, &d->epoch, sizeof(int));
 
-    for (int k = 0; k < d->world_size; k++)
+    for (int i = 0; i < d->world_size; i++)
     {
-        write(fd, &(d->peer[k].addrlen), sizeof(size_t));
-        write(fd, d->peer[k].address, d->peer[k].addrlen);
+        send_ucx_address(d, fd, i);
     }
 }
 
@@ -48,18 +66,12 @@ static inline void receive_instance_data(InstData *d, int fd)
     d->peer = (Peer *)malloc(d->world_size * sizeof(Peer));
     if (d->peer == NULL)
     {
-        laik_panic("Could not malloc heap for non master\n");
+        laik_panic("Could not allocate heap peer address array\n");
     }
 
     for (int i = 0; i < d->world_size; i++)
     {
-        read(fd, &d->peer[i].addrlen, sizeof(d->peer[i].addrlen));
-        d->peer[i].address = (ucp_address_t *)malloc(d->peer[i].addrlen);
-        if (d->peer[i].address == NULL)
-        {
-            laik_panic("Could not allocate heap for peer address\n");
-        }
-        read(fd, d->peer[i].address, d->peer[i].addrlen);
+        receive_ucx_address(d, fd, i);
     }
 }
 
@@ -85,7 +97,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
     socket_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0)
     {
-        laik_panic("UCP cannot create listening socket");
+        laik_panic("UCP_TCP cannot create listening socket");
     }
 
     if (try_master)
@@ -94,7 +106,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
         if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR,
                        &(int){1}, sizeof(int)) < 0)
         {
-            laik_panic("UCP cannot set SO_REUSEADDR");
+            laik_panic("UCP_TCP cannot set SO_REUSEADDR");
         }
 
         sin.sin_family = AF_INET;
@@ -132,7 +144,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
         d->peer = (Peer *)calloc(d->world_size, sizeof(Peer));
         if (d->peer == NULL)
         {
-            laik_panic("Could not malloc heap for peers\n");
+            laik_panic("Could not allocate heap for peer address array\n");
         }
 
         d->peer[0].address = d->address;
@@ -141,7 +153,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
         fds = (int *)calloc(d->world_size, sizeof(int));
         if (fds == NULL)
         {
-            laik_panic("Could not malloc heap for fds\n");
+            laik_panic("Could not allocate heap for fds\n");
         }
         for (int i = 1; i < d->world_size; i++)
         {
@@ -153,14 +165,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
 
             // the length of the ucx worker addresses does not have to be the same across the nodes
             laik_log(1, "Master accepted initial Rank [%d]\n", i);
-            read(fds[i], &d->peer[i].addrlen, sizeof(d->peer[i].addrlen));
-
-            d->peer[i].address = (ucp_address_t *)malloc(d->peer[i].addrlen);
-            if (d->peer[i].address == NULL)
-            {
-                laik_panic("Could not allocate heap for peer address\n");
-            }
-            read(fds[i], d->peer[i].address, d->peer[i].addrlen);
+            receive_ucx_address(d, fds[i], i);
         }
         // send assigned number and address list to every non-master node
         for (int i = 1; i < d->world_size; i++)
@@ -173,7 +178,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
         socket_fd = socket(PF_INET, SOCK_STREAM, 0);
         if (socket_fd < 0)
         {
-            laik_panic("UCP cannot create listening socket");
+            laik_panic("UCP_TCP cannot create listening socket");
         }
 
         if (connect(socket_fd, res->ai_addr, res->ai_addrlen) != 0)
@@ -212,13 +217,7 @@ size_t tcp_initialize_new_peers(InstData *d)
 
     for (int i = old_world_size; i < d->world_size; i++)
     {
-        read(socket_fd, &(d->peer[i].addrlen), sizeof(size_t));
-        d->peer[i].address = (ucp_address_t *)malloc(d->peer[i].addrlen);
-        if (d->peer[i].address == NULL)
-        {
-            laik_panic("Not enough memory for peer address\n");
-        }
-        read(socket_fd, d->peer[i].address, d->peer[i].addrlen);
+        receive_ucx_address(d, socket_fd, i);
     }
 
     return d->world_size - old_world_size;
@@ -308,25 +307,23 @@ size_t add_new_peers_master(InstData *d, Laik_Instance *instance)
         // broadcast old rank addresses to newcomers
         for (int k = 0; k < old_world_size; k++)
         {
-            write(fds[i], &(d->peer[k].addrlen), sizeof(size_t));
-            write(fds[i], d->peer[k].address, d->peer[k].addrlen);
+            send_ucx_address(d, fds[i], k);
         }
 
         // broadcast new world size and newcomer addresses to newcomers
         write(fds[i], &(d->world_size), sizeof(int));
         for (int k = old_world_size; k < d->world_size; k++)
         {
-            write(fds[i], &(d->peer[k].addrlen), sizeof(size_t));
-            write(fds[i], d->peer[k].address, d->peer[k].addrlen);
+            send_ucx_address(d, fds[i], k);
         }
     }
 
+    // broadcast newcomers to old ranks
     for (int i = 1; i < old_world_size; i++)
     {
         for (int k = old_world_size; k < d->world_size; k++)
         {
-            write(fds[i], &(d->peer[k].addrlen), sizeof(size_t));
-            write(fds[i], d->peer[k].address, d->peer[k].addrlen);
+            send_ucx_address(d, fds[i], k);
         }
     }
 
@@ -356,13 +353,7 @@ size_t add_new_peers_non_master(InstData *d, Laik_Instance *instance)
 
         for (int i = old_world_size; i < d->world_size; i++)
         {
-            read(socket_fd, &(d->peer[i].addrlen), sizeof(size_t));
-            d->peer[i].address = (ucp_address_t *)malloc(d->peer[i].addrlen);
-            if (d->peer[i].address == NULL)
-            {
-                laik_panic("Not enough memory for peer address\n");
-            }
-            read(socket_fd, d->peer[i].address, d->peer[i].addrlen);
+            receive_ucx_address(d, socket_fd, i);
         }
     }
 
