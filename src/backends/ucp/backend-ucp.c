@@ -2,9 +2,11 @@
 #ifdef USE_UCP
 
 //*********************************************************************************
+// laik libraries
 #include "laik-backend-ucp.h"
 #include "laik-internal.h"
 
+// standard libraries
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -14,10 +16,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-
 #include <pthread.h>
+
+// UCP library
 #include <ucp/api/ucp.h>
 
+// backend libraries
 #include "tcp.h"
 #include "command_parser.h"
 #include "backend-ucp-types.h"
@@ -57,7 +61,7 @@ static void laik_ucp_cleanup(Laik_ActionSeq *);
 static void laik_ucp_exec(Laik_ActionSeq *as);
 static void laik_ucp_finalize(Laik_Instance *);
 static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs);
-static void laik_ucp_finish_resize();
+static void laik_ucp_finish_resize(void);
 
 /* static void laik_ucp_updateGroup(Laik_Group *);
 static bool laik_ucp_log_action(Laik_Action *a);
@@ -492,7 +496,7 @@ ucp_tag_t create_tag(int src_rank, int dest_rank)
 //*********************************************************************************
 void laik_ucp_buf_send(int to_rank, char *buf, size_t count)
 {
-    laik_log(1, "Rank [%d] => [%d]: Sending message with size %lu.\n", d->mylid, to_rank, count);
+    laik_log(LAIK_LL_Debug, "Rank [%d] => [%d]: Sending message with size %lu.\n", d->mylid, to_rank, count);
     // laik_log_hexdump(2, count, &buf);
 
     ucp_request_param_t send_param;
@@ -512,7 +516,7 @@ void laik_ucp_buf_send(int to_rank, char *buf, size_t count)
 
     if (request == NULL)
     {
-        laik_log(1, "Request is NULL\n");
+        laik_log(LAIK_LL_Debug, "Request is NULL\n");
     }
 
     if (status != UCS_OK)
@@ -568,10 +572,11 @@ void laik_ucp_buf_recv(int from_rank, char *buf, size_t count)
         laik_log(LAIK_LL_Error, "Rank [%d] <= Rank [%d] encountered error while receiving\n", d->mylid, from_rank);
     }
 
-    laik_log(2, "Rank [%d] <= Rank [%d] received message with size %lu.\n", d->mylid, from_rank, count);
+    laik_log(LAIK_LL_Debug, "Rank [%d] <= Rank [%d] received message with size %lu.\n", d->mylid, from_rank, count);
     // laik_log_hexdump(2, count, &buf);
 }
 
+/// TODO: implementaion is too slow for a lot of ranks, possible solution 'tree' like communication
 //*********************************************************************************
 void barrier()
 {
@@ -731,6 +736,7 @@ void close_endpoints(void)
     }
 }
 
+/// TODO: finish ressource management
 //*********************************************************************************
 static void laik_ucp_finalize(Laik_Instance *inst)
 {
@@ -761,6 +767,54 @@ static void laik_ucp_finalize(Laik_Instance *inst)
     free(d);
 }
 
+/// TODO: tree communication instead of one to all
+//*********************************************************************************
+void remove_peer(ResizeCommand *resize_command)
+{
+    if (d->mylid == 0)
+    {
+        laik_log_begin(LAIK_LL_Info);
+        laik_log_append("Removing ranks: ");
+        for (size_t i = 0; i < resize_command->number_to_remove; i++)
+        {
+            laik_log_append("[%lu] ", resize_command->ranks_to_remove[i]);
+        }
+        laik_log_flush("\n");
+
+        for (int i = 1; i < d->world_size; i++)
+        {
+            laik_ucp_buf_send(i, (char *)&(resize_command->number_to_remove), sizeof(size_t));
+            laik_ucp_buf_send(i, (char *)resize_command->ranks_to_remove, resize_command->number_to_remove * sizeof(size_t));
+        }
+
+        laik_log(LAIK_LL_Info, "Rank [%d] finished sending terminate commands", d->mylid);
+    }
+    else
+    {
+        size_t number_to_remove = 0;
+        laik_ucp_buf_recv(0, (char *)&number_to_remove, sizeof(size_t));
+
+        size_t *ranks_to_remove = malloc(number_to_remove * sizeof(size_t));
+
+        if (ranks_to_remove == NULL)
+        {
+            laik_panic("Could not allocate heap for ranks to remove array");
+        }
+
+        laik_ucp_buf_recv(0, (char *)ranks_to_remove, number_to_remove * sizeof(size_t));
+
+        for (size_t i = 0; i < number_to_remove; i++)
+        {
+            if ((size_t)d->mylid == ranks_to_remove[i])
+            {
+                laik_log(LAIK_LL_Info, "Rank [%d] received termination command.", d->mylid);
+            }
+        }
+
+        free(ranks_to_remove);
+    }
+}
+
 //*********************************************************************************
 static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
 {
@@ -771,24 +825,26 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
 
     /// TODO: DO i really need a barrier here? socket interaction should be an implicit barrier
     // for now helpful while debugging
-    barrier();
+    // barrier();
 
-    /// TODO: Implement command usage in tcp
+    /// TODO: Implement command usage
     ResizeCommand *resize_commands = parse_resize_commands();
 
     if (resize_commands != NULL)
     {
-        for (size_t i = 0; i < resize_commands->number_to_remove; ++i)
-        {
-            // remove peer can be performed using ucp
-            // size_t rank = resize_commands->ranks_to_remove[i]
-        }
+        laik_log(LAIK_LL_Info, "Expecting %lu new connections", resize_commands->number_to_add);
+        remove_peer(resize_commands);
+
+        free(resize_commands);
+    }
+    else
+    {
+        // nothing has to be done
+        return NULL;
     }
 
     // ucp cannot establish connections on its own
     size_t number_new_connections = tcp_add_new_peers(d, instance);
-
-    free(resize_commands);
 
     if (number_new_connections)
     {
@@ -800,7 +856,7 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
 }
 
 //*********************************************************************************
-static void laik_ucp_finish_resize()
+static void laik_ucp_finish_resize(void)
 {
     // a resize must have been started
     assert(instance->world && instance->world->parent);

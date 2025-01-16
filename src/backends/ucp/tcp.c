@@ -36,42 +36,42 @@ static inline void receive_ucx_address(InstData *d, int from_fd, int lid)
     d->peer[lid].address = (ucp_address_t *)malloc(d->peer[lid].addrlen);
     if (d->peer[lid].address == NULL)
     {
-        laik_panic("Could not allocate to receive peer ucx address\n");
+        laik_panic("Could not allocate heap to receive peer ucx address\n");
     }
     read(from_fd, d->peer[lid].address, d->peer[lid].addrlen);
 }
 
 //*********************************************************************************
-static inline void send_instance_data(InstData *d, int fd, int lid)
+static inline void send_instance_data(InstData *d, int to_fd, int lid)
 {
-    write(fd, &lid, sizeof(int));
-    write(fd, &d->world_size, sizeof(int));
-    write(fd, &d->phase, sizeof(int));
-    write(fd, &d->epoch, sizeof(int));
+    write(to_fd, &lid, sizeof(int));
+    write(to_fd, &d->world_size, sizeof(int));
+    write(to_fd, &d->phase, sizeof(int));
+    write(to_fd, &d->epoch, sizeof(int));
 
     for (int i = 0; i < d->world_size; i++)
     {
-        send_ucx_address(d, fd, i);
+        send_ucx_address(d, to_fd, i);
     }
 }
 
 //*********************************************************************************
-static inline void receive_instance_data(InstData *d, int fd)
+static inline void receive_instance_data(InstData *d, int from_fd)
 {
-    read(fd, &(d->mylid), sizeof(int));
-    read(fd, &(d->world_size), sizeof(int));
-    read(fd, &d->phase, sizeof(int));
-    read(fd, &d->epoch, sizeof(int));
+    read(from_fd, &(d->mylid), sizeof(int));
+    read(from_fd, &(d->world_size), sizeof(int));
+    read(from_fd, &d->phase, sizeof(int));
+    read(from_fd, &d->epoch, sizeof(int));
 
     d->peer = (Peer *)malloc(d->world_size * sizeof(Peer));
     if (d->peer == NULL)
     {
-        laik_panic("Could not allocate heap peer address array\n");
+        laik_panic("Could not allocate heap for peer address array\n");
     }
 
     for (int i = 0; i < d->world_size; i++)
     {
-        receive_ucx_address(d, fd, i);
+        receive_ucx_address(d, from_fd, i);
     }
 }
 
@@ -94,6 +94,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
     sock_hints.ai_socktype = SOCK_STREAM;
     getaddrinfo(home_host, HOME_PORT_STR, &sock_hints, &res);
 
+    /// TODO: NON_BLOCKING SOCKET using multiplexing techniques
     socket_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0)
     {
@@ -119,7 +120,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
             // if this fails, another process started listening first
             // and we need to open another socket, as we cannot unbind
             /// TODO: how many processes should be queued?
-            if (listen(socket_fd, 500) < 0)
+            if (listen(socket_fd, SOMAXCONN) < 0)
             {
                 close(socket_fd);
                 laik_log(1, "Another process is already master, opening new socket\n");
@@ -318,7 +319,7 @@ size_t add_new_peers_master(InstData *d, Laik_Instance *instance)
         }
     }
 
-    // broadcast newcomers to old ranks
+    // broadcast newcomer addresses to old ranks
     for (int i = 1; i < old_world_size; i++)
     {
         for (int k = old_world_size; k < d->world_size; k++)

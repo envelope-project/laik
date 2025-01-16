@@ -25,7 +25,7 @@ size_t tcp_add_new_peers(InstData *d, Laik_Instance *instance);
 
 //*********************************************************************************
 /*
-    Master polls new connections and broadcasts newcomer addresses
+    Broadcast removed peers and update InstanceData accordingly
 */
 size_t tcp_remove_peer(InstData *d, Laik_Instance *instance);
 

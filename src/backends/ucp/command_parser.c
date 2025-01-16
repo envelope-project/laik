@@ -11,8 +11,8 @@
 //*********************************************************************************
 static const char *RESIZE_COMMANDS_FILE_PATH = "/home/ubuntu/BachelorThesis/laik/src/backends/ucp/resize_commands.txt";
 
-// Command length is expected to be 4 Bytes long within the code (including '\0' Byte)
-// Specifies how many newcomers to expect
+/// TODO: this is not required for TCP since it can just POLL the socket, but maybe useful for other connection setup frameworks
+// Specifies how many newcomers to expect as upper limit
 static const char *COMMAND_ADD = "ADD";
 // Specifies ONE rank that needs to be removed
 /// TODO: Process ID instead of rank
@@ -21,6 +21,7 @@ static const char *COMMAND_REMOVE = "REM";
 // total command length per line should not exceed 32 byte
 static const size_t MAX_LINE_LENGTH = 32;
 
+// Command length is expected to be 4 Bytes long within the code (including '\0' Byte)
 static const size_t COMMAND_LENGTH = 4;
 
 /* _Static_assert(COMMAND_LENGTH == sizeof(COMMAND_ADD), "ADD Command has incorrect length");
