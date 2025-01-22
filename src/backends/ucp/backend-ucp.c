@@ -35,8 +35,6 @@
 static ucs_status_t ep_status = UCS_OK;
 
 //*********************************************************************************
-struct _InstData;
-struct _Peer;
 
 struct ucx_context
 {
@@ -99,6 +97,8 @@ void initialize_instance_data(char *location, char *home_host, int world_size)
         exit(1);
     }
 
+    d->state = NEW;
+    d->number_dead = 0;
     d->world_size = world_size;
     d->epoch = 0;
     d->phase = 0;
@@ -134,28 +134,31 @@ void initialize_endpoints(void)
 
     for (int i = 0; i < d->world_size; i++)
     {
-        ucp_ep_params_t ep_params;
-
-        // Initialize endpoint parameters
-        memset(&ep_params, 0, sizeof(ep_params));
-        ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-                               UCP_EP_PARAM_FIELD_ERR_HANDLER;
-        ep_params.address = d->peer[i].address;
-        ep_params.err_handler.cb = error_handler; // Error callback
-        // Create the endpoint
-        ucs_status_t status = ucp_ep_create(ucp_worker, &ep_params, &ucp_endpoints[i]);
-
-        if (status != UCS_OK)
+        if (d->peer[i].state < INREMOVE1)
         {
-            char message[256];
-            snprintf(message, sizeof(message), "Rank [%d] => Rank[%d]: Endpoint creation failed. %s\n",
-                     d->mylid, i, ucs_status_string(status));
-            laik_panic((const char *)message);
-        }
+            ucp_ep_params_t ep_params;
 
-        laik_log(1, "Rank[%d] => Rank[%d]: UCP endpoint created successfully.\n", d->mylid, i);
+            // Initialize endpoint parameters
+            memset(&ep_params, 0, sizeof(ep_params));
+            ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+                                   UCP_EP_PARAM_FIELD_ERR_HANDLER;
+            ep_params.address = d->peer[i].address;
+            ep_params.err_handler.cb = error_handler; // Error callback
+            // Create the endpoint
+            ucs_status_t status = ucp_ep_create(ucp_worker, &ep_params, &ucp_endpoints[i]);
+
+            if (status != UCS_OK)
+            {
+                char message[256];
+                snprintf(message, sizeof(message), "Rank [%d] => Rank[%d]: Endpoint creation failed. %s\n",
+                         d->mylid, i, ucs_status_string(status));
+                laik_panic((const char *)message);
+            }
+
+            laik_log(LAIK_LL_Info, "Rank[%d] => Rank[%d]: UCP endpoint created successfully.\n", d->mylid, i);
+        }
     }
-};
+}
 
 //*********************************************************************************
 void update_endpoints(int number_new_connections)
@@ -170,55 +173,206 @@ void update_endpoints(int number_new_connections)
 
     for (int i = old_world_size; i < d->world_size; i++)
     {
-        ucp_ep_params_t ep_params;
-        // Initialize endpoint parameters
-        memset(&ep_params, 0, sizeof(ep_params));
-        ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
-                               UCP_EP_PARAM_FIELD_ERR_HANDLER;
-        ep_params.address = d->peer[i].address;
-        ep_params.err_handler.cb = error_handler; // Error callback
-        // Create the endpoint
-        ucs_status_t status = ucp_ep_create(ucp_worker, &ep_params, &ucp_endpoints[i]);
-        if (status != UCS_OK)
+        if (d->peer[i].state < INREMOVE1)
         {
-            char message[256];
-            snprintf(message, sizeof(message), "Rank [%d] => Rank[%d]: Endpoint creation failed. %s\n",
-                     d->mylid, i, ucs_status_string(status));
-            laik_panic((const char *)message);
-        }
+            ucp_ep_params_t ep_params;
+            // Initialize endpoint parameters
+            memset(&ep_params, 0, sizeof(ep_params));
+            ep_params.field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS |
+                                   UCP_EP_PARAM_FIELD_ERR_HANDLER;
+            ep_params.address = d->peer[i].address;
+            ep_params.err_handler.cb = error_handler; // Error callback
+            // Create the endpoint
+            ucs_status_t status = ucp_ep_create(ucp_worker, &ep_params, &ucp_endpoints[i]);
+            if (status != UCS_OK)
+            {
+                char message[256];
+                snprintf(message, sizeof(message), "Rank [%d] => Rank[%d]: Endpoint creation failed. %s\n",
+                         d->mylid, i, ucs_status_string(status));
+                laik_panic((const char *)message);
+            }
 
-        laik_log(1, "Rank[%d] => Rank[%d]: UCP endpoint created successfully.\n", d->mylid, i);
+            /* if (i == 2)
+            {
+                if (d->mylid == 0)
+                {
+                    sleep(1);
+                }
+                laik_log_begin(LAIK_LL_Info);
+                laik_log_append("Rank [%d] UCX address (length: %zu):\n", d->mylid, d->peer[i].addrlen);
+                for (size_t k = 0; k < d->peer[i].addrlen; k++)
+                {
+                    laik_log_append("%02x ", ((unsigned char *)d->peer[i].address)[k]);
+                    if ((k + 1) % 16 == 0)
+                    {
+                        laik_log_append("\n");
+                    }
+                }
+                laik_log_flush("\n");
+            } */
+
+            laik_log(LAIK_LL_Info, "Rank[%d] => Rank[%d]: UCP endpoint created successfully.\n", d->mylid, i);
+        }
     }
 }
 
 //*********************************************************************************
-Laik_Group *create_new_laik_group(int old_world_size)
+// Called by necomers during init
+void init_first_laik_group(int old_world_size, Laik_Group *world)
+{
+    Laik_Group *parent = laik_create_group(instance, old_world_size);
+
+    parent->size = old_world_size;
+    parent->myid = -1;  // not in parent group
+    int i1 = 0, i2 = 0; // i1: index in parent, i2: new process index
+    for (int lid = 0; lid < d->world_size; lid++)
+    {
+        // location ids can only grow
+        if (lid == d->mylid)
+        {
+            world->myid = i2;
+        }
+
+        laik_log(LAIK_LL_Info, "Rank [%d lid [%d] in state [%d]", d->mylid, lid, d->peer[lid].state);
+
+        switch (d->peer[lid].state)
+        {
+        case (NEW):
+        {
+            world->locationid[i2] = lid;
+            world->toParent[i2] = -1; // did not exist before
+            i2++;
+            break;
+        }
+        case (INHERITED):
+        {
+            // both in old and new group
+            parent->locationid[i1] = lid;
+            world->locationid[i2] = lid;
+            world->toParent[i2] = i1;
+            world->fromParent[i1] = i2;
+            i1++;
+            i2++;
+            break;
+        }
+        case (INREMOVE2):
+        {
+            laik_log(LAIK_LL_Info, "Rank [%d]: Rank [%d] does not exist in new group", d->mylid, lid);
+            parent->locationid[i1] = lid;
+            world->fromParent[i1] = -1; // does not exist in new group
+            i1++;
+            break;
+        }
+        case (DEAD):
+        {
+            break;
+        }
+        case (INREMOVE1):
+        {
+            // this state should never be reached, since the update_state() function is called directly after marking the peers
+            // turning their INREMOVE1 state into the INREMOVE2 state
+            __attribute__((fallthrough));
+        }
+        default:
+            laik_log(LAIK_LL_Error, "Rank[%d] has invalid peer[%d] state <%d>", d->mylid, lid, d->peer[lid].state);
+        }
+    }
+
+    assert(i1 == old_world_size);
+    laik_log(LAIK_LL_Debug, "i1: %d i2: %d world size %d", i1, i2, d->world_size);
+
+    world->size = i2;
+    world->parent = parent;
+
+    laik_log_begin(LAIK_LL_Info);
+    laik_log_append("Rank [%d]: goup id [%d] parent location ids:", d->mylid, world->parent->gid);
+    for (int i = 0; i < i1; i++)
+    {
+        laik_log_append(" [%d]", parent->locationid[i]);
+    }
+    laik_log_append("\n");
+    laik_log_append("Rank [%d]: goup id [%d] world location ids:", d->mylid, world->parent->gid);
+    for (int i = 0; i < i2; i++)
+    {
+        laik_log_append(" [%d]", world->locationid[i]);
+    }
+    laik_log_flush("\n");
+}
+
+//*********************************************************************************
+// Called by inherited ranks during resize
+Laik_Group *create_new_laik_group(void)
 {
     // create new group as child of old group
     Laik_Group *world = instance->world;
     Laik_Group *group = laik_create_group(instance, d->world_size);
     group->parent = world;
-    group->size = d->world_size;
-    group->myid = d->mylid;
-    instance->locations = d->world_size;
-    for (int i = 0; i < old_world_size; i++)
+
+    int i1 = 0, i2 = 0; // i1: index in parent, i2: new process index
+    for (int lid = 0; lid < d->world_size; lid++)
     {
-        group->locationid[i] = i;
-        group->toParent[i] = i;
-        group->fromParent[i] = i;
-    }
-    for (int i = old_world_size; i < d->world_size; i++)
-    {
-        group->locationid[i] = i;
-        group->toParent[i] = -1;
-        group->fromParent[i] = -1;
+        laik_log(LAIK_LL_Info, "Rank [%d lid [%d] in state [%d]", d->mylid, lid, d->peer[lid].state);
+        switch (d->peer[lid].state)
+        {
+        case (NEW):
+        {
+            group->locationid[i2] = lid;
+            group->toParent[i2] = -1; // did not exist before
+            i2++;
+            break;
+        }
+        case (INHERITED):
+        {
+            // both in old and new group
+            group->locationid[i2] = lid;
+            group->toParent[i2] = i1;
+            group->fromParent[i1] = i2;
+            i1++;
+            i2++;
+            break;
+        }
+        case (INREMOVE2):
+        {
+            laik_log(LAIK_LL_Info, "Rank [%d]: Rank [%d] does not exist in new group", d->mylid, lid);
+            group->fromParent[i1] = -1; // does not exist in new group
+            i1++;
+            break;
+        }
+        case (DEAD):
+        {
+            break;
+        }
+        case (INREMOVE1):
+        {
+            // this state should never be reached, since the update_state() function is called directly after marking the peers
+            // turning their INREMOVE1 state into the INREMOVE2 state
+            __attribute__((fallthrough));
+        }
+        default:
+            laik_log(LAIK_LL_Error, "Rank[%d] has invalid peer[%d] state <%d>", d->mylid, lid, d->peer[lid].state);
+        }
     }
 
-    laik_log(1, "Rank [%d] set group size to [%d]\n", d->mylid, d->world_size);
+    group->size = i2;
+    group->myid = group->fromParent[world->myid];
+    instance->locations = d->world_size;
+
+    laik_log_begin(LAIK_LL_Info);
+    laik_log_append("Rank [%d]: goup id [%d] parent location ids:", d->mylid, group->parent->gid);
+    for (int i = 0; i < i1; i++)
+    {
+        laik_log_append(" [%d]", group->parent->locationid[i]);
+    }
+    laik_log_append("\n");
+    laik_log_append("Rank [%d]: goup id [%d] world location ids:", d->mylid, world->gid);
+    for (int i = 0; i < i2; i++)
+    {
+        laik_log_append(" [%d]", world->locationid[i]);
+    }
+    laik_log_flush("\n");
     return group;
 }
 
-/// TODO: Create more subfunctions
 //*********************************************************************************
 Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 {
@@ -336,28 +490,36 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 
     instance = laik_new_instance(&laik_backend_ucp, d->world_size, d->mylid,
                                  d->epoch, d->phase, d->location, d);
-    Laik_Group *group = laik_create_group(instance, d->world_size);
-    group->size = d->world_size;
-    group->myid = (d->phase == 0) ? d->mylid : -1;
+    Laik_Group *group;
 
-    for (int i = 0; i < d->world_size; i++)
+    if (d->phase == 0)
     {
-        group->locationid[i] = i;
+        group = laik_create_group(instance, d->world_size);
+        // we are part of initial processes: no parent
+        // location IDs are process IDs in initial world
+        group->myid = d->mylid;
+
+        for (int i = 0; i < d->world_size; i++)
+        {
+            group->locationid[i] = i;
+        }
+
+        group->size = d->world_size;
+        instance->world = group;
     }
-    instance->world = group;
-
-    // Only new processes during a resize have a phase > 0
-    if (d->phase)
+    else
     {
+        // Only new processes during a resize have a phase > 0
         int number_new_connections;
 
+        // updates d->world_size
         number_new_connections = tcp_initialize_new_peers(d);
+        group = laik_create_group(instance, d->world_size);
 
         update_endpoints(number_new_connections);
 
-        Laik_Group *new_group = create_new_laik_group(d->world_size - number_new_connections);
-
-        laik_set_world(instance, new_group);
+        init_first_laik_group(d->world_size - number_new_connections, group);
+        laik_set_world(instance, group);
     }
 
     return instance;
@@ -462,54 +624,61 @@ static ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct ucx_context *reques
     }
     else
     {
-        // laik_log(1, "Rank [%d] Finish to %s %s\n", d->mylid, op_str, data_str);
+        laik_log(1, "Rank [%d] Finish to %s %s\n", d->mylid, op_str, data_str);
     }
 
     return status;
 }
 
 //*********************************************************************************
-static void send_handler(void *request, ucs_status_t, void *)
+static void send_handler(void *request, ucs_status_t status, void *user_data)
 {
+    (void)user_data;
+
     struct ucx_context *context = (struct ucx_context *)request;
-    // const char *str = (const char *)ctx;
+    laik_log(LAIK_LL_Info, "Send handler called with status: %s", ucs_status_string(status));
 
     context->completed = 1;
 }
 
 //*********************************************************************************
-static void recv_handler(void *request, ucs_status_t,
-                         const ucp_tag_recv_info_t *, void *)
+static void recv_handler(void *request, ucs_status_t status,
+                         const ucp_tag_recv_info_t *tag, void *user_data)
 {
+    (void)status;
+    (void)tag;
+    (void)user_data;
+
     struct ucx_context *context = (struct ucx_context *)request;
 
     context->completed = 1;
 }
 
 //*********************************************************************************
-ucp_tag_t create_tag(int src_rank, int dest_rank)
+ucp_tag_t create_tag(int src_lid, int dest_lid)
 {
-    return ((ucp_tag_t)src_rank << TAG_SOURCE_SHIFT) |
-           ((ucp_tag_t)dest_rank << TAG_DEST_SHIFT);
+    laik_log(LAIK_LL_Info, "Creating tag SRC LID <%d> DEST LID <%d> = <0x%lx>", src_lid, dest_lid,
+             ((ucp_tag_t)src_lid << TAG_SOURCE_SHIFT) | ((ucp_tag_t)dest_lid << TAG_DEST_SHIFT));
+    return ((ucp_tag_t)src_lid << TAG_SOURCE_SHIFT) |
+           ((ucp_tag_t)dest_lid << TAG_DEST_SHIFT);
 }
 
 //*********************************************************************************
-void laik_ucp_buf_send(int to_rank, char *buf, size_t count)
+void laik_ucp_buf_send(int to_lid, char *buf, size_t count)
 {
-    laik_log(LAIK_LL_Debug, "Rank [%d] => [%d]: Sending message with size %lu.\n", d->mylid, to_rank, count);
+    laik_log(LAIK_LL_Info, "Rank [%d] ==> [%d]: Sending message with size %lu.\n", d->mylid, to_lid, count);
     // laik_log_hexdump(2, count, &buf);
 
     ucp_request_param_t send_param;
     ucs_status_t status;
     ucs_status_ptr_t request;
-    ucp_tag_t specific_tag = create_tag(d->mylid, to_rank);
+    ucp_tag_t specific_tag = create_tag(d->mylid, to_lid);
 
     send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
                               UCP_OP_ATTR_FIELD_USER_DATA;
     send_param.cb.send = send_handler;
     send_param.user_data = (void *)UCX_MESSAGE_STRING;
-
-    request = ucp_tag_send_nbx((ucp_endpoints[to_rank]), (void *)buf, count, specific_tag,
+    request = ucp_tag_send_nbx((ucp_endpoints[to_lid]), (void *)buf, count, specific_tag,
                                &send_param);
     status = ucx_wait(ucp_worker, request, "send",
                       UCX_MESSAGE_STRING);
@@ -521,19 +690,25 @@ void laik_ucp_buf_send(int to_rank, char *buf, size_t count)
 
     if (status != UCS_OK)
     {
-        laik_log(LAIK_LL_Error, "Could not send message to %d\n", to_rank);
+        laik_log(LAIK_LL_Error, "Could not send message to %d\n", to_lid);
+    }
+    else
+    {
+        laik_log(LAIK_LL_Info, "Rank [%d] ==> [%d]: Sent message with size %lu.\n", d->mylid, to_lid, count);
     }
 }
 
 //*********************************************************************************
-void laik_ucp_buf_recv(int from_rank, char *buf, size_t count)
+void laik_ucp_buf_recv(int from_lid, char *buf, size_t count)
 {
+    laik_log(LAIK_LL_Info, "Rank [%d] <= Rank [%d] receiving message with size %lu.\n", d->mylid, from_lid, count);
+
     ucp_request_param_t recv_param;
     ucs_status_ptr_t request;
     ucp_tag_recv_info_t info_tag;
     ucs_status_t status;
     ucp_tag_message_h msg_tag;
-    ucp_tag_t specific_tag = create_tag(from_rank, d->mylid);
+    ucp_tag_t specific_tag = create_tag(from_lid, d->mylid);
     ucp_tag_t tag_mask = (ucp_tag_t)(-1) << TAG_SOURCE_SHIFT;
 
     for (;;)
@@ -569,14 +744,15 @@ void laik_ucp_buf_recv(int from_rank, char *buf, size_t count)
 
     if (status != UCS_OK)
     {
-        laik_log(LAIK_LL_Error, "Rank [%d] <= Rank [%d] encountered error while receiving\n", d->mylid, from_rank);
+        laik_log(LAIK_LL_Error, "Rank [%d] <= Rank [%d] encountered error while receiving\n", d->mylid, from_lid);
     }
-
-    laik_log(LAIK_LL_Debug, "Rank [%d] <= Rank [%d] received message with size %lu.\n", d->mylid, from_rank, count);
-    // laik_log_hexdump(2, count, &buf);
+    else
+    {
+        laik_log(LAIK_LL_Info, "Rank [%d] <= Rank [%d] received message with size %lu.\n", d->mylid, from_lid, count);
+    }
 }
 
-/// TODO: implementaion is too slow for a lot of ranks, possible solution 'tree' like communication
+/// TODO: implementaion is very slow for a lot of ranks, possible solution 'tree' like communication
 //*********************************************************************************
 void barrier()
 {
@@ -586,18 +762,27 @@ void barrier()
     {
         for (int i = 1; i < d->world_size; ++i)
         {
-            laik_ucp_buf_recv(i, buf, sizeof(buf));
+            if (d->peer[i].state < INREMOVE1)
+            {
+                laik_ucp_buf_recv(i, buf, sizeof(buf));
+            }
         }
 
         for (int i = 1; i < d->world_size; ++i)
         {
-            laik_ucp_buf_send(i, buf, sizeof(buf));
+            if (d->peer[i].state < INREMOVE1)
+            {
+                laik_ucp_buf_send(i, buf, sizeof(buf));
+            }
         }
     }
     else
     {
-        laik_ucp_buf_send(0, buf, sizeof(buf));
-        laik_ucp_buf_recv(0, buf, sizeof(buf));
+        if (d->state < INREMOVE1)
+        {
+            laik_ucp_buf_send(0, buf, sizeof(buf));
+            laik_ucp_buf_recv(0, buf, sizeof(buf));
+        }
     }
 
     laik_log(2, "============================================ Rank [%d] leaves the barrier ============================================\n", d->mylid);
@@ -606,6 +791,7 @@ void barrier()
 //*********************************************************************************
 static void laik_ucp_exec(Laik_ActionSeq *as)
 {
+    laik_log(LAIK_LL_Info, "Rank [%d] entering execute", d->mylid);
     Laik_Action *a = as->action;
     Laik_TransitionContext *tc = as->context[0];
     Laik_MappingList *fromList = tc->fromList;
@@ -625,7 +811,12 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
         case LAIK_AT_BufSend:
         {
             Laik_A_BufSend *aa = (Laik_A_BufSend *)a;
-            laik_ucp_buf_send(aa->to_rank, aa->buf, aa->count * elemsize);
+            int to_lid = laik_group_locationid(tc->transition->group, aa->to_rank);
+            // if (to_lid != aa->to_rank)
+            {
+                laik_log(LAIK_LL_Info, "Rank [%d] ==> (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->to_rank, to_lid, tc->transition->group->gid);
+            }
+            laik_ucp_buf_send(to_lid, aa->buf, aa->count * elemsize);
             break;
         }
         /* case LAIK_AT_RBufSend:
@@ -635,7 +826,12 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
         case LAIK_AT_BufRecv:
         {
             Laik_A_BufRecv *aa = (Laik_A_BufRecv *)a;
-            laik_ucp_buf_recv(aa->from_rank, aa->buf, aa->count * elemsize);
+            int from_lid = laik_group_locationid(tc->transition->group, aa->from_rank);
+            // if (from_lid != aa->from_rank)
+            {
+                laik_log(LAIK_LL_Info, "Rank [%d] <== (Rank %d was mapped to LID %d) group id [%d]", d->mylid, aa->from_rank, from_lid, tc->transition->group->gid);
+            }
+            laik_ucp_buf_recv(from_lid, aa->buf, aa->count * elemsize);
             break;
         }
         case LAIK_AT_CopyFromBuf:
@@ -740,7 +936,7 @@ void close_endpoints(void)
 //*********************************************************************************
 static void laik_ucp_finalize(Laik_Instance *inst)
 {
-    laik_log(1, "Rank [%d] is preparing to exit\n", d->mylid);
+    laik_log(LAIK_LL_Info, "Rank [%d] is preparing to exit\n", d->mylid);
     assert(inst == instance);
 
     /* close(socket_fd);
@@ -755,64 +951,234 @@ static void laik_ucp_finalize(Laik_Instance *inst)
         free(fds);
     } */
 
-    free(d->peer);
+    /* free(d->peer);
 
     close_endpoints();
 
     // also frees d->address
     ucp_worker_destroy(ucp_worker);
 
-    laik_log(1, "Rank [%d] is exiting\n", d->mylid);
+    laik_log(LAIK_LL_Info, "Rank [%d] is exiting\n", d->mylid);
 
-    free(d);
+    free(d); */
 }
+
+//*********************************************************************************
+void delete_peer(Peer *peer, int lid)
+{
+    laik_log(LAIK_LL_Debug, "Rank [%d]: Deleting peer with Rank [%d]", d->mylid, lid);
+    free(peer->address);
+
+    d->world_size--;
+    assert(d->world_size > 0);
+}
+
+//*********************************************************************************
+/* void organize_peers(void)
+{
+    // d->world_size can change during peer deletion
+    laik_log(LAIK_LL_Info, "Rank [%d] starting to organize peers", d->mylid);
+    int world_size = d->world_size;
+
+    int i = world_size - 1;
+
+    // i marks the last element in the array
+    for (int k = 0; k < i && i >= 0;)
+    {
+        if (d->peer[i].dead == false)
+        {
+            if (d->peer[k].dead == true)
+            {
+                // change k-th member to i-th member
+                d->peer[k].dead = d->peer[i].dead;
+
+                assert(d->peer[k].addrlen == d->peer[i].addrlen);
+                d->peer[k].addrlen = d->peer[i].addrlen;
+                memcpy(d->peer[k].address, d->peer[i].address, d->peer[i].addrlen);
+
+                ucp_ep_destroy(ucp_endpoints[k]);
+                ucp_endpoints[k] = ucp_endpoints[i];
+
+                delete_peer(&d->peer[i], i);
+
+                if (d->mylid == i)
+                {
+                    d->mylid = k;
+                    d->dead = false;
+                    laik_log(LAIK_LL_Info, "Rank [%d] changed its Rank to [%d]", i, k);
+                }
+
+                --i;
+            }
+
+            ++k;
+        }
+        else
+        {
+            delete_peer(&(d->peer[i]), i);
+            --i;
+            // we do not increase k here
+        }
+    }
+
+    if (world_size != d->world_size)
+    {
+        d->peer = realloc(d->peer, d->world_size * sizeof(Peer));
+        if (d->peer == NULL)
+        {
+            laik_panic("Could not reallocate peer array after peer deletion");
+        }
+        else
+        {
+            laik_log(LAIK_LL_Info, "Deleted <%d> peers. New world size is <%d>", world_size - d->world_size, d->world_size);
+        }
+    }
+} */
 
 /// TODO: tree communication instead of one to all
 //*********************************************************************************
-void remove_peer(ResizeCommand *resize_command)
+void mark_peers_to_be_removed(ResizeCommand *resize_command)
 {
-    if (d->mylid == 0)
+    size_t number_to_remove = 0;
+    size_t *ranks_to_remove;
+    int number_sends = 0;
+
+    if (d->state < INREMOVE1)
     {
-        laik_log_begin(LAIK_LL_Info);
-        laik_log_append("Removing ranks: ");
-        for (size_t i = 0; i < resize_command->number_to_remove; i++)
+        if (d->mylid == 0)
         {
-            laik_log_append("[%lu] ", resize_command->ranks_to_remove[i]);
-        }
-        laik_log_flush("\n");
+            if (resize_command == NULL)
+            {
+                laik_log(LAIK_LL_Info, "Rank[%d] No ranks have to be removed", d->mylid);
 
-        for (int i = 1; i < d->world_size; i++)
+                for (int i = 1; i < d->world_size; i++)
+                {
+                    if (d->peer[i].state < INREMOVE1)
+                    {
+                        laik_ucp_buf_send(i, (char *)&(number_to_remove), sizeof(size_t));
+                        number_sends++;
+                    }
+                }
+            }
+            else
+            {
+                laik_log_begin(LAIK_LL_Info);
+                laik_log_append("Rank[%d] Removing ranks: ", d->mylid);
+                for (size_t i = 0; i < resize_command->number_to_remove; i++)
+                {
+                    laik_log_append("[%lu] ", resize_command->ranks_to_remove[i]);
+                }
+                laik_log_flush("\n");
+
+                for (int i = 1; i < d->world_size; i++)
+                {
+                    if (d->peer[i].state < INREMOVE1)
+                    {
+                        laik_ucp_buf_send(i, (char *)&(resize_command->number_to_remove), sizeof(size_t));
+                        if (resize_command->number_to_remove > 0)
+                        {
+                            laik_ucp_buf_send(i, (char *)resize_command->ranks_to_remove, resize_command->number_to_remove * sizeof(size_t));
+                        }
+                        number_sends++;
+                    }
+                }
+
+                laik_log(LAIK_LL_Debug, "Rank [%d] finished sending terminate commands to <%d> many peers", d->mylid, number_sends);
+
+                number_to_remove = resize_command->number_to_remove;
+                ranks_to_remove = resize_command->ranks_to_remove;
+            }
+        }
+        else
         {
-            laik_ucp_buf_send(i, (char *)&(resize_command->number_to_remove), sizeof(size_t));
-            laik_ucp_buf_send(i, (char *)resize_command->ranks_to_remove, resize_command->number_to_remove * sizeof(size_t));
+            laik_ucp_buf_recv(0, (char *)&number_to_remove, sizeof(size_t));
+
+            if (number_to_remove > 0)
+            {
+                ranks_to_remove = malloc(number_to_remove * sizeof(size_t));
+
+                if (ranks_to_remove == NULL)
+                {
+                    laik_panic("Could not allocate heap for ranks to remove array");
+                }
+
+                laik_ucp_buf_recv(0, (char *)ranks_to_remove, number_to_remove * sizeof(size_t));
+            }
+            laik_log(LAIK_LL_Debug, "Rank [%d] finished receiving terminate commands", d->mylid);
         }
-
-        laik_log(LAIK_LL_Info, "Rank [%d] finished sending terminate commands", d->mylid);
-    }
-    else
-    {
-        size_t number_to_remove = 0;
-        laik_ucp_buf_recv(0, (char *)&number_to_remove, sizeof(size_t));
-
-        size_t *ranks_to_remove = malloc(number_to_remove * sizeof(size_t));
-
-        if (ranks_to_remove == NULL)
-        {
-            laik_panic("Could not allocate heap for ranks to remove array");
-        }
-
-        laik_ucp_buf_recv(0, (char *)ranks_to_remove, number_to_remove * sizeof(size_t));
 
         for (size_t i = 0; i < number_to_remove; i++)
         {
-            if ((size_t)d->mylid == ranks_to_remove[i])
+            // only update if information is new
+            if (d->peer[ranks_to_remove[i]].state < INREMOVE1)
             {
-                laik_log(LAIK_LL_Info, "Rank [%d] received termination command.", d->mylid);
+                if ((size_t)d->mylid == ranks_to_remove[i])
+                {
+                    d->state = INREMOVE1;
+                    laik_log(LAIK_LL_Info, "Rank [%d] is marked as dead.", d->mylid);
+                }
+
+                // mark peer
+                d->peer[ranks_to_remove[i]].state = INREMOVE1;
+                /// TODO: free resources here?
+
+                d->number_dead++;
             }
         }
 
-        free(ranks_to_remove);
+        if (d->mylid > 0 && number_to_remove > 0)
+        {
+            free(ranks_to_remove);
+        }
+
+        /* if (d->dead == false)
+        {
+            organize_peers();
+        } */
     }
+}
+
+//*********************************************************************************
+// NEW => INHERITED
+// INHERITED => INHERITED
+// INREMOVE1 => INREMOVE2
+// INREMOVE2 => DEAD
+// DEAD => DEAD
+void update_peer_states(void)
+{
+    for (int i = 0; i < d->world_size; ++i)
+    {
+        switch (d->peer[i].state)
+        {
+        case (NEW):
+        {
+            d->peer[i].state = INHERITED;
+            break;
+        }
+        case (INREMOVE1):
+        {
+            d->peer[i].state = INREMOVE2;
+            break;
+        }
+        case (INREMOVE2):
+        {
+            d->peer[i].state = DEAD;
+            break;
+        }
+        case (INHERITED):
+        {
+            __attribute__((fallthrough));
+        }
+        case (DEAD):
+        {
+            break;
+        }
+        default:
+            laik_log(LAIK_LL_Error, "Rank [%d] has invalid peer[%d] state <%d>", d->mylid, i, d->peer[i].state);
+        }
+    }
+
+    d->state = d->peer[d->mylid].state;
 }
 
 //*********************************************************************************
@@ -825,33 +1191,40 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
 
     /// TODO: DO i really need a barrier here? socket interaction should be an implicit barrier
     // for now helpful while debugging
-    // barrier();
+    barrier();
 
-    /// TODO: Implement command usage
-    ResizeCommand *resize_commands = parse_resize_commands();
-
-    if (resize_commands != NULL)
+    // returns NULL if there was an error during parsing
+    ResizeCommand *resize_commands = NULL;
+    if (d->mylid == 0)
     {
-        laik_log(LAIK_LL_Info, "Expecting %lu new connections", resize_commands->number_to_add);
-        remove_peer(resize_commands);
+        resize_commands = parse_resize_commands();
+    }
 
-        free(resize_commands);
-    }
-    else
-    {
-        // nothing has to be done
-        return NULL;
-    }
+    int old_number_of_dead_peers = d->number_dead;
+    mark_peers_to_be_removed(resize_commands);
+    update_peer_states();
+
+    free(resize_commands);
 
     // ucp cannot establish connections on its own
     size_t number_new_connections = tcp_add_new_peers(d, instance);
+    laik_log(LAIK_LL_Info, "Rank [%d] processed join and remove requests", d->mylid);
 
     if (number_new_connections)
     {
         update_endpoints(number_new_connections);
-        return create_new_laik_group(d->world_size - number_new_connections);
     }
 
+    if (old_number_of_dead_peers != d->number_dead || number_new_connections)
+    {
+        return create_new_laik_group();
+    }
+
+    // nothing changed
+    if (d->mylid == 0)
+    {
+        laik_log(LAIK_LL_Info, "Rank [%d] Nothing has to be done in resize", d->mylid);
+    }
     return NULL;
 }
 
@@ -861,7 +1234,8 @@ static void laik_ucp_finish_resize(void)
     // a resize must have been started
     assert(instance->world && instance->world->parent);
 
-    laik_log(1, "Rank [%d] reached fisish resize\n", d->mylid);
+    laik_log(LAIK_LL_Info, "Rank [%d] reached finish resize\n", d->mylid);
+    /// TODO: free resources?
 }
 
 //*********************************************************************************

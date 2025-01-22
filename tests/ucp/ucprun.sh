@@ -29,6 +29,9 @@ total=$((procs + spares))
 for (( i=1; i<=$total; i++ )); do
     # echo Running $@
     $@ &
+    # print process ids and capture them for resize_commands later on
+    #pid=$!
+    #echo "Started process with PID: $pid"
 done
 [ ! -z "$remove" ] && sleep .1 && echo "c $remove" | nc localhost 7777 &> /dev/null
 wait

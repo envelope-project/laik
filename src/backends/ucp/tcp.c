@@ -25,20 +25,45 @@ bool check_local(char *host);
 //*********************************************************************************
 static inline void send_ucx_address(InstData *d, int to_fd, int lid)
 {
-    write(to_fd, &(d->peer[lid].addrlen), sizeof(size_t));
-    write(to_fd, d->peer[lid].address, d->peer[lid].addrlen);
+    size_t bytes_written = 0;
+    bytes_written = write(to_fd, &(d->peer[lid].addrlen), sizeof(size_t));
+    assert(bytes_written == sizeof(size_t));
+    bytes_written = write(to_fd, d->peer[lid].address, d->peer[lid].addrlen);
+    assert(bytes_written == d->peer[lid].addrlen);
+    bytes_written = write(to_fd, &(d->peer[lid].state), sizeof(State));
+    assert(bytes_written == sizeof(State));
+}
+
+//*********************************************************************************
+static inline void send_ucx_address_state(InstData *d, int to_fd, int lid, State state)
+{
+    size_t bytes_written = 0;
+    bytes_written = write(to_fd, &(d->peer[lid].addrlen), sizeof(size_t));
+    assert(bytes_written == sizeof(size_t));
+    bytes_written = write(to_fd, d->peer[lid].address, d->peer[lid].addrlen);
+    assert(bytes_written == d->peer[lid].addrlen);
+    bytes_written = write(to_fd, &(state), sizeof(State));
+    assert(bytes_written == sizeof(State));
 }
 
 //*********************************************************************************
 static inline void receive_ucx_address(InstData *d, int from_fd, int lid)
 {
-    read(from_fd, &d->peer[lid].addrlen, sizeof(d->peer[lid].addrlen));
-    d->peer[lid].address = (ucp_address_t *)malloc(d->peer[lid].addrlen);
-    if (d->peer[lid].address == NULL)
+    if (d->state < DEAD)
     {
-        laik_panic("Could not allocate heap to receive peer ucx address\n");
+        size_t bytes_read = 0;
+        bytes_read = read(from_fd, &(d->peer[lid].addrlen), sizeof(size_t));
+        assert(bytes_read == sizeof(size_t));
+        d->peer[lid].address = (ucp_address_t *)malloc(d->peer[lid].addrlen);
+        if (d->peer[lid].address == NULL)
+        {
+            laik_panic("Could not allocate heap to receive peer ucx address\n");
+        }
+        bytes_read = read(from_fd, d->peer[lid].address, d->peer[lid].addrlen);
+        assert(bytes_read == d->peer[lid].addrlen);
+        bytes_read = read(from_fd, &(d->peer[lid].state), sizeof(State));
+        assert(bytes_read == sizeof(State));
     }
-    read(from_fd, d->peer[lid].address, d->peer[lid].addrlen);
 }
 
 //*********************************************************************************
@@ -150,6 +175,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
 
         d->peer[0].address = d->address;
         d->peer[0].addrlen = d->addrlen;
+        d->peer[0].state = d->state;
 
         fds = (int *)calloc(d->world_size, sizeof(int));
         if (fds == NULL)
@@ -176,6 +202,7 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
     }
     else
     {
+        // newcomers and initial non master processes
         socket_fd = socket(PF_INET, SOCK_STREAM, 0);
         if (socket_fd < 0)
         {
@@ -188,9 +215,12 @@ void tcp_initialize_setup_connection(char *home_host, const int home_port, InstD
             exit(1);
         }
 
+        // peer array not initialized yet
         write(socket_fd, &d->addrlen, sizeof(size_t));
         write(socket_fd, d->address, d->addrlen);
+        write(socket_fd, &(d->state), sizeof(State));
 
+        // peer array is being initialized here
         receive_instance_data(d, socket_fd);
 
         if (d->mylid < 0)
@@ -261,9 +291,13 @@ size_t add_new_peers_master(InstData *d, Laik_Instance *instance)
     int number_new_connections = d->world_size - old_world_size;
     assert(number_new_connections >= 0);
 
+    // broadcast number new connections
     for (int i = 1; i < old_world_size; i++)
     {
-        write(fds[i], &number_new_connections, sizeof(int));
+        if (d->peer[i].state < DEAD)
+        {
+            write(fds[i], &number_new_connections, sizeof(int));
+        }
     }
 
     if (number_new_connections == 0)
@@ -278,24 +312,16 @@ size_t add_new_peers_master(InstData *d, Laik_Instance *instance)
         laik_panic("Not enough memory for peers\n");
     }
 
+    // collect new addresses
     for (int i = old_world_size; i < d->world_size; i++)
     {
-        read(fds[i], &(d->peer[i].addrlen), sizeof(size_t));
-        d->peer[i].address = (ucp_address_t *)malloc(d->peer[i].addrlen);
-
-        if (d->peer[i].address == NULL)
-        {
-            laik_panic("Not enough memory for peer address\n");
-        }
-
-        read(fds[i], d->peer[i].address, d->peer[i].addrlen);
-
-        laik_log(1, "Received new address with length %lu!\n", d->peer[i].addrlen);
+        receive_ucx_address(d, fds[i], i);
     }
 
     int epoch = laik_epoch(instance);
     int phase = laik_phase(instance);
 
+    // broadcast information to newcomers
     for (int i = old_world_size; i < d->world_size; i++)
     {
         // broadcast inst data to newcomers
@@ -315,16 +341,19 @@ size_t add_new_peers_master(InstData *d, Laik_Instance *instance)
         write(fds[i], &(d->world_size), sizeof(int));
         for (int k = old_world_size; k < d->world_size; k++)
         {
-            send_ucx_address(d, fds[i], k);
+            send_ucx_address_state(d, fds[i], k, NEW);
         }
     }
 
     // broadcast newcomer addresses to old ranks
     for (int i = 1; i < old_world_size; i++)
     {
-        for (int k = old_world_size; k < d->world_size; k++)
+        if (d->peer[i].state < DEAD)
         {
-            send_ucx_address(d, fds[i], k);
+            for (int k = old_world_size; k < d->world_size; k++)
+            {
+                send_ucx_address_state(d, fds[i], k, NEW);
+            }
         }
     }
 
@@ -337,7 +366,11 @@ size_t add_new_peers_non_master(InstData *d, Laik_Instance *instance)
     (void)instance;
 
     int number_new_connections = 0;
-    read(socket_fd, &number_new_connections, sizeof(int));
+
+    if (d->state < DEAD)
+    {
+        read(socket_fd, &number_new_connections, sizeof(int));
+    }
 
     laik_log(1, "Rank [%d] received %d new connections\n", d->mylid, number_new_connections);
 
@@ -374,15 +407,6 @@ size_t tcp_add_new_peers(InstData *d, Laik_Instance *instance)
         number_new_connections = add_new_peers_non_master(d, instance);
     }
     return number_new_connections;
-}
-
-//*********************************************************************************
-size_t tcp_remove_peer(InstData *d, Laik_Instance *instance)
-{
-    (void)d;
-    (void)instance;
-
-    return 0;
 }
 
 //*********************************************************************************

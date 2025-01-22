@@ -134,6 +134,7 @@ static inline void parse_remove_argument(ResizeCommand *resize_command, const ch
 }
 
 //*********************************************************************************
+///TODO: use regular expressions instead
 ResizeCommand *parse_resize_commands(void)
 {
     FILE *commands_file = fopen(RESIZE_COMMANDS_FILE_PATH, "r");

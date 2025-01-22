@@ -25,12 +25,6 @@ size_t tcp_add_new_peers(InstData *d, Laik_Instance *instance);
 
 //*********************************************************************************
 /*
-    Broadcast removed peers and update InstanceData accordingly
-*/
-size_t tcp_remove_peer(InstData *d, Laik_Instance *instance);
-
-//*********************************************************************************
-/*
     This function is called if the current process is started during a resize event
     The process receives the newcomer addresses here
 */
