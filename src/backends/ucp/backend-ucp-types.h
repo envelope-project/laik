@@ -8,10 +8,10 @@
 // Initialized as NEW
 typedef enum _State
 {
-    NEW = 1,   // process is new to group
-    INHERITED, // process is still active in new group
+    NEW = 1,   // process is only in new group
+    INHERITED, // process is in old and new group
     INREMOVE1, // process is marked to be removed
-    INREMOVE2, // process is is no longer in laik group
+    INREMOVE2, // process will be removed from laik group (is only in old group)
     DEAD       // process is no longer used
 } State;
 

@@ -79,6 +79,8 @@ static Laik_Backend laik_backend_ucp = {
     //.sync        = laik_ucp_sync
 };
 
+#define LAIK_AT_UcpMapSend (LAIK_AT_Backend + 50)
+
 //*********************************************************************************
 static void request_init(void *request)
 {
@@ -284,7 +286,7 @@ void init_first_laik_group(int old_world_size, Laik_Group *world)
     world->size = i2;
     world->parent = parent;
 
-    laik_log_begin(LAIK_LL_Info);
+    /* laik_log_begin(LAIK_LL_Info);
     laik_log_append("Rank [%d]: goup id [%d] parent location ids:", d->mylid, world->parent->gid);
     for (int i = 0; i < i1; i++)
     {
@@ -295,7 +297,7 @@ void init_first_laik_group(int old_world_size, Laik_Group *world)
     for (int i = 0; i < i2; i++)
     {
         laik_log_append(" [%d]", world->locationid[i]);
-    }
+    } */
     laik_log_flush("\n");
 }
 
@@ -357,7 +359,7 @@ Laik_Group *create_new_laik_group(void)
     group->myid = group->fromParent[world->myid];
     instance->locations = d->world_size;
 
-    laik_log_begin(LAIK_LL_Info);
+    /* laik_log_begin(LAIK_LL_Info);
     laik_log_append("Rank [%d]: goup id [%d] parent location ids:", d->mylid, group->parent->gid);
     for (int i = 0; i < i1; i++)
     {
@@ -369,7 +371,7 @@ Laik_Group *create_new_laik_group(void)
     {
         laik_log_append(" [%d]", world->locationid[i]);
     }
-    laik_log_flush("\n");
+    laik_log_flush("\n"); */
     return group;
 }
 
@@ -459,7 +461,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
         laik_panic("Could not init ucp!\n");
     }
 
-    // TODO: field_mask and thread_mode can be used for optimizations
+    /// TODO: field_mask and thread_mode can be used for optimizations
     worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
     worker_params.thread_mode = UCS_THREAD_MODE_SINGLE;
 
@@ -509,7 +511,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
     }
     else
     {
-        // Only new processes during a resize have a phase > 0
+        // Only joining processes during a resize have a phase > 0
         int number_new_connections;
 
         // updates d->world_size
@@ -528,15 +530,15 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 //*********************************************************************************
 static void laik_ucp_prepare(Laik_ActionSeq *as)
 {
-    if (laik_log_begin(1))
-    {
-        laik_log_append("UCP backend prepare:\n");
-        laik_log_ActionSeq(as, false);
-        laik_log_flush(0);
-    }
-
     // mark as prepared by UCP backend: for UCP-specific cleanup + action logging
     as->backend = &laik_backend_ucp;
+
+    if (laik_log_begin(2))
+    {
+        laik_log_append("UCP backend prepare:\n");
+        laik_log_ActionSeq(as, true);
+        laik_log_flush(0);
+    }
 
     bool changed = laik_aseq_splitTransitionExecs(as);
     laik_log_ActionSeqIfChanged(changed, as, "After splitting transition execs");
@@ -657,7 +659,8 @@ static void recv_handler(void *request, ucs_status_t status,
 //*********************************************************************************
 ucp_tag_t create_tag(int src_lid, int dest_lid)
 {
-    laik_log(LAIK_LL_Info, "Creating tag SRC LID <%d> DEST LID <%d> = <0x%lx>", src_lid, dest_lid,
+    laik_log(LAIK_LL_Debug, "Creating tag SRC LID <%d> DEST LID <%d> = <0x%lx>",
+             src_lid, dest_lid,
              ((ucp_tag_t)src_lid << TAG_SOURCE_SHIFT) | ((ucp_tag_t)dest_lid << TAG_DEST_SHIFT));
     return ((ucp_tag_t)src_lid << TAG_SOURCE_SHIFT) |
            ((ucp_tag_t)dest_lid << TAG_DEST_SHIFT);
@@ -762,7 +765,7 @@ void barrier()
     {
         for (int i = 1; i < d->world_size; ++i)
         {
-            if (d->peer[i].state < INREMOVE1)
+            if (d->peer[i].state < DEAD)
             {
                 laik_ucp_buf_recv(i, buf, sizeof(buf));
             }
@@ -770,7 +773,7 @@ void barrier()
 
         for (int i = 1; i < d->world_size; ++i)
         {
-            if (d->peer[i].state < INREMOVE1)
+            if (d->peer[i].state < DEAD)
             {
                 laik_ucp_buf_send(i, buf, sizeof(buf));
             }
@@ -778,7 +781,7 @@ void barrier()
     }
     else
     {
-        if (d->state < INREMOVE1)
+        if (d->state < DEAD)
         {
             laik_ucp_buf_send(0, buf, sizeof(buf));
             laik_ucp_buf_recv(0, buf, sizeof(buf));
@@ -812,26 +815,44 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
         {
             Laik_A_BufSend *aa = (Laik_A_BufSend *)a;
             int to_lid = laik_group_locationid(tc->transition->group, aa->to_rank);
-            // if (to_lid != aa->to_rank)
+            if (to_lid != aa->to_rank)
             {
                 laik_log(LAIK_LL_Info, "Rank [%d] ==> (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->to_rank, to_lid, tc->transition->group->gid);
             }
             laik_ucp_buf_send(to_lid, aa->buf, aa->count * elemsize);
             break;
         }
-        /* case LAIK_AT_RBufSend:
+        case LAIK_AT_RBufSend:
         {
+            Laik_A_RBufSend *aa = (Laik_A_RBufSend *)a;
+            int to_lid = laik_group_locationid(tc->transition->group, aa->to_rank);
+            if (to_lid != aa->to_rank)
+            {
+                laik_log(LAIK_LL_Info, "Rank [%d] ==> (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->to_rank, to_lid, tc->transition->group->gid);
+            }
+            laik_ucp_buf_send(to_lid, as->buf[aa->bufID] + aa->offset, aa->count * elemsize);
             break;
-        } */
+        }
         case LAIK_AT_BufRecv:
         {
             Laik_A_BufRecv *aa = (Laik_A_BufRecv *)a;
             int from_lid = laik_group_locationid(tc->transition->group, aa->from_rank);
-            // if (from_lid != aa->from_rank)
+            if (from_lid != aa->from_rank)
             {
                 laik_log(LAIK_LL_Info, "Rank [%d] <== (Rank %d was mapped to LID %d) group id [%d]", d->mylid, aa->from_rank, from_lid, tc->transition->group->gid);
             }
             laik_ucp_buf_recv(from_lid, aa->buf, aa->count * elemsize);
+            break;
+        }
+        case LAIK_AT_RBufRecv:
+        {
+            Laik_A_RBufRecv *aa = (Laik_A_RBufRecv *)a;
+            int from_lid = laik_group_locationid(tc->transition->group, aa->from_rank);
+            if (from_lid != aa->from_rank)
+            {
+                laik_log(LAIK_LL_Info, "Rank [%d] <== (Rank %d was mapped to LID %d) group id [%d]", d->mylid, aa->from_rank, from_lid, tc->transition->group->gid);
+            }
+            laik_ucp_buf_recv(from_lid, as->buf[aa->bufID] + aa->offset, aa->count * elemsize);
             break;
         }
         case LAIK_AT_CopyFromBuf:
@@ -973,68 +994,6 @@ void delete_peer(Peer *peer, int lid)
     assert(d->world_size > 0);
 }
 
-//*********************************************************************************
-/* void organize_peers(void)
-{
-    // d->world_size can change during peer deletion
-    laik_log(LAIK_LL_Info, "Rank [%d] starting to organize peers", d->mylid);
-    int world_size = d->world_size;
-
-    int i = world_size - 1;
-
-    // i marks the last element in the array
-    for (int k = 0; k < i && i >= 0;)
-    {
-        if (d->peer[i].dead == false)
-        {
-            if (d->peer[k].dead == true)
-            {
-                // change k-th member to i-th member
-                d->peer[k].dead = d->peer[i].dead;
-
-                assert(d->peer[k].addrlen == d->peer[i].addrlen);
-                d->peer[k].addrlen = d->peer[i].addrlen;
-                memcpy(d->peer[k].address, d->peer[i].address, d->peer[i].addrlen);
-
-                ucp_ep_destroy(ucp_endpoints[k]);
-                ucp_endpoints[k] = ucp_endpoints[i];
-
-                delete_peer(&d->peer[i], i);
-
-                if (d->mylid == i)
-                {
-                    d->mylid = k;
-                    d->dead = false;
-                    laik_log(LAIK_LL_Info, "Rank [%d] changed its Rank to [%d]", i, k);
-                }
-
-                --i;
-            }
-
-            ++k;
-        }
-        else
-        {
-            delete_peer(&(d->peer[i]), i);
-            --i;
-            // we do not increase k here
-        }
-    }
-
-    if (world_size != d->world_size)
-    {
-        d->peer = realloc(d->peer, d->world_size * sizeof(Peer));
-        if (d->peer == NULL)
-        {
-            laik_panic("Could not reallocate peer array after peer deletion");
-        }
-        else
-        {
-            laik_log(LAIK_LL_Info, "Deleted <%d> peers. New world size is <%d>", world_size - d->world_size, d->world_size);
-        }
-    }
-} */
-
 /// TODO: tree communication instead of one to all
 //*********************************************************************************
 void mark_peers_to_be_removed(ResizeCommand *resize_command)
@@ -1130,11 +1089,6 @@ void mark_peers_to_be_removed(ResizeCommand *resize_command)
         {
             free(ranks_to_remove);
         }
-
-        /* if (d->dead == false)
-        {
-            organize_peers();
-        } */
     }
 }
 
@@ -1204,7 +1158,7 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
     mark_peers_to_be_removed(resize_commands);
     update_peer_states();
 
-    free(resize_commands);
+    free_resize_commands(resize_commands);
 
     // ucp cannot establish connections on its own
     size_t number_new_connections = tcp_add_new_peers(d, instance);
