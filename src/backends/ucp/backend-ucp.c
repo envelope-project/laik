@@ -25,6 +25,7 @@
 #include "tcp.h"
 #include "command_parser.h"
 #include "backend-ucp-types.h"
+#include "rdma_memory_handler.h"
 
 //*********************************************************************************
 
@@ -60,6 +61,7 @@ static void laik_ucp_exec(Laik_ActionSeq *as);
 static void laik_ucp_finalize(Laik_Instance *);
 static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs);
 static void laik_ucp_finish_resize(void);
+static bool laik_ucp_log_action(Laik_Action *a);
 
 /* static void laik_ucp_updateGroup(Laik_Group *);
 static bool laik_ucp_log_action(Laik_Action *a);
@@ -73,15 +75,64 @@ static Laik_Backend laik_backend_ucp = {
     .exec = laik_ucp_exec,
     .finalize = laik_ucp_finalize,
     .resize = laik_ucp_resize,
-    .finish_resize = laik_ucp_finish_resize
+    .finish_resize = laik_ucp_finish_resize,
+    .log_action = laik_ucp_log_action
     //.updateGroup = laik_ucp_updateGroup,
-    //.log_action  = laik_ucp_log_action,
     //.sync        = laik_ucp_sync
 };
 
-#define LAIK_AT_UcpMapSend (LAIK_AT_Backend + 50)
+//*********************************************************************************
+// backend internal actions
+
+#define LAIK_AT_UcpMapRecvAndUnpack (LAIK_AT_Backend + 50)
+#define LAIK_AT_UcpMapPackAndSend (LAIK_AT_Backend + 51)
+
+#define LAIK_AT_UcpRdmaSend (LAIK_AT_Backend + 52)
+#define LAIK_AT_UcpRdmaRecv (LAIK_AT_Backend + 53)
+
+// action structs are packed
+#pragma pack(push, 1)
+
+typedef struct _LAIK_A_UcpMapPackAndSend
+{
+    Laik_Action h;
+    int to_rank;
+    int fromMapNo;
+    Laik_Range *range;
+    unsigned int count;
+} LAIK_A_UcpMapPackAndSend;
+
+typedef struct _LAIK_A_UcpMapRecvAndUnpack
+{
+    Laik_Action h;
+    int from_rank;
+    int toMapNo;
+    Laik_Range *range;
+    unsigned int count;
+} LAIK_A_UcpMapRecvAndUnpack;
+
+typedef struct _LAIK_A_UcpRdmaSend
+{
+    Laik_Action h;
+    int to_rank;
+    unsigned int offset;
+    unsigned int count;
+    char *buffer;
+} LAIK_A_UcpRdmaSend;
+
+typedef struct _LAIK_A_UcpRdmaRecv
+{
+    Laik_Action h;
+    int from_rank;
+    unsigned int offset;
+    unsigned int count;
+    char *buffer;
+} LAIK_A_UcpRdmaRecv;
+
+#pragma pack(pop)
 
 //*********************************************************************************
+// struct for synchronous communication
 static void request_init(void *request)
 {
     struct ucx_context *context = (struct ucx_context *)request;
@@ -446,7 +497,8 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
                             UCP_PARAM_FIELD_REQUEST_SIZE |
                             UCP_PARAM_FIELD_REQUEST_INIT |
                             UCP_PARAM_FIELD_NAME;
-    ucp_params.features = UCP_FEATURE_TAG;
+    ucp_params.features = UCP_FEATURE_TAG |
+                          UCP_FEATURE_RMA;
     ucp_params.request_size = sizeof(struct ucx_context);
     ucp_params.request_init = request_init;
     ucp_params.name = "ucp backend";
@@ -528,6 +580,229 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 }
 
 //*********************************************************************************
+void aseq_add_rdma_send(Laik_ActionSeq *as, int round,
+                        char *from_buf, unsigned int off,
+                        unsigned int count, int to)
+{
+    LAIK_A_UcpRdmaSend *a = (LAIK_A_UcpRdmaSend *)laik_aseq_addBAction(as, round);
+
+    a->h.type = LAIK_AT_UcpRdmaSend;
+    a->buffer = from_buf;
+    a->offset = off;
+    a->count = count;
+    a->to_rank = to;
+}
+
+//*********************************************************************************
+void aseq_add_rdma_recv(Laik_ActionSeq *as, int round,
+                        char *to_buf, unsigned int off,
+                        unsigned int count, int from)
+{
+    LAIK_A_UcpRdmaRecv *a = (LAIK_A_UcpRdmaRecv *)laik_aseq_addBAction(as, round);
+
+    a->h.type = LAIK_AT_UcpRdmaRecv;
+    a->buffer = to_buf;
+    a->offset = off;
+    a->count = count;
+    a->from_rank = from;
+}
+
+//*********************************************************************************
+// this function is derived from laik_aseq_flattenPacking
+// however, we avoid buffer related actions to be created thus preventing unnessecary buffer allocation
+// also, we prepare the action sequence to perform one-copies from sender container to receiver container using rdma
+bool ucp_aseq_prepare_rdma(Laik_ActionSeq *as)
+{
+    bool changed = false;
+
+    Laik_Action *a = as->action;
+
+    Laik_Mapping *fromMap, *toMap;
+    int64_t from, to;
+    unsigned int count;
+
+    // must not have new actions, we want to start a new build
+    assert(as->newActionCount == 0);
+
+    Laik_TransitionContext *tc = as->context[0];
+    unsigned int elemsize = tc->data->elemsize;
+
+    for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
+    {
+        Laik_BackendAction *ba = (Laik_BackendAction *)a;
+        bool handled = false;
+
+        switch (a->type)
+        {
+        case LAIK_AT_MapPackAndSend:
+        {
+            Laik_A_MapPackAndSend *aa = (Laik_A_MapPackAndSend *)a;
+
+            if (tc->fromList)
+            {
+                assert(aa->fromMapNo < tc->fromList->count);
+            }
+
+            // check if mapping is known
+            fromMap = tc->fromList ? &(tc->fromList->map[aa->fromMapNo]) : 0;
+
+            if (fromMap && aa->range->space->dims == 1)
+            {
+                // mapping is known and 1 dimensional: can use direct send/recv
+                /// TODO: this assumes lexicographical layout
+                from = aa->range->from.i[0] - fromMap->requiredRange.from.i[0];
+                to = aa->range->to.i[0] - fromMap->requiredRange.from.i[0];
+
+                assert(from >= 0);
+                assert(to > from);
+                count = (unsigned int)(to - from);
+
+                // replace with different action depending on map allocation done
+                if (fromMap->base)
+                {
+                    aseq_add_rdma_send(as, 3 * a->round + 1, fromMap->base, from * elemsize, count, aa->to_rank);
+                }
+                else
+                {
+                    // MapSend()
+                    laik_panic("This rdma functionality is not supported yet!");
+                }
+            }
+            else
+            {
+                // RBufSend() / BufSend()
+                laik_panic("This rdma functionality is not supported yet!");
+            }
+
+            handled = true;
+            break;
+        }
+        case LAIK_AT_MapRecvAndUnpack:
+        {
+            Laik_A_MapRecvAndUnpack *aa = (Laik_A_MapRecvAndUnpack *)a;
+
+            if (tc->toList)
+                assert(aa->toMapNo < tc->toList->count);
+            toMap = tc->toList ? &(tc->toList->map[aa->toMapNo]) : 0;
+
+            if (toMap && (aa->range->space->dims == 1))
+            {
+                // mapping known and 1d: can use direct send/recv
+
+                // FIXME: this assumes lexicographical layout
+                from = aa->range->from.i[0] - toMap->requiredRange.from.i[0];
+                to = aa->range->to.i[0] - toMap->requiredRange.from.i[0];
+                assert(from >= 0);
+                assert(to > from);
+                count = (unsigned int)(to - from);
+
+                // replace with different action depending on map allocation done
+                if (toMap->base)
+                    aseq_add_rdma_recv(as, 3 * a->round + 1, toMap->base, from * elemsize, count, aa->from_rank);
+                else
+                {
+                    // MapRecv()
+                    laik_panic("This rdma functionality is not supported yet!");
+                }
+            }
+            else
+            {
+                // RBufRecv/ BufRecv
+                laik_panic("This rdma functionality is not supported yet!");
+            }
+            handled = true;
+            break;
+        }
+        case LAIK_AT_MapGroupReduce:
+        {
+            // TODO: for >1 dims, use pack/unpack with buffer
+            if (ba->range->space->dims == 1)
+            {
+                char *fromBase, *toBase;
+
+                // if current task is input, fromBase should be allocated
+                if (laik_trans_isInGroup(tc->transition, ba->inputGroup, d->mylid))
+                {
+                    assert(tc->fromList);
+                    assert(ba->fromMapNo < tc->fromList->count);
+                    fromMap = &(tc->fromList->map[ba->fromMapNo]);
+                    fromBase = fromMap ? fromMap->base : 0;
+                    assert(fromBase != 0);
+                }
+                else
+                {
+                    fromBase = 0;
+                    fromMap = 0;
+                }
+
+                // if current task is receiver, toBase should be allocated
+                if (laik_trans_isInGroup(tc->transition, ba->outputGroup, d->mylid))
+                {
+                    assert(tc->toList);
+                    assert(ba->toMapNo < tc->toList->count);
+                    toMap = &(tc->toList->map[ba->toMapNo]);
+                    toBase = toMap ? toMap->base : 0;
+                    assert(toBase != 0);
+                }
+                else
+                {
+                    toBase = 0; // no interest in receiving anything
+                    toMap = 0;
+                }
+
+                // FIXME: this assumes lexicographical layout
+                from = ba->range->from.i[0];
+                to = ba->range->to.i[0];
+                assert(to > from);
+                count = (unsigned int)(to - from);
+
+                if (fromBase)
+                {
+                    assert(from >= fromMap->requiredRange.from.i[0]);
+                    fromBase += (from - fromMap->requiredRange.from.i[0]) * elemsize;
+                }
+                if (toBase)
+                {
+                    assert(from >= toMap->requiredRange.from.i[0]);
+                    toBase += (from - toMap->requiredRange.from.i[0]) * elemsize;
+                }
+
+                laik_aseq_addGroupReduce(as, 3 * a->round + 1,
+                                         ba->inputGroup, ba->outputGroup,
+                                         fromBase, toBase, count, ba->redOp);
+                handled = true;
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
+        }
+
+        if (!handled)
+        {
+            laik_aseq_add(a, as, 3 * a->round + 1);
+        }
+        else
+        {
+            changed = true;
+        }
+    }
+
+    if (changed)
+    {
+        laik_aseq_activateNewActions(as);
+    }
+    else
+    {
+        laik_aseq_discardNewActions(as);
+    }
+
+    return changed;
+}
+
+//*********************************************************************************
 static void laik_ucp_prepare(Laik_ActionSeq *as)
 {
     // mark as prepared by UCP backend: for UCP-specific cleanup + action logging
@@ -536,7 +811,7 @@ static void laik_ucp_prepare(Laik_ActionSeq *as)
     if (laik_log_begin(2))
     {
         laik_log_append("UCP backend prepare:\n");
-        laik_log_ActionSeq(as, true);
+        laik_log_ActionSeq(as, false);
         laik_log_flush(0);
     }
 
@@ -548,9 +823,13 @@ static void laik_ucp_prepare(Laik_ActionSeq *as)
         return;
     }
 
+    /// TODO: FINISH ONE COPY
+    changed = ucp_aseq_prepare_rdma(as);
+    laik_log_ActionSeqIfChanged(changed, as, "After one copy preparation actions");
+    /*
     changed = laik_aseq_flattenPacking(as);
     laik_log_ActionSeqIfChanged(changed, as, "After flattening actions");
-
+    */
     changed = laik_aseq_combineActions(as);
     laik_log_ActionSeqIfChanged(changed, as, "After combining actions 1");
 
@@ -755,6 +1034,54 @@ void laik_ucp_buf_recv(int from_lid, char *buf, size_t count)
     }
 }
 
+//*********************************************************************************
+void laik_ucp_rdma_send(int to_lid, char *buf, unsigned int offset, size_t count)
+{
+    RemoteKey remote_key;
+
+    laik_ucp_buf_recv(to_lid, (char *)&remote_key.rkey_buffer_size, sizeof(size_t));
+
+    remote_key.rkey_buffer = malloc(sizeof(remote_key.buffer_size));
+    if (remote_key.rkey_buffer == NULL)
+    {
+        laik_log(LAIK_LL_Error, "Could not allocate heap for rkey buffer of size [%ld]", remote_key.buffer_size);
+        exit(1);
+    }
+    
+    laik_ucp_buf_recv(to_lid, remote_key.rkey_buffer, remote_key.rkey_buffer_size);
+    laik_ucp_buf_recv(to_lid, (char *)&remote_key.buffer_address, sizeof(uint64_t));
+
+    laik_log(LAIK_LL_Info, "Rank [%d] received remote key for rdma operation", d->mylid);
+
+    ucp_rkey_h rkey = get_rkey_handle(&remote_key, to_lid, ucp_endpoints[to_lid]);
+
+    ucs_status_ptr_t req = ucp_put_nb(ucp_endpoints[to_lid], buf + offset, count, remote_key.buffer_address, rkey, NULL);
+    if (UCS_PTR_IS_ERR(req))
+    {
+        laik_log(LAIK_LL_Error, "RMA PUT failed: %s\n", ucs_status_string(UCS_PTR_STATUS(req)));
+        exit(1);
+    }
+    else if (req != NULL)
+    {
+        ucp_request_free(req);
+    }
+
+    laik_log(LAIK_LL_Info, "Rank [%d] ==> Rank [%d] sent message of size [%ld] using rdma", d->mylid, to_lid, count);
+}
+
+//*********************************************************************************
+void laik_ucp_rdma_receive(int from_lid, char *buf, unsigned int offset, size_t count)
+{
+    laik_log(LAIK_LL_Info, "Rank [%d] requesting rkey for address [%p] with size [%lu]", d->mylid, (void *)buf + offset, count);
+    RemoteKey *remote_key = insert_new_rkey((uint64_t)buf + offset, count, ucp_context);
+
+    laik_ucp_buf_send(from_lid, (char *)&remote_key->rkey_buffer_size, sizeof(size_t));
+    laik_ucp_buf_send(from_lid, remote_key->rkey_buffer, remote_key->rkey_buffer_size);
+    laik_ucp_buf_send(from_lid, (char *)&remote_key->buffer_address, sizeof(uint64_t));
+
+    laik_log(LAIK_LL_Info, "Rank [%d] sent remote key for rdma operation", d->mylid);
+}
+
 /// TODO: implementaion is very slow for a lot of ranks, possible solution 'tree' like communication
 //*********************************************************************************
 void barrier()
@@ -809,6 +1136,28 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
         {
         case LAIK_AT_Nop:
         {
+            break;
+        }
+        case LAIK_AT_UcpRdmaSend:
+        {
+            LAIK_A_UcpRdmaSend *aa = (LAIK_A_UcpRdmaSend *)a;
+            int to_lid = laik_group_locationid(tc->transition->group, aa->to_rank);
+            if (to_lid != aa->to_rank)
+            {
+                laik_log(LAIK_LL_Info, "Rank [%d] ==> (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->to_rank, to_lid, tc->transition->group->gid);
+            }
+            laik_ucp_rdma_send(to_lid, aa->buffer, aa->offset, aa->count * elemsize);
+            break;
+        }
+        case LAIK_AT_UcpRdmaRecv:
+        {
+            LAIK_A_UcpRdmaRecv *aa = (LAIK_A_UcpRdmaRecv *)a;
+            int from_lid = laik_group_locationid(tc->transition->group, aa->from_rank);
+            if (from_lid != aa->from_rank)
+            {
+                laik_log(LAIK_LL_Info, "Rank [%d] <== (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->from_rank, from_lid, tc->transition->group->gid);
+            }
+            laik_ucp_rdma_receive(from_lid, aa->buffer, aa->offset, aa->count * elemsize);
             break;
         }
         case LAIK_AT_BufSend:
@@ -1190,6 +1539,30 @@ static void laik_ucp_finish_resize(void)
 
     laik_log(LAIK_LL_Info, "Rank [%d] reached finish resize\n", d->mylid);
     /// TODO: free resources?
+}
+
+//*********************************************************************************
+static bool laik_ucp_log_action(Laik_Action *a)
+{
+    switch (a->type)
+    {
+    case LAIK_AT_UcpRdmaRecv:
+    {
+        LAIK_A_UcpRdmaRecv *aa = (LAIK_A_UcpRdmaRecv *)a;
+        laik_log_append(": rdma recv from Rank[%d] to buffer [%p] with offset [%d] and count [%d]", aa->from_rank, aa->buffer, aa->offset, aa->count);
+        break;
+    }
+    case LAIK_AT_UcpRdmaSend:
+    {
+        LAIK_A_UcpRdmaSend *aa = (LAIK_A_UcpRdmaSend *)a;
+        laik_log_append(": rdma send to Rank[%d] from buffer [%p] with offset [%d] and count [%d]", aa->to_rank, aa->buffer, aa->offset, aa->count);
+        break;
+    }
+    default:
+        return false;
+        break;
+    }
+    return true;
 }
 
 //*********************************************************************************
