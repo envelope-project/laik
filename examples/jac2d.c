@@ -85,18 +85,27 @@ int main(int argc, char* argv[])
     bool use_cornerhalo = true; // use halo partitioner including corners?
     bool do_profiling = false;
     bool do_sum = false;
+    bool do_reservation = false;
+    bool do_exec = false;
+    bool do_actions = false;
 
     int arg = 1;
     while ((argc > arg) && (argv[arg][0] == '-')) {
         if (argv[arg][1] == 'n') use_cornerhalo = false;
         if (argv[arg][1] == 'p') do_profiling = true;
         if (argv[arg][1] == 's') do_sum = true;
+        if (argv[arg][1] == 'r') do_reservation = true;
+        if (argv[arg][1] == 'e') do_exec = true;
+        if (argv[arg][1] == 'a') do_actions = true;
         if (argv[arg][1] == 'h') {
             printf("Usage: %s [options] <side width> <maxiter> <repart>\n\n"
                    "Options:\n"
                    " -n : use partitioner which does not include corners\n"
                    " -p : write profiling data to 'jac2d_profiling.txt'\n"
                    " -s : print value sum at end (warning: sum done at master)\n"
+                   " -r        : do space reservation before iteration loop\n"
+                   " -e        : pre-calculate transitions to exec in iteration loop\n"
+                   " -a        : pre-calculate action sequence to exec (includes -e)\n"
                    " -h : print this help text and exit\n",
                    argv[0]);
             exit(1);
@@ -130,6 +139,9 @@ int main(int argc, char* argv[])
     int64_t gx1, gx2, gy1, gy2;
     int64_t x1, x2, y1, y2;
 
+    // for reservation API test
+    double *data1BaseW = 0, *data2BaseW = 0;
+
     // two 2d arrays for jacobi, using same space
     Laik_Space* space = laik_new_space_2d(inst, size, size);
     Laik_Data* data1 = laik_new_data(space, laik_Double);
@@ -150,6 +162,48 @@ int main(int argc, char* argv[])
     pRead  = laik_new_partitioning(prRead, world, space, pWrite);
     laik_partitioning_set_name(pWrite, "pWrite");
     laik_partitioning_set_name(pRead, "pRead");
+
+    Laik_Reservation* r1 = 0;
+    Laik_Reservation* r2 = 0;
+    if (do_reservation) {
+        // reserve and pre-allocate memory for data1/2
+        // this is purely optional, and the application still works when we
+        // switch to a partitioning not reserved and allocated for.
+        // However, this makes sure that no allocation happens in the main
+        // iteration, and reservation/allocation should be done again on
+        // re-partitioning.
+
+        r1 = laik_reservation_new(data1);
+        laik_reservation_add(r1, pRead);
+        laik_reservation_add(r1, pWrite);
+        laik_reservation_alloc(r1);
+        laik_data_use_reservation(data1, r1);
+
+        r2 = laik_reservation_new(data2);
+        laik_reservation_add(r2, pRead);
+        laik_reservation_add(r2, pWrite);
+        laik_reservation_alloc(r2);
+        laik_data_use_reservation(data2, r2);
+    }
+
+    Laik_Transition* toHaloTransition = 0;
+    Laik_Transition* toExclTransition = 0;
+    Laik_ActionSeq* data1_toHaloActions = 0;
+    Laik_ActionSeq* data1_toExclActions = 0;
+    Laik_ActionSeq* data2_toHaloActions = 0;
+    Laik_ActionSeq* data2_toExclActions = 0;
+    if (do_exec || do_actions) {
+        toHaloTransition = laik_calc_transition(space, pWrite, pRead,
+                                                LAIK_DF_Preserve, LAIK_RO_None);
+        toExclTransition = laik_calc_transition(space, pRead, pWrite,
+                                                LAIK_DF_None, LAIK_RO_None);
+        if (do_actions) {
+            data1_toHaloActions = laik_calc_actions(data1, toHaloTransition, r1, r1);
+            data1_toExclActions = laik_calc_actions(data1, toExclTransition, r1, r1);
+            data2_toHaloActions = laik_calc_actions(data2, toHaloTransition, r2, r2);
+            data2_toExclActions = laik_calc_actions(data2, toExclTransition, r2, r2);
+        }
+    }
 
     // for global sum, used for residuum: 1 double accessible by all
     Laik_Space* sp1 = laik_new_space_1d(inst, 1);
@@ -175,8 +229,14 @@ int main(int argc, char* argv[])
         for(uint64_t x = 0; x < xsizeW; x++)
             baseW[y * ystrideW + x] = (double) ((gx1 + x + gy1 + y) & 6);
 
+    // for reservation API test
+    data1BaseW = baseW;
+
     setBoundary(size, pWrite, dWrite);
     laik_log(2, "Init done\n");
+
+    // set data2 to pRead to make exec_transition happy (this is a no-op)
+    laik_switchto_partitioning(dRead,  pRead, LAIK_DF_None, LAIK_RO_None);
 
     // for statistics (with LAIK_LOG=2)
     double t, t1 = laik_wtime(), t2 = t1;
@@ -191,8 +251,36 @@ int main(int argc, char* argv[])
         if (dRead == data1) { dRead = data2; dWrite = data1; }
         else                { dRead = data1; dWrite = data2; }
 
-        laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
-        laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
+        // we show 3 different ways of switching containers among partitionings
+        // (1) no preparation: directly switch to another partitioning
+        // (2) with pre-calculated transitions between partitiongs: execute it
+        // (3) with pre-calculated action sequence for transitions: execute it
+        // with (3), it is especially beneficial to use a reservation, as
+        // the actions usually directly refer to e.g. MPI calls
+
+        if (do_actions) {
+            // case (3): pre-calculated action sequences
+            if (dRead == data1) {
+                // switch data 1 to halo partitioning
+                laik_exec_actions(data1_toHaloActions);
+                laik_exec_actions(data2_toExclActions);
+            }
+            else {
+                laik_exec_actions(data2_toHaloActions);
+                laik_exec_actions(data1_toExclActions);
+            }
+        }
+        else if (do_exec) {
+            // case (2): pre-calculated transitions
+            laik_exec_transition(dRead, toHaloTransition);
+            laik_exec_transition(dWrite, toExclTransition);
+        }
+        else {
+            // case (1): no pre-calculation: switch to partitionings
+            laik_switchto_partitioning(dRead,  pRead,  LAIK_DF_Preserve, LAIK_RO_None);
+            laik_switchto_partitioning(dWrite, pWrite, LAIK_DF_None, LAIK_RO_None);
+        }
+
         laik_get_map_2d(dRead,  0, (void**) &baseR, &ysizeR, &ystrideR, &xsizeR);
         laik_get_map_2d(dWrite, 0, (void**) &baseW, &ysizeW, &ystrideW, &xsizeW);
 
@@ -213,6 +301,23 @@ int main(int argc, char* argv[])
         if (gy1 > 0) {
             // ghost cells from top neighbor at y=0, move that to -1
             baseR += ystrideR;
+        }
+        // instead of relocating baseR, we can query address via index g1
+        // check this (addr is zero if range is empty - this can happen!)
+        Laik_Index g1;
+        laik_index_init(&g1, gx1, gy1, 0);
+        double* baseR2 = (double*) laik_get_map_addr(dRead, 0, &g1);
+        if (baseR2) assert(baseR == baseR2);
+
+        // for reservation API test: check that write pointer stay the same
+        if (do_reservation) {
+            if (dWrite == data2) {
+                if (data2BaseW == 0) data2BaseW = baseW;
+                assert(data2BaseW == baseW);
+            } else {
+                if (data1BaseW == 0) data1BaseW = baseW;
+                assert(data1BaseW == baseW);
+            }
         }
 
         // do jacobi
