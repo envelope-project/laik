@@ -114,7 +114,7 @@ ucp_rkey_h get_rkey_handle(RemoteKey *remote_key, int lid, ucp_ep_h endpoint)
     rk->lid = lid;
 
     // is not initialized yet
-    ucs_status_t status = ucp_ep_rkey_unpack(endpoint, &remote_key->rkey_buffer, &(rk->rkey_handler));
+    ucs_status_t status = ucp_ep_rkey_unpack(endpoint, remote_key->rkey_buffer, &(rk->rkey_handler));
     if (status != UCS_OK)
     {
         laik_panic("Could not unpack remot key");
@@ -124,3 +124,5 @@ ucp_rkey_h get_rkey_handle(RemoteKey *remote_key, int lid, ucp_ep_h endpoint)
 
     return rk->rkey_handler;
 }
+
+//*********************************************************************************

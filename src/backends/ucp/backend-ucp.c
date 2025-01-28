@@ -1047,7 +1047,7 @@ void laik_ucp_rdma_send(int to_lid, char *buf, unsigned int offset, size_t count
         laik_log(LAIK_LL_Error, "Could not allocate heap for rkey buffer of size [%ld]", remote_key.buffer_size);
         exit(1);
     }
-    
+
     laik_ucp_buf_recv(to_lid, remote_key.rkey_buffer, remote_key.rkey_buffer_size);
     laik_ucp_buf_recv(to_lid, (char *)&remote_key.buffer_address, sizeof(uint64_t));
 
