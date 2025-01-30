@@ -163,8 +163,10 @@ void initialize_instance_data(char *location, char *home_host, int world_size)
 }
 
 //*********************************************************************************
-void error_handler(void *, ucp_ep_h, ucs_status_t status)
+void error_handler(void *user_data, ucp_ep_h endpoint, ucs_status_t status)
 {
+    (void) user_data;
+    (void) endpoint;
     // filter graceful shutdowns
     if (status != UCS_OK)
     {
