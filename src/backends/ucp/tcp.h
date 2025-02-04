@@ -15,7 +15,7 @@
 /*
     Master is determined and initial peer addresses are broadcasted, enabling ucp connections for further communication
 */
-void tcp_initialize_setup_connection(char *home_host, const int home_port, InstData *d);
+void tcp_initialize_setup_connection(const char *home_host, const int home_port, InstData *d);
 
 //*********************************************************************************
 /*
@@ -31,3 +31,4 @@ size_t tcp_add_new_peers(InstData *d, Laik_Instance *instance);
 size_t tcp_initialize_new_peers(InstData *d);
 
 //*********************************************************************************
+void tcp_close_connections(InstData* d);

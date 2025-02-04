@@ -101,7 +101,7 @@ static inline void receive_instance_data(InstData *d, int from_fd)
 }
 
 //*********************************************************************************
-void tcp_initialize_setup_connection(char *home_host, const int home_port, InstData *d)
+void tcp_initialize_setup_connection(const char *home_host, const int home_port, InstData *d)
 { //
     // create listening socket and determine who is master
     //
@@ -407,6 +407,24 @@ size_t tcp_add_new_peers(InstData *d, Laik_Instance *instance)
         number_new_connections = add_new_peers_non_master(d, instance);
     }
     return number_new_connections;
+}
+
+//*********************************************************************************
+void tcp_close_connections(InstData *d)
+{
+    if (d->mylid == 0 && fds != NULL)
+    {
+        for (int i = 0; i < d->world_size; i++)
+        {
+            if (d->peer[i].state < DEAD && i != d->mylid)
+            {
+                close(fds[i]);
+            }
+        }
+        free(fds);
+    }
+
+    close(socket_fd);
 }
 
 //*********************************************************************************

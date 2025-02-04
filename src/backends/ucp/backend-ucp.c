@@ -63,6 +63,9 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs);
 static void laik_ucp_finish_resize(void);
 static bool laik_ucp_log_action(Laik_Action *a);
 
+void laik_ucp_buf_send(int to_lid, char *buf, size_t count);
+void laik_ucp_buf_recv(int from_lid, char *buf, size_t count);
+
 /* static void laik_ucp_updateGroup(Laik_Group *);
 static bool laik_ucp_log_action(Laik_Action *a);
 static void laik_ucp_sync(Laik_KVStore *kvs);  */
@@ -70,13 +73,13 @@ static void laik_ucp_sync(Laik_KVStore *kvs);  */
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_ucp = {
     .name = "UCP backend",
+    .finalize = laik_ucp_finalize,
     .prepare = laik_ucp_prepare,
     .cleanup = laik_ucp_cleanup,
     .exec = laik_ucp_exec,
-    .finalize = laik_ucp_finalize,
+    .log_action = laik_ucp_log_action,
     .resize = laik_ucp_resize,
-    .finish_resize = laik_ucp_finish_resize,
-    .log_action = laik_ucp_log_action
+    .finish_resize = laik_ucp_finish_resize
     //.updateGroup = laik_ucp_updateGroup,
     //.sync        = laik_ucp_sync
 };
@@ -117,7 +120,9 @@ typedef struct _LAIK_A_UcpRdmaSend
     int to_rank;
     unsigned int offset;
     unsigned int count;
+    ucp_rkey_h rkey_handle;
     char *buffer;
+    uint64_t remote_buffer;
 } LAIK_A_UcpRdmaSend;
 
 typedef struct _LAIK_A_UcpRdmaRecv
@@ -141,7 +146,7 @@ static void request_init(void *request)
 }
 
 //*********************************************************************************
-void initialize_instance_data(char *location, char *home_host, int world_size)
+void initialize_instance_data(const char *location, const char *home_host, int world_size)
 {
     d = (InstData *)malloc(sizeof(InstData));
     if (d == NULL)
@@ -462,7 +467,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 
     // setting of home location: host/port to register with
     str = getenv("LAIK_UCP_HOST");
-    char *home_host = str ? str : "localhost";
+    const char *home_host = str ? str : "localhost";
     str = getenv("LAIK_UCP_PORT");
     int home_port = str ? atoi(str) : 0;
     if (home_port == 0)
@@ -475,8 +480,6 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
     laik_log(1, "UCP location '%s', home %s:%d\n", location, home_host, home_port);
 
     initialize_instance_data(location, home_host, world_size);
-
-    // TODO: field_mask is used for optimizations
 
     // UCP temporary vars
     ucp_params_t ucp_params;
@@ -507,7 +510,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 
     status = ucp_init(&ucp_params, config, &ucp_context);
     // for debug
-    // ucp_config_print(config, stdout, NULL, UCS_CONFIG_PRINT_CONFIG);
+    //ucp_config_print(config, stdout, NULL, UCS_CONFIG_PRINT_CONFIG);
 
     ucp_config_release(config);
     if (status != UCS_OK)
@@ -515,7 +518,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
         laik_panic("Could not init ucp!\n");
     }
 
-    /// TODO: field_mask and thread_mode can be used for optimizations
+    // promise that we only use master thread to communicate
     worker_params.field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE;
     worker_params.thread_mode = UCS_THREAD_MODE_SINGLE;
 
@@ -537,10 +540,11 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
     d->addrlen = worker_attr.address_length;
     d->address = worker_attr.address;
 
-    laik_log(1, "Created worker with address length of %lu\n", worker_attr.address_length);
+    laik_log(LAIK_LL_Info, "Created worker with address length of %lu\n", worker_attr.address_length);
 
     tcp_initialize_setup_connection(home_host, home_port, d);
 
+    // make sure that InstData was distributed by master
     assert(d->mylid >= 0);
     initialize_endpoints();
 
@@ -584,7 +588,8 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 //*********************************************************************************
 void aseq_add_rdma_send(Laik_ActionSeq *as, int round,
                         char *from_buf, unsigned int off,
-                        unsigned int count, int to)
+                        unsigned int count, int to,
+                        Laik_Group *group)
 {
     LAIK_A_UcpRdmaSend *a = (LAIK_A_UcpRdmaSend *)laik_aseq_addBAction(as, round);
 
@@ -593,12 +598,33 @@ void aseq_add_rdma_send(Laik_ActionSeq *as, int round,
     a->offset = off;
     a->count = count;
     a->to_rank = to;
+
+    int from_lid = laik_group_locationid(group, a->to_rank);
+
+    RemoteKey remote_key;
+    laik_ucp_buf_recv(from_lid, (char *)&remote_key.rkey_buffer_size, sizeof(size_t));
+
+    remote_key.rkey_buffer = malloc(sizeof(remote_key.buffer_size));
+    if (remote_key.rkey_buffer == NULL)
+    {
+        laik_log(LAIK_LL_Error, "Could not allocate heap for rkey buffer of size [%ld]", remote_key.buffer_size);
+        exit(1);
+    }
+
+    laik_ucp_buf_recv(from_lid, (char*)remote_key.rkey_buffer, remote_key.rkey_buffer_size);
+    laik_ucp_buf_recv(from_lid, (char*)&remote_key.buffer_address, sizeof(uint64_t));
+
+    laik_log(LAIK_LL_Info, "Rank [%d] received remote key for rdma operation", d->mylid);
+
+    a->remote_buffer = remote_key.buffer_address;
+    a->rkey_handle = get_rkey_handle(&remote_key, from_lid, ucp_endpoints[from_lid]);
 }
 
 //*********************************************************************************
 void aseq_add_rdma_recv(Laik_ActionSeq *as, int round,
                         char *to_buf, unsigned int off,
-                        unsigned int count, int from)
+                        unsigned int count, int from,
+                        Laik_Group *group)
 {
     LAIK_A_UcpRdmaRecv *a = (LAIK_A_UcpRdmaRecv *)laik_aseq_addBAction(as, round);
 
@@ -607,6 +633,16 @@ void aseq_add_rdma_recv(Laik_ActionSeq *as, int round,
     a->offset = off;
     a->count = count;
     a->from_rank = from;
+
+    int to_lid = laik_group_locationid(group, a->from_rank);
+
+    RemoteKey *remote_key = insert_new_rkey((uint64_t)to_buf + off, count, ucp_context);
+
+    laik_ucp_buf_send(to_lid, (char *)&remote_key->rkey_buffer_size, sizeof(size_t));
+    laik_ucp_buf_send(to_lid, (char*)remote_key->rkey_buffer, remote_key->rkey_buffer_size);
+    laik_ucp_buf_send(to_lid, (char *)&remote_key->buffer_address, sizeof(uint64_t));
+
+    laik_log(LAIK_LL_Info, "Rank [%d] sent remote key for rdma operation", d->mylid);
 }
 
 //*********************************************************************************
@@ -626,7 +662,7 @@ bool ucp_aseq_prepare_rdma(Laik_ActionSeq *as)
     // must not have new actions, we want to start a new build
     assert(as->newActionCount == 0);
 
-    Laik_TransitionContext *tc = as->context[0];
+    Laik_TransitionContext *tc = (Laik_TransitionContext *) as->context[0];
     unsigned int elemsize = tc->data->elemsize;
 
     for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
@@ -662,7 +698,7 @@ bool ucp_aseq_prepare_rdma(Laik_ActionSeq *as)
                 // replace with different action depending on map allocation done
                 if (fromMap->base)
                 {
-                    aseq_add_rdma_send(as, 3 * a->round + 1, fromMap->base, from * elemsize, count, aa->to_rank);
+                    aseq_add_rdma_send(as, 3 * a->round + 1, fromMap->base, from * elemsize, count, aa->to_rank, tc->transition->group);
                 }
                 else
                 {
@@ -700,7 +736,7 @@ bool ucp_aseq_prepare_rdma(Laik_ActionSeq *as)
 
                 // replace with different action depending on map allocation done
                 if (toMap->base)
-                    aseq_add_rdma_recv(as, 3 * a->round + 1, toMap->base, from * elemsize, count, aa->from_rank);
+                    aseq_add_rdma_recv(as, 3 * a->round + 1, toMap->base, from * elemsize, count, aa->from_rank, tc->transition->group);
                 else
                 {
                     // MapRecv()
@@ -805,6 +841,95 @@ bool ucp_aseq_prepare_rdma(Laik_ActionSeq *as)
 }
 
 //*********************************************************************************
+bool ucp_aseq_inject_rdma_operations(Laik_ActionSeq *as)
+{
+    bool changed = false;
+
+    Laik_Action *a = as->action;
+
+    // must not have new actions, we want to start a new build
+    assert(as->newActionCount == 0);
+
+    Laik_TransitionContext *tc = (Laik_TransitionContext *) as->context[0];
+
+    for (unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a))
+    {
+        bool handled = false;
+
+        switch (a->type)
+        {
+            case LAIK_AT_BufSend:
+            {
+                Laik_A_BufSend* aa = (Laik_A_BufSend*) a;
+
+                aseq_add_rdma_send(as, 3 * a->round + 1, aa->buf, 0, aa->count, aa->to_rank, tc->transition->group);
+                handled = true;
+                break;
+            }
+            case LAIK_AT_BufRecv:
+            {
+                Laik_A_BufRecv* aa = (Laik_A_BufRecv*) a;
+
+                aseq_add_rdma_recv(as, 3 * a->round + 1, aa->buf, 0, aa->count, aa->from_rank, tc->transition->group);
+                handled = true;
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+
+        if (!handled)
+        {
+            laik_aseq_add(a, as, 3 * a->round + 1);
+        }
+        else
+        {
+            changed = true;
+        }
+    }
+
+    if (changed)
+    {
+        laik_aseq_activateNewActions(as);
+    }
+    else
+    {
+        laik_aseq_discardNewActions(as);
+    }
+
+    return changed;
+}
+
+//*********************************************************************************
+void ucp_aseq_calc_stats(Laik_ActionSeq *as)
+{
+    unsigned int count;
+    Laik_TransitionContext* tc = as->context[0];
+    int current_tid = 0;
+    Laik_Action* a = as->action;
+    for(unsigned int i = 0; i < as->actionCount; i++, a = nextAction(a)) {
+        assert(a->tid == current_tid); // TODO: only assumes actions from one transition
+        switch(a->type) {
+        case LAIK_AT_UcpRdmaSend:
+            count = ((LAIK_A_UcpRdmaSend*)a)->count;
+            as->msgAsyncSendCount++;
+            as->elemSendCount += count;
+            as->byteSendCount += count * tc->data->elemsize;
+            break;
+        case LAIK_AT_UcpRdmaRecv:
+            count = ((LAIK_A_UcpRdmaRecv*)a)->count;
+            as->msgAsyncRecvCount++;
+            as->elemRecvCount += count;
+            as->byteRecvCount += count * tc->data->elemsize;
+            break;
+        default: break;
+        }
+    }
+}
+
+//*********************************************************************************
 static void laik_ucp_prepare(Laik_ActionSeq *as)
 {
     // mark as prepared by UCP backend: for UCP-specific cleanup + action logging
@@ -826,12 +951,13 @@ static void laik_ucp_prepare(Laik_ActionSeq *as)
     }
 
     /// TODO: FINISH ONE COPY
+    /* 
     changed = ucp_aseq_prepare_rdma(as);
-    laik_log_ActionSeqIfChanged(changed, as, "After one copy preparation actions");
-    /*
+    laik_log_ActionSeqIfChanged(changed, as, "After one copy preparation actions"); 
+    */
     changed = laik_aseq_flattenPacking(as);
     laik_log_ActionSeqIfChanged(changed, as, "After flattening actions");
-    */
+   
     changed = laik_aseq_combineActions(as);
     laik_log_ActionSeqIfChanged(changed, as, "After combining actions 1");
 
@@ -852,13 +978,17 @@ static void laik_ucp_prepare(Laik_ActionSeq *as)
 
     changed = laik_aseq_allocBuffer(as);
     laik_log_ActionSeqIfChanged(changed, as, "After buffer allocation 3");
-
+   
     changed = laik_aseq_sort_2phases(as);
     // changed = laik_aseq_sort_rankdigits(as);
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
 
+    changed = ucp_aseq_inject_rdma_operations(as);
+    laik_log_ActionSeqIfChanged(changed, as, "After injecting rdma operations");
+
     laik_aseq_freeTempSpace(as);
 
+    ucp_aseq_calc_stats(as);
     laik_aseq_calc_stats(as);
 }
 
@@ -964,7 +1094,7 @@ void laik_ucp_buf_send(int to_lid, char *buf, size_t count)
     send_param.user_data = (void *)UCX_MESSAGE_STRING;
     request = ucp_tag_send_nbx((ucp_endpoints[to_lid]), (void *)buf, count, specific_tag,
                                &send_param);
-    status = ucx_wait(ucp_worker, request, "send",
+    status = ucx_wait(ucp_worker, (struct ucx_context*)request, "send",
                       UCX_MESSAGE_STRING);
 
     if (request == NULL)
@@ -1024,7 +1154,7 @@ void laik_ucp_buf_recv(int from_lid, char *buf, size_t count)
     request = ucp_tag_msg_recv_nbx(ucp_worker, (void *)buf, count, msg_tag,
                                    &recv_param);
 
-    status = ucx_wait(ucp_worker, request, "receive", UCX_MESSAGE_STRING);
+    status = ucx_wait(ucp_worker, (struct ucx_context*) request, "receive", UCX_MESSAGE_STRING);
 
     if (status != UCS_OK)
     {
@@ -1037,56 +1167,43 @@ void laik_ucp_buf_recv(int from_lid, char *buf, size_t count)
 }
 
 //*********************************************************************************
-void laik_ucp_rdma_send(int to_lid, char *buf, unsigned int offset, size_t count)
+void laik_ucp_rdma_send(int to_lid, char *buf, unsigned int offset, size_t count, uint64_t remote_buffer, ucp_rkey_h rkey_handle)
 {
-    RemoteKey remote_key;
+    ucs_status_t status;
 
-    laik_ucp_buf_recv(to_lid, (char *)&remote_key.rkey_buffer_size, sizeof(size_t));
+    status = ucp_put_nbi(ucp_endpoints[to_lid], buf + offset, count, remote_buffer, rkey_handle);
 
-    remote_key.rkey_buffer = malloc(sizeof(remote_key.buffer_size));
-    if (remote_key.rkey_buffer == NULL)
+    if (status == UCS_INPROGRESS)
     {
-        laik_log(LAIK_LL_Error, "Could not allocate heap for rkey buffer of size [%ld]", remote_key.buffer_size);
+        ucp_worker_flush(ucp_worker);
+    }
+    else if (status != UCS_OK)
+    {
+        laik_log(LAIK_LL_Error, "ucp_put_nbi failed: %s\n", ucs_status_string(status));
         exit(1);
     }
+     
+    laik_log(LAIK_LL_Info, "Rank [%d] => Rank [%d]: Sent rdma message with size %ld", d->mylid, to_lid, count);
 
-    laik_ucp_buf_recv(to_lid, remote_key.rkey_buffer, remote_key.rkey_buffer_size);
-    laik_ucp_buf_recv(to_lid, (char *)&remote_key.buffer_address, sizeof(uint64_t));
-
-    laik_log(LAIK_LL_Info, "Rank [%d] received remote key for rdma operation", d->mylid);
-
-    ucp_rkey_h rkey = get_rkey_handle(&remote_key, to_lid, ucp_endpoints[to_lid]);
-
-    ucs_status_ptr_t req = ucp_put_nb(ucp_endpoints[to_lid], buf + offset, count, remote_key.buffer_address, rkey, NULL);
-    if (UCS_PTR_IS_ERR(req))
-    {
-        laik_log(LAIK_LL_Error, "RMA PUT failed: %s\n", ucs_status_string(UCS_PTR_STATUS(req)));
-        exit(1);
-    }
-    else if (req != NULL)
-    {
-        ucp_request_free(req);
-    }
-
-    laik_log(LAIK_LL_Info, "Rank [%d] ==> Rank [%d] sent message of size [%ld] using rdma", d->mylid, to_lid, count);
+    static char test[1];
+    laik_ucp_buf_send(to_lid, test, 1);
 }
 
 //*********************************************************************************
 void laik_ucp_rdma_receive(int from_lid, char *buf, unsigned int offset, size_t count)
 {
-    laik_log(LAIK_LL_Info, "Rank [%d] requesting rkey for address [%p] with size [%lu]", d->mylid, (void *)buf + offset, count);
-    RemoteKey *remote_key = insert_new_rkey((uint64_t)buf + offset, count, ucp_context);
+    (void)from_lid;
+    (void)buf;
+    (void)offset;
+    (void)count;
 
-    laik_ucp_buf_send(from_lid, (char *)&remote_key->rkey_buffer_size, sizeof(size_t));
-    laik_ucp_buf_send(from_lid, remote_key->rkey_buffer, remote_key->rkey_buffer_size);
-    laik_ucp_buf_send(from_lid, (char *)&remote_key->buffer_address, sizeof(uint64_t));
-
-    laik_log(LAIK_LL_Info, "Rank [%d] sent remote key for rdma operation", d->mylid);
+    static char test[1];
+    laik_ucp_buf_recv(from_lid, test, 1);
 }
 
 /// TODO: implementaion is very slow for a lot of ranks, possible solution 'tree' like communication
 //*********************************************************************************
-void barrier()
+static inline void barrier()
 {
     char buf[1] = {0};
 
@@ -1125,7 +1242,7 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
 {
     laik_log(LAIK_LL_Info, "Rank [%d] entering execute", d->mylid);
     Laik_Action *a = as->action;
-    Laik_TransitionContext *tc = as->context[0];
+    Laik_TransitionContext *tc = (Laik_TransitionContext *)as->context[0];
     Laik_MappingList *fromList = tc->fromList;
     Laik_MappingList *toList = tc->toList;
 
@@ -1148,7 +1265,7 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
             {
                 laik_log(LAIK_LL_Info, "Rank [%d] ==> (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->to_rank, to_lid, tc->transition->group->gid);
             }
-            laik_ucp_rdma_send(to_lid, aa->buffer, aa->offset, aa->count * elemsize);
+            laik_ucp_rdma_send(to_lid, aa->buffer, aa->offset, aa->count * elemsize, aa->remote_buffer, aa->rkey_handle);
             break;
         }
         case LAIK_AT_UcpRdmaRecv:
@@ -1284,7 +1401,7 @@ void close_endpoints(void)
 {
     for (int i = 0; i < d->world_size; i++)
     {
-        if (i != d->mylid)
+        if (d->peer[i].state < DEAD)
         {
             // lets endpoint finish operation
             ucs_status_ptr_t close_req = ucp_ep_close_nb(ucp_endpoints[i], UCP_EP_CLOSE_MODE_FLUSH);
@@ -1311,28 +1428,23 @@ static void laik_ucp_finalize(Laik_Instance *inst)
     laik_log(LAIK_LL_Info, "Rank [%d] is preparing to exit\n", d->mylid);
     assert(inst == instance);
 
-    /* close(socket_fd);
 
-    if (d->mylid == 0)
-    {
-        for (int i = 1; i < d->world_size; i++)
-        {
-            // close(fds[i]);
-            free(d->peer[i].address);
-        }
-        free(fds);
-    } */
+    tcp_close_connections(d);
 
-    /* free(d->peer);
+    // This barrier ensures that all rdma operations are finsished before closing the endpoints
+    barrier();
 
+    destroy_rkeys(ucp_context);
     close_endpoints();
 
     // also frees d->address
     ucp_worker_destroy(ucp_worker);
+    ucp_cleanup(ucp_context);
 
     laik_log(LAIK_LL_Info, "Rank [%d] is exiting\n", d->mylid);
 
-    free(d); */
+    free(d->peer);
+    free(d);
 }
 
 //*********************************************************************************
@@ -1405,7 +1517,7 @@ void mark_peers_to_be_removed(ResizeCommand *resize_command)
 
             if (number_to_remove > 0)
             {
-                ranks_to_remove = malloc(number_to_remove * sizeof(size_t));
+                ranks_to_remove = (size_t*) malloc(number_to_remove * sizeof(size_t));
 
                 if (ranks_to_remove == NULL)
                 {
