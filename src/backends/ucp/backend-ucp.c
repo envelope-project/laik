@@ -175,7 +175,7 @@ void error_handler(void *user_data, ucp_ep_h endpoint, ucs_status_t status)
     // filter graceful shutdowns
     if (status != UCS_OK)
     {
-        laik_log(LAIK_LL_Error, "Rank[%d]: Endpoint is in an invalid state (%s)\n", d->mylid, ucs_status_string(ep_status));
+        laik_log(LAIK_LL_Error, "Rank[%d]: Endpoint is in an invalid state (%s)\n", d->mylid, ucs_status_string(status));
     }
 }
 
@@ -642,7 +642,7 @@ void aseq_add_rdma_recv(Laik_ActionSeq *as, int round,
     laik_ucp_buf_send(to_lid, (char*)remote_key->rkey_buffer, remote_key->rkey_buffer_size);
     laik_ucp_buf_send(to_lid, (char *)&remote_key->buffer_address, sizeof(uint64_t));
 
-    laik_log(LAIK_LL_Info, "Rank [%d] sent remote key for rdma operation", d->mylid);
+    laik_log(LAIK_LL_Info, "Rank [%d] sent remote key for rdma operation for target address [%p] and count [%ud]", d->mylid, (void*)(to_buf + off), count);
 }
 
 //*********************************************************************************
@@ -862,7 +862,7 @@ bool ucp_aseq_inject_rdma_operations(Laik_ActionSeq *as)
             {
                 Laik_A_BufSend* aa = (Laik_A_BufSend*) a;
 
-                aseq_add_rdma_send(as, 3 * a->round + 1, aa->buf, 0, aa->count, aa->to_rank, tc->transition->group);
+                aseq_add_rdma_send(as, 3 * a->round + 1, aa->buf, 0, aa->count * tc->data->elemsize, aa->to_rank, tc->transition->group);
                 handled = true;
                 break;
             }
@@ -870,7 +870,7 @@ bool ucp_aseq_inject_rdma_operations(Laik_ActionSeq *as)
             {
                 Laik_A_BufRecv* aa = (Laik_A_BufRecv*) a;
 
-                aseq_add_rdma_recv(as, 3 * a->round + 1, aa->buf, 0, aa->count, aa->from_rank, tc->transition->group);
+                aseq_add_rdma_recv(as, 3 * a->round + 1, aa->buf, 0, aa->count * tc->data->elemsize, aa->from_rank, tc->transition->group);
                 handled = true;
                 break;
             }
@@ -915,14 +915,14 @@ void ucp_aseq_calc_stats(Laik_ActionSeq *as)
         case LAIK_AT_UcpRdmaSend:
             count = ((LAIK_A_UcpRdmaSend*)a)->count;
             as->msgAsyncSendCount++;
-            as->elemSendCount += count;
-            as->byteSendCount += count * tc->data->elemsize;
+            as->elemSendCount += count / tc->data->elemsize;
+            as->byteSendCount += count;
             break;
         case LAIK_AT_UcpRdmaRecv:
             count = ((LAIK_A_UcpRdmaRecv*)a)->count;
             as->msgAsyncRecvCount++;
-            as->elemRecvCount += count;
-            as->byteRecvCount += count * tc->data->elemsize;
+            as->elemRecvCount += count / tc->data->elemsize;
+            as->byteRecvCount += count;
             break;
         default: break;
         }
@@ -1171,19 +1171,20 @@ void laik_ucp_rdma_send(int to_lid, char *buf, unsigned int offset, size_t count
 {
     ucs_status_t status;
 
-    status = ucp_put_nbi(ucp_endpoints[to_lid], buf + offset, count, remote_buffer, rkey_handle);
+    status = ucp_put_nbi(ucp_endpoints[to_lid], (const void*)(buf + offset), count, remote_buffer, rkey_handle);
 
     if (status == UCS_INPROGRESS)
     {
-        ucp_worker_flush(ucp_worker);
+        status = ucp_worker_flush(ucp_worker);
     }
-    else if (status != UCS_OK)
+
+    if (status != UCS_OK)
     {
-        laik_log(LAIK_LL_Error, "ucp_put_nbi failed: %s\n", ucs_status_string(status));
+        laik_log(LAIK_LL_Error, "Rank [%d] ucp_put_nbi failed: %s\n", d->mylid, ucs_status_string(status));
         exit(1);
     }
      
-    laik_log(LAIK_LL_Info, "Rank [%d] => Rank [%d]: Sent rdma message with size %ld", d->mylid, to_lid, count);
+    laik_log(LAIK_LL_Info, "Rank [%d] => Rank [%d]: Sent rdma message with size %ld using rkey [%p] and remote address [%p]", d->mylid, to_lid, count, (void*)rkey_handle, (void*)remote_buffer);
 
     static char test[1];
     laik_ucp_buf_send(to_lid, test, 1);
@@ -1265,7 +1266,7 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
             {
                 laik_log(LAIK_LL_Info, "Rank [%d] ==> (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->to_rank, to_lid, tc->transition->group->gid);
             }
-            laik_ucp_rdma_send(to_lid, aa->buffer, aa->offset, aa->count * elemsize, aa->remote_buffer, aa->rkey_handle);
+            laik_ucp_rdma_send(to_lid, aa->buffer, aa->offset, aa->count, aa->remote_buffer, aa->rkey_handle);
             break;
         }
         case LAIK_AT_UcpRdmaRecv:
@@ -1276,7 +1277,7 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
             {
                 laik_log(LAIK_LL_Info, "Rank [%d] <== (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->from_rank, from_lid, tc->transition->group->gid);
             }
-            laik_ucp_rdma_receive(from_lid, aa->buffer, aa->offset, aa->count * elemsize);
+            laik_ucp_rdma_receive(from_lid, aa->buffer, aa->offset, aa->count);
             break;
         }
         case LAIK_AT_BufSend:
