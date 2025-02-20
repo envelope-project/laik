@@ -7,6 +7,10 @@
 #include "laik-internal.h"
 
 //*********************************************************************************
+// base address of local laik rdma memory segment
+
+
+//*********************************************************************************
 typedef struct _RemoteKey
 {
     ucp_rkey_h rkey_handler; // initialized by sender during unpack
@@ -19,16 +23,32 @@ typedef struct _RemoteKey
 } RemoteKey;
 
 //*********************************************************************************
+void init_rdma_memory_handler(ucp_context_h ucp_context_backend, ucp_worker_h ucp_worker_backend);
+
+//*********************************************************************************
 // receiver inserts new rdma address here
 // if address is already mapped to rdma, existing remote key will be returned instead
 RemoteKey *insert_new_rkey(uint64_t new_buffer_address, size_t size, ucp_context_h ucp_context);
 
 //*********************************************************************************
 // sender checks if rkey is already registered
-// we have to distinguish between the different endpoints which is done using the receriver lid
-ucp_rkey_h get_rkey_handle(RemoteKey *remote_key, int lid, ucp_ep_h endpoint);
+// we have to distinguish between the different endpoints which is done using the receiver lid
+RemoteKey* get_rkey_handle(RemoteKey *remote_key, int lid, ucp_ep_h endpoint);
 
 //*********************************************************************************
 void destroy_rkeys(ucp_context_h ucp_context);
 
 //*********************************************************************************
+void *ucp_rdma_malloc(Laik_Data *d, size_t size);
+
+//*********************************************************************************
+void *ucp_rdma_realloc(Laik_Data *d, void* ptr, size_t size);
+
+//*********************************************************************************
+void ucp_rdma_free(Laik_Data *d, void* ptr);
+
+//*********************************************************************************
+void ucp_unmap_temporay_rdma_buffers(Laik_ActionSeq *as);
+
+//*********************************************************************************
+void ucp_map_temporay_rdma_buffers(Laik_ActionSeq *as);

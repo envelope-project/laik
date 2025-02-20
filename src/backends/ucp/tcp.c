@@ -158,7 +158,6 @@ void tcp_initialize_setup_connection(const char *home_host, const int home_port,
         }
     }
 
-    // now we know if we are master: init peer with id 0
     bool is_master = (d->mylid == 0);
 
     if (is_master)
