@@ -156,6 +156,26 @@ void laik_switchstat_free(Laik_SwitchStat* ss, uint64_t bytes)
 
 static int data_id = 0;
 
+// get backend specific allocator
+// currently lowest backend with custom allocator defines allocator for data container
+static Laik_Allocator* allocator(Laik_Instance* inst, Laik_Data* d)
+{
+    (void)d;
+    Laik_Allocator* (*create)();
+    create = inst->backend->allocator;
+    //Laik_Inst_Data* idata = NULL;
+    //for(Laik_Inst_Data* c = inst->inst_data; c->next != NULL; c = c->next)
+    //{
+        //create = c->next_backend->allocator ? c->next_backend->allocator : create;
+        //idata = c->next;
+    //}
+    assert(laik_allocator_def);
+
+    // set backend data of data container to inst data of backend that does allocation
+    //d->backend_data = idata;
+    return create ? create() : laik_allocator_def;
+}
+
 Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
 {
     Laik_Data* d = malloc(sizeof(Laik_Data));
@@ -177,7 +197,8 @@ Laik_Data* laik_new_data(Laik_Space* space, Laik_Type* type)
     d->activePartitioning = 0;
     d->activeMappings = 0;
     assert(laik_allocator_def);
-    d->allocator = laik_allocator_def; // malloc/free + reuse if possible
+    d->allocator = allocator(space->inst, d); // malloc/free + reuse if possible
+    assert(d->allocator);
     d->layout_factory = laik_new_layout_lex; // by default, use lex layouts
     d->stat = laik_newSwitchStat();
 
