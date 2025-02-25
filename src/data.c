@@ -157,22 +157,14 @@ void laik_switchstat_free(Laik_SwitchStat* ss, uint64_t bytes)
 static int data_id = 0;
 
 // get backend specific allocator
-// currently lowest backend with custom allocator defines allocator for data container
 static Laik_Allocator* allocator(Laik_Instance* inst, Laik_Data* d)
 {
     (void)d;
     Laik_Allocator* (*create)();
     create = inst->backend->allocator;
-    //Laik_Inst_Data* idata = NULL;
-    //for(Laik_Inst_Data* c = inst->inst_data; c->next != NULL; c = c->next)
-    //{
-        //create = c->next_backend->allocator ? c->next_backend->allocator : create;
-        //idata = c->next;
-    //}
+
     assert(laik_allocator_def);
 
-    // set backend data of data container to inst data of backend that does allocation
-    //d->backend_data = idata;
     return create ? create() : laik_allocator_def;
 }
 
