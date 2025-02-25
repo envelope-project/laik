@@ -31,12 +31,10 @@ void init_rdma_memory_handler(ucp_context_h ucp_context_backend, ucp_worker_h uc
 RemoteKey *insert_new_rkey(uint64_t new_buffer_address, size_t size, ucp_context_h ucp_context);
 
 //*********************************************************************************
-// sender checks if rkey is already registered
-// we have to distinguish between the different endpoints which is done using the receiver lid
-RemoteKey* get_rkey_handle(RemoteKey *remote_key, int lid, ucp_ep_h endpoint);
+RemoteKey* get_remote_key(RemoteKey *remote_key, int lid, ucp_ep_h endpoint);
 
 //*********************************************************************************
-void destroy_rkeys(ucp_context_h ucp_context);
+void destroy_rkeys(ucp_context_h ucp_context, bool finalize);
 
 //*********************************************************************************
 void *ucp_rdma_malloc(Laik_Data *d, size_t size);

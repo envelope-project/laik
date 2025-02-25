@@ -27,7 +27,7 @@ export LAIK_SIZE=$procs
 
 total=$((procs + spares))
 for (( i=1; i<=$total; i++ )); do
-    log_file="output_rank_${i}.log"
+    log_file="/home/ge96hoy2/logs/output_rank_${i}.log"
     echo "Launching process $i, output redirected to $log_file"
     $@ > "$log_file" 2>&1 &  # Redirect stdout and stderr to the log file
 done

@@ -23,7 +23,7 @@ int number_entries_send_keys;;
 //*********************************************************************************
 void init_rdma_memory_handler(ucp_context_h ucp_context_backend, ucp_worker_h ucp_worker_backend)
 {
-    laik_log(LAIK_LL_Debug, "Initialized rdma memory handler");
+    laik_log(LAIK_LL_Info, "Initialized rdma memory handler");
     ucp_context = ucp_context_backend;
     ucp_worker = ucp_worker_backend;
 }
@@ -57,7 +57,7 @@ RemoteKey *insert_new_rkey(uint64_t new_base_address, size_t size, ucp_context_h
 
     if (!remote_key)
     {
-        laik_log(LAIK_LL_Error, "Creating new remote key for temporary buffer [%p] with size [%lu]", (void *)new_base_address, size);
+        laik_log(LAIK_LL_Debug, "Creating new remote key for temporary buffer [%p] with size [%lu]", (void *)new_base_address, size);
         // temporary buffer needs to be mapped to rdma as well
         assert(number_entries_recv_keys < MAX_NUMBER_RKEYS);
 
@@ -96,68 +96,51 @@ RemoteKey *insert_new_rkey(uint64_t new_base_address, size_t size, ucp_context_h
 }
 
 //*********************************************************************************
-RemoteKey* get_rkey_handle(RemoteKey *remote_key, int lid, ucp_ep_h endpoint)
+RemoteKey* get_remote_key(RemoteKey *remote_key, int lid, ucp_ep_h endpoint)
 {
-    RemoteKey* rk = NULL;
+    RemoteKey* rk;
 
-    for (int i = 0; i < MAX_NUMBER_RKEYS; i++)
+    assert(number_entries_send_keys < MAX_NUMBER_RKEYS);
+    rk = &send_key_list[number_entries_send_keys];
+    rk->buffer_address = remote_key->buffer_address;
+    rk->buffer_size = remote_key->buffer_size;
+    rk->rkey_buffer_size = remote_key->rkey_buffer_size;
+    rk->rkey_buffer = remote_key->rkey_buffer;
+    rk->lid = lid;
+    // is not initialized yet
+    ucs_status_t status = ucp_ep_rkey_unpack(endpoint, remote_key->rkey_buffer, &(rk->rkey_handler));
+    if (status != UCS_OK)
     {
-        if (remote_key->buffer_address == send_key_list[i].buffer_address && remote_key->lid == send_key_list[i].lid)
-        {
-            rk = &send_key_list[i];
-            break;
-        }
+        laik_panic("Could not unpack remot key");
     }
-
-    if (!rk)
-    {
-        assert(number_entries_send_keys < MAX_NUMBER_RKEYS);
-
-        rk = &send_key_list[number_entries_send_keys];
-
-        rk->buffer_address = remote_key->buffer_address;
-        rk->buffer_size = remote_key->buffer_size;
-        rk->rkey_buffer_size = remote_key->rkey_buffer_size;
-        rk->rkey_buffer = remote_key->rkey_buffer;
-        rk->lid = lid;
-
-        // is not initialized yet
-        ucs_status_t status = ucp_ep_rkey_unpack(endpoint, remote_key->rkey_buffer, &(rk->rkey_handler));
-        if (status != UCS_OK)
-        {
-            laik_panic("Could not unpack remot key");
-        }
-
-        assert(rk->rkey_handler != NULL);
-        laik_log(LAIK_LL_Debug, "Unpacked rkey for buffer [%p] with target location [%d] and rkey handler [%p]", (void*)rk->buffer_address, lid, (void*)rk->rkey_handler);
-        
-        number_entries_send_keys++;
-    }
-    else
-    {
-        laik_log(LAIK_LL_Debug, "Sending: Address [%p] with size [%lu] is within buffer [%p] and size [%lu]", (void*)remote_key->buffer_address, remote_key->buffer_size, (void*)rk->buffer_address, rk->buffer_size);
-    }
-
+    assert(rk->rkey_handler != NULL);
+    laik_log(LAIK_LL_Debug, "Unpacked rkey for buffer [%p] with target location [%d] and rkey handler [%p]", (void*)rk->buffer_address, lid, (void*)rk->rkey_handler);
+    
+    number_entries_send_keys++;
     return rk;
 }
 
 //*********************************************************************************
-void destroy_rkeys(ucp_context_h ucp_context)
+void destroy_rkeys(ucp_context_h ucp_context, bool finalize)
 {
-    for (int i = 0; i < number_entries_recv_keys; i++)
-    {
-        if (recv_key_list[i].buffer_address != UINT64_MAX)
+    if (finalize)
+    {      
+        // ensure that rdma memory is unmapped if ucp_rdma_free was not called by application
+        for (int i = 0; i < number_entries_recv_keys; i++)
         {
-            ucp_mem_unmap(ucp_context, recv_key_list[i].mem_handler);
-            laik_log(LAIK_LL_Error, "Unmapping temporary buffer [%p] with size [%lu]", (void*)recv_key_list[i].buffer_address, recv_key_list[i].buffer_size);
+           if (recv_key_list[i].buffer_address != UINT64_MAX)
+           {
+                ucp_mem_unmap(ucp_context, recv_key_list[i].mem_handler);
+                laik_log(LAIK_LL_Debug, "Unmapping buffer [%p] with size [%lu]", (void*)recv_key_list[i].buffer_address, recv_key_list[i].buffer_size);
+           }
         }
-    } 
+    }
     for (int i = 0; i < number_entries_send_keys; i++)
     {
         ucp_rkey_destroy(send_key_list[i].rkey_handler);
     }
 
-    number_entries_recv_keys = 0;
+    // number_entries_recv_keys = 0;
     number_entries_send_keys = 0;
 }
 
@@ -200,7 +183,7 @@ void *ucp_rdma_malloc(Laik_Data *d, size_t size)
     void* ptr = malloc(size);
     // Ensure memory is backed before RDMA registration
     memset(ptr, 0, size);
-    laik_log(LAIK_LL_Error, "Allocated memory for data [%d] with size: [%lu] at address [%p]", d->id, size, ptr);
+    laik_log(LAIK_LL_Debug, "Allocated memory for data [%d] with size: [%lu] at address [%p]", d->id, size, ptr);
 
     if (!ptr)
     {
@@ -232,7 +215,7 @@ void *ucp_rdma_realloc(Laik_Data *d, void* ptr, size_t size)
 /// TODO: Finish to implement this if needed
 void ucp_rdma_free(Laik_Data *d, void* ptr)
 {
-    laik_log(LAIK_LL_Error, "Freeing memory for data [%d] at address [%p]", d->id, ptr);
+    laik_log(LAIK_LL_Debug, "Freeing memory for data [%d] at address [%p]", d->id, ptr);
     assert(ucp_context);
 
     for (int i = 0; i < number_entries_recv_keys; i++)
@@ -260,7 +243,7 @@ void ucp_unmap_temporay_rdma_buffers(Laik_ActionSeq *as)
             {
                 if ((uint64_t)as->buf[i] == recv_key_list[k].buffer_address && as->bufSize[i] == recv_key_list[k].buffer_size)
                 {
-                    laik_log(LAIK_LL_Error, "Unmapping temporary buffer [%p] with size [%lu] from rdma", (void*)as->buf[i], as->bufSize[i]);
+                    laik_log(LAIK_LL_Debug, "Unmapping temporary buffer [%p] with size [%lu] from rdma", (void*)as->buf[i], as->bufSize[i]);
                     ucp_mem_unmap(ucp_context, recv_key_list[k].mem_handler);
                     recv_key_list[k].buffer_address = UINT64_MAX;
                 }
@@ -275,7 +258,7 @@ void ucp_map_temporay_rdma_buffers(Laik_ActionSeq *as)
     for(int i = 0; i < as->bufferCount; i++) {
         if (as->bufSize[i] > 0) 
         {
-            laik_log(LAIK_LL_Error, "Mapping temporary buffer [%p] with size [%lu] for rdma", (void*)as->buf[i], as->bufSize[i]);
+            laik_log(LAIK_LL_Debug, "Mapping temporary buffer [%p] with size [%lu] for rdma", (void*)as->buf[i], as->bufSize[i]);
             (void)insert_new_rkey((uint64_t)as->buf[i], as->bufSize[i], ucp_context);
         }
     }

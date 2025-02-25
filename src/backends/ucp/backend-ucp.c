@@ -460,7 +460,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
     if (world_size == 0)
         world_size = 1;
 
-    laik_log(1, "UCP location '%s', home %s:%d\n", location, home_host, home_port);
+    laik_log(LAIK_LL_Info, "UCP location '%s', home %s:%d\n", location, home_host, home_port);
 
     initialize_instance_data(location, home_host, world_size);
 
@@ -606,7 +606,7 @@ void aseq_add_rdma_send(Laik_ActionSeq *as, int round,
     laik_log(LAIK_LL_Info, "Rank [%d] received remote key for rdma operation", d->mylid);
 
     a->remote_buffer = direct_address;
-    a->remote_key = get_rkey_handle(&remote_key, from_lid, ucp_endpoints[from_lid]);
+    a->remote_key = get_remote_key(&remote_key, from_lid, ucp_endpoints[from_lid]);
 }
 
 //*********************************************************************************
@@ -745,11 +745,6 @@ static void laik_ucp_prepare(Laik_ActionSeq *as)
         return;
     }
 
-    /// TODO: FINISH ONE COPY
-    /* 
-    changed = ucp_aseq_prepare_rdma(as);
-    laik_log_ActionSeqIfChanged(changed, as, "After one copy preparation actions"); 
-    */
     changed = laik_aseq_flattenPacking(as);
     laik_log_ActionSeqIfChanged(changed, as, "After flattening actions");
    
@@ -781,7 +776,7 @@ static void laik_ucp_prepare(Laik_ActionSeq *as)
     ucp_map_temporay_rdma_buffers(as);
     changed = ucp_aseq_inject_rdma_operations(as);
     laik_log_ActionSeqIfChanged(changed, as, "After injecting rdma operations");
-
+   
     laik_aseq_freeTempSpace(as);
 
     ucp_aseq_calc_stats(as);
@@ -801,6 +796,7 @@ static void laik_ucp_cleanup(Laik_ActionSeq *as)
     }
 
     ucp_unmap_temporay_rdma_buffers(as);
+    destroy_rkeys(ucp_context, false);
 }
 
 //*********************************************************************************
@@ -1240,7 +1236,7 @@ static void laik_ucp_finalize(Laik_Instance *inst)
         status = ucp_worker_flush(ucp_worker);
     }  while(status == UCS_INPROGRESS);
 
-    destroy_rkeys(ucp_context);
+    destroy_rkeys(ucp_context, true);
     close_endpoints();
 
     // also frees d->address
