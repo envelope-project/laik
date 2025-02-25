@@ -10,6 +10,7 @@ EXAMPLES = min vsum vsum2 spmv spmv2 \
     propagation1d propagation2d \
     resize vsum3 \
     ping_pong \
+    overlapping_memory_usage \
     README-example
 
 LDFLAGS = $(OPT)
@@ -55,6 +56,8 @@ vsum3: vsum3.o $(LAIKLIB)
 README-example: README-example.o $(LAIKLIB)
 
 ping_pong: ping_pong.o $(LAIKLIB)
+
+overlapping_memory_usage: overlapping_memory_usage.o $(LAIKLIB)
 
 clean:
 	rm -f *.o *~ *.ppm $(EXAMPLES)
