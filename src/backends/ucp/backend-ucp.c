@@ -29,7 +29,7 @@
 
 //*********************************************************************************
 
-// Used for calculating the message tags for send and recv
+// Used for calculating the message tags for send and recv, 2**32-1 different sources/destinations possible
 #define TAG_SOURCE_SHIFT 32
 #define TAG_DEST_SHIFT 0
 
@@ -129,7 +129,7 @@ static void request_init(void *request)
 }
 
 //*********************************************************************************
-void initialize_instance_data(const char *location, const char *home_host, int world_size)
+void initialize_instance_data(const char *location, char *home_host, int world_size)
 {
     d = (InstData *)malloc(sizeof(InstData));
     if (d == NULL)
@@ -159,6 +159,7 @@ void error_handler(void *user_data, ucp_ep_h endpoint, ucs_status_t status)
     if (status != UCS_OK)
     {
         laik_log(LAIK_LL_Error, "Rank[%d]: Endpoint is in an invalid state (%s)\n", d->mylid, ucs_status_string(status));
+        exit(1);
     }
 }
 
@@ -450,7 +451,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 
     // setting of home location: host/port to register with
     str = getenv("LAIK_UCP_HOST");
-    const char *home_host = str ? str : "localhost";
+    char *home_host = str ? str : "localhost";
     str = getenv("LAIK_UCP_PORT");
     int home_port = str ? atoi(str) : 0;
     if (home_port == 0)
@@ -630,7 +631,6 @@ void aseq_add_rdma_recv(Laik_ActionSeq *as, int round,
     laik_ucp_buf_send(to_lid, (char *)&a->remote_key->buffer_address, sizeof(uint64_t));
     laik_ucp_buf_send(to_lid, (char *)&a->remote_key->buffer_size, sizeof(size_t));
 
-    /// TODO: remove offset
     laik_ucp_buf_send(to_lid, (char *)&to_buf, sizeof(uint64_t));
 
     laik_log(LAIK_LL_Info, "Rank [%d] sent remote key for rdma operation for target address [%p] and count [%ud]", d->mylid, (void*)to_buf, count);
@@ -772,11 +772,11 @@ static void laik_ucp_prepare(Laik_ActionSeq *as)
     changed = laik_aseq_sort_2phases(as);
     // changed = laik_aseq_sort_rankdigits(as);
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
-
+    /* 
     ucp_map_temporay_rdma_buffers(as);
     changed = ucp_aseq_inject_rdma_operations(as);
     laik_log_ActionSeqIfChanged(changed, as, "After injecting rdma operations");
-   
+    */
     laik_aseq_freeTempSpace(as);
 
     ucp_aseq_calc_stats(as);
@@ -898,6 +898,7 @@ void laik_ucp_buf_send(int to_lid, char *buf, size_t count)
     if (status != UCS_OK)
     {
         laik_log(LAIK_LL_Error, "Could not send message to %d\n", to_lid);
+        exit(1);
     }
     else
     {
@@ -952,6 +953,7 @@ void laik_ucp_buf_recv(int from_lid, char *buf, size_t count)
     if (status != UCS_OK)
     {
         laik_log(LAIK_LL_Error, "Rank [%d] <= Rank [%d] encountered error while receiving\n", d->mylid, from_lid);
+        exit(1);
     }
     else
     {
@@ -982,7 +984,7 @@ void laik_ucp_rdma_send(int to_lid, char *buf, size_t count, uint64_t remote_buf
     static char ack[1];
     laik_ucp_buf_send(to_lid, ack, 1);
 
-    laik_log(LAIK_LL_Error, "Rank [%d] => Rank [%d]: RDMA Send to remote address [%p] and count [%lu]: Target RDMA [%p] with total size [%lu]",
+    laik_log(LAIK_LL_Debug, "Rank [%d] => Rank [%d]: RDMA Send to remote address [%p] and count [%lu]: Target RDMA [%p] with total size [%lu]",
         d->mylid, to_lid, (void*)remote_buffer, count, (void*)remote_key->buffer_address, remote_key->buffer_size);
 }
 
@@ -993,7 +995,7 @@ void laik_ucp_rdma_receive(int from_lid, char *buf, size_t count, RemoteKey* rem
     static char ack[1];
     laik_ucp_buf_recv(from_lid, ack, 1);
 
-    laik_log(LAIK_LL_Error, "Rank [%d] <= Rank [%d]: RDMA Recv into address [%p] and count [%lu]: Target RDMA [%p] with total size [%lu]",
+    laik_log(LAIK_LL_Debug, "Rank [%d] <= Rank [%d]: RDMA Recv into address [%p] and count [%lu]: Target RDMA [%p] with total size [%lu]",
         d->mylid, from_lid, (void*)buf, count, (void*)remote_key->buffer_address, remote_key->buffer_size);
 }
 
@@ -1212,6 +1214,7 @@ void close_endpoints(void)
             else if (UCS_PTR_STATUS(close_req) != UCS_OK)
             {
                 laik_log(LAIK_LL_Error, "Failed to close endpoint: %s\n", ucs_status_string(UCS_PTR_STATUS(close_req)));
+                exit(1);
             }
         }
     }

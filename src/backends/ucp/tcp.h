@@ -15,7 +15,7 @@
 /*
     Master is determined and initial peer addresses are broadcasted, enabling ucp connections for further communication
 */
-void tcp_initialize_setup_connection(const char *home_host, const int home_port, InstData *d);
+void tcp_initialize_setup_connection(char *home_host, const int home_port, InstData *d);
 
 //*********************************************************************************
 /*
