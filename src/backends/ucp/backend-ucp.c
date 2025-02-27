@@ -47,7 +47,6 @@ static const char *UCX_MESSAGE_STRING = "UCX DATA MESSAGE";
 static ucp_context_h ucp_context;
 static ucp_worker_h ucp_worker;
 static ucp_ep_h *ucp_endpoints;
-// static ucp_mem_h ucp_memory_handle;
 
 //*********************************************************************************
 static Laik_Instance *instance = 0;

@@ -23,7 +23,7 @@ static int *fds;
 bool check_local(char *host);
 
 //*********************************************************************************
-void safe_read(int socket_fd, void *buffer, size_t length) {
+static inline void safe_read(int socket_fd, void *buffer, size_t length) {
     size_t total_read = 0;
     ssize_t bytes_read;
     char *buf = buffer;
@@ -41,7 +41,7 @@ void safe_read(int socket_fd, void *buffer, size_t length) {
 }
 
 //*********************************************************************************
-void  safe_write(int socket_fd, const void *buffer, size_t length) {
+static inline void  safe_write(int socket_fd, const void *buffer, size_t length) {
     size_t total_written = 0;
     ssize_t bytes_written;
     const char *buf = buffer;
