@@ -2,12 +2,13 @@
 
 trap 'jobs -p | xargs -r kill' SIGINT SIGTERM
 
-export LAUNCHER=/home/ubuntu/BachelorThesis/laik/tests/ucp/launcher.sh
+export LAUNCHER="/home/ge96hoy2/laik/tests/ucp/launcher.sh"
 
-DIR=${1:-.}  # default to the current directory
+DIR="/home/ge96hoy2/laik/tests/common"
+
 for file in "$DIR"/*; do
-    if [ -x "$file" ] && [ -f "$file" ] && [ "$(basename -- "$file")" != "test-kvstest-single.sh" ]; then #kv not supported
-        echo "Executing: $file"
+    if [ -x "$file" ] && [ -f "$file" ]; then 
+        #echo "Executing: $file"
         "$file"
     fi
 done

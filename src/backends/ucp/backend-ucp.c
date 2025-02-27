@@ -62,14 +62,13 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs);
 static void laik_ucp_finish_resize(void);
 static bool laik_ucp_log_action(Laik_Action *a);
 static Laik_Allocator *laik_ucp_allocator(void);
+static void laik_ucp_sync(Laik_KVStore *kvs); 
 
-void laik_ucp_buf_send(int to_lid, char *buf, size_t count);
-void laik_ucp_buf_recv(int from_lid, char *buf, size_t count);
-
-/* static void laik_ucp_updateGroup(Laik_Group *);
-static bool laik_ucp_log_action(Laik_Action *a);
-static void laik_ucp_sync(Laik_KVStore *kvs);  */
-
+void laik_ucp_buf_send(int to_lid, const void *buf, size_t count);
+void laik_ucp_buf_recv(int from_lid, void *buf, size_t count);
+/* 
+static void laik_ucp_updateGroup(Laik_Group *);
+ */
 // C guarantees that unset function pointers are NULL
 static Laik_Backend laik_backend_ucp = {
     .name = "UCP backend",
@@ -80,9 +79,9 @@ static Laik_Backend laik_backend_ucp = {
     .log_action = laik_ucp_log_action,
     .resize = laik_ucp_resize,
     .finish_resize = laik_ucp_finish_resize,
-    .allocator = laik_ucp_allocator
+    .allocator = laik_ucp_allocator,
     //.updateGroup = laik_ucp_updateGroup,
-    //.sync        = laik_ucp_sync
+    .sync        = laik_ucp_sync
 };
 
 //*********************************************************************************
@@ -235,25 +234,6 @@ void update_endpoints(int number_new_connections)
                 laik_panic((const char *)message);
             }
 
-            /* if (i == 2)
-            {
-                if (d->mylid == 0)
-                {
-                    sleep(1);
-                }
-                laik_log_begin(LAIK_LL_Info);
-                laik_log_append("Rank [%d] UCX address (length: %zu):\n", d->mylid, d->peer[i].addrlen);
-                for (size_t k = 0; k < d->peer[i].addrlen; k++)
-                {
-                    laik_log_append("%02x ", ((unsigned char *)d->peer[i].address)[k]);
-                    if ((k + 1) % 16 == 0)
-                    {
-                        laik_log_append("\n");
-                    }
-                }
-                laik_log_flush("\n");
-            } */
-
             laik_log(LAIK_LL_Info, "Rank[%d] => Rank[%d]: UCP endpoint created successfully.\n", d->mylid, i);
         }
     }
@@ -327,18 +307,6 @@ void init_first_laik_group(int old_world_size, Laik_Group *world)
     world->size = i2;
     world->parent = parent;
 
-    /* laik_log_begin(LAIK_LL_Info);
-    laik_log_append("Rank [%d]: goup id [%d] parent location ids:", d->mylid, world->parent->gid);
-    for (int i = 0; i < i1; i++)
-    {
-        laik_log_append(" [%d]", parent->locationid[i]);
-    }
-    laik_log_append("\n");
-    laik_log_append("Rank [%d]: goup id [%d] world location ids:", d->mylid, world->parent->gid);
-    for (int i = 0; i < i2; i++)
-    {
-        laik_log_append(" [%d]", world->locationid[i]);
-    } */
     laik_log_flush("\n");
 }
 
@@ -400,19 +368,6 @@ Laik_Group *create_new_laik_group(void)
     group->myid = group->fromParent[world->myid];
     instance->locations = d->world_size;
 
-    /* laik_log_begin(LAIK_LL_Info);
-    laik_log_append("Rank [%d]: goup id [%d] parent location ids:", d->mylid, group->parent->gid);
-    for (int i = 0; i < i1; i++)
-    {
-        laik_log_append(" [%d]", group->parent->locationid[i]);
-    }
-    laik_log_append("\n");
-    laik_log_append("Rank [%d]: goup id [%d] world location ids:", d->mylid, world->gid);
-    for (int i = 0; i < i2; i++)
-    {
-        laik_log_append(" [%d]", world->locationid[i]);
-    }
-    laik_log_flush("\n"); */
     return group;
 }
 
@@ -870,7 +825,7 @@ ucp_tag_t create_tag(int src_lid, int dest_lid)
 }
 
 //*********************************************************************************
-void laik_ucp_buf_send(int to_lid, char *buf, size_t count)
+void laik_ucp_buf_send(int to_lid, const void *buf, size_t count)
 {
     laik_log(LAIK_LL_Info, "Rank [%d] ==> [%d]: Sending message with size %lu.\n", d->mylid, to_lid, count);
     // laik_log_hexdump(2, count, &buf);
@@ -906,7 +861,7 @@ void laik_ucp_buf_send(int to_lid, char *buf, size_t count)
 }
 
 //*********************************************************************************
-void laik_ucp_buf_recv(int from_lid, char *buf, size_t count)
+void laik_ucp_buf_recv(int from_lid, void *buf, size_t count)
 {
     laik_log(LAIK_LL_Info, "Rank [%d] <= Rank [%d] receiving message with size %lu.\n", d->mylid, from_lid, count);
 
@@ -1230,7 +1185,7 @@ static void laik_ucp_finalize(Laik_Instance *inst)
     tcp_close_connections(d);
 
     // This barrier ensures that all rdma operations are finsished before closing the endpoints
-    barrier();
+    //barrier();
 
     ucs_status_t status;
     do 
@@ -1481,6 +1436,129 @@ static bool laik_ucp_log_action(Laik_Action *a)
         break;
     }
     return true;
+}
+
+//*********************************************************************************
+static void laik_ucp_sync(Laik_KVStore *kvs)
+{
+    assert(kvs->inst == instance);
+
+    Laik_Group* world = kvs->inst->world;
+    int myid = world->myid;
+
+    int count[2] = {0,0};
+
+    if (myid > 0) 
+    {
+        // send to master, receive from master
+        count[0] = (int) kvs->changes.offUsed;
+        assert((count[0] == 0) || ((count[0] & 1) == 1)); // 0 or odd number of offsets
+        count[1] = (int) kvs->changes.dataUsed;
+        laik_log(LAIK_LL_Debug, "UCP sync: sending %d changes (total %d chars) to T0",
+                 count[0] / 2, count[1]);
+        
+        laik_ucp_buf_send(0, count, sizeof(count));
+
+        if (count[0] > 0)
+        {
+            assert(count[1] > 0);
+            laik_ucp_buf_send(0, kvs->changes.off, count[0] * sizeof(count[0]));
+            laik_ucp_buf_send(0, kvs->changes.data, count[1] * sizeof(char));
+        }
+        else 
+        {
+            assert(count[1] == 0);
+        }
+
+        laik_ucp_buf_recv(0, count, sizeof(count));
+        laik_log(LAIK_LL_Debug, "MPI sync: getting %d changes (total %d chars) from T0",
+                 count[0] / 2, count[1]);
+
+        if (count[0] > 0) 
+        {
+            assert(count[1] > 0);
+            laik_kvs_changes_ensure_size(&(kvs->changes), count[0], count[1]);
+            laik_ucp_buf_recv(0, kvs->changes.off, count[0] * sizeof(count[0]));
+            laik_ucp_buf_recv(0, kvs->changes.data, count[1] * sizeof(char));
+
+            laik_kvs_changes_set_size(&(kvs->changes), count[0], count[1]);
+            // TODO: opt - remove own changes from received ones
+            laik_kvs_changes_apply(&(kvs->changes), kvs);
+        }
+        else
+            assert(count[1] == 0);
+
+        return;
+    }
+
+    // master: receive changes from all others, sort, merge, send back
+
+    // first sort own changes, as preparation for merging
+    laik_kvs_changes_sort(&(kvs->changes));
+
+    Laik_KVS_Changes recvd, changes;
+    laik_kvs_changes_init(&changes); // temporary changes struct
+    laik_kvs_changes_init(&recvd);
+
+    Laik_KVS_Changes *src, *dst, *tmp;
+    // after merging, result should be in dst;
+    dst = &(kvs->changes);
+    src = &changes;
+
+    for(int i = 1; i < world->size; i++) {
+        if (d->peer[i].state < DEAD)
+        {
+            laik_ucp_buf_recv(i, count, sizeof(count));
+            
+            laik_log(LAIK_LL_Debug, "MPI sync: getting %d changes (total %d chars) from T%d",
+                    count[0] / 2, count[1], i);
+            laik_kvs_changes_set_size(&recvd, 0, 0); // fresh reuse
+            laik_kvs_changes_ensure_size(&recvd, count[0], count[1]);
+            if (count[0] == 0) {
+                assert(count[1] == 0);
+                continue;
+            }
+
+            assert(count[1] > 0);
+            laik_ucp_buf_recv(i, recvd.off, count[0] * sizeof(count[0]));
+            laik_ucp_buf_recv(i, recvd.data, count[1] * sizeof(char));
+
+            laik_kvs_changes_set_size(&recvd, count[0], count[1]);
+
+            // for merging, both inputs need to be sorted
+            laik_kvs_changes_sort(&recvd);
+
+            // swap src/dst: now merging can overwrite dst
+            tmp = src; src = dst; dst = tmp;
+
+            laik_kvs_changes_merge(dst, src, &recvd);
+        }
+    }
+
+    // send merged changes to all others: may be 0 entries
+    count[0] = dst->offUsed;
+    count[1] = dst->dataUsed;
+    assert(count[1] > count[0]); // more byte than offsets
+    for(int i = 1; i < world->size; i++) {
+        if (d->peer[i].state < DEAD)
+        {
+            laik_log(1, "MPI sync: sending %d changes (total %d chars) to T%d",
+            count[0] / 2, count[1], i);
+            
+            laik_ucp_buf_send(i, count, sizeof(count));
+            
+            if (count[0] == 0) continue;
+            
+            laik_ucp_buf_send(i, dst->off, count[0] * sizeof(count[0]));
+            laik_ucp_buf_send(i, dst->data, count[1] * sizeof(char));
+        }
+    }
+
+    // TODO: opt - remove own changes from received ones
+    laik_kvs_changes_apply(dst, kvs);
+
+    laik_kvs_changes_free(&recvd);
+    laik_kvs_changes_free(&changes);
 }
 
 //*********************************************************************************
