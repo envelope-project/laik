@@ -86,12 +86,8 @@ static Laik_Backend laik_backend_ucp = {
 
 //*********************************************************************************
 // backend internal actions
-
-#define LAIK_AT_UcpMapRecvAndUnpack (LAIK_AT_Backend + 50)
-#define LAIK_AT_UcpMapPackAndSend (LAIK_AT_Backend + 51)
-
-#define LAIK_AT_UcpRdmaSend (LAIK_AT_Backend + 52)
-#define LAIK_AT_UcpRdmaRecv (LAIK_AT_Backend + 53)
+#define LAIK_AT_UcpRdmaSend (LAIK_AT_Backend + 50)
+#define LAIK_AT_UcpRdmaRecv (LAIK_AT_Backend + 51)
 
 // action structs are packed
 #pragma pack(push, 1)
@@ -100,7 +96,7 @@ typedef struct _LAIK_A_UcpRdmaSend
 {
     Laik_Action h;
     int to_rank;
-    unsigned int count;
+    size_t count;
     RemoteKey* remote_key;
     char *buffer;
     uint64_t remote_buffer;
@@ -110,7 +106,7 @@ typedef struct _LAIK_A_UcpRdmaRecv
 {
     Laik_Action h;
     int from_rank;
-    unsigned int count;
+    size_t count;
     RemoteKey* remote_key;
     char *buffer;
 } LAIK_A_UcpRdmaRecv;
@@ -528,7 +524,7 @@ Laik_Instance *laik_init_ucp(int *argc, char ***argv)
 
 //*********************************************************************************
 void aseq_add_rdma_send(Laik_ActionSeq *as, int round,
-                        char *from_buf, unsigned int count, int to,
+                        char *from_buf, size_t count, int to,
                         Laik_Group *group)
 {
     LAIK_A_UcpRdmaSend *a = (LAIK_A_UcpRdmaSend *)laik_aseq_addBAction(as, round);
@@ -566,7 +562,7 @@ void aseq_add_rdma_send(Laik_ActionSeq *as, int round,
 
 //*********************************************************************************
 void aseq_add_rdma_recv(Laik_ActionSeq *as, int round,
-                        char *to_buf, unsigned int count, int from,
+                        char *to_buf, size_t count, int from,
                         Laik_Group *group)
 {
     LAIK_A_UcpRdmaRecv *a = (LAIK_A_UcpRdmaRecv *)laik_aseq_addBAction(as, round);
@@ -587,7 +583,7 @@ void aseq_add_rdma_recv(Laik_ActionSeq *as, int round,
 
     laik_ucp_buf_send(to_lid, (char *)&to_buf, sizeof(uint64_t));
 
-    laik_log(LAIK_LL_Info, "Rank [%d] sent remote key for rdma operation for target address [%p] and count [%ud]", d->mylid, (void*)to_buf, count);
+    laik_log(LAIK_LL_Info, "Rank [%d] sent remote key for rdma operation for target address [%p] and count [%lu]", d->mylid, (void*)to_buf, count);
 }
 
 //*********************************************************************************
@@ -611,15 +607,16 @@ bool ucp_aseq_inject_rdma_operations(Laik_ActionSeq *as)
             case LAIK_AT_BufSend:
             {
                 Laik_A_BufSend* aa = (Laik_A_BufSend*) a;
-
-                aseq_add_rdma_send(as, 3 * a->round + 1, aa->buf, aa->count * tc->data->elemsize, aa->to_rank, tc->transition->group);
+                size_t total_byte = (size_t) aa->count * tc->data->elemsize;
+                aseq_add_rdma_send(as, 3 * a->round + 1, aa->buf, total_byte, aa->to_rank, tc->transition->group);
                 handled = true;
                 break;
             }
             case LAIK_AT_BufRecv:
             {
                 Laik_A_BufRecv* aa = (Laik_A_BufRecv*) a;
-                aseq_add_rdma_recv(as, 3 * a->round + 1, aa->buf, aa->count * tc->data->elemsize, aa->from_rank, tc->transition->group);
+                size_t total_byte = (size_t) aa->count * tc->data->elemsize;
+                aseq_add_rdma_recv(as, 3 * a->round + 1, aa->buf, total_byte, aa->from_rank, tc->transition->group);
                 handled = true;
                 break;
             }
