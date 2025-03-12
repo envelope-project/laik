@@ -1039,7 +1039,8 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
             {
                 laik_log(LAIK_LL_Info, "Rank [%d] ==> (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->to_rank, to_lid, tc->transition->group->gid);
             }
-            laik_ucp_buf_send(to_lid, aa->buf, aa->count * elemsize);
+            size_t total_bytes = (size_t)aa->count * elemsize;
+            laik_ucp_buf_send(to_lid, aa->buf, total_bytes);
             break;
         }
         case LAIK_AT_RBufSend:
@@ -1050,7 +1051,7 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
             {
                 laik_log(LAIK_LL_Info, "Rank [%d] ==> (Rank %d was mapped to LID %d group id [%d])", d->mylid, aa->to_rank, to_lid, tc->transition->group->gid);
             }
-            laik_ucp_buf_send(to_lid, as->buf[aa->bufID] + aa->offset, aa->count * elemsize);
+            laik_ucp_buf_send(to_lid, as->buf[aa->bufID] + aa->offset, (size_t)aa->count * elemsize);
             break;
         }
         case LAIK_AT_BufRecv:
@@ -1061,7 +1062,8 @@ static void laik_ucp_exec(Laik_ActionSeq *as)
             {
                 laik_log(LAIK_LL_Info, "Rank [%d] <== (Rank %d was mapped to LID %d) group id [%d]", d->mylid, aa->from_rank, from_lid, tc->transition->group->gid);
             }
-            laik_ucp_buf_recv(from_lid, aa->buf, aa->count * elemsize);
+            size_t total_bytes = (size_t)aa->count * elemsize;
+            laik_ucp_buf_recv(from_lid, aa->buf, total_bytes);
             break;
         }
         case LAIK_AT_RBufRecv:
