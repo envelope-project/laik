@@ -20,6 +20,7 @@ typedef struct _RemoteKey
     size_t rkey_buffer_size; // packed remote key buffer size
     size_t lid;              // location id of registered endpoint
     void *rkey_buffer;       // packed remote key buffer
+    size_t as_id;
 } RemoteKey;
 
 //*********************************************************************************
@@ -34,7 +35,7 @@ RemoteKey *insert_new_rkey(uint64_t new_buffer_address, size_t size, ucp_context
 RemoteKey* get_remote_key(RemoteKey *remote_key, int lid, ucp_ep_h endpoint);
 
 //*********************************************************************************
-void destroy_rkeys(ucp_context_h ucp_context, bool finalize);
+void destroy_rkeys(ucp_context_h ucp_context, size_t as_id, bool finalize);
 
 //*********************************************************************************
 void *ucp_rdma_malloc(Laik_Data *d, size_t size);

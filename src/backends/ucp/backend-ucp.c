@@ -558,6 +558,7 @@ void aseq_add_rdma_send(Laik_ActionSeq *as, int round,
 
     a->remote_buffer = direct_address;
     a->remote_key = get_remote_key(&remote_key, from_lid, ucp_endpoints[from_lid]);
+    a->remote_key->as_id = as->id; // mark key with action sequence id for cleanup 
 }
 
 //*********************************************************************************
@@ -723,11 +724,11 @@ static void laik_ucp_prepare(Laik_ActionSeq *as)
     changed = laik_aseq_sort_2phases(as);
     // changed = laik_aseq_sort_rankdigits(as);
     laik_log_ActionSeqIfChanged(changed, as, "After sorting for deadlock avoidance");
-    /* 
+    
     ucp_map_temporay_rdma_buffers(as);
     changed = ucp_aseq_inject_rdma_operations(as);
     laik_log_ActionSeqIfChanged(changed, as, "After injecting rdma operations");
-    */
+   
     laik_aseq_freeTempSpace(as);
 
     ucp_aseq_calc_stats(as);
@@ -747,7 +748,8 @@ static void laik_ucp_cleanup(Laik_ActionSeq *as)
     }
 
     ucp_unmap_temporay_rdma_buffers(as);
-    destroy_rkeys(ucp_context, false);
+    /// TODO: delete only action sequence associated remote keys
+    //destroy_rkeys(ucp_context, as->id, false);
 }
 
 //*********************************************************************************
@@ -917,6 +919,8 @@ void laik_ucp_rdma_send(int to_lid, char *buf, size_t count, uint64_t remote_buf
 {
     // remote_buffer contains the exact address (including offset) within the rdma region
     // remote_key->buffer_address contains the base address of the rdma region targeted by remote_buffer
+    laik_log(2, "Rank [%d] => Rank [%d]: RDMA Send to remote address [%p] and count [%lu]: Target RDMA [%p] with total size [%lu] and remote key from as [%lu]",
+        d->mylid, to_lid, (void*)remote_buffer, count, (void*)remote_key->buffer_address, remote_key->buffer_size, remote_key->as_id);
 
     ucs_status_t status;
     status = ucp_put_nbi(ucp_endpoints[to_lid], (const void*)buf, count, remote_buffer, remote_key->rkey_handler);
@@ -934,9 +938,6 @@ void laik_ucp_rdma_send(int to_lid, char *buf, size_t count, uint64_t remote_buf
     
     static char ack[1];
     laik_ucp_buf_send(to_lid, ack, 1);
-
-    laik_log(LAIK_LL_Debug, "Rank [%d] => Rank [%d]: RDMA Send to remote address [%p] and count [%lu]: Target RDMA [%p] with total size [%lu]",
-        d->mylid, to_lid, (void*)remote_buffer, count, (void*)remote_key->buffer_address, remote_key->buffer_size);
 }
 
 //*********************************************************************************
@@ -1192,7 +1193,7 @@ static void laik_ucp_finalize(Laik_Instance *inst)
         status = ucp_worker_flush(ucp_worker);
     }  while(status == UCS_INPROGRESS);
 
-    destroy_rkeys(ucp_context, true);
+    destroy_rkeys(ucp_context, 0, true);
     close_endpoints();
 
     // also frees d->address

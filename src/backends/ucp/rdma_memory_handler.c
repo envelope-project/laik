@@ -121,10 +121,10 @@ RemoteKey* get_remote_key(RemoteKey *remote_key, int lid, ucp_ep_h endpoint)
 }
 
 //*********************************************************************************
-void destroy_rkeys(ucp_context_h ucp_context, bool finalize)
+void destroy_rkeys(ucp_context_h ucp_context, size_t as_id, bool finalize)
 {
     if (finalize)
-    {      
+    {     
         // ensure that rdma memory is unmapped if ucp_rdma_free was not called by application
         for (int i = 0; i < number_entries_recv_keys; i++)
         {
@@ -134,14 +134,17 @@ void destroy_rkeys(ucp_context_h ucp_context, bool finalize)
                 laik_log(LAIK_LL_Debug, "Unmapping buffer [%p] with size [%lu]", (void*)recv_key_list[i].buffer_address, recv_key_list[i].buffer_size);
            }
         }
+
+        
     }
+    
+
     for (int i = 0; i < number_entries_send_keys; i++)
     {
         ucp_rkey_destroy(send_key_list[i].rkey_handler);
     }
 
     // number_entries_recv_keys = 0;
-    number_entries_send_keys = 0;
 }
 
 //*********************************************************************************
