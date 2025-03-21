@@ -6,7 +6,7 @@
 
 //*********************************************************************************
 /// TODO: regulate upper limit dynamically
-#define MAX_NUMBER_RKEYS 1024
+#define MAX_NUMBER_RKEYS (4096*4)
 
 //*********************************************************************************
 // ucp backend context initialized during ucp_init
@@ -144,6 +144,7 @@ void destroy_rkeys(ucp_context_h ucp_context, size_t as_id, bool finalize)
         ucp_rkey_destroy(send_key_list[i].rkey_handler);
     }
 
+    laik_log(4, "KEY COUNT: [%d]", number_entries_recv_keys);
     // number_entries_recv_keys = 0;
 }
 
