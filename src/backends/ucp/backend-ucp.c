@@ -1141,7 +1141,6 @@ static void laik_ucp_finalize(Laik_Instance *inst)
 
     tcp_close_connections(d);
 
-    // This barrier ensures that all rdma operations are finsished before closing the endpoints
     //barrier();
 
     ucs_status_t status;
@@ -1324,7 +1323,7 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
 
     /// TODO: DO i really need a barrier here? socket interaction should be an implicit barrier
     // for now helpful while debugging
-    barrier();
+    //barrier();
 
     // returns NULL if there was an error during parsing
     ResizeCommand *resize_commands = NULL;
