@@ -1110,9 +1110,9 @@ void close_endpoints(void)
 {
     for (int i = 0; i < d->world_size; i++)
     {
-        if (ucp_endpoints[i] != NULL)
+        if (d->peer[i].state < INREMOVE2)
         {
-            // lets endpoint finish operation
+            laik_log(1, "Rank %d closing endpoint %d", d->mylid, i);
             ucs_status_ptr_t close_req = ucp_ep_close_nb(ucp_endpoints[i], UCP_EP_CLOSE_MODE_FLUSH);
             if (UCS_PTR_IS_PTR(close_req))
             {
@@ -1127,7 +1127,6 @@ void close_endpoints(void)
                 laik_log(LAIK_LL_Error, "Failed to close endpoint: %s\n", ucs_status_string(UCS_PTR_STATUS(close_req)));
                 exit(1);
             }
-            ucp_endpoints[i] = NULL;
         }
     }
 }
@@ -1141,14 +1140,6 @@ static void laik_ucp_finalize(Laik_Instance *inst)
 
 
     tcp_close_connections(d);
-
-    //barrier();
-
-    ucs_status_t status;
-    do 
-    {
-        status = ucp_worker_flush(ucp_worker);
-    }  while(status == UCS_INPROGRESS);
 
     destroy_rkeys(ucp_context, 0, true);
     close_endpoints();
@@ -1332,10 +1323,8 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
     int old_number_of_dead_peers = d->number_dead;
     mark_peers_to_be_removed(resize_commands);
     update_peer_states();
-
+    
     free_resize_commands(resize_commands);
-
-    // ucp cannot establish connections on its own
     size_t number_new_connections = tcp_add_new_peers(d, instance);
     laik_log(LAIK_LL_Info, "Rank [%d] processed join and remove requests", d->mylid);
 

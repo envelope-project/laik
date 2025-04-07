@@ -9,13 +9,10 @@
 #include <limits.h>
 
 //*********************************************************************************
-static const char *RESIZE_COMMANDS_FILE_PATH = "/home/ubuntu/BachelorThesis/laik/src/backends/ucp/resize_commands.txt";
-
 /// TODO: this is not required for TCP since it can just POLL the socket, but maybe useful for other connection setup frameworks
 // Specifies how many newcomers to expect as upper limit
 static const char *COMMAND_ADD = "ADD";
 // Specifies ONE rank that needs to be removed
-/// TODO: Process ID instead of rank
 static const char *COMMAND_REMOVE = "REM";
 
 // total command length per line should not exceed 32 byte
@@ -137,7 +134,10 @@ static inline void parse_remove_argument(ResizeCommand *resize_command, const ch
 ///TODO: use regular expressions instead
 ResizeCommand *parse_resize_commands(void)
 {
-    FILE *commands_file = fopen(RESIZE_COMMANDS_FILE_PATH, "r");
+    char* commands_file_path = getenv("UCP_COMMANDS_FILE");
+    commands_file_path = commands_file_path ? commands_file_path : "";
+
+    FILE *commands_file = fopen(commands_file_path, "r");
 
     if (commands_file != NULL)
     {

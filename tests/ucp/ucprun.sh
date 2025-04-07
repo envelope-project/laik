@@ -32,13 +32,13 @@ node1_cpus=(36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58
 num_cpus_node0=${#node0_cpus[@]}
 num_cpus_node1=${#node1_cpus[@]}
 
-if [[ "$strict_node" -eq 0 ]]; then
-    echo "Strictly core pinning on Node 0"
-elif [[ "$strict_node" -eq 1 ]]; then
-    echo "Strictly core pinning on Node 1"
-else
-    echo "Interleaved core pinning"
-fi
+#if [[ "$strict_node" -eq 0 ]]; then
+    #echo "Strictly core pinning on Node 0"
+#elif [[ "$strict_node" -eq 1 ]]; then
+    #echo "Strictly core pinning on Node 1"
+#else
+    #echo "Interleaved core pinning"
+#fi
 
 total=$((procs + spares))
 for (( i=0; i<$total; i++ )); do
@@ -62,7 +62,7 @@ for (( i=0; i<$total; i++ )); do
         fi
     fi
     core_ht=$((core + 72))
-    echo "Starting process $i at node $node pinned to core $core,$core_ht"
+    #echo "Starting process $i at node $node pinned to core $core,$core_ht"
 
     numactl --physcpubind=$core,$core_ht --membind=$node -- "$@" &
     #numactl --physcpubind=$core,$core_ht --membind=$node -- "$@" > ./logs/testrun 2>&1 &
