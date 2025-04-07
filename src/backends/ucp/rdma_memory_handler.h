@@ -27,9 +27,8 @@ typedef struct _RemoteKey
 void init_rdma_memory_handler(ucp_context_h ucp_context_backend, ucp_worker_h ucp_worker_backend);
 
 //*********************************************************************************
-// receiver inserts new rdma address here
-// if address is already mapped to rdma, existing remote key will be returned instead
-RemoteKey *insert_new_rkey(uint64_t new_buffer_address, size_t size, ucp_context_h ucp_context);
+/// @brief Register only unmapped buffers, then return (already existing) Remotekey
+RemoteKey *register_rkey(uint64_t new_buffer_address, size_t size, ucp_context_h ucp_context);
 
 //*********************************************************************************
 RemoteKey* get_remote_key(RemoteKey *remote_key, int lid, ucp_ep_h endpoint);

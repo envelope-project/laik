@@ -51,7 +51,7 @@ RemoteKey* get_rkey_of_address(uint64_t addr, size_t size)
 }
 
 //*********************************************************************************
-RemoteKey *insert_new_rkey(uint64_t new_base_address, size_t size, ucp_context_h ucp_context)
+RemoteKey *register_rkey(uint64_t new_base_address, size_t size, ucp_context_h ucp_context)
 {
     RemoteKey* remote_key = get_rkey_of_address(new_base_address, size);
 
@@ -144,8 +144,7 @@ void destroy_rkeys(ucp_context_h ucp_context, size_t as_id, bool finalize)
         ucp_rkey_destroy(send_key_list[i].rkey_handler);
     }
 
-    laik_log(4, "KEY COUNT: [%d]", number_entries_recv_keys);
-    // number_entries_recv_keys = 0;
+    laik_log(LAIK_LL_Info, "KEY COUNT: [%d]", number_entries_recv_keys);
 }
 
 //*********************************************************************************
@@ -263,7 +262,7 @@ void ucp_map_temporay_rdma_buffers(Laik_ActionSeq *as)
         if (as->bufSize[i] > 0) 
         {
             laik_log(LAIK_LL_Debug, "Mapping temporary buffer [%p] with size [%lu] for rdma", (void*)as->buf[i], as->bufSize[i]);
-            (void)insert_new_rkey((uint64_t)as->buf[i], as->bufSize[i], ucp_context);
+            (void)register_rkey((uint64_t)as->buf[i], as->bufSize[i], ucp_context);
         }
     }
 }

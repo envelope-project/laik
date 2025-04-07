@@ -585,7 +585,7 @@ void aseq_add_rdma_recv(Laik_ActionSeq *as, int round,
 
     int to_lid = laik_group_locationid(group, a->from_rank);
 
-    a->remote_key = insert_new_rkey((uint64_t)to_buf, count, ucp_context);
+    a->remote_key = register_rkey((uint64_t)to_buf, count, ucp_context);
 
     laik_ucp_buf_send(to_lid, (char *)&a->remote_key->rkey_buffer_size, sizeof(size_t));
     laik_ucp_buf_send(to_lid, (char*)a->remote_key->rkey_buffer, a->remote_key->rkey_buffer_size);
@@ -806,9 +806,9 @@ static ucs_status_t ucx_wait(ucp_worker_h ucp_worker, struct operation_status *r
 static void send_handler(void *request, ucs_status_t status, void *user_data)
 {
     (void)user_data;
+    (void)status;
 
     struct operation_status *context = (struct operation_status *)request;
-    laik_log(LAIK_LL_Info, "Send handler called with status: %s", ucs_status_string(status));
 
     context->completed = 1;
 }
@@ -1110,7 +1110,7 @@ void close_endpoints(void)
 {
     for (int i = 0; i < d->world_size; i++)
     {
-        if (d->peer[i].state < DEAD)
+        if (ucp_endpoints[i] != NULL)
         {
             // lets endpoint finish operation
             ucs_status_ptr_t close_req = ucp_ep_close_nb(ucp_endpoints[i], UCP_EP_CLOSE_MODE_FLUSH);
@@ -1127,6 +1127,7 @@ void close_endpoints(void)
                 laik_log(LAIK_LL_Error, "Failed to close endpoint: %s\n", ucs_status_string(UCS_PTR_STATUS(close_req)));
                 exit(1);
             }
+            ucp_endpoints[i] = NULL;
         }
     }
 }
@@ -1321,11 +1322,7 @@ static Laik_Group *laik_ucp_resize(Laik_ResizeRequests *reqs)
     // any previous resize must be finished
     assert(instance->world && (instance->world->parent == 0));
 
-    /// TODO: DO i really need a barrier here? socket interaction should be an implicit barrier
-    // for now helpful while debugging
-    //barrier();
-
-    // returns NULL if there was an error during parsing
+    // returns NULL if there was an error during parsing or if file does not exist
     ResizeCommand *resize_commands = NULL;
     if (d->mylid == 0)
     {
@@ -1394,6 +1391,7 @@ static bool laik_ucp_log_action(Laik_Action *a)
     return true;
 }
 
+// derived from openmpi backend
 //*********************************************************************************
 static void laik_ucp_sync(Laik_KVStore *kvs)
 {
