@@ -6,7 +6,7 @@ procs=1
 add=0
 remove=0
 hosts="localhost" # default host
-debug=0
+debug=1
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -n) procs="$2"; shift ;;
@@ -27,13 +27,15 @@ if [ -z "$1" ]; then
 fi
 
 if [ $debug -eq 1 ]; then
-    LAIK_LOG="1"
+    export LAIK_LOG="1"
 else
-    LAIK_LOG=
+    #export LAIK_LOG=
+    :
 fi
 
 export LAIK_BACKEND=mpi_dyn
 export LAIK_NUM_PROCS_ADD=$add
 export LAIK_NUM_PROCS_REMOVE=$remove
-mpirun -x LAIK_BACKEND -x LAIK_NUM_PROCS_ADD -x LAIK_NUM_PROCS_REMOVE -x LAIK_LOG --map-by node -n $procs -H $hosts $@
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/hpc/install/dyn_psets/lib/
+mpirun --prefix /opt/hpc/install/prrte -x LD_LIBRARY_PATH -x LAIK_BACKEND -x LAIK_NUM_PROCS_ADD -x LAIK_NUM_PROCS_REMOVE -x LAIK_LOG --map-by node -n $procs -H $hosts $@
 wait

@@ -95,7 +95,7 @@ if use_mpi:
     mpi_found = bool(shutil.which(mpicc))
 if use_mpi and mpi_found:
     print("MPI backend enabled (using '" + mpicc + "' as compiler wrapper).")
-    defs += " -DUSE_MPI"
+    defs += " -DUSE_MPI -DUSE_MPI_DYN"
     test_subdirs += " mpi"
     mpiversion = os.popen('mpirun --version').read().strip()
     if "Open MPI" in mpiversion:
