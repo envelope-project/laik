@@ -7,11 +7,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt-get update
-      - run: sudo apt-get install -y python3-distutils gcc make
+      - run: sudo apt-get install -y python3 git gcc make
       - run: python3 configure
       - run: make
       - run: make test
