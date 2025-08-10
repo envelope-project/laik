@@ -29,5 +29,5 @@ for (( i=1; i<=$total; i++ )); do
     # echo Running $@
     $@ &
 done
-[ ! -z "$remove" ] && sleep .1 && echo "c $remove" | nc localhost 7777 &> /dev/null
+[ ! -z "$remove" ] && sleep .5 && echo "c $remove" | nc localhost 7777 &> /dev/null
 wait
