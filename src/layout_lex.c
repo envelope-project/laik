@@ -180,8 +180,8 @@ void copy_lex(Laik_Range* range,
     Laik_Layout_Lex* toLayout = laik_is_layout_lex(to->layout);
     assert(fromLayout != 0);
     assert(toLayout != 0);
-    Lex_Entry* fromLayoutEntry = &(fromLayout->e[0]);
-    Lex_Entry* toLayoutEntry = &(toLayout->e[0]);
+    Lex_Entry* fromLayoutEntry = &(fromLayout->e[from->layoutSection]);
+    Lex_Entry* toLayoutEntry = &(toLayout->e[to->layoutSection]);
 
     unsigned int elemsize = from->data->elemsize;
     assert(elemsize == to->data->elemsize);
@@ -239,7 +239,7 @@ unsigned int pack_lex(Laik_Mapping* m, Laik_Range* s,
 {
     unsigned int elemsize = m->data->elemsize;
     Laik_Layout_Lex* layout = laik_is_layout_lex(m->layout);
-    Lex_Entry* layoutEntry = &(layout->e[0]);
+    Lex_Entry* layoutEntry = &(layout->e[m->layoutSection]);
     int dims = m->layout->dims;
 
     if (laik_index_isEqual(dims, idx, &(s->to))) {
@@ -362,7 +362,7 @@ unsigned int unpack_lex(Laik_Mapping* m, Laik_Range* s,
 {
     unsigned int elemsize = m->data->elemsize;
     Laik_Layout_Lex* layout = laik_is_layout_lex(m->layout);
-    Lex_Entry* layoutEntry = &(layout->e[0]);
+    Lex_Entry* layoutEntry = &(layout->e[m->layoutSection]);
     int dims = m->layout->dims;
 
     // there should be something to unpack
