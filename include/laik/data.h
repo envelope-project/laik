@@ -186,7 +186,7 @@ typedef struct _Laik_MappingList Laik_MappingList;
 // offset for an index inside a layout section (1d/2d/3d)
 int64_t laik_offset(Laik_Layout* l, int section, Laik_Index* idx);
 
-// get address of entry for index <idx>
+// get address of entry for index <idx> in mapping <n>
 char *laik_get_map_addr(Laik_Data* d, int n, Laik_Index* idx);
 
 // copy data in a range between mappings

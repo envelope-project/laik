@@ -1405,7 +1405,7 @@ int64_t laik_offset(Laik_Layout* l, int section, Laik_Index* idx)
     return (l->offset)(l, section, idx);
 }
 
-// get address if entry for index <idx> in mapping <m>
+// get address of entry for index <idx> in mapping <n>
 char* laik_get_map_addr(Laik_Data* d, int n, Laik_Index* idx)
 {
     Laik_Mapping* m = laik_get_map(d, n);
