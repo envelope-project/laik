@@ -27,7 +27,7 @@ void laik_tcp_map_add (Laik_Tcp_Map* this, GBytes* key, GBytes* value);
 
 void laik_tcp_map_block (Laik_Tcp_Map* this);
 
-void laik_tcp_map_free ();
+void laik_tcp_map_free (Laik_Tcp_Map* this);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (Laik_Tcp_Map, laik_tcp_map_free)
 
 void laik_tcp_map_discard (Laik_Tcp_Map* this, GBytes* key);
